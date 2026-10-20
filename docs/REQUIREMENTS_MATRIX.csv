@@ -1,0 +1,35 @@
+Requirement ID,PDF Part,Requirement (accessible source paraphrase),Phase 1 implementation,Evidence,Verification,Status
+ARCH-001,20,Inspect existing codebase before changes,"Original ZIP reviewed, React preserved",docs/PHASE1_ARCHITECTURE.md,Snapshot comparison,Implemented; static verified
+ARCH-002,20,Modular architecture,Shared access/audit services in core; domain app split deferred,backend/core/services/,Code review,Partial
+ARCH-003,20,Backend business rules; frontend presentation,DRF central policy and validators,backend/core/views.py,Direct API negative tests,Implemented; runtime unverified
+ARCH-004,20,Database source of truth,Django models and ORM persist records,backend/core/models.py,API persistence tests pending,Partial
+ARCH-005,20,Relational relationships and constraints,"FKs, uniqueness, cross-entity validation",backend/core/models.py,IntegrityAuditTransferTests,Partial: cross-table constraints model-only
+ARCH-006,20,Preserve historical records,"Protected enrolment and grade links, auditable transfers",backend/core/views.py,Transfer persistence tests,Partial: historic teacher assignments pending
+ARCH-007,20,Multi-record atomic transactions,Atomic create/update/transfer and audit,backend/core/views.py,Transfer rollback test,Implemented; runtime unverified
+ARCH-008,20,Version schema migrations,Committed initial migration,backend/core/migrations/0001_initial.py,Migration check not executed,Implemented; runtime unverified
+ARCH-009,20,Consistent API validation errors,DRF serializers and model validation,backend/core/views.py,Invalid data tests,Partial
+ARCH-010,20,Role/tenant scope on APIs,Centralized resource/action/relationship policy,backend/core/services/access.py,TenantAndRoleTests,Implemented initial matrix; runtime unverified
+ARCH-011,20,Shared calculation services,Existing dashboard calculations but full rules not centralised,backend/core/views.py,No acceptance suite,Pending
+ARCH-012,20,API versioning,Existing /api/v1/ prefix retained,backend/core/urls.py,Static route review,Implemented basic version path
+SEC-001,18,Centralised server-side authorization,Resource policy and scoped relations,backend/core/services/access.py,TenantAndRoleTests,Implemented initial controls; runtime unverified
+SEC-002,18,Deny by default,Explicit READ CREATE UPDATE DELETE matrices,backend/core/services/access.py,Unauthorised action tests,Implemented initial controls; runtime unverified
+ORG-016,4,Enrolment records separate from student identity,Separate Enrollment with date ranges,backend/core/models.py,Enrollment overlap tests,Partial: broader history pending
+ORG-017,4,Explicit student transfers retaining history,Atomic school/class transfer endpoint,backend/core/views.py,Success and failure tests,Implemented limited within-org transfer; runtime unverified
+ORG-018,4,Authorised guardian relationships,Limited existing guardian links with org/role checks,backend/core/services/access.py,Parent scope tests,Partial: verification/consent missing
+ORG-019,4,Role-based permissions,Explicit action matrix,backend/core/services/access.py,Six role tests,Implemented initial controls; runtime unverified
+ORG-020,4,Scope-based permissions,Org/school/class/student scopes,backend/core/services/access.py,Cross-school tests,Implemented initial controls; runtime unverified
+ORG-021,4,Server-side authorisation,Viewset scopes on direct requests,backend/core/views.py,Direct request tests,Implemented initial controls; runtime unverified
+ORG-022,4,Organisation isolation,Cross-tenant FK and queryset restrictions,backend/core/services/access.py,Cross-org tests,Implemented initial controls; runtime unverified
+ORG-023,4,Correctly scoped reports/exports,School/class filtered metrics and restricted CSV,backend/core/views.py,Report tests pending,Partial
+INT-034,14,Organisation isolation for cases,Cases constrained by student and school scopes,backend/core/services/access.py,Cross-tenant tests,Implemented initial controls; runtime unverified
+INT-035,14,Audit indicator/case/action history,"AuditEvent action+scope, field names",backend/core/services/audit.py,Audit tests,Partial: indicator engine not present
+INT-036,14,Avoid publicly exposing private cases,Protected case querysets and roles,backend/core/services/access.py,Anonymous/case tests,Implemented initial controls; runtime unverified
+INT-038,14,Accessible review status labels,Existing React interface preserved,frontend/src/main.tsx,Manual accessibility test pending,Partial
+INT-039,14,Distinguish missing data from negative outcomes,Basic reporting excludes missing grades,backend/core/views.py,Data quality rules pending,Partial
+AUTH-012,5,Public homepage must only show approved school-level indicators,"Anonymous endpoint returns only explicitly approved aggregate records; no student data",backend/core/onboarding_views.py,Public privacy regression tests authored,Implemented as foundation; Django runtime unverified
+AUTH-014,5,Controlled account invitations and activation,Not added by this increment; public self signup disabled,docs/PUBLIC_HOME_AND_SCHOOL_SETUP.md,Future feature,Not implemented
+SCH-002,19,School-specific configuration,SchoolConfiguration OneToOne per school,backend/core/models.py,School-scoping tests authored,Partial: module integration outstanding
+SCH-003,19,Multiple programmes per school,Programmes list in setup draft and activation snapshot,frontend/src/SchoolSetup.tsx,Programme data shape check,Partial: academic offering linkage outstanding
+SCH-004,19,School configuration wizard,"Six-step authorised wizard covers identity country timezone locale programmes calendar policies and review",frontend/src/SchoolSetup.tsx,Backend activation tests authored,Implemented onboarding collection; downstream modules not integrated
+SCH-005,19,Configuration completeness validation,Server returns field-specific issues and blocks invalid activation,backend/core/services/school_setup.py,Invalid draft and overlap tests authored,Implemented for recorded configuration; runtime unverified
+SCH-006,19,Change impact and historical preservation,Versioned activation snapshots + audit; full impact analysis pending,backend/core/models.py,Snapshot tests authored,Partial

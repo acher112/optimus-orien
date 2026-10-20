@@ -1,0 +1,6 @@
+from django.urls import path,include
+from rest_framework.routers import DefaultRouter
+from . import views, onboarding_views
+r=DefaultRouter()
+for name,view in [('schools',views.Schools),('classes',views.Classes),('students',views.Students),('subjects',views.Subjects),('years',views.Years),('enrollments',views.Enrollments),('assessments',views.Assessments),('grades',views.Grades),('attendance',views.AttendanceRecords),('homework',views.HomeworkItems),('submissions',views.Submissions),('observations',views.Observations),('cases',views.Cases),('interventions',views.Interventions),('notifications',views.Notifications),('audit',views.AuditLog)]:r.register(name,view,basename=name)
+urlpatterns=[path('public/indicators/',onboarding_views.public_school_indicators),path('schools/<int:school_id>/setup/',onboarding_views.school_configuration),path('schools/<int:school_id>/setup/activate/',onboarding_views.activate_school_configuration),path('auth/csrf/',views.csrf),path('auth/login/',views.signin),path('auth/logout/',views.signout),path('auth/me/',views.me),path('dashboard/',views.dashboard),path('students/<int:pk>/transfer/',views.transfer_student),path('reports/',views.reports),path('exports/students.csv',views.export_students),path('',include(r.urls))]
