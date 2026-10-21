@@ -22,7 +22,7 @@ from .models import *
 import csv
 
 @require_GET
-def health(request):return JsonResponse({'status':'ok','service':'optimus-orien'})
+def health(request):return JsonResponse({'status':'ok','service':'optimus-orien','release':'982f067'})
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
