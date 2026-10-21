@@ -293,3 +293,17 @@ class IntegrityAuditTransferTests(AccessFixture):
   # Django's CSRF middleware rejects requests whose Origin is not in CSRF_TRUSTED_ORIGINS
   # when the origin differs from the server's own host.
   self.assertEqual(r.status_code,403)
+
+ def test_ensure_admin_bootstrap_creates_valid_admin(self):
+  """ensure_admin must create an organisation_admin superuser with valid tenant scoping."""
+  from core.services.bootstrap import ensure_admin
+  admin=ensure_admin('auto_admin','SuperPass123!','admin@example.com')
+  self.assertIsNotNone(admin)
+  self.assertEqual(admin.username,'auto_admin')
+  self.assertTrue(admin.is_superuser)
+  self.assertEqual(admin.role,'organisation_admin')
+  self.assertIsNotNone(admin.organisation)
+  self.assertIsNotNone(admin.school)
+  # Subsequent call is idempotent
+  again=ensure_admin('auto_admin','DifferentPass!')
+  self.assertEqual(again.pk,admin.pk)
