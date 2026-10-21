@@ -7,11 +7,19 @@
       "destination": "https://optimus-orien-api.onrender.com/api/health/"
     },
     {
-      "source": "/api/:path*",
-      "destination": "https://optimus-orien-api.onrender.com/api/:path*"
+      "source": "/api/health",
+      "destination": "https://optimus-orien-api.onrender.com/api/health/"
     },
     {
-      "source": "/(.*)",
+      "source": "/api/health/",
+      "destination": "https://optimus-orien-api.onrender.com/api/health/"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "https://optimus-orien-api.onrender.com/api/$1"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
