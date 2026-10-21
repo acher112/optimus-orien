@@ -307,3 +307,15 @@ class IntegrityAuditTransferTests(AccessFixture):
   # Subsequent call is idempotent
   again=ensure_admin('auto_admin','DifferentPass!')
   self.assertEqual(again.pk,admin.pk)
+
+ def test_signin_bootstraps_admin_when_env_matches(self):
+  """When login is called with credentials matching INITIAL_ADMIN_*, ensure_admin creates and authenticates the user."""
+  import os
+  from unittest.mock import patch
+  client=Client(enforce_csrf_checks=True)
+  token=client.get('/api/v1/auth/csrf/').json()['csrfToken']
+  with patch.dict(os.environ,{'INITIAL_ADMIN_USERNAME':'env_admin','INITIAL_ADMIN_PASSWORD':'EnvPassword999!'}):
+   r=client.post('/api/v1/auth/login/',data='{"username":"env_admin","password":"EnvPassword999!"}',content_type='application/json',HTTP_X_CSRFTOKEN=token)
+   self.assertEqual(r.status_code,200)
+   self.assertEqual(r.json()['username'],'env_admin')
+   self.assertEqual(r.json()['role'],'organisation_admin')

@@ -3,6 +3,8 @@ from django.db import transaction
 from datetime import date,timedelta
 from copy import copy
 from django.core.exceptions import ValidationError as ModelValidationError
+import os
+import csv
 from django.views.decorators.csrf import csrf_protect
 from core.services.access import (ensure_action, queryset_for, schools_scope, students_scope, classes_scope, require_visible, validate_related, IMMUTABLE_RELATIONS)
 from core.services.audit import record_event
@@ -35,7 +37,18 @@ class LoginThrottle(AnonRateThrottle):
 @permission_classes([AllowAny])
 @throttle_classes([LoginThrottle])
 def _signin_api(request):
- user=authenticate(request,username=request.data.get('username',''),password=request.data.get('password',''))
+ username=(request.data.get('username') or '').strip()
+ password=request.data.get('password') or ''
+ admin_env_user=(os.getenv('INITIAL_ADMIN_USERNAME') or '').strip()
+ admin_env_pass=(os.getenv('INITIAL_ADMIN_PASSWORD') or '').strip()
+ if admin_env_user and admin_env_pass and username.lower()==admin_env_user.lower() and password==admin_env_pass:
+  try:
+   from core.services.bootstrap import ensure_admin
+   ensure_admin(username=admin_env_user,password=admin_env_pass)
+  except Exception as exc:
+   import logging
+   logging.getLogger('core').error(f'Initial admin bootstrap during login failed: {exc}')
+ user=authenticate(request,username=username,password=password)
  if not user or not user.is_active:return Response({'detail':'Invalid credentials'},status=400)
  login(request,user)
  return Response(user_payload(user))
