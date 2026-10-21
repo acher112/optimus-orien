@@ -16,8 +16,14 @@ def ensure_admin(username, password, email='', org_name='Northstar Education Gro
 
     existing = User.objects.filter(username=username).first()
     if existing:
-        # If user exists, update password if requested, ensuring credentials are valid
-        logger.info(f'Administrator user "{username}" already exists.')
+        # If user exists, update password and ensure active status matching environment config
+        existing.set_password(password)
+        existing.is_active = True
+        existing.is_staff = True
+        existing.is_superuser = True
+        existing.role = 'organisation_admin'
+        existing.save()
+        logger.info(f'Administrator user "{username}" updated successfully with active status.')
         return existing
 
     org, _ = Organisation.objects.get_or_create(
