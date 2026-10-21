@@ -226,3 +226,70 @@ class IntegrityAuditTransferTests(AccessFixture):
   self.assertEqual(client.post('/api/v1/auth/login/',{'username':'teacher1','password':'anything'}).status_code,403)
   token=client.get('/api/v1/auth/csrf/').json()['csrfToken']
   self.assertEqual(client.post('/api/v1/auth/login/',{'username':'teacher1','password':'A-Strong-Test-Password-1!'},HTTP_X_CSRFTOKEN=token).status_code,200)
+
+ def test_invalid_credentials_return_400_not_html(self):
+  """Invalid credentials must return JSON 400, never an HTML page or 500."""
+  client=Client(enforce_csrf_checks=True)
+  token=client.get('/api/v1/auth/csrf/').json()['csrfToken']
+  r=client.post('/api/v1/auth/login/',data='{"username":"nobody","password":"wrong"}',content_type='application/json',HTTP_X_CSRFTOKEN=token)
+  self.assertEqual(r.status_code,400)
+  self.assertIn('application/json',r.headers.get('Content-Type',''))
+  self.assertIn('detail',r.json())
+
+ def test_csrf_endpoint_returns_json_token(self):
+  """CSRF endpoint must return JSON with csrfToken and set the csrftoken cookie."""
+  r=self.client.get('/api/v1/auth/csrf/')
+  self.assertEqual(r.status_code,200)
+  self.assertIn('application/json',r.headers.get('Content-Type',''))
+  data=r.json()
+  self.assertIn('csrfToken',data)
+  self.assertGreater(len(data['csrfToken']),10)
+  self.assertIn('csrftoken',r.cookies)
+
+ def test_authenticated_me_returns_user_payload(self):
+  """After login the /auth/me/ endpoint returns the authenticated user's profile."""
+  client=Client(enforce_csrf_checks=True)
+  token=client.get('/api/v1/auth/csrf/').json()['csrfToken']
+  r=client.post('/api/v1/auth/login/',data='{"username":"teacher1","password":"A-Strong-Test-Password-1!"}',content_type='application/json',HTTP_X_CSRFTOKEN=token)
+  self.assertEqual(r.status_code,200)
+  payload=r.json()
+  self.assertEqual(payload['username'],'teacher1')
+  self.assertIn('role',payload)
+  # Session cookie must be present so subsequent requests are authenticated
+  self.assertIn('sessionid',client.cookies)
+  # /auth/me/ must succeed in the same session
+  me=client.get('/api/v1/auth/me/')
+  self.assertEqual(me.status_code,200)
+  self.assertEqual(me.json()['username'],'teacher1')
+
+ def test_logout_invalidates_session(self):
+  """Logout must clear the session; a subsequent me/ call must fail."""
+  client=Client(enforce_csrf_checks=True)
+  token=client.get('/api/v1/auth/csrf/').json()['csrfToken']
+  client.post('/api/v1/auth/login/',data='{"username":"teacher1","password":"A-Strong-Test-Password-1!"}',content_type='application/json',HTTP_X_CSRFTOKEN=token)
+  token2=client.get('/api/v1/auth/csrf/').json()['csrfToken']
+  logout_r=client.post('/api/v1/auth/logout/',data='{}',content_type='application/json',HTTP_X_CSRFTOKEN=token2)
+  self.assertEqual(logout_r.status_code,200)
+  me=client.get('/api/v1/auth/me/')
+  self.assertIn(me.status_code,(401,403))
+
+ def test_unauthenticated_dashboard_is_protected(self):
+  """Dashboard must reject unauthenticated requests."""
+  r=self.client.get('/api/v1/dashboard/')
+  self.assertIn(r.status_code,(401,403))
+
+ def test_trusted_origin_enforcement(self):
+  """CSRF verification must reject requests from untrusted origins even with a valid token."""
+  client=Client(enforce_csrf_checks=True)
+  token=client.get('/api/v1/auth/csrf/').json()['csrfToken']
+  r=client.post(
+   '/api/v1/auth/login/',
+   data='{"username":"teacher1","password":"A-Strong-Test-Password-1!"}',
+   content_type='application/json',
+   HTTP_X_CSRFTOKEN=token,
+   HTTP_ORIGIN='https://evil-site.example.com',
+   SERVER_NAME='testserver',
+  )
+  # Django's CSRF middleware rejects requests whose Origin is not in CSRF_TRUSTED_ORIGINS
+  # when the origin differs from the server's own host.
+  self.assertEqual(r.status_code,403)
