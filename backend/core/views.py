@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view,permission_classes,throttle_class
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied,ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError as APIValidationError
 from .models import *
 import csv
 
@@ -31,15 +31,21 @@ def csrf(request):
 class LoginThrottle(AnonRateThrottle):
  scope='login'
 
-@csrf_protect
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @throttle_classes([LoginThrottle])
-def signin(request):
+def _signin_api(request):
  user=authenticate(request,username=request.data.get('username',''),password=request.data.get('password',''))
  if not user or not user.is_active:return Response({'detail':'Invalid credentials'},status=400)
  login(request,user)
  return Response(user_payload(user))
+
+# DRF's @api_view marks its view CSRF-exempt. Protect an independent Django
+# wrapper instead so an anonymous login POST is checked even before a session
+# exists. The DRF endpoint inside continues to apply its authentication throttle.
+@csrf_protect
+def signin(request):
+ return _signin_api(request)
 
 @api_view(['POST'])
 def signout(request):logout(request);return Response({'ok':True})
@@ -103,7 +109,7 @@ def validate_model(model,attrs,instance=None,server_attrs=None):
  for k,v in {**data,**(server_attrs or {})}.items():setattr(obj,k,v)
  try:obj.full_clean()
  except ModelValidationError as exc:
-  raise ValidationError(getattr(exc,'message_dict',None) or getattr(exc,'messages',None) or str(exc))
+  raise APIValidationError(getattr(exc,'message_dict',None) or getattr(exc,'messages',None) or str(exc))
  return obj
 
 class ScopedViewSet(viewsets.ModelViewSet):
@@ -155,7 +161,7 @@ class ScopedViewSet(viewsets.ModelViewSet):
   user=self.request.user;model=self.queryset.model;old=self.get_object();data=serializer.validated_data
   if model is Notification:
    if set(self.request.data) - {'read'} or 'read' not in data:
-    raise ValidationError({'detail':'Only the read state may be updated'})
+    raise APIValidationError({'detail':'Only the read state may be updated'})
   if model is Assessment:
    if user.role=='teacher' and 'published' in data:
     raise PermissionDenied('Publishing results requires school leadership')
@@ -179,7 +185,7 @@ class ScopedViewSet(viewsets.ModelViewSet):
    cutoff=data['end_date']
    if cutoff:
     if Grade.objects.filter(student=old.student,assessment__school_class=old.school_class,assessment__date__gt=cutoff).exists() or Attendance.objects.filter(student=old.student,school_class=old.school_class,date__gt=cutoff).exists() or HomeworkSubmission.objects.filter(student=old.student,homework__school_class=old.school_class,homework__due_date__gt=cutoff).exists():
-     raise ValidationError({'end_date':'Cannot shorten enrollment before recorded grades or attendance'})
+     raise APIValidationError({'end_date':'Cannot shorten enrollment before recorded grades or attendance'})
   validate_model(model,data,instance=old,server_attrs=extras)
   before={k:getattr(old,k) for k in data}
   saved=serializer.save(**extras)
@@ -226,29 +232,29 @@ def transfer_student(request, pk):
  try:
   target_id=int(request.data.get('school_class'))
   on=date.fromisoformat(request.data.get('effective_date',''))
- except (TypeError,ValueError):raise ValidationError({'detail':'school_class and YYYY-MM-DD effective_date required'})
+ except (TypeError,ValueError):raise APIValidationError({'detail':'school_class and YYYY-MM-DD effective_date required'})
  with transaction.atomic():
   student=Student.objects.select_for_update().filter(pk=pk).first()
   if not student:raise PermissionDenied('Student not accessible')
   require_visible(user,Student,student.pk)
   target=SchoolClass.objects.select_related('school','academic_year').filter(pk=target_id).first()
-  if not target:raise ValidationError({'school_class':'Not found'})
+  if not target:raise APIValidationError({'school_class':'Not found'})
   require_visible(user,SchoolClass,target.pk)
   if target.school.organisation_id!=student.school.organisation_id:
    raise PermissionDenied('Cross-organisation transfers are not supported')
   if target.school_id!=student.school_id and not (user.role=='organisation_admin' or user.is_superuser):
    raise PermissionDenied('Cross-school transfer requires organisation administration')
   if not target.academic_year.start_date<=on<=target.academic_year.end_date:
-   raise ValidationError({'effective_date':'Outside target academic year'})
+   raise APIValidationError({'effective_date':'Outside target academic year'})
   current=list(Enrollment.objects.select_for_update().filter(student=student,end_date__isnull=True))
-  if len(current)>1:raise ValidationError({'detail':'Multiple active enrollments: contact administrator'})
+  if len(current)>1:raise APIValidationError({'detail':'Multiple active enrollments: contact administrator'})
   if current:
-   if on<=current[0].start_date:raise ValidationError({'effective_date':'Must follow existing enrollment start'})
+   if on<=current[0].start_date:raise APIValidationError({'effective_date':'Must follow existing enrollment start'})
    cutoff=on-timedelta(days=1)
    if (Grade.objects.filter(student=student,assessment__school_class=current[0].school_class,assessment__date__gt=cutoff).exists() or
        Attendance.objects.filter(student=student,school_class=current[0].school_class,date__gt=cutoff).exists() or
        HomeworkSubmission.objects.filter(student=student,homework__school_class=current[0].school_class,homework__due_date__gt=cutoff).exists()):
-    raise ValidationError({'effective_date':'Transfer would invalidate existing historical learning records'})
+    raise APIValidationError({'effective_date':'Transfer would invalidate existing historical learning records'})
    current[0].end_date=cutoff
    validate_model(Enrollment,{},current[0]);current[0].save(update_fields=['end_date'])
    record_event(actor=user,action='close_enrollment',obj=current[0],changed_fields=['end_date'],before={'end_date':None},after={'end_date':cutoff})

@@ -16,7 +16,7 @@ class IsolationTests(TestCase):
   self.assertEqual(self.client.get(f'/api/v1/students/{self.student.pk}/').status_code,404)
  def test_teacher_cannot_delete_records(self):
   self.client.force_login(self.u)
-  self.assertEqual(self.client.delete(f'/api/v1/students/{self.student.pk}/').status_code,404)
+  self.assertEqual(self.client.delete(f'/api/v1/students/{self.student.pk}/').status_code,403)  # no delete permission, before lookup
  def test_anonymous_dashboard_blocked(self):self.assertIn(self.client.get('/api/v1/dashboard/').status_code,[401,403])
  def test_homework_requires_confirmation(self):
   obj=HomeworkSubmission(status='completed');self.assertRaises(Exception,obj.full_clean)
