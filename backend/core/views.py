@@ -22,18 +22,7 @@ from .models import *
 import csv
 
 @require_GET
-def health(request):
- from .models import User
- admin_count=User.objects.filter(is_superuser=True).count()
- user_count=User.objects.count()
- env_u=os.getenv('INITIAL_ADMIN_USERNAME','')
- has_p=bool(os.getenv('INITIAL_ADMIN_PASSWORD'))
- pass_len=len(os.getenv('INITIAL_ADMIN_PASSWORD',''))
- return JsonResponse({
-  'status':'ok','service':'optimus-orien','release':'diag-1',
-  'users_in_db':user_count,'superusers_in_db':admin_count,
-  'env_username':env_u,'has_env_password':has_p,'env_password_len':pass_len
- })
+def health(request):return JsonResponse({'status':'ok','service':'optimus-orien'})
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
