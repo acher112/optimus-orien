@@ -1,12 +1,17 @@
+
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    {
+      "source": "/proxy-health",
+      "destination": "https://optimus-orien-api.onrender.com/api/health/"
+    },
     {
       "source": "/api/:path*",
       "destination": "https://optimus-orien-api.onrender.com/api/:path*"
     },
     {
-      "source": "/:path((?!api/).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
