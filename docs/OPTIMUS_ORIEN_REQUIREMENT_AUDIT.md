@@ -212,3 +212,21 @@ $$\text{Overall Progress} = \frac{\sum \text{Module Scores}}{14}$$
 
 **Current Verified Completion: 58.2%**
 *(Up from ~25% starter codebase following production login resolution, CSRF lockdown, 57 automated regression tests, and audited school setup increment).*
+
+
+---
+
+## Addendum 2026-10-22 — Reports & Drill-Down (Milestone 2.5)
+
+| ID | Source | Requirement | Evidence | Status | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **REP-DD-001** | Part 6 §11.3 | Organisation → campus → class/subject drill-down | `core/reports.py`, `frontend/src/Reports.tsx` | **COMPLETE** | Four levels, breadcrumb navigation. |
+| **VIS-021** | Part 6 | Access enforced at every drill-down level | `test_reports.py::ReportAccessTests` | **COMPLETE** | 404 for out-of-scope ids at every endpoint. |
+| **REP-020** | Part 15 §8.2 | Class performance report with defined average method | `class_report`, `method` block | **PARTIALLY COMPLETE** | Missing: assignment completion and progress measures. |
+| **REP-021** | Part 15 §8.3 | Subject performance report | `subject_report` | **PARTIALLY COMPLETE** | Missing: skill ratings and cross-period change. |
+| **REP-022** | Part 15 §8.9 | Organisation performance report | `overview` | **PARTIALLY COMPLETE** | Attendance and academic only; no health statuses or history. |
+| **TDB-014** | Part 18 | Missing results never become zero | `test_missing_results_are_reported_not_zeroed` | **COMPLETE** | |
+| **TDB-016** | Part 18 | Class comparisons state basis; incompatible rules flagged | `test_classes_with_different_assessment_structure_flagged...` | **PARTIALLY COMPLETE** | Structure check covers count/weights/max marks only. |
+| **TDB-017** | Part 18 | Enrolment context preserved for historical periods | `test_student_joining_later_is_not_counted_missing...` | **COMPLETE** | Eligibility by enrolment dates. |
+| **ORG-023** | Part 4 | Correctly scoped reports and exports | `test_reports.py` (reports); CSV export remains untested | **PARTIALLY COMPLETE** | Downgraded from COMPLETE in the earlier audit: only the anonymous-access report test existed. Reports now covered; CSV export scoping still lacks tests. |
+| **EDUC-012** | Part 2 | Avoid unsupported equivalence claims | `comparable` flag, method note | **PARTIALLY COMPLETE** | Previously COMPLETE on the strength of a static note only. |

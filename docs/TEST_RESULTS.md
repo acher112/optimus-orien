@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-10-22):** this record describes the 2026-10-19 static-only validation. Django tests, migrations and the frontend build have since been executed; see `OPTIMUS_ORIEN_TEST_RESULTS.md` for current results.
+
 # Phase 1 validation record (2026-10-19)
 
 ## Actual environment outcomes

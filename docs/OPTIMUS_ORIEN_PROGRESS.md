@@ -5,6 +5,14 @@
 **Auditor & Lead Architect:** Senior Full-Stack Architect & Education Intelligence Specialist  
 **Current Baseline Status:** 58.2% Verified Completion (Evidence-Based Calculation)  
 
+
+> ## ⚠ Corrections recorded 2026-10-22 (read before relying on the figures below)
+>
+> * The module table in section 2 sums to **186 tracked / 95 complete / 59 partial / 32 missing**, not the 165 / 68 / 48 / 42 stated in the summary. Recomputing from that table gives ≈ 66.9%, not 58.2%.
+> * `OPTIMUS_ORIEN_REQUIREMENT_AUDIT.md` itself contains **112** requirement rows (79 complete, 29 partial, 2 missing, 1 incorrect) and a third, weighted scoring table that also totals 58.2%. The three tallies are not reconciled, so **58.2% must be treated as unverified** until the audit rows, this table and the weighted table are rebuilt from one requirement list.
+> * The report that the 58.2% was based on rated the Reporting module at 29% and Dashboards at 38%; the client's test on 2026-10-22 confirmed Reports lacked campus/class/subject drill-down. **Milestone 2.5 (Reports & Drill-Down) was added** — see `REPORTS_MILESTONE.md`.
+> * Test counts: the baseline was 61 tests (a earlier line says 59). With Milestone 2.5 there are now **82** (61 + 21 report tests); see `OPTIMUS_ORIEN_TEST_RESULTS.md` for the executed output.
+
 ---
 
 ## 1. Verified Completion Calculation Methodology
@@ -81,6 +89,9 @@ $$\text{Verified Progress} = \frac{68.0 + 24.0}{158.0} = \frac{92.0}{158.0} = \m
   2. **Curriculum Subjects & Academic Years Management:** Added `Academic years` and `Subjects` views to the workspace navigation and resource grid, enabling school administrators to manage calendar sessions and course subject codes directly in the UI (`ORG-006`, `ORG-011`).
   3. **Plain-English Usable Select Dropdowns (Eliminating Raw DB IDs):** Enhanced the resource creation modal across all entity types to replace raw integer input boxes with dynamic `<select>` dropdowns for schools, academic years, teachers, classes, subjects, and attendance/intervention status options. Auto-selects user's campus when scoped (`PR-011`).
   4. **Render Health Check & Deployment Fix:** Resolved Render auto-deploy failure by adding `path('', views.health)` root and `/health/` handlers, exempting health probes from SSL redirect (`SECURE_REDIRECT_EXEMPT`), enabling `SECURE_PROXY_SSL_HEADER`, and automatically including `.onrender.com` in `ALLOWED_HOSTS`.
+
+### Milestone 2.5: Reports & Drill-Down Analytics
+- **Status:** **IMPLEMENTED (new, 2026-10-22)** — Organisation → Campus → Class → Subject drill-down with reporting period, weighted student-level averages, missing-data accounting and server-side scope checks at every level. Details, limits and tests: `docs/REPORTS_MILESTONE.md`.
 
 ### Upcoming Milestones (Pending User Review & Consent)
 - **Milestone 3:** Student Admission, Historical Enrolments & Multi-Campus Transfers.

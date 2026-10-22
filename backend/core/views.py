@@ -326,16 +326,6 @@ def dashboard(request):
  return Response({'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count()},'stats':stats,'schools':school_items,'recent_cases':recent,'recent_students':recent_students,'attention':cases.filter(priority='high').exclude(status='resolved').count(),'recent_notifications':list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))})
 
 @api_view(['GET'])
-def reports(request):
- students=students_scope(request.user);cls=classes_scope(request.user)
- subject_rows=[]
- for subject in Subject.objects.filter(school__in=schools_scope(request.user)):
-  grades=Grade.objects.filter(student__in=students,assessment__subject=subject,assessment__school_class__in=cls,assessment__published=True).select_related('assessment')
-  percentages=[float(g.marks/g.assessment.max_marks*100) for g in grades]
-  subject_rows.append({'name':subject.name,'average':round(sum(percentages)/len(percentages),1) if percentages else None,'record_count':len(percentages)})
- return Response({'overall':student_stats(students,cls),'subjects':subject_rows,'generated_at':timezone.now().isoformat(),'notes':'Averages use recorded published assessment percentages. Missing records are not counted as zero. Cross-school assessment comparisons may not be equivalent.'})
-
-@api_view(['GET'])
 def export_students(request):
  ensure_action(request.user,Student,'read')
  if not request.user.is_superuser and request.user.role not in ('organisation_admin','school_admin','principal'):

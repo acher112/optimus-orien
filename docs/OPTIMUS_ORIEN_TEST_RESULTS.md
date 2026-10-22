@@ -3,7 +3,7 @@
 **Test Date:** October 22, 2026  
 **Environment:** Windows Developer Workstation + PostgreSQL / SQLite3 Test Runner  
 **Full Test Suite Run:** `backend/manage.py test core` & `frontend: npm run build`  
-**Overall Outcome:** **100% PASS (61/61 Backend Tests, Zero Build Errors)**  
+**Overall Outcome:** **100% PASS (82/82 Backend Tests, Zero Build Errors)** — re-run 2026-10-22 after Milestone 2.5 (Reports & Drill-Down); previously 61/61  
 
 ---
 
@@ -11,11 +11,11 @@
 
 | Verification Category | Status | Details |
 | :--- | :--- | :--- |
-| **Django Test Suite** | **PASS** | 61 tests executed, 0 failures, 0 errors, 0 skipped. |
-| **Django System Check** | **PASS** | `python manage.py check` reported 0 issues. |
+| **Django Test Suite** | **PASS** | 82 tests executed (61 existing + 21 in `test_reports.py`), 0 failures, 0 errors, 0 skipped. Output: `Ran 82 tests in 466.719s — OK`. |
+| **Django System Check** | **PASS** (re-run: no issues) | `python manage.py check` reported 0 issues. |
 | **Database Migrations** | **PASS** | `makemigrations --check --dry-run` reported clean schema. |
 | **TypeScript Typecheck** | **PASS** | `tsc -b` compiled with zero diagnostic errors. |
-| **Vite Production Bundler** | **PASS** | Built 2,202 modules into minified JS & CSS assets. |
+| **Vite Production Bundler** | **PASS** | Built 2,204 modules (re-run after adding the Reports page; no TypeScript errors) into minified JS & CSS assets. |
 | **Live Production Authentication** | **PASS** | Verified end-to-end on Vercel frontend + Render backend. |
 | **Render Health Check & Deployment**| **PASS** | Root `/`, `/health/`, and `/api/health/` return 200 OK without SSL redirect loop. |
 

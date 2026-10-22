@@ -91,6 +91,17 @@ flowchart TD
 
 ---
 
+### Milestone 2.5: Reports & Drill-Down Analytics (inserted 2026-10-22, precedes Milestone 3)
+*Status: IMPLEMENTED — see `REPORTS_MILESTONE.md`*
+- **Primary PDF Requirements:** Part 6 §11.3, §12, §16; Part 13.2; Part 15 §8.2, §8.3, §8.9, §9–10; `TDB-014`, `TDB-016`, `TDB-017`, `VIS-021`, `VIS-022`, `ORG-023`.
+- **Scope & Deliverables:**
+  - Organisation → Campus → Class → Subject drill-down endpoints with a persistent reporting period.
+  - Student-level weighted averages; missing results reported, never zero; comparability flags.
+  - Role scoping at every level; aggregates independent of the student-privacy flag, identifiable rows dependent on it.
+- **Verification Criteria:** `backend/core/tests/test_reports.py` (21 tests) pass; frontend builds with zero TypeScript errors.
+
+---
+
 ### Milestone 3: Student Identity, Admission, Enrolment & Transfers
 *Status: SCHEDULED*
 - **Primary PDF Requirements:** `PR-003`, `PR-009`, `ORG-015`–`ORG-018`, `STU-001`–`STU-014`, Part 7, Part 8.

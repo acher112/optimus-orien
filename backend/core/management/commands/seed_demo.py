@@ -46,4 +46,40 @@ class Command(BaseCommand):
   for i,s in enumerate(students[:7]):
    ReviewCase.objects.get_or_create(student=s,title=['Attendance requires review','Declining mathematics results','Homework confirmation pending','Follow-up attendance check','Subject support review','Learning support check','Data completeness review'][i],defaults={'reason':'This is a fictional demonstration case. Review underlying records before drawing conclusions.','priority':'high' if i<2 else 'medium','status':'in_progress' if i%2 else 'open','assignee':teacher})
   for idx,title in enumerate(['Complete attendance register','New academic term overview','Review cases assigned']):Notification.objects.get_or_create(user=admin,title=title,defaults={'body':'Your school workspace has an item ready for review.'})
-  self.stdout.write(self.style.SUCCESS('Demo ready: admin / teacher / principal — password DemoPass123!'))
+  # ---- Second campus (Westbridge) so multi-campus drill-down reports can be demonstrated ----
+  west_teacher,_=User.objects.get_or_create(username='teacher_west',defaults={'first_name':'Priya','last_name':'Nair','role':'teacher','organisation':org,'school':sister});west_teacher.set_password('DemoPass123!');west_teacher.save()
+  west_principal,_=User.objects.get_or_create(username='principal_west',defaults={'first_name':'Daniel','last_name':'Hughes','role':'principal','organisation':org,'school':sister});west_principal.set_password('DemoPass123!');west_principal.save()
+  wyear,_=AcademicYear.objects.get_or_create(school=sister,name='2026–2027',defaults={'start_date':today-timedelta(days=90),'end_date':today+timedelta(days=270)})
+  wk1,_=SchoolClass.objects.get_or_create(school=sister,academic_year=wyear,name='Grade 8 · W1',defaults={'grade_level':'8','teacher':west_teacher})
+  wk2,_=SchoolClass.objects.get_or_create(school=sister,academic_year=wyear,name='Grade 9 · W2',defaults={'grade_level':'9','teacher':west_teacher})
+  west_names=[('Zara','Khan'),('Omar','Farouk'),('Lina','Haddad'),('Yusuf','Ali'),('Maya','Singh'),('Ethan','Park'),('Nora','Silva'),('Leo','Costa'),('Aisha','Rahman'),('Felix','Novak'),('Ines','Duarte'),('Hugo','Meyer'),('Sana','Iqbal'),('Tomas','Ruiz'),('Elif','Demir'),('Jonas','Berg')]
+  west_students=[]
+  for i,(first,last) in enumerate(west_names):
+   s2,_=Student.objects.get_or_create(school=sister,admission_number=f'WS-{2001+i}',defaults={'first_name':first,'last_name':last,'enrolled_on':today-timedelta(days=80)})
+   Enrollment.objects.get_or_create(student=s2,school_class=wk1 if i<8 else wk2,start_date=today-timedelta(days=80))
+   west_students.append(s2)
+  for code,name in [('MAT','Mathematics'),('ENG','English Language'),('SCI','Science')]:
+   subject,_=Subject.objects.get_or_create(school=sister,code=code,defaults={'name':name})
+   for c in [wk1,wk2]:
+    for k in range(3):
+     # Grade 9 Mathematics deliberately weights its last checkpoint x2 so the report flags it as not directly comparable
+     weight=2 if (c==wk2 and code=='MAT' and k==2) else 1
+     assessment,_=Assessment.objects.get_or_create(school_class=c,subject=subject,title=f'{name} • Checkpoint {k+1}',defaults={'date':today-timedelta(days=52-k*16),'max_marks':100,'published':True,'weight':weight})
+     for i,s2 in enumerate(west_students):
+      if (i<8)!=(c==wk1):continue
+      if i==5 and k==2:continue # one genuinely missing result, never treated as zero
+      marks=max(35,min(97,58+(i*11+k*7+len(code)*5)%38))
+      Grade.objects.get_or_create(student=s2,assessment=assessment,defaults={'marks':Decimal(marks)})
+  for i,s2 in enumerate(west_students):
+   c=wk1 if i<8 else wk2
+   for d in range(1,32):
+    day=today-timedelta(days=d)
+    if day.weekday()>4:continue
+    status='absent' if (i*5+d)%11==0 else ('late' if (i+d)%9==0 else 'present')
+    Attendance.objects.get_or_create(student=s2,school_class=c,date=day,defaults={'status':status})
+  # Reporting periods (per school) used by the report period selector
+  for sch in (school,sister):
+   SchoolConfiguration.objects.get_or_create(school=sch,defaults={'country':'GB','timezone':'Europe/London','language':'en','reporting_periods':[
+    {'name':'Term 1','start':(today-timedelta(days=90)).isoformat(),'end':(today-timedelta(days=30)).isoformat()},
+    {'name':'Term 2','start':(today-timedelta(days=29)).isoformat(),'end':(today+timedelta(days=60)).isoformat()}]})
+  self.stdout.write(self.style.SUCCESS('Demo ready: admin / teacher / principal / teacher_west / principal_west — password DemoPass123!'))

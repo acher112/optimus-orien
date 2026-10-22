@@ -129,13 +129,13 @@ The API is the authority for calculations and access control. Demo metrics exclu
 - **Students, Schools, Classes:** searchable directories and creation flows.
 - **Academics, Attendance, Homework:** list/create records backed by Django.
 - **Interventions:** support-case creation and monitoring.
-- **Reports:** school/subject performance and attendance figures.
+- **Reports:** drill-down from organisation → campus → class → subject with a reporting-period selector, weighted student-level averages and missing-data accounting (see `docs/REPORTS_MILESTONE.md`).
 - **Notifications:** saved notification records.
 - **Settings:** access profile and theme.
 
 ## API
 
-`GET /api/health/`, `GET /api/v1/auth/csrf/`, `POST /api/v1/auth/login/`, `POST /api/v1/auth/logout/`, `GET /api/v1/auth/me/`, `GET /api/v1/dashboard/`, `GET /api/v1/reports/`, `GET /api/v1/exports/students.csv`.
+`GET /api/health/`, `GET /api/v1/auth/csrf/`, `POST /api/v1/auth/login/`, `POST /api/v1/auth/logout/`, `GET /api/v1/auth/me/`, `GET /api/v1/dashboard/`, `GET /api/v1/reports/overview/`, `GET /api/v1/reports/campus/<id>/`, `GET /api/v1/reports/class/<id>/`, `GET /api/v1/reports/campus/<id>/subject/<code>/`, `GET /api/v1/exports/students.csv`.
 
 All protected CRUD endpoints accept GET collection and detail, POST collection, PATCH/PUT detail, DELETE detail: `/api/v1/{schools,students,classes,subjects,years,enrollments,assessments,grades,attendance,homework,submissions,observations,cases,interventions,notifications}/`. Django REST Framework pagination uses `results`, `count`, `next`, and `previous`.
 
