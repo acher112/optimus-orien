@@ -4,3 +4,50 @@
 .modal-fields select:focus{border-color:#7d69e4;box-shadow:0 0 0 3px #7d69e422}
 .dark .modal-fields select{background:#292b40;color:#f0f1f8;border-color:#45435d}
 
+.nav-sublabel{font-size:9px;color:#c0c5d4;letter-spacing:1.4px;font-weight:800;margin:14px 16px 5px;text-transform:uppercase}
+.nav-sublabel-admin{color:#bbb5f0}
+.dark .nav-sublabel{color:#6b6e8a}
+.dark .nav-sublabel-admin{color:#8f89c9}
+
+.campus-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;margin-top:4px}
+.campus-card{background:#fff;border-radius:18px;border:1px solid #eceefa;padding:24px;display:flex;flex-direction:column;gap:16px;transition:box-shadow .2s}
+.campus-card:hover{box-shadow:0 8px 30px #7462e814}
+.campus-card-header{display:flex;align-items:center;gap:14px}
+.campus-icon{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;flex-shrink:0}
+.campus-card-info h3{font-size:15px;font-weight:800;margin:0 0 3px;color:#252b44}
+.campus-code{font-size:11px;font-weight:700;color:#9ba2b4;letter-spacing:.5px}
+.campus-card-meta{display:flex;gap:18px;flex-wrap:wrap}
+.campus-card-meta>div{display:flex;flex-direction:column;gap:3px}
+.campus-card-meta span{font-size:10px;color:#a0a8bc;font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+.campus-card-meta strong{font-size:13px;font-weight:800;color:#363d55}
+.campus-card-actions{display:flex;gap:10px;flex-wrap:wrap}
+.active-btn{background:#f0edff!important;color:#7460e5!important;border-color:#c8bffd!important}
+
+.accounts-panel{background:#f8f9fd;border-radius:13px;padding:18px;display:flex;flex-direction:column;gap:12px;border:1px solid #eceefa}
+.accounts-panel-head{font-size:12px;font-weight:800;color:#555d78}
+.accounts-list{display:flex;flex-direction:column;gap:8px}
+.account-row{display:flex;align-items:center;gap:10px}
+.account-avatar{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:11px;font-weight:800;flex-shrink:0}
+.account-row>div:last-child{display:flex;flex-direction:column;gap:2px}
+.account-row b{font-size:12px;font-weight:800;color:#252b44}
+.account-row small{font-size:11px;color:#9ba2b4}
+.accounts-empty{font-size:12px;color:#a0a8bc;margin:0}
+.accounts-divider{font-size:10px;font-weight:800;color:#9ba2b4;letter-spacing:1.2px;text-transform:uppercase;border-top:1px solid #eceefa;padding-top:12px;margin-top:4px}
+.account-create-form{display:flex;flex-direction:column;gap:12px}
+.acf-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.acf-row label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#5a6278}
+.acf-row input,.acf-row select{border:1px solid #e2e5f0;border-radius:9px;padding:9px 11px;font-size:12px;font-family:inherit;background:#fff;color:#2a3148;width:100%;outline:none}
+.acf-row input:focus,.acf-row select:focus{border-color:#7d69e4;box-shadow:0 0 0 3px #7d69e418}
+.readonly-input{background:#f2f3f8!important;color:#8e96ab!important;cursor:not-allowed}
+.acf-actions{display:flex;justify-content:flex-end}
+
+.dark .campus-card{background:#232538;border-color:#35374c}
+.dark .campus-card-info h3{color:#e9e9f6}
+.dark .campus-card-meta strong{color:#d5d6eb}
+.dark .accounts-panel{background:#1e1f30;border-color:#35374c}
+.dark .acf-row input,.dark .acf-row select{background:#292b40;color:#f0f1f8;border-color:#45435d}
+.dark .accounts-divider{border-color:#35374c}
+
+@media(max-width:760px){.campus-grid{grid-template-columns:1fr}.acf-row{grid-template-columns:1fr}}
+
+

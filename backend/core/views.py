@@ -342,3 +342,57 @@ def teachers_list(request):
  schools=schools_scope(request.user)
  teachers=User.objects.filter(school__in=schools,role='teacher',is_active=True).select_related('school')
  return Response({'results':[{'id':t.id,'name':t.get_full_name() or t.username,'username':t.username,'school_id':t.school_id,'school_name':t.school.name if t.school else ''} for t in teachers]})
+
+@api_view(['POST'])
+def create_account(request):
+ """Organisation admin or school admin can create staff/student accounts for their school."""
+ user=request.user
+ if not user.is_authenticated:
+  return Response({'detail':'Authentication required'},status=401)
+ if user.role not in ('organisation_admin','school_admin') and not user.is_superuser:
+  raise PermissionDenied('Account creation requires administrator role')
+ data=request.data
+ first_name=(data.get('first_name') or '').strip()
+ last_name=(data.get('last_name') or '').strip()
+ username=(data.get('username') or '').strip()
+ password=data.get('password') or ''
+ role=(data.get('role') or '').strip()
+ school_id=data.get('school')
+ VALID_ROLES=['school_admin','principal','teacher','student','parent']
+ if not all([first_name,last_name,username,password,role]):
+  return Response({'detail':'first_name, last_name, username, password and role are required'},status=400)
+ if role not in VALID_ROLES:
+  return Response({'detail':f'Role must be one of: {", ".join(VALID_ROLES)}'},status=400)
+ if user.role=='school_admin' and role=='school_admin':
+  raise PermissionDenied('School admins cannot create other school admin accounts')
+ if school_id:
+  school=schools_scope(user).filter(pk=school_id).first()
+  if not school:
+   return Response({'detail':'School not found or not in your scope'},status=400)
+ else:
+  school=None
+  if user.role=='school_admin':
+   school=user.school
+ if User.objects.filter(username=username).exists():
+  return Response({'detail':'Username already taken'},status=400)
+ from django.contrib.auth.password_validation import validate_password
+ from django.core.exceptions import ValidationError as DjangoValidationError
+ try:
+  validate_password(password)
+ except DjangoValidationError as e:
+  return Response({'detail':' '.join(e.messages)},status=400)
+ new_user=User(username=username,first_name=first_name,last_name=last_name,role=role,school=school,organisation=user.organisation,is_active=True)
+ new_user.set_password(password)
+ new_user.full_clean()
+ new_user.save()
+ record_event(actor=user,action='create',obj=new_user,changed_fields=['username','role','school'])
+ return Response({'id':new_user.id,'username':new_user.username,'name':new_user.get_full_name(),'role':new_user.role,'school':new_user.school_id,'school_name':new_user.school.name if new_user.school else None},status=201)
+
+@api_view(['GET'])
+def school_users(request,school_id):
+ """List users assigned to a specific school."""
+ school=schools_scope(request.user).filter(pk=school_id).first()
+ if not school:
+  return Response({'detail':'Not found'},status=404)
+ users=User.objects.filter(school=school,is_active=True).order_by('role','first_name')
+ return Response({'results':[{'id':u.id,'name':u.get_full_name() or u.username,'username':u.username,'role':u.role} for u in users]})

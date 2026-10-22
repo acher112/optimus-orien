@@ -10,3 +10,5 @@ export const logout=()=>request('auth/logout/',{method:'POST'});
 export const list=async<T>(name:string)=>{const x=await request<{results:T[]} | T[]>(name+'/');return Array.isArray(x)?x:x.results};
 export const create=(name:string,data:Record<string,unknown>)=>request<Resource>(name+'/',{method:'POST',body:JSON.stringify(data)});
 export const update=(name:string,id:number,data:Record<string,unknown>)=>request<Resource>(`${name}/${id}/`,{method:'PATCH',body:JSON.stringify(data)});
+export const createAccount=(data:Record<string,unknown>)=>request<Record<string,unknown>>('accounts/',{method:'POST',body:JSON.stringify(data)});
+export const schoolUsers=(schoolId:number)=>request<{results:Array<{id:number;name:string;username:string;role:string}>}>(`schools/${schoolId}/users/`);
