@@ -87,6 +87,7 @@ class SchoolSerializer(DynamicSerializer):
  class Meta:model=School;fields=['id','organisation','name','code','city','attendance_alert_threshold','grade_alert_threshold'];read_only_fields=['organisation']
 class ClassSerializer(DynamicSerializer):
  school_name=serializers.CharField(source='school.name',read_only=True)
+ academic_year_name=serializers.CharField(source='academic_year.name',read_only=True)
  teacher_name=serializers.SerializerMethodField()
  def get_teacher_name(self,o):return o.teacher.get_full_name() if o.teacher else 'Unassigned'
  class Meta:model=SchoolClass;fields='__all__'
@@ -98,6 +99,7 @@ class StudentSerializer(DynamicSerializer):
   return e.school_class.name if e else 'Unassigned'
  class Meta:model=Student;fields=['id','school','admission_number','first_name','last_name','full_name','date_of_birth','enrolled_on','active','user','guardians','class_name']
 class SubjectSerializer(DynamicSerializer):
+ school_name=serializers.CharField(source='school.name',read_only=True)
  class Meta:model=Subject;fields='__all__'
 class AssessmentSerializer(DynamicSerializer):
  subject_name=serializers.CharField(source='subject.name',read_only=True)
@@ -124,6 +126,7 @@ class InterventionSerializer(DynamicSerializer):
 class NotificationSerializer(DynamicSerializer):
  class Meta:model=Notification;fields='__all__';read_only_fields=['user','title','body','created_at']
 class YearSerializer(DynamicSerializer):
+ school_name=serializers.CharField(source='school.name',read_only=True)
  class Meta:model=AcademicYear;fields='__all__'
 class EnrollmentSerializer(DynamicSerializer):
  class Meta:model=Enrollment;fields='__all__'
@@ -343,3 +346,9 @@ def export_students(request):
  writer=csv.writer(response);writer.writerow(['Admission #','First name','Last name','School','Enrolled','Active'])
  for s in students_scope(request.user).select_related('school'):writer.writerow([s.admission_number,s.first_name,s.last_name,s.school.name,s.enrolled_on,s.active])
  return response
+
+@api_view(['GET'])
+def teachers_list(request):
+ schools=schools_scope(request.user)
+ teachers=User.objects.filter(school__in=schools,role='teacher',is_active=True).select_related('school')
+ return Response({'results':[{'id':t.id,'name':t.get_full_name() or t.username,'username':t.username,'school_id':t.school_id,'school_name':t.school.name if t.school else ''} for t in teachers]})

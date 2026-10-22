@@ -74,8 +74,15 @@ $$\text{Verified Progress} = \frac{68.0 + 24.0}{158.0} = \frac{92.0}{158.0} = \m
   3. **Organisation Management View:** Added organisation network and student privacy policy card to Workspace Settings for organisation and school administrators.
   4. **Full Documentation Deliverables:** Generated all 5 master planning and audit documents in `docs/` (`REQUIREMENT_AUDIT`, `IMPLEMENTATION_ROADMAP`, `FEATURE_RELATIONSHIPS`, `TEST_RESULTS`, and `PROGRESS`).
 
+### Milestone 2: Academic Structures, Teaching Assignments & Usable Foreign Key Dropdowns
+- **Status:** **COMPLETE**
+- **Achievements:**
+  1. **Teaching Assignments Endpoint (`/api/v1/teachers/`):** Added a scoped, authenticated endpoint returning active teachers for the user's authorised schools, including teacher ID, full name, username, and campus affiliation (`ORG-014`). Verified with tenant-isolation unit tests.
+  2. **Curriculum Subjects & Academic Years Management:** Added `Academic years` and `Subjects` views to the workspace navigation and resource grid, enabling school administrators to manage calendar sessions and course subject codes directly in the UI (`ORG-006`, `ORG-011`).
+  3. **Plain-English Usable Select Dropdowns (Eliminating Raw DB IDs):** Enhanced the resource creation modal across all entity types to replace raw integer input boxes with dynamic `<select>` dropdowns for schools, academic years, teachers, classes, subjects, and attendance/intervention status options. Auto-selects user's campus when scoped (`PR-011`).
+  4. **Render Health Check & Deployment Fix:** Resolved Render auto-deploy failure by adding `path('', views.health)` root and `/health/` handlers, exempting health probes from SSL redirect (`SECURE_REDIRECT_EXEMPT`), enabling `SECURE_PROXY_SSL_HEADER`, and automatically including `.onrender.com` in `ALLOWED_HOSTS`.
+
 ### Upcoming Milestones (Pending User Review & Consent)
-- **Milestone 2:** Academic Structures, Year Groups, Stages & Class Teaching Offerings.
 - **Milestone 3:** Student Admission, Historical Enrolments & Multi-Campus Transfers.
 - **Milestone 4:** Daily Attendance Registers & School Calendar Integration.
 - **Milestone 5:** Assessment Markbook, Weighted Evaluation & Grade Publishing Lock.

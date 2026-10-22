@@ -138,6 +138,21 @@ class TenantAndRoleTests(AccessFixture):
   n.refresh_from_db();self.assertTrue(n.read)
   self.sign(self.parent_other)
   self.assertEqual(self.client.get(f'/api/v1/notifications/{n.pk}/').status_code,404)
+ def test_teachers_list_scoped_by_school(self):
+  self.sign(self.school_admin)
+  r=self.client.get('/api/v1/teachers/')
+  self.assertEqual(r.status_code,200)
+  ids={t['id'] for t in r.json()['results']}
+  self.assertIn(self.teacher.id,ids)
+  self.assertIn(self.other_teacher.id,ids)
+  self.assertNotIn(self.teacher3.id,ids)
+  self.client.logout()
+  self.assertIn(self.client.get('/api/v1/teachers/').status_code,(401,403))
+ def test_health_and_root_endpoints(self):
+  for p in ('/','/health/','/api/health/'):
+   r=self.client.get(p)
+   self.assertEqual(r.status_code,200)
+   self.assertEqual(r.json().get('status'),'ok')
 
 class IntegrityAuditTransferTests(AccessFixture):
  def test_cannot_change_immutable_grade_relationship(self):

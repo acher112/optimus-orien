@@ -6,6 +6,8 @@ load_dotenv(BASE_DIR.parent/'.env')
 SECRET_KEY=os.getenv('DJANGO_SECRET_KEY','dev-only-change-before-production')
 DEBUG=os.getenv('DJANGO_DEBUG','false').lower()=='true'
 ALLOWED_HOSTS=[h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS','localhost,127.0.0.1').split(',') if h.strip()]
+for _h in ('localhost','127.0.0.1','.onrender.com'):
+ if _h not in ALLOWED_HOSTS:ALLOWED_HOSTS.append(_h)
 if not DEBUG and (SECRET_KEY in ('dev-only-change-before-production','change-this-to-a-long-random-secret','local-development-only-optimus-orien-not-production') or len(SECRET_KEY)<32):
  raise RuntimeError('DJANGO_SECRET_KEY must be strong and unique when DJANGO_DEBUG=false')
 INSTALLED_APPS=['django.contrib.admin','django.contrib.auth','django.contrib.contenttypes','django.contrib.sessions','django.contrib.messages','django.contrib.staticfiles','rest_framework','corsheaders','core']
@@ -30,11 +32,12 @@ for _origin in ('https://optimus-orien.vercel.app','https://optimus-orien-api.on
 SESSION_COOKIE_HTTPONLY=True
 SESSION_COOKIE_SECURE=not DEBUG
 CSRF_COOKIE_SECURE=not DEBUG
-SECURE_SSL_REDIRECT=(not DEBUG and os.getenv('DJANGO_SSL_REDIRECT','true').lower()=='true')
+SECURE_SSL_REDIRECT=(not DEBUG and os.getenv('DJANGO_SSL_REDIRECT','false' if os.getenv('RENDER') else 'true').lower()=='true')
+SECURE_REDIRECT_EXEMPT=[r'^$',r'^health/?$',r'^api/health/?$']
 SECURE_HSTS_SECONDS=31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS=not DEBUG
 SECURE_REFERRER_POLICY='same-origin'
-SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https') if os.getenv('TRUST_REVERSE_PROXY','false').lower()=='true' else None
+SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https') if (not DEBUG or os.getenv('TRUST_REVERSE_PROXY','true').lower()=='true' or os.getenv('RENDER')) else None
 SESSION_COOKIE_SAMESITE='Lax'
 CSRF_COOKIE_SAMESITE='Lax'
 SESSION_EXPIRE_AT_BROWSER_CLOSE=True
