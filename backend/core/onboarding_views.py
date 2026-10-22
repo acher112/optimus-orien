@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import PermissionDenied,ValidationError
 from rest_framework.response import Response
-from .models import School,SchoolConfiguration,SchoolConfigurationVersion,PublishedSchoolIndicator
+from .models import School,SchoolConfiguration,SchoolConfigurationVersion,PublishedSchoolIndicator,AcademicYear
 from .services.access import schools_scope
 from .services.audit import record_event
 from .services.school_setup import CONFIG_FIELDS,readiness,setup_snapshot
@@ -107,6 +107,16 @@ def activate_school_configuration(request,school_id):
   config.save()
   SchoolConfigurationVersion.objects.create(configuration=config,version=config.active_version,
                                             snapshot=setup_snapshot(config),activated_by=request.user)
+  if config.academic_year_name and config.academic_start and config.academic_end:
+   AcademicYear.objects.update_or_create(
+       school=school,
+       name=config.academic_year_name,
+       defaults={
+           'start_date': config.academic_start,
+           'end_date': config.academic_end,
+           'active': True,
+       }
+   )
   record_event(actor=request.user,action='school_setup_activated',obj=school,
                changed_fields=['status','active_version'],after={'status':'active','active_version':config.active_version})
  return Response(payload(school,config))

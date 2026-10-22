@@ -7,3 +7,4 @@ dist/
 *.sqlite3
 staticfiles/
 .DS_Store
+*.tsbuildinfo

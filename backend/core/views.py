@@ -63,7 +63,19 @@ def signin(request):
 @api_view(['POST'])
 def signout(request):logout(request);return Response({'ok':True})
 
-def user_payload(u):return {'id':u.id,'name':u.get_full_name() or u.username,'username':u.username,'role':u.role,'organisation':u.organisation_id,'school':u.school_id,'is_staff':u.is_staff}
+def user_payload(u):
+ return {
+  'id': u.id,
+  'name': u.get_full_name() or u.username,
+  'username': u.username,
+  'role': u.role,
+  'organisation': u.organisation_id,
+  'organisation_name': u.organisation.name if u.organisation else None,
+  'allow_org_admin_student_access': getattr(u.organisation, 'allow_org_admin_student_access', False) if u.organisation else False,
+  'school': u.school_id,
+  'school_name': u.school.name if u.school else None,
+  'is_staff': u.is_staff,
+ }
 @api_view(['GET'])
 def me(request):return Response(user_payload(request.user))
 

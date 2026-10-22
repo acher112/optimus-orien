@@ -4,7 +4,7 @@ import json
 from django.test import TestCase
 from django.utils import timezone
 from core.models import (School,Organisation,User,SchoolConfiguration,SchoolConfigurationVersion,
-                         PublishedSchoolIndicator,AuditEvent,Student)
+                         PublishedSchoolIndicator,AuditEvent,Student,AcademicYear)
 
 class SetupTests(TestCase):
  def setUp(self):
@@ -65,6 +65,7 @@ class SetupTests(TestCase):
   self.assertEqual(first.version,1)
   self.assertEqual(first.snapshot['programmes'],self.valid['programmes'])
   self.assertTrue(AuditEvent.objects.filter(action='school_setup_activated',school=self.school).exists())
+  self.assertTrue(AcademicYear.objects.filter(school=self.school,name='2026-2027',active=True).exists())
   self.assertEqual(self.activate().status_code,409)
   draft=self.patch({'language':'ur'})
   self.assertEqual(draft.status_code,200)
