@@ -345,54 +345,269 @@ def teachers_list(request):
 
 @api_view(['POST'])
 def create_account(request):
- """Organisation admin or school admin can create staff/student accounts for their school."""
+ """
+ Multi-role account provisioning matching OPTIMUS ORIEN Part 5 §18, SEC-018, AUTH-014/015.
+ - organisation_admin can provision any institutional or community role.
+ - school_admin and principal can provision teachers, students, and parents for their assigned campus.
+ - Enforces username uniqueness, password complexity, school scoping, and optional automatic
+   student directory or guardian linkage.
+ """
  user=request.user
  if not user.is_authenticated:
   return Response({'detail':'Authentication required'},status=401)
- if user.role not in ('organisation_admin','school_admin') and not user.is_superuser:
-  raise PermissionDenied('Account creation requires administrator role')
+ if user.role not in ('organisation_admin','school_admin','principal') and not user.is_superuser:
+  raise PermissionDenied('Account creation requires administrator or principal role')
  data=request.data
  first_name=(data.get('first_name') or '').strip()
  last_name=(data.get('last_name') or '').strip()
  username=(data.get('username') or '').strip()
+ email=(data.get('email') or '').strip().lower()
  password=data.get('password') or ''
  role=(data.get('role') or '').strip()
  school_id=data.get('school')
- VALID_ROLES=['school_admin','principal','teacher','student','parent']
+ admission_number=(data.get('admission_number') or '').strip()
+ student_id=data.get('student_id')
+ class_id=data.get('class_id')
+ 
+ VALID_ROLES=['organisation_admin','school_admin','principal','teacher','student','parent']
  if not all([first_name,last_name,username,password,role]):
   return Response({'detail':'first_name, last_name, username, password and role are required'},status=400)
  if role not in VALID_ROLES:
   return Response({'detail':f'Role must be one of: {", ".join(VALID_ROLES)}'},status=400)
- if user.role=='school_admin' and role=='school_admin':
-  raise PermissionDenied('School admins cannot create other school admin accounts')
- if school_id:
-  school=schools_scope(user).filter(pk=school_id).first()
+ 
+ if user.role in ('school_admin','principal'):
+  if role not in ('teacher','student','parent'):
+   raise PermissionDenied('Campus leaders may only provision teachers, students, and parents')
+  school=user.school
   if not school:
-   return Response({'detail':'School not found or not in your scope'},status=400)
+   raise PermissionDenied('Your account has no assigned school campus')
+ elif user.role=='organisation_admin' or user.is_superuser:
+  if role=='organisation_admin' and not school_id:
+   school=None
+  elif school_id:
+   school=schools_scope(user).filter(pk=school_id).first()
+   if not school:
+    return Response({'detail':'School campus not found or not in your scope'},status=400)
+  else:
+   if role!='organisation_admin':
+    return Response({'detail':'A school campus must be selected for this role'},status=400)
+   school=None
  else:
-  school=None
-  if user.role=='school_admin':
-   school=user.school
+  raise PermissionDenied('Permission denied')
+
  if User.objects.filter(username=username).exists():
-  return Response({'detail':'Username already taken'},status=400)
+  return Response({'detail':'Username is already taken. Please choose another.'},status=400)
+ 
+ if email and User.objects.filter(email=email).exists():
+  return Response({'detail':'An account with this email address already exists.'},status=400)
+
  from django.contrib.auth.password_validation import validate_password
  from django.core.exceptions import ValidationError as DjangoValidationError
  try:
   validate_password(password)
  except DjangoValidationError as e:
   return Response({'detail':' '.join(e.messages)},status=400)
- new_user=User(username=username,first_name=first_name,last_name=last_name,role=role,school=school,organisation=user.organisation,is_active=True)
- new_user.set_password(password)
- new_user.full_clean()
- new_user.save()
- record_event(actor=user,action='create',obj=new_user,changed_fields=['username','role','school'])
- return Response({'id':new_user.id,'username':new_user.username,'name':new_user.get_full_name(),'role':new_user.role,'school':new_user.school_id,'school_name':new_user.school.name if new_user.school else None},status=201)
+
+ with transaction.atomic():
+  new_user=User(
+   username=username,
+   email=email,
+   first_name=first_name,
+   last_name=last_name,
+   role=role,
+   school=school,
+   organisation=user.organisation,
+   is_active=True
+  )
+  new_user.set_password(password)
+  new_user.full_clean()
+  new_user.save()
+  
+  linked_info={}
+  if role=='student' and school:
+   from django.utils import timezone
+   adm=admission_number or f"ADM-{timezone.now().year}-{new_user.id:04d}"
+   st=Student.objects.filter(school=school,admission_number=adm).first()
+   if not st:
+    st=Student(
+     school=school,
+     admission_number=adm,
+     first_name=first_name,
+     last_name=last_name,
+     user=new_user,
+     enrolled_on=timezone.now().date(),
+     active=True
+    )
+    st.full_clean()
+    st.save()
+   else:
+    if not st.user:
+     st.user=new_user
+     st.save(update_fields=['user'])
+   linked_info['student_id']=st.id
+   linked_info['admission_number']=st.admission_number
+   
+   if class_id:
+    sc_class=SchoolClass.objects.filter(pk=class_id,school=school).first()
+    if sc_class:
+     enrollment=Enrollment(student=st,school_class=sc_class,start_date=timezone.now().date())
+     enrollment.full_clean()
+     enrollment.save()
+     linked_info['class_name']=sc_class.name
+  
+  if role=='parent' and student_id:
+   st=Student.objects.filter(pk=student_id,school__organisation=user.organisation).first()
+   if st:
+    st.guardians.add(new_user)
+    linked_info['ward_name']=st.full_name
+  
+  if role=='teacher' and class_id and school:
+   sc_class=SchoolClass.objects.filter(pk=class_id,school=school).first()
+   if sc_class and not sc_class.teacher:
+    sc_class.teacher=new_user
+    sc_class.save(update_fields=['teacher'])
+    linked_info['assigned_class']=sc_class.name
+  
+  record_event(
+   actor=user,
+   action='create',
+   obj=new_user,
+   changed_fields=['username','email','role','school']
+  )
+
+ return Response({
+  'id':new_user.id,
+  'username':new_user.username,
+  'email':new_user.email,
+  'name':new_user.get_full_name(),
+  'role':new_user.role,
+  'school':new_user.school_id,
+  'school_name':new_user.school.name if new_user.school else None,
+  **linked_info
+ },status=201)
+
+@api_view(['POST'])
+def register_campus(request):
+ """
+ Comprehensive Campus Registration matching OPTIMUS ORIEN Parts 1, 2, 4 & 19 (SCH-001/004, ORG-001/002).
+ Registers a campus entity with identity, location, jurisdiction, timezone, educational pathways,
+ alert thresholds, and official contact metadata. Automatically initializes the SchoolConfiguration draft.
+ """
+ user=request.user
+ if not user.is_authenticated:
+  return Response({'detail':'Authentication required'},status=401)
+ if user.role!='organisation_admin' and not user.is_superuser:
+  raise PermissionDenied('Registering a new campus requires organisation administration')
+ if not user.organisation_id:
+  raise PermissionDenied('Organisation membership required')
+ 
+ data=request.data
+ name=(data.get('name') or '').strip()
+ code=(data.get('code') or '').strip().upper()
+ city=(data.get('city') or '').strip()
+ jurisdiction=(data.get('jurisdiction') or '').strip()
+ country=(data.get('country') or '').strip().upper()
+ address=(data.get('address') or '').strip()
+ timezone_val=(data.get('timezone') or '').strip()
+ contact_email=(data.get('contact_email') or '').strip()
+ contact_phone=(data.get('contact_phone') or '').strip()
+ campus_type=(data.get('campus_type') or 'Branch Campus').strip()
+ programmes=data.get('programmes') or []
+ if isinstance(programmes,str):
+  programmes=[p.strip() for p in programmes.split(',') if p.strip()]
+ 
+ attendance_alert=data.get('attendance_alert_threshold')
+ if attendance_alert is not None and attendance_alert!='':
+  try:attendance_alert=float(attendance_alert)
+  except:attendance_alert=80.0
+ else:attendance_alert=80.0
+
+ grade_alert=data.get('grade_alert_threshold')
+ if grade_alert is not None and grade_alert!='':
+  try:grade_alert=float(grade_alert)
+  except:grade_alert=60.0
+ else:grade_alert=60.0
+
+ if not name or not code:
+  return Response({'detail':'Campus name and unique code are required'},status=400)
+ 
+ if School.objects.filter(organisation=user.organisation,code=code).exists():
+  return Response({'detail':f'A campus with code "{code}" already exists in your organisation'},status=400)
+
+ with transaction.atomic():
+  school=School(
+   organisation=user.organisation,
+   name=name,
+   code=code,
+   city=city,
+   attendance_alert_threshold=attendance_alert,
+   grade_alert_threshold=grade_alert
+  )
+  school.full_clean()
+  school.save()
+
+  from .models import SchoolConfiguration
+  config,_=SchoolConfiguration.objects.get_or_create(school=school)
+  if country and len(country)==2:
+   config.country=country
+  if jurisdiction:
+   config.jurisdiction=jurisdiction
+  if timezone_val:
+   config.timezone=timezone_val
+  if programmes and isinstance(programmes,list):
+   config.programmes=[p[:120] for p in programmes if isinstance(p,str)]
+  
+  settings_dict=config.school_settings or {}
+  if address:settings_dict['address']=address
+  if contact_email:settings_dict['contact_email']=contact_email
+  if contact_phone:settings_dict['contact_phone']=contact_phone
+  if campus_type:settings_dict['campus_type']=campus_type
+  config.school_settings=settings_dict
+  config.full_clean()
+  config.save()
+
+  record_event(
+   actor=user,
+   action='create',
+   obj=school,
+   changed_fields=['name','code','city','attendance_alert_threshold','grade_alert_threshold']
+  )
+
+ return Response({
+  'id':school.id,
+  'organisation':school.organisation_id,
+  'name':school.name,
+  'code':school.code,
+  'city':school.city,
+  'jurisdiction':config.jurisdiction,
+  'country':config.country,
+  'timezone':config.timezone,
+  'programmes':config.programmes,
+  'attendance_alert_threshold':float(school.attendance_alert_threshold),
+  'grade_alert_threshold':float(school.grade_alert_threshold),
+  'school_settings':config.school_settings
+ },status=201)
 
 @api_view(['GET'])
 def school_users(request,school_id):
- """List users assigned to a specific school."""
+ """List users assigned to a specific school with role and contact metadata."""
  school=schools_scope(request.user).filter(pk=school_id).first()
  if not school:
   return Response({'detail':'Not found'},status=404)
  users=User.objects.filter(school=school,is_active=True).order_by('role','first_name')
- return Response({'results':[{'id':u.id,'name':u.get_full_name() or u.username,'username':u.username,'role':u.role} for u in users]})
+ res=[]
+ for u in users:
+  item={
+   'id':u.id,
+   'name':u.get_full_name() or u.username,
+   'username':u.username,
+   'email':u.email or '',
+   'role':u.role,
+   'date_joined':u.date_joined.strftime('%Y-%m-%d') if u.date_joined else ''
+  }
+  if u.role=='student':
+   st=Student.objects.filter(user=u).first()
+   if st:
+    item['admission_number']=st.admission_number
+  res.append(item)
+ return Response({'results':res})

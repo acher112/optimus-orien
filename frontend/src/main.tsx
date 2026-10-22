@@ -1,9 +1,10 @@
-﻿import React,{useCallback,useEffect,useMemo,useState} from 'react';import{createRoot}from'react-dom/client';
+import React,{useCallback,useEffect,useMemo,useState} from 'react';import{createRoot}from'react-dom/client';
 import{Activity,ArrowDownRight,ArrowRight,ArrowUpRight,BarChart3,Bell,BookOpen,Building2,CalendarDays,Check,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,ClipboardCheck,ClipboardList,Download,FileBarChart,GraduationCap,HeartHandshake,LayoutDashboard,LogOut,Menu,MoreHorizontal,Plus,Search,Settings2,ShieldCheck,SlidersHorizontal,Sparkles,Users,UserRound,School,TrendingUp,X,AlertCircle,Clock,PanelLeftClose,Sun,Moon,RefreshCw}from'lucide-react';
 import{Area,AreaChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis,Bar,BarChart,Cell}from'recharts';
-import{request,login,logout,list,create,update,createAccount,schoolUsers,type User,type Dashboard,type Resource}from'./api';import PublicHome from './PublicHome';import SchoolSetup from './SchoolSetup';import Reports from './Reports';import './style.css';
-const WORKSPACE_NAV=[{name:'Overview',icon:LayoutDashboard},{name:'Students',icon:GraduationCap},{name:'Schools',icon:School},{name:'Campuses',icon:Building2,adminOnly:true},{name:'School setup',icon:Settings2,adminOnly:true},{name:'Academic years',icon:CalendarDays,adminOnly:true},{name:'Classes',icon:Users},{name:'Subjects',icon:BookOpen},{name:'Academics',icon:FileBarChart},{name:'Attendance',icon:ClipboardCheck},{name:'Homework',icon:ClipboardList},{name:'Interventions',icon:HeartHandshake}];
-const SYSTEM_NAV=[{name:'Reports',icon:BarChart3},{name:'Notifications',icon:Bell},{name:'Settings',icon:Settings2}];
+import{request,login,logout,list,create,update,createAccount,registerCampus,schoolUsers,type User,type Dashboard,type Resource}from'./api';import PublicHome from './PublicHome';import SchoolSetup from './SchoolSetup';import Reports from './Reports';import './style.css';
+const WORKSPACE_NAV=[{name:'Overview',icon:LayoutDashboard},{name:'Campuses',icon:Building2,adminOnly:true},{name:'Schools',icon:School},{name:'School setup',icon:Settings2,adminOnly:true},{name:'Academic years',icon:CalendarDays,adminOnly:true},{name:'Classes',icon:Users},{name:'Subjects',icon:BookOpen},{name:'Students',icon:GraduationCap},{name:'Attendance',icon:ClipboardCheck},{name:'Homework',icon:ClipboardList},{name:'Academics',icon:FileBarChart},{name:'Interventions',icon:HeartHandshake}];
+const SYSTEM_NAV=[{name:'Reports',icon:BarChart3},{name:'Audit log',icon:ShieldCheck,adminOnly:true},{name:'Notifications',icon:Bell},{name:'Settings',icon:Settings2}];
+const NAV_GROUPS=[{sublabel:'ORGANISATION & CAMPUSES',items:['Overview','Campuses','Schools']},{sublabel:'ACADEMIC CONFIGURATION',adminLabel:true,items:['School setup','Academic years']},{sublabel:'ACADEMIC STRUCTURE',items:['Classes','Subjects']},{sublabel:'STUDENTS & LEARNING',items:['Students','Attendance','Homework','Academics']},{sublabel:'STUDENT SUPPORT',items:['Interventions']}];
 const COLOR=['#715ee8','#23b7a0','#f29d50','#6c9eff','#e477a1','#b4a0e9'];
 const initials=(name:string)=>name.split(/\s+/).map(s=>s[0]).join('').slice(0,2).toUpperCase();
 const fmt=(n:number|null|undefined,suffix='%')=>n===null||n===undefined?'—':`${n}${suffix}`;
@@ -24,7 +25,7 @@ const Pill=({value}:{value:string|boolean|undefined})=>{const text=typeof value=
 function App(){const[user,setUser]=useState<User|null>(null),[loading,setLoading]=useState(true),[page,setPage]=useState('Overview'),[dash,setDash]=useState<Dashboard|null>(null),[records,setRecords]=useState<Resource[]>([]),[search,setSearch]=useState(''),[error,setError]=useState(''),[toast,setToast]=useState(''),[modal,setModal]=useState(false),[sidebar,setSidebar]=useState(false),[dark,setDark]=useState(false),[showNotifications,setShowNotifications]=useState(false),[form,setForm]=useState<Record<string,string>>({}),[filter,setFilter]=useState('All'),[saving,setSaving]=useState(false),[setupSchool,setSetupSchool]=useState<number|null>(null),[refData,setRefData]=useState<{schools:Array<{id:number;name:string}>;years:Array<{id:number;name:string;school?:number}>;teachers:Array<{id:number;name:string;school_id?:number}>;classes:Array<{id:number;name:string;school?:number}>;subjects:Array<{id:number;name:string;code?:string;school?:number}>}>({schools:[],years:[],teachers:[],classes:[],subjects:[]});
  const notify=(msg:string)=>{setToast(msg);setTimeout(()=>setToast(''),3500)};
  useEffect(()=>{request<User>('auth/me/').then(setUser).catch(()=>{}).finally(()=>setLoading(false))},[]);
- const load=useCallback(async()=>{if(!user)return;setError('');try{if(page==='Overview'){setDash(await request<Dashboard>('dashboard/'))}else if(page==='Reports'){}else if(resourceInfo[page]){setRecords(await list<Resource>(resourceInfo[page].api))}else if(page==='Settings'){setRecords(await list<Resource>('schools'))}}catch(e){setError(e instanceof Error?e.message:'Could not load data')}},[page,user]);
+ const load=useCallback(async()=>{if(!user)return;setError('');try{if(page==='Overview'){setDash(await request<Dashboard>('dashboard/'))}else if(page==='Reports'||page==='Campuses'||page==='Audit log'){}else if(resourceInfo[page]){setRecords(await list<Resource>(resourceInfo[page].api))}else if(page==='Settings'){setRecords(await list<Resource>('schools'))}}catch(e){setError(e instanceof Error?e.message:'Could not load data')}},[page,user]);
  useEffect(()=>{load()},[load]);
  const switchPage=(p:string)=>{setPage(p);setSearch('');setFilter('All');setSidebar(false)};
  const changeTheme=()=>setDark(d=>!d);
@@ -38,8 +39,8 @@ function App(){const[user,setUser]=useState<User|null>(null),[loading,setLoading
  return <div className={'app '+(dark?'dark':'')}>
  <aside className={'sidebar '+(sidebar?'open':'')}><div className="brand"><span className="brand-symbol">◈</span><span className="brand-copy"><strong>optimus<span>orien</span></strong><small>EDUCATION INTELLIGENCE</small></span><button className="mobile-x" onClick={()=>setSidebar(false)}><X size={19}/></button></div>
  <div className="workspace-pill"><span className="workspace-icon"><School size={19}/></span><span className="workspace-name"><b>Northstar Workspace</b><small>Education management</small></span><ChevronDown size={15}/></div>
- <div className="nav-label">WORKSPACE</div><nav>{[{sublabel:'ORGANISATION',items:['Overview','Campuses','Schools']},{sublabel:'ACADEMIC SETUP',adminLabel:true,items:['School setup','Academic years']},{sublabel:'LEARNERS',items:['Students','Classes','Subjects']},{sublabel:'ACTIVITY',items:['Academics','Attendance','Homework','Interventions']}].map(group=>{const isAdmin=group.adminLabel;if(isAdmin&&!['organisation_admin','school_admin'].includes(user.role))return null;const navItems=WORKSPACE_NAV.filter(item=>group.items.includes(item.name)&&(!item.adminOnly||['organisation_admin','school_admin'].includes(user.role)));if(!navItems.length)return null;return <React.Fragment key={group.sublabel}><div className={'nav-sublabel'+(isAdmin?' nav-sublabel-admin':'')}>{group.sublabel}</div>{navItems.map(({name,icon:Icon})=><button key={name} onClick={()=>switchPage(name)} className={'nav-item '+(page===name?'selected':'')}><Icon size={19} strokeWidth={1.9}/><span>{name}</span>{name==='Interventions'&&!!dash?.counts.open_cases&&<em>{dash.counts.open_cases}</em>}</button>)}</React.Fragment>;})}</nav>
-<div className="nav-label nav-lower">INSIGHTS & SYSTEM</div><nav>{SYSTEM_NAV.map(({name,icon:Icon})=><button key={name} onClick={()=>switchPage(name)} className={'nav-item '+(page===name?'selected':'')}><Icon size={19} strokeWidth={1.9}/><span>{name}</span></button>)}</nav>
+ <div className="nav-label">WORKSPACE</div><nav>{NAV_GROUPS.map(group=>{const isAdmin=group.adminLabel;if(isAdmin&&!['organisation_admin','school_admin'].includes(user.role))return null;const navItems=WORKSPACE_NAV.filter(item=>group.items.includes(item.name)&&(!item.adminOnly||['organisation_admin','school_admin'].includes(user.role)));if(!navItems.length)return null;return <React.Fragment key={group.sublabel}><div className={'nav-sublabel'+(isAdmin?' nav-sublabel-admin':'')}>{group.sublabel}</div>{navItems.map(({name,icon:Icon})=><button key={name} onClick={()=>switchPage(name)} className={'nav-item '+(page===name?'selected':'')}><Icon size={19} strokeWidth={1.9}/><span>{name}</span>{name==='Interventions'&&!!dash?.counts.open_cases&&<em>{dash.counts.open_cases}</em>}</button>)}</React.Fragment>;})}</nav>
+<div className="nav-label nav-lower">INSIGHTS & SYSTEM</div><nav>{SYSTEM_NAV.filter(item=>!item.adminOnly||['organisation_admin','school_admin','principal'].includes(user.role)).map(({name,icon:Icon})=><button key={name} onClick={()=>switchPage(name)} className={'nav-item '+(page===name?'selected':'')}><Icon size={19} strokeWidth={1.9}/><span>{name}</span></button>)}</nav>
  <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><Sparkles size={17}/></div><b>More clarity. Better outcomes.</b><p>Use insights to make every school day count.</p><button onClick={()=>switchPage('Reports')}>Explore reports <ArrowRight size={14}/></button><a className="public-sidebar-link" href="/">Public homepage <ArrowUpRight size={13}/></a></div><div className="account"><div className="avatar">{initials(user.name)}</div><div><b>{user.name}</b><small>{nice(user.role)}</small></div><button aria-label="Sign out" onClick={async()=>{await logout();setUser(null)}}><LogOut size={18}/></button></div></div>
  </aside>
  <div className="main-shell"><header className="topbar"><div className="topbar-left"><button className="mobile-menu" onClick={()=>setSidebar(true)} aria-label="Open menu"><Menu size={21}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{page}</strong></div></div><div className="topbar-right"><span className="today"><CalendarDays size={16}/>{new Intl.DateTimeFormat('en',{month:'short',day:'numeric',year:'numeric'}).format(new Date())}</span><button className="icon-button" title="Toggle theme" onClick={changeTheme}>{dark?<Sun size={19}/>:<Moon size={19}/>}</button><div className="notif-wrap"><button className="icon-button notification-trigger" title="Notifications" onClick={()=>setShowNotifications(v=>!v)}><Bell size={19}/><i/></button>{showNotifications&&<div className="notification-menu"><b>Recent notifications</b>{(dash?.recent_notifications||[]).length?(dash?.recent_notifications||[]).map(n=><div key={n.id} className="notification-row"><Bell size={15}/><span><strong>{n.title}</strong><small>{n.body}</small></span></div>):<p>Your workspace is up to date.</p>}<button onClick={()=>{setShowNotifications(false);switchPage('Notifications')}}>View all notifications <ArrowRight size={14}/></button></div>}</div><div className="avatar small">{initials(user.name)}</div></div></header>
@@ -53,6 +54,7 @@ function App(){const[user,setUser]=useState<User|null>(null),[loading,setLoading
  <div className="dashboard-grid lower"><section className="panel students-panel"><div className="panel-head"><div><h3>Recently added students</h3><p>Latest learners in your workspace</p></div><button className="text-link" onClick={()=>switchPage('Students')}>View all <ArrowRight size={16}/></button></div><div className="simple-table"><div className="simple-tr table-title"><span>STUDENT</span><span>ADMISSION ID</span><span>SCHOOL</span></div>{dash?.recent_students.map((s,i)=><div className="simple-tr" key={s.id}><span className="student-label"><span className="student-avatar" style={{background:COLOR[i%COLOR.length]+'1b',color:COLOR[i%COLOR.length]}}>{initials(s.first_name+' '+s.last_name)}</span><b>{s.first_name} {s.last_name}</b></span><span>{s.admission_number}</span><span>{s.school__name}</span></div>)}</div></section><section className="panel pulse-panel"><div className="panel-head"><div><h3>Workspace pulse</h3><p>The numbers behind your progress</p></div><MoreHorizontal size={20} color="#a6adbb"/></div><div className="pulse-feature"><div className="pulse-ring"><strong>{fmt(dash?.stats.attendance_rate)}</strong><small>Attendance</small></div><div className="pulse-copy"><span className="pulse-chip"><Activity size={14}/> Key indicator</span><h4>Every day counts.</h4><p>Attendance reflects recorded eligible sessions, not unrecorded days.</p></div></div><div className="pulse-bottom"><div><strong>{dash?.counts.classes??0}</strong><span>Classes</span></div><div><strong>{dash?.counts.teachers??0}</strong><span>Teachers</span></div><div><strong>{dash?.counts.open_cases??0}</strong><span>Review cases</span></div></div></section></div></>}
  {config&&<><div className="page-header"><div><div className="eyebrow">WORKSPACE / {page.toUpperCase()}</div><h1>{config.title}</h1><p>{config.desc}</p></div>{config.fields.length>0&&user.role!=='student'&&user.role!=='parent'&&<button className="primary-btn" onClick={openCreateModal}><Plus size={17}/> Add {page==='Students'?'student':page==='Schools'?'school':page==='Interventions'?'case':page==='Academic years'?'academic year':page==='Classes'?'class':page==='Subjects'?'subject':'record'}</button>}</div><div className="resource-summary"><div className="resource-icon"><LayersIcon page={page}/></div><div><strong>{records.length}</strong><span>Total {page.toLowerCase()} records</span></div><div className="resource-side"><CheckCircle2 size={17}/> Synced with your workspace</div></div><section className="panel resource-panel"><div className="toolbar"><div className="searchbox"><Search size={18}/><input aria-label="Search records" value={search} onChange={e=>setSearch(e.target.value)} placeholder={`Search ${page.toLowerCase()}...`}/>{search&&<button onClick={()=>setSearch('')}><X size={14}/></button>}</div><div className="toolbar-right"><span className="result-count">{filtered.length} results</span><button className="outline-btn" onClick={()=>load()}><RefreshCw size={16}/> Refresh</button>{page==='Students'&&<a className="outline-btn" href="/api/v1/exports/students.csv"><Download size={16}/> Export CSV</a>}</div></div><div className="table-scroll"><table className="data-table"><thead><tr>{config.columns.map(c=><th key={c.key}>{c.label}</th>)}<th/></tr></thead><tbody>{filtered.map((r,i)=><tr key={r.id}>{config.columns.map((c,j)=><td key={c.key}>{j===0?<div className="student-label"><span className="student-avatar" style={{background:COLOR[i%COLOR.length]+'18',color:COLOR[i%COLOR.length]}}>{initials(String(c.key==='name'?r.full_name||`${r.first_name||''} ${r.last_name||''}`:r[c.key]||'OO'))}</span><strong>{c.key==='name'?String(r.full_name||`${r.first_name} ${r.last_name}`):String(r[c.key]||'—')}</strong></div>:typeof r[c.key]==='boolean'||['status','priority'].includes(c.key)?<Pill value={r[c.key] as string|boolean}/>:<span>{String(r[c.key]??'—')}</span>}</td>)}<td>{page==='Schools'&&['organisation_admin','school_admin'].includes(user.role)&&<button className="setup-table-button" onClick={()=>{setSetupSchool(Number(r.id));switchPage('School setup')}}><Settings2 size={14}/> Configure</button>}<button title="More information" className="table-more" onClick={()=>notify(`Record #${r.id} • ${page}`)}><MoreHorizontal size={19}/></button></td></tr>)}</tbody></table>{!filtered.length&&<Empty text={search?'No matching records. Try a different search.':'No records yet. Add your first entry to get started.'}/>}</div><div className="table-footer"><span>Showing {filtered.length} of {records.length} records</span><span>All authorised records <ShieldCheck size={15}/></span></div></section></>}
    {page==='Campuses'&&<CampusesPage user={user} notify={notify} onSetupSchool={(id)=>{setSetupSchool(id);switchPage('School setup')}}/>}
+   {page==='Audit log'&&<AuditLogView notify={notify}/>}
   {page==='Reports'&&<Reports user={user}/>}
  {page==='Settings'&&<><div className="page-header"><div><div className="eyebrow">PREFERENCES / CONFIGURATION</div><h1>Workspace settings</h1><p>Make the platform work for your school community.</p></div></div><div className="settings-grid"><section className="panel setting-card"><div className="setting-icon"><UserRound size={23}/></div><h3>Account & access</h3><p>Signed in as <b>{user.name}</b>, with the {nice(user.role)} role. School and organisation permissions are enforced by the backend.</p><div className="setting-detail"><span>Username</span><strong>{user.username}</strong></div><div className="setting-detail"><span>Role</span><Pill value={user.role}/></div></section>{user.organisation&&<section className="panel setting-card"><div className="setting-icon"><School size={23}/></div><h3>Organisation details</h3><p>Governing educational network and data policy for your workspace.</p><div className="setting-detail"><span>Organisation</span><strong>{user.organisation_name||`Organisation #${user.organisation}`}</strong></div><div className="setting-detail"><span>Student data policy</span><Pill value={user.allow_org_admin_student_access?'Full access':'Anonymised only'}/></div>{user.school_name&&<div className="setting-detail"><span>Campus assignment</span><strong>{user.school_name}</strong></div>}<button className="outline-btn" style={{marginTop:'14px'}} onClick={()=>switchPage('Schools')}>View campuses <ArrowRight size={15}/></button></section>}<section className="panel setting-card"><div className="setting-icon"><SlidersHorizontal size={23}/></div><h3>Appearance</h3><p>Choose the workspace experience that feels right for you.</p><div className="setting-detail"><span>Dark mode</span><button className={'toggle '+(dark?'on':'')} onClick={changeTheme}><i/></button></div></section><section className="panel setting-card"><div className="setting-icon"><ShieldCheck size={23}/></div><h3>Data protection</h3><p>Your workspace uses authenticated server APIs and scoped school data access. For additional setup controls, use Django administration.</p><button className="outline-btn" onClick={()=>notify('Ask a system administrator for configuration access.')}>System information <ArrowRight size={15}/></button></section></div></>}
  </main><footer className="footer"><span>© {new Date().getFullYear()} Optimus Orien. Made for better education.</span><span><span className="online-indicator"/> Secure school intelligence platform</span></footer></div>
@@ -78,73 +80,320 @@ function CampusesPage({user,notify,onSetupSchool}:{user:User;notify:(m:string)=>
  const [schools,setSchools]=useState<Resource[]>([]);
  const [loading,setLoading]=useState(true);
  const [addModal,setAddModal]=useState(false);
- const [addForm,setAddForm]=useState<Record<string,string>>({});
+ const [addForm,setAddForm]=useState<Record<string,string>>({campus_type:'Branch Campus',country:'PK',timezone:'Asia/Karachi',attendance_alert_threshold:'80',grade_alert_threshold:'60'});
  const [saving,setSaving]=useState(false);
  const [expandedSchool,setExpandedSchool]=useState<number|null>(null);
- const [schoolUserMap,setSchoolUserMap]=useState<Record<number,Array<{id:number;name:string;username:string;role:string}>>>({});
+ const [schoolUserMap,setSchoolUserMap]=useState<Record<number,Array<{id:number;name:string;username:string;email?:string;role:string;date_joined?:string;admission_number?:string}>>>({});
+ const [schoolClassMap,setSchoolClassMap]=useState<Record<number,Array<{id:number;name:string}>>>({});
+ const [schoolStudentMap,setSchoolStudentMap]=useState<Record<number,Array<{id:number;name:string}>>>({});
  const [accountForm,setAccountForm]=useState<Record<number,Record<string,string>>>({});
  const [accountSaving,setAccountSaving]=useState<Record<number,boolean>>({});
- const isAdmin=['organisation_admin','school_admin'].includes(user.role);
- const load=async()=>{setLoading(true);try{setSchools(await list<Resource>('schools'))}catch{}finally{setLoading(false)}};
+ 
+ const isOrgAdmin=user.role==='organisation_admin'||user.is_superuser;
+ const isSchoolAdmin=['organisation_admin','school_admin','principal'].includes(user.role);
+
+ const load=async()=>{
+  setLoading(true);
+  try{setSchools(await list<Resource>('schools'))}catch{}finally{setLoading(false)}
+ };
  useEffect(()=>{load()},[]);
+
  const toggleAccounts=async(id:number)=>{
   if(expandedSchool===id){setExpandedSchool(null);return;}
   setExpandedSchool(id);
   if(!schoolUserMap[id]){
-   try{const r=await schoolUsers(id);setSchoolUserMap(m=>({...m,[id]:r.results}))}catch{}
+   try{
+    const [uRes, cRes, sRes] = await Promise.all([
+     schoolUsers(id).catch(()=>({results:[]})),
+     list<{id:number;name:string;school?:number}>('classes').catch(()=>[]),
+     list<{id:number;first_name?:string;last_name?:string;full_name?:string;school?:number}>('students').catch(()=>[])
+    ]);
+    setSchoolUserMap(m=>({...m,[id]:uRes.results}));
+    setSchoolClassMap(m=>({...m,[id]:cRes.filter(c=>!c.school||c.school===id)}));
+    setSchoolStudentMap(m=>({...m,[id]:sRes.filter(s=>!s.school||s.school===id).map(st=>({id:st.id,name:st.full_name||`${st.first_name||''} ${st.last_name||''}`}))}));
+   }catch{}
   }
  };
- const handleAddCampus=async(e:React.FormEvent)=>{
-  e.preventDefault();setSaving(true);
+
+ const handleRegisterCampus=async(e:React.FormEvent)=>{
+  e.preventDefault();
+  setSaving(true);
   try{
-   const data:Record<string,unknown>={};
-   for(const k of['name','code','city','attendance_alert_threshold']){if(addForm[k]!==undefined&&addForm[k]!==''){data[k]=k==='attendance_alert_threshold'?Number(addForm[k]):addForm[k]}}
-   await create('schools',data);setAddModal(false);setAddForm({});notify('Campus created successfully');await load();
-  }catch(e){notify(e instanceof Error?e.message:'Could not create campus')}finally{setSaving(false)};
+   await registerCampus(addForm);
+   setAddModal(false);
+   setAddForm({campus_type:'Branch Campus',country:'PK',timezone:'Asia/Karachi',attendance_alert_threshold:'80',grade_alert_threshold:'60'});
+   notify('Campus registered successfully with initialised configuration');
+   await load();
+  }catch(e){
+   notify(e instanceof Error?e.message:'Could not register campus');
+  }finally{
+   setSaving(false);
+  }
  };
+
  const handleCreateAccount=async(e:React.FormEvent,schoolId:number)=>{
-  e.preventDefault();setAccountSaving(s=>({...s,[schoolId]:true}));
+  e.preventDefault();
+  setAccountSaving(s=>({...s,[schoolId]:true}));
   const f=accountForm[schoolId]||{};
   try{
-   await createAccount({first_name:f.first_name,last_name:f.last_name,username:f.username,password:f.password,role:f.role,school:schoolId});
-   notify('Account created successfully');
+   const payload:Record<string,unknown>={
+    first_name:f.first_name,
+    last_name:f.last_name,
+    email:f.email,
+    username:f.username,
+    password:f.password,
+    role:f.role,
+    school:schoolId
+   };
+   if(f.admission_number) payload.admission_number=f.admission_number;
+   if(f.class_id) payload.class_id=Number(f.class_id);
+   if(f.student_id) payload.student_id=Number(f.student_id);
+
+   await createAccount(payload);
+   notify(`Account for ${f.first_name} ${f.last_name} created successfully as ${f.role.replace('_',' ')}`);
    setAccountForm(m=>({...m,[schoolId]:{}}));
-   const r=await schoolUsers(schoolId);setSchoolUserMap(m=>({...m,[schoolId]:r.results}));
-  }catch(ex){notify(ex instanceof Error?ex.message:'Could not create account')}finally{setAccountSaving(s=>({...s,[schoolId]:false}))};
+   const r=await schoolUsers(schoolId);
+   setSchoolUserMap(m=>({...m,[schoolId]:r.results}));
+  }catch(ex){
+   notify(ex instanceof Error?ex.message:'Could not create account');
+  }finally{
+   setAccountSaving(s=>({...s,[schoolId]:false}));
+  }
  };
+
  const setAccountField=(schoolId:number,key:string,val:string)=>setAccountForm(m=>({...m,[schoolId]:{...(m[schoolId]||{}),[key]:val}}));
- const COLOR2=['#715ee8','#23b7a0','#f29d50','#6c9eff','#e477a1'];
- return <><div className="page-header"><div><div className="eyebrow">WORKSPACE / CAMPUSES</div><h1>Campus management</h1><p>Manage your school campuses and create staff accounts.</p></div>{isAdmin&&<button className="primary-btn" onClick={()=>{setAddForm({});setAddModal(true)}}><Plus size={17}/> Add campus</button>}</div>
- {loading?<div className="empty"><span><Building2 size={25}/></span><strong>Loading campuses…</strong></div>:schools.length===0?<div className="empty"><span><Building2 size={25}/></span><strong>Nothing to show yet</strong><p>No campuses found. Add your first campus to get started.</p></div>:
+ const setAddField=(key:string,val:string)=>setAddForm(f=>({...f,[key]:val}));
+ const COLOR2=['#715ee8','#23b7a0','#f29d50','#6c9eff','#e477a1','#8b5cf6'];
+
+ return <><div className="page-header"><div><div className="eyebrow">WORKSPACE / CAMPUSES</div><h1>Campus & institutional management</h1><p>Authorised multi-campus network directory, educational setup readiness, and role-scoped institutional account provisioning.</p></div>{isOrgAdmin&&<button className="primary-btn" onClick={()=>{setAddForm({campus_type:'Branch Campus',country:'PK',timezone:'Asia/Karachi',attendance_alert_threshold:'80',grade_alert_threshold:'60'});setAddModal(true)}}><Plus size={17}/> Register campus</button>}</div>
+ {loading?<div className="empty"><span><Building2 size={25}/></span><strong>Loading campuses…</strong></div>:schools.length===0?<div className="empty"><span><Building2 size={25}/></span><strong>Nothing to show yet</strong><p>No campuses found in your organisation. Register your first campus to get started.</p></div>:
  <div className="campus-grid">{schools.map((s,i)=>{
-  const sid=Number(s.id);const expanded=expandedSchool===sid;const users=schoolUserMap[sid]||[];const af=accountForm[sid]||{};const as2=accountSaving[sid]||false;
+  const sid=Number(s.id);
+  const expanded=expandedSchool===sid;
+  const users=schoolUserMap[sid]||[];
+  const classes=schoolClassMap[sid]||[];
+  const students=schoolStudentMap[sid]||[];
+  const af=accountForm[sid]||{};
+  const as2=accountSaving[sid]||false;
+  const cfg=(s.school_settings as Record<string,unknown>)||{};
+  const cType=String(cfg.campus_type||'Branch Campus');
+  const cEmail=String(cfg.contact_email||'');
+  const cPhone=String(cfg.contact_phone||'');
+  const cTz=String(s.timezone||'');
+
   return <div className="campus-card" key={sid}>
    <div className="campus-card-header">
     <div className="campus-icon" style={{background:COLOR2[i%COLOR2.length]+'1a',color:COLOR2[i%COLOR2.length]}}><Building2 size={21}/></div>
-    <div className="campus-card-info"><h3>{String(s.name||'—')}</h3><span className="campus-code">{String(s.code||'')}</span></div>
+    <div className="campus-card-info">
+     <h3>{String(s.name||'—')}</h3>
+     <div className="campus-badge-row">
+      <span className="campus-code">{String(s.code||'')}</span>
+      <span className="campus-tag">{cType}</span>
+      {Boolean(s.country)&&<span className="campus-tag">{String(s.country)}</span>}
+     </div>
+    </div>
    </div>
    <div className="campus-card-meta">
-    <div><span>City</span><strong>{String(s.city||'—')}</strong></div>
-    <div><span>Attendance alert</span><strong>{s.attendance_alert_threshold!=null?s.attendance_alert_threshold+'%':'—'}</strong></div>
+    <div><span>Location</span><strong>{s.city?`${String(s.city)}${s.jurisdiction?`, ${String(s.jurisdiction)}`:''}`:'—'}</strong></div>
+    <div><span>Attendance alert</span><strong>{s.attendance_alert_threshold!=null?s.attendance_alert_threshold+'%':'80%'}</strong></div>
+    <div><span>Academic alert</span><strong>{s.grade_alert_threshold!=null?s.grade_alert_threshold+'%':'60%'}</strong></div>
+    {Boolean(cTz)&&<div><span>Timezone</span><strong>{cTz}</strong></div>}
+    {Boolean(cEmail)&&<div><span>Contact email</span><strong>{cEmail}</strong></div>}
+    {Boolean(cPhone)&&<div><span>Phone</span><strong>{cPhone}</strong></div>}
    </div>
    <div className="campus-card-actions">
-    {isAdmin&&<button className="outline-btn" onClick={()=>onSetupSchool(sid)}><Settings2 size={14}/> Configure</button>}
-    <button className={'outline-btn'+(expanded?' active-btn':'')} onClick={()=>toggleAccounts(sid)}><Users size={14}/> Manage Accounts</button>
+    {isSchoolAdmin&&<button className="outline-btn" onClick={()=>onSetupSchool(sid)}><Settings2 size={14}/> Configure setup</button>}
+    <button className={'outline-btn'+(expanded?' active-btn':'')} onClick={()=>toggleAccounts(sid)}><Users size={14}/> Manage Accounts ({users.length||'View'})</button>
    </div>
    {expanded&&<div className="accounts-panel">
-    <div className="accounts-panel-head"><strong>Accounts for {String(s.name)}</strong></div>
-    {users.length>0?<div className="accounts-list">{users.map(u=><div className="account-row" key={u.id}><div className="account-avatar" style={{background:COLOR2[u.id%COLOR2.length]+'22',color:COLOR2[u.id%COLOR2.length]}}>{(u.name||u.username).slice(0,2).toUpperCase()}</div><div><b>{u.name}</b><small>@{u.username} · {u.role.replace('_',' ')}</small></div></div>)}</div>:<p className="accounts-empty">No accounts assigned to this campus yet.</p>}
-    {isAdmin&&<><div className="accounts-divider">Create new account</div>
+    <div className="accounts-panel-head"><strong>Campus user directory • {String(s.name)}</strong></div>
+    {users.length>0?<div className="accounts-list">{users.map(u=>{
+     const rClass=u.role==='organisation_admin'||u.role==='school_admin'?'role-admin':u.role==='principal'?'role-principal':u.role==='teacher'?'role-teacher':u.role==='student'?'role-student':'role-parent';
+     return <div className="account-row" key={u.id}>
+      <div className="account-avatar" style={{background:COLOR2[u.id%COLOR2.length]+'22',color:COLOR2[u.id%COLOR2.length]}}>{(u.name||u.username).slice(0,2).toUpperCase()}</div>
+      <div>
+       <div className="account-meta">
+        <b>{u.name}</b>
+        <span className={'account-role-pill '+rClass}>{u.role.replace('_',' ')}</span>
+       </div>
+       <small>@{u.username}{u.email?` • ${u.email}`:''}{u.admission_number?` • ID: ${u.admission_number}`:''}{u.date_joined?` • Joined ${u.date_joined}`:''}</small>
+      </div>
+     </div>;
+    })}</div>:<p className="accounts-empty">No institutional accounts provisioned for this campus yet.</p>}
+    
+    {isSchoolAdmin&&<><div className="accounts-divider">Provision new account (Part 5 §18, SEC-018)</div>
     <form className="account-create-form" onSubmit={e=>handleCreateAccount(e,sid)}>
-     <div className="acf-row"><label>First name <span className="required">*</span><input required value={af.first_name||''} onChange={e=>setAccountField(sid,'first_name',e.target.value)} placeholder="First name"/></label><label>Last name <span className="required">*</span><input required value={af.last_name||''} onChange={e=>setAccountField(sid,'last_name',e.target.value)} placeholder="Last name"/></label></div>
-     <div className="acf-row"><label>Username <span className="required">*</span><input required value={af.username||''} onChange={e=>setAccountField(sid,'username',e.target.value)} placeholder="Username"/></label><label>Password <span className="required">*</span><input required type="password" value={af.password||''} onChange={e=>setAccountField(sid,'password',e.target.value)} placeholder="Password"/></label></div>
-     <div className="acf-row"><label>Role <span className="required">*</span><select required value={af.role||''} onChange={e=>setAccountField(sid,'role',e.target.value)}><option value="">Select role…</option><option value="school_admin">School admin</option><option value="principal">Principal</option><option value="teacher">Teacher</option><option value="student">Student</option><option value="parent">Parent</option></select></label><label>School<input readOnly value={String(s.name)} className="readonly-input"/></label></div>
-     <div className="acf-actions"><button type="submit" className="primary-btn" disabled={as2}>{as2?'Creating…':'Create account'} <ArrowRight size={15}/></button></div>
+     <div className="acf-row">
+      <label>First name <span className="required">*</span><input required value={af.first_name||''} onChange={e=>setAccountField(sid,'first_name',e.target.value)} placeholder="Legal first name"/></label>
+      <label>Last name <span className="required">*</span><input required value={af.last_name||''} onChange={e=>setAccountField(sid,'last_name',e.target.value)} placeholder="Legal last name"/></label>
+     </div>
+     <div className="acf-row">
+      <label>Email address <span className="required">*</span><input required type="email" value={af.email||''} onChange={e=>setAccountField(sid,'email',e.target.value)} placeholder="name@institution.edu"/></label>
+      <label>Username <span className="required">*</span><input required value={af.username||''} onChange={e=>setAccountField(sid,'username',e.target.value)} placeholder="Unique username"/></label>
+     </div>
+     <div className="acf-row">
+      <label>Password <span className="required">*</span><input required type="password" value={af.password||''} onChange={e=>setAccountField(sid,'password',e.target.value)} placeholder="Min 8 characters"/></label>
+      <label>Institutional role <span className="required">*</span>
+       <select required value={af.role||''} onChange={e=>setAccountField(sid,'role',e.target.value)}>
+        <option value="">Select role…</option>
+        {isOrgAdmin&&<option value="school_admin">School Administrator</option>}
+        {isOrgAdmin&&<option value="principal">Campus Principal / Head</option>}
+        <option value="teacher">Educator / Teacher</option>
+        <option value="student">Student / Learner</option>
+        <option value="parent">Parent / Guardian</option>
+        {isOrgAdmin&&<option value="organisation_admin">Organisation Administrator</option>}
+       </select>
+      </label>
+     </div>
+     
+     {af.role==='student'&&<div className="acf-row">
+      <label>Admission number<input value={af.admission_number||''} onChange={e=>setAccountField(sid,'admission_number',e.target.value)} placeholder="e.g. ADM-2026-001 (or auto-generated)"/></label>
+      <label>Assign to class
+       <select value={af.class_id||''} onChange={e=>setAccountField(sid,'class_id',e.target.value)}>
+        <option value="">Unassigned (Select class later)</option>
+        {classes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+       </select>
+      </label>
+     </div>}
+
+     {af.role==='parent'&&<div className="acf-row">
+      <label>Link to student / ward
+       <select value={af.student_id||''} onChange={e=>setAccountField(sid,'student_id',e.target.value)}>
+        <option value="">Select student…</option>
+        {students.map(st=><option key={st.id} value={st.id}>{st.name}</option>)}
+       </select>
+      </label>
+      <label>Assigned campus<input readOnly value={String(s.name)} className="readonly-input"/></label>
+     </div>}
+
+     {af.role==='teacher'&&<div className="acf-row">
+      <label>Lead classroom assignment
+       <select value={af.class_id||''} onChange={e=>setAccountField(sid,'class_id',e.target.value)}>
+        <option value="">No class assigned yet</option>
+        {classes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+       </select>
+      </label>
+      <label>Assigned campus<input readOnly value={String(s.name)} className="readonly-input"/></label>
+     </div>}
+
+     <div className="acf-actions"><button type="submit" className="primary-btn" disabled={as2}>{as2?'Provisioning account…':'Provision account'} <ArrowRight size={15}/></button></div>
     </form></>}
    </div>}
   </div>;
  })}</div>}
- {addModal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setAddModal(false)}}><div className="modal-card"><div className="modal-head"><div className="modal-icon"><Plus size={20}/></div><div><h3>Add campus</h3><p>Complete the details below to create a new campus.</p></div><button onClick={()=>setAddModal(false)}><X size={20}/></button></div><form onSubmit={handleAddCampus}><div className="modal-fields"><label>School name <span className="required">*</span><input required value={addForm.name||''} onChange={e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="School name"/></label><label>Code <span className="required">*</span><input required value={addForm.code||''} onChange={e=>setAddForm(f=>({...f,code:e.target.value}))} placeholder="e.g. NHS01"/></label><label>City<input value={addForm.city||''} onChange={e=>setAddForm(f=>({...f,city:e.target.value}))} placeholder="City"/></label><label>Attendance alert %<input type="number" value={addForm.attendance_alert_threshold||''} onChange={e=>setAddForm(f=>({...f,attendance_alert_threshold:e.target.value}))} placeholder="e.g. 80"/></label></div><div className="modal-footer"><button type="button" className="outline-btn" onClick={()=>setAddModal(false)}>Cancel</button><button className="primary-btn" disabled={saving}>{saving?'Saving…':'Create campus'} <ArrowRight size={16}/></button></div></form></div></div>}
+ 
+ {addModal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setAddModal(false)}}><div className="modal-card modal-card-wide"><div className="modal-head"><div className="modal-icon"><Plus size={20}/></div><div><h3>Register institutional campus</h3><p>Configure complete campus identity, location, time zone, pathways, and alert thresholds (Parts 1, 4 & 19).</p></div><button onClick={()=>setAddModal(false)}><X size={20}/></button></div>
+  <form onSubmit={handleRegisterCampus}>
+   <div className="modal-fields modal-fields-2col">
+    <div className="modal-section-title">1. Campus Identity</div>
+    <label>Campus name <span className="required">*</span><input required value={addForm.name||''} onChange={e=>setAddField('name',e.target.value)} placeholder="e.g. Northstar Academy — Main Campus"/></label>
+    <label>Campus code <span className="required">*</span><input required value={addForm.code||''} onChange={e=>setAddField('code',e.target.value)} placeholder="e.g. NSA-MAIN"/></label>
+    <label>Campus type
+     <select value={addForm.campus_type||'Branch Campus'} onChange={e=>setAddField('campus_type',e.target.value)}>
+      <option value="Main Campus">Main Campus</option>
+      <option value="Branch Campus">Branch Campus</option>
+      <option value="Junior Campus">Junior Campus</option>
+      <option value="Senior Campus">Senior Campus</option>
+      <option value="Preparatory Campus">Preparatory Campus</option>
+     </select>
+    </label>
+    <label>Primary educational programme<input value={addForm.programmes||''} onChange={e=>setAddField('programmes',e.target.value)} placeholder="e.g. Cambridge IGCSE, Matriculation"/></label>
+    
+    <div className="modal-section-title">2. Location & Jurisdiction</div>
+    <label>Country
+     <select value={addForm.country||'PK'} onChange={e=>setAddField('country',e.target.value)}>
+      <option value="PK">PK — Pakistan</option>
+      <option value="AE">AE — United Arab Emirates</option>
+      <option value="GB">GB — United Kingdom</option>
+      <option value="US">US — United States</option>
+      <option value="SA">SA — Saudi Arabia</option>
+      <option value="QA">QA — Qatar</option>
+      <option value="MY">MY — Malaysia</option>
+      <option value="CA">CA — Canada</option>
+     </select>
+    </label>
+    <label>Jurisdiction / Province<input value={addForm.jurisdiction||''} onChange={e=>setAddField('jurisdiction',e.target.value)} placeholder="e.g. Sindh, Punjab, Federal"/></label>
+    <label>City<input value={addForm.city||''} onChange={e=>setAddField('city',e.target.value)} placeholder="City / Municipality"/></label>
+    <label>Official time zone
+     <select value={addForm.timezone||'Asia/Karachi'} onChange={e=>setAddField('timezone',e.target.value)}>
+      <option value="Asia/Karachi">Asia/Karachi (PKT UTC+5)</option>
+      <option value="Asia/Dubai">Asia/Dubai (GST UTC+4)</option>
+      <option value="Europe/London">Europe/London (GMT/BST)</option>
+      <option value="America/New_York">America/New_York (EST/EDT)</option>
+      <option value="UTC">UTC Universal</option>
+     </select>
+    </label>
+    <label style={{gridColumn:'1 / -1'}}>Campus street address<input value={addForm.address||''} onChange={e=>setAddField('address',e.target.value)} placeholder="Full physical street address"/></label>
+
+    <div className="modal-section-title">3. Official Communications & Thresholds</div>
+    <label>Official campus email<input type="email" value={addForm.contact_email||''} onChange={e=>setAddField('contact_email',e.target.value)} placeholder="admin.campus@institution.edu"/></label>
+    <label>Contact phone<input value={addForm.contact_phone||''} onChange={e=>setAddField('contact_phone',e.target.value)} placeholder="+92 21 34567890"/></label>
+    <label>Attendance alert threshold (%)<input type="number" min="0" max="100" value={addForm.attendance_alert_threshold||'80'} onChange={e=>setAddField('attendance_alert_threshold',e.target.value)}/></label>
+    <label>Academic alert threshold (%)<input type="number" min="0" max="100" value={addForm.grade_alert_threshold||'60'} onChange={e=>setAddField('grade_alert_threshold',e.target.value)}/></label>
+   </div>
+   <div className="modal-footer">
+    <button type="button" className="outline-btn" onClick={()=>setAddModal(false)}>Cancel</button>
+    <button className="primary-btn" disabled={saving}>{saving?'Registering campus…':'Register campus'} <ArrowRight size={16}/></button>
+   </div>
+  </form>
+ </div></div>}
+ </>;
+}
+function AuditLogView({notify}:{notify:(m:string)=>void}){
+ const [logs,setLogs]=useState<Resource[]>([]);
+ const [loading,setLoading]=useState(true);
+ const [search,setSearch]=useState('');
+ useEffect(()=>{
+  list<Resource>('audit').then(setLogs).catch(()=>{}).finally(()=>setLoading(false));
+ },[]);
+ const filtered=useMemo(()=>logs.filter(l=>JSON.stringify(l).toLowerCase().includes(search.toLowerCase())),[logs,search]);
+ return <>
+  <div className="page-header">
+   <div>
+    <div className="eyebrow">SYSTEM & SECURITY / AUDIT TRAIL</div>
+    <h1>Immutable audit log</h1>
+    <p>Complete traceability of administrative modifications, account provisioning, transfers, and configuration activations (Part 5 §21, Part 18 SEC-056).</p>
+   </div>
+  </div>
+  <div className="resource-summary">
+   <div className="resource-icon"><ShieldCheck size={23}/></div>
+   <div><strong>{logs.length}</strong><span>Total recorded security events</span></div>
+   <div className="resource-side"><CheckCircle2 size={17}/> Tamper-evident ledger</div>
+  </div>
+  <section className="panel audit-panel">
+   <div className="toolbar">
+    <div className="searchbox"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Filter audit events by actor, action, or resource…"/>{search&&<button onClick={()=>setSearch('')}><X size={14}/></button>}</div>
+    <div className="toolbar-right"><span className="result-count">{filtered.length} events</span></div>
+   </div>
+   <div className="table-scroll">
+    <table className="audit-table">
+     <thead>
+      <tr>
+       <th>Timestamp</th>
+       <th>Action</th>
+       <th>Resource</th>
+       <th>Target ID</th>
+       <th>Changes summary</th>
+      </tr>
+     </thead>
+     <tbody>
+      {filtered.map(l=>{
+       const act=String(l.action||'');
+       const aClass=act.includes('create')?'act-create':act.includes('update')?'act-update':act.includes('transfer')?'act-transfer':'act-setup';
+       const ch=l.changes?JSON.stringify(l.changes):'—';
+       return <tr key={l.id}>
+        <td><Clock size={12} style={{marginRight:5,verticalAlign:'middle'}}/>{l.created_at?new Date(String(l.created_at)).toLocaleString():'—'}</td>
+        <td><span className={'action-pill '+aClass}>{act.replace('_',' ')}</span></td>
+        <td><strong>{String(l.resource||'—')}</strong></td>
+        <td>#{String(l.resource_id||'—')}</td>
+        <td style={{maxWidth:350,wordBreak:'break-word',fontFamily:'monospace',fontSize:11,color:'#636b83'}}>{ch}</td>
+       </tr>;
+      })}
+     </tbody>
+    </table>
+    {!filtered.length&&<Empty text={search?'No matching audit events found.':'No audit events recorded yet.'}/>}
+   </div>
+  </section>
  </>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
