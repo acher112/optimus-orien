@@ -90,6 +90,11 @@ export default function PublicHome({
         </nav>
 
         <div className="public-nav-actions">
+          {!authenticated && (
+            <a className="public-signup-link" href="/login?tab=register">
+              Create account
+            </a>
+          )}
           <a className="public-signin" href={workspace}>
             {authenticated ? 'Open dashboard' : 'Sign in'}
             <ArrowUpRight size={16} />
@@ -132,10 +137,17 @@ export default function PublicHome({
                 <ArrowRight size={19} />
               </a>
 
-              <a className="public-button-secondary" href="#platform">
-                Explore the platform
-                <ArrowUpRight size={17} />
-              </a>
+              {!authenticated ? (
+                <a className="public-button-secondary" href="/login?tab=register">
+                  Register school / account
+                  <ArrowUpRight size={17} />
+                </a>
+              ) : (
+                <a className="public-button-secondary" href="#platform">
+                  Explore the platform
+                  <ArrowUpRight size={17} />
+                </a>
+              )}
             </div>
 
             <div className="public-hero-trust">

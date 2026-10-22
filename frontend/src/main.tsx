@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';import{createRoot}from'react-dom/client';
 import{Activity,ArrowDownRight,ArrowRight,ArrowUpRight,BarChart3,Bell,BookOpen,Building2,CalendarDays,Check,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,ClipboardCheck,ClipboardList,Download,FileBarChart,GraduationCap,HeartHandshake,LayoutDashboard,LogOut,Menu,MoreHorizontal,Plus,Search,Settings2,ShieldCheck,SlidersHorizontal,Sparkles,Users,UserRound,School,TrendingUp,X,AlertCircle,Clock,PanelLeftClose,Sun,Moon,RefreshCw}from'lucide-react';
 import{Area,AreaChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis,Bar,BarChart,Cell}from'recharts';
-import{request,login,logout,list,create,update,createAccount,registerCampus,schoolUsers,type User,type Dashboard,type Resource}from'./api';import PublicHome from './PublicHome';import SchoolSetup from './SchoolSetup';import Reports from './Reports';import './style.css';
+import{request,login,register,logout,list,create,update,createAccount,registerCampus,schoolUsers,type User,type Dashboard,type Resource}from'./api';import PublicHome from './PublicHome';import SchoolSetup from './SchoolSetup';import Reports from './Reports';import './style.css';
 const WORKSPACE_NAV=[{name:'Overview',icon:LayoutDashboard},{name:'Campuses',icon:Building2,adminOnly:true},{name:'Schools',icon:School},{name:'School setup',icon:Settings2,adminOnly:true},{name:'Academic years',icon:CalendarDays,adminOnly:true},{name:'Classes',icon:Users},{name:'Subjects',icon:BookOpen},{name:'Students',icon:GraduationCap},{name:'Attendance',icon:ClipboardCheck},{name:'Homework',icon:ClipboardList},{name:'Academics',icon:FileBarChart},{name:'Interventions',icon:HeartHandshake}];
 const SYSTEM_NAV=[{name:'Reports',icon:BarChart3},{name:'Audit log',icon:ShieldCheck,adminOnly:true},{name:'Notifications',icon:Bell},{name:'Settings',icon:Settings2}];
 const NAV_GROUPS=[{sublabel:'ORGANISATION & CAMPUSES',items:['Overview','Campuses','Schools']},{sublabel:'ACADEMIC CONFIGURATION',adminLabel:true,items:['School setup','Academic years']},{sublabel:'ACADEMIC STRUCTURE',items:['Classes','Subjects']},{sublabel:'STUDENTS & LEARNING',items:['Students','Attendance','Homework','Academics']},{sublabel:'STUDENT SUPPORT',items:['Interventions']}];
@@ -75,7 +75,199 @@ function App(){const[user,setUser]=useState<User|null>(null),[loading,setLoading
 function LayersIcon({page}:{page:string}){return page==='Students'?<GraduationCap size={23}/>:page==='Schools'?<School size={23}/>:page==='Attendance'?<ClipboardCheck size={23}/>:page==='Interventions'?<HeartHandshake size={23}/>:page==='Academic years'?<CalendarDays size={23}/>:page==='Subjects'?<BookOpen size={23}/>:page==='Classes'?<Users size={23}/>:<FileBarChart size={23}/>}
 function Stat({icon:Icon,label,value,foot,tone}:{icon:typeof Users;label:string;value:string|number;foot:string;tone:string}){return <div className="stat-card"><div className={'stat-icon '+tone}><Icon size={21}/></div><div className="stat-value">{value}</div><div className="stat-label">{label}</div><div className="stat-foot"><span className="tiny-dot"/> {foot}</div><div className={'stat-decor '+tone}/></div>}
 function Empty({text,small=false}:{text:string;small?:boolean}){return <div className={'empty '+(small?'empty-small':'')}><span><ClipboardList size={25}/></span><strong>Nothing to show yet</strong><p>{text}</p></div>}
-function Login({onLogin}:{onLogin:(user:User)=>void}){const[name,setName]=useState(''),[pass,setPass]=useState(''),[pending,setPending]=useState(false),[error,setError]=useState('');async function submit(e:React.FormEvent){e.preventDefault();setPending(true);setError('');try{onLogin(await login(name,pass))}catch(e){setError(e instanceof Error?e.message:'Sign in failed')}finally{setPending(false)}}return <div className="login-page"><div className="login-left"><div className="login-brand"><span className="brand-symbol">◈</span><strong>optimus<span>orien</span></strong></div><div className="login-art"><div className="login-circle one"/><div className="login-circle two"/><div className="login-glass"><div className="login-insight-icon"><TrendingUp size={23}/></div><span>Student performance</span><strong>Growing together</strong><div className="login-line"><i/><i/><i/><i/><i/><i/></div></div><div className="login-glass second"><CheckCircle2 size={20}/> Meaningful progress, every day</div></div><div className="login-left-copy"><div className="hero-kicker"><Sparkles size={15}/> INTELLIGENCE WITH EMPATHY</div><h1>Every learner has<br/>a story. <em>See the full picture.</em></h1><p>One thoughtful workspace for schools, educators and brighter educational futures.</p></div><span className="login-copyright">© {new Date().getFullYear()} Optimus Orien</span></div><div className="login-right"><div className="login-form-wrap"><div className="login-welcome-icon"><GraduationCap size={26}/></div><span className="eyebrow">WELCOME BACK</span><h2>Your workspace awaits.</h2><p>Sign in to access your school intelligence dashboard.</p><form onSubmit={submit}><label>Username<input autoComplete="username" required value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your username"/></label><label>Password<input autoComplete="current-password" required type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="Enter your password"/></label>{error&&<div className="login-error"><AlertCircle size={16}/>{error}</div>}<button type="submit" className="login-submit" disabled={pending}>{pending?'Signing in…':'Sign in to workspace'} <ArrowRight size={18}/></button></form><div className="demo-credentials"><div><ShieldCheck size={16}/><strong>Authorised Workspace Access</strong></div><p>Sign in with your educational credentials. For account recovery or access requests, contact your school administrator.</p></div><div className="login-security"><ShieldCheck size={16}/> Your data belongs to your school community.</div><a className="login-home-link" href="/"><ChevronLeft size={16}/> Back to public homepage</a></div></div></div>}
+function Login({onLogin}:{onLogin:(user:User)=>void}){
+  const [tab,setTab]=useState<'signin'|'register'>(()=>
+    window.location.search.includes('tab=register')||window.location.pathname==='/register'?'register':'signin'
+  );
+  const [name,setName]=useState(''),[pass,setPass]=useState('');
+  const [regForm,setRegForm]=useState({
+    first_name:'',
+    last_name:'',
+    email:'',
+    username:'',
+    password:'',
+    organisation_name:'',
+    school_name:'',
+    city:'',
+    role:'organisation_admin'
+  });
+  const [pending,setPending]=useState(false),[error,setError]=useState('');
+
+  async function submitLogin(e:React.FormEvent){
+    e.preventDefault();
+    setPending(true);
+    setError('');
+    try{
+      onLogin(await login(name,pass));
+    }catch(e){
+      setError(e instanceof Error?e.message:'Sign in failed');
+    }finally{
+      setPending(false);
+    }
+  }
+
+  async function submitRegister(e:React.FormEvent){
+    e.preventDefault();
+    setPending(true);
+    setError('');
+    try{
+      onLogin(await register(regForm));
+    }catch(e){
+      setError(e instanceof Error?e.message:'Registration failed');
+    }finally{
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-left">
+        <div className="login-brand">
+          <span className="brand-symbol">◈</span>
+          <strong>optimus<span>orien</span></strong>
+        </div>
+        <div className="login-art">
+          <div className="login-circle one"/>
+          <div className="login-circle two"/>
+          <div className="login-glass">
+            <div className="login-insight-icon"><TrendingUp size={23}/></div>
+            <span>Student performance</span>
+            <strong>Growing together</strong>
+            <div className="login-line"><i/><i/><i/><i/><i/><i/></div>
+          </div>
+          <div className="login-glass second"><CheckCircle2 size={20}/> Meaningful progress, every day</div>
+        </div>
+        <div className="login-left-copy">
+          <div className="hero-kicker"><Sparkles size={15}/> INTELLIGENCE WITH EMPATHY</div>
+          <h1>Every learner has<br/>a story. <em>See the full picture.</em></h1>
+          <p>One thoughtful workspace for schools, educators and brighter educational futures.</p>
+        </div>
+        <span className="login-copyright">© {new Date().getFullYear()} Optimus Orien</span>
+      </div>
+      <div className="login-right">
+        <div className="login-form-wrap">
+          <div className="login-welcome-icon"><GraduationCap size={26}/></div>
+
+          <div className="login-tabs">
+            <button
+              type="button"
+              className={'login-tab '+(tab==='signin'?'active':'')}
+              onClick={()=>{setTab('signin');setError('');}}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              className={'login-tab '+(tab==='register'?'active':'')}
+              onClick={()=>{setTab('register');setError('');}}
+            >
+              Create Account
+            </button>
+          </div>
+
+          {tab==='signin'?(
+            <>
+              <span className="eyebrow">WELCOME BACK</span>
+              <h2>Your workspace awaits.</h2>
+              <p>Sign in to access your school intelligence dashboard.</p>
+              <form onSubmit={submitLogin}>
+                <label>
+                  Username
+                  <input autoComplete="username" required value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your username"/>
+                </label>
+                <label>
+                  Password
+                  <input autoComplete="current-password" required type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="Enter your password"/>
+                </label>
+                {error&&<div className="login-error"><AlertCircle size={16}/>{error}</div>}
+                <button type="submit" className="login-submit" disabled={pending}>
+                  {pending?'Signing in…':'Sign in to workspace'} <ArrowRight size={18}/>
+                </button>
+              </form>
+              <div className="login-switch-row">
+                <span>New educational institution?</span>
+                <button type="button" className="text-link-btn" onClick={()=>{setTab('register');setError('');}}>
+                  Create account & register school →
+                </button>
+              </div>
+              <div className="demo-credentials">
+                <div><ShieldCheck size={16}/><strong>Authorised Workspace Access</strong></div>
+                <p>Sign in with your educational credentials. For account recovery or access requests, contact your school administrator.</p>
+              </div>
+            </>
+          ):(
+            <>
+              <span className="eyebrow">INSTITUTION SETUP</span>
+              <h2>Create your workspace.</h2>
+              <p>Register your education organisation, campus, and founding administrator account.</p>
+              <form onSubmit={submitRegister}>
+                <div className="login-grid-2">
+                  <label>
+                    First name
+                    <input required value={regForm.first_name} onChange={e=>setRegForm({...regForm,first_name:e.target.value})} placeholder="e.g. Eleanor"/>
+                  </label>
+                  <label>
+                    Last name
+                    <input required value={regForm.last_name} onChange={e=>setRegForm({...regForm,last_name:e.target.value})} placeholder="e.g. Vance"/>
+                  </label>
+                </div>
+                <label>
+                  Official email address
+                  <input required type="email" autoComplete="email" value={regForm.email} onChange={e=>setRegForm({...regForm,email:e.target.value})} placeholder="admin@school.org"/>
+                </label>
+                <div className="login-grid-2">
+                  <label>
+                    Username
+                    <input required autoComplete="username" value={regForm.username} onChange={e=>setRegForm({...regForm,username:e.target.value})} placeholder="e.g. admin_eleanor"/>
+                  </label>
+                  <label>
+                    Password (min 8 chars)
+                    <input required type="password" autoComplete="new-password" value={regForm.password} onChange={e=>setRegForm({...regForm,password:e.target.value})} placeholder="Choose a secure password"/>
+                  </label>
+                </div>
+                <label>
+                  Organisation / Trust / Group Name
+                  <input required value={regForm.organisation_name} onChange={e=>setRegForm({...regForm,organisation_name:e.target.value})} placeholder="e.g. St. Jude Educational Trust"/>
+                </label>
+                <div className="login-grid-2">
+                  <label>
+                    Initial Campus Name
+                    <input value={regForm.school_name} onChange={e=>setRegForm({...regForm,school_name:e.target.value})} placeholder="e.g. Main City Campus (Optional)"/>
+                  </label>
+                  <label>
+                    City / Jurisdiction
+                    <input value={regForm.city} onChange={e=>setRegForm({...regForm,city:e.target.value})} placeholder="e.g. Lahore, London"/>
+                  </label>
+                </div>
+                <label>
+                  Administrative Role
+                  <select value={regForm.role} onChange={e=>setRegForm({...regForm,role:e.target.value})}>
+                    <option value="organisation_admin">Organisation Administrator (Full trust & multi-campus control)</option>
+                    <option value="school_admin">Campus Administrator (Single school management)</option>
+                    <option value="teacher">Educator / Academic Lead</option>
+                  </select>
+                </label>
+                {error&&<div className="login-error"><AlertCircle size={16}/>{error}</div>}
+                <button type="submit" className="login-submit" disabled={pending}>
+                  {pending?'Creating workspace…':'Create workspace & sign in'} <ArrowRight size={18}/>
+                </button>
+              </form>
+              <div className="login-switch-row">
+                <span>Already registered?</span>
+                <button type="button" className="text-link-btn" onClick={()=>{setTab('signin');setError('');}}>
+                  Sign in to existing account →
+                </button>
+              </div>
+            </>
+          )}
+
+          <div className="login-security"><ShieldCheck size={16}/> Your data belongs to your school community.</div>
+          <a className="login-home-link" href="/"><ChevronLeft size={16}/> Back to public homepage</a>
+        </div>
+      </div>
+    </div>
+  );
+}
 function CampusesPage({user,notify,onSetupSchool}:{user:User;notify:(m:string)=>void;onSetupSchool:(id:number)=>void}){
  const [schools,setSchools]=useState<Resource[]>([]);
  const [loading,setLoading]=useState(true);

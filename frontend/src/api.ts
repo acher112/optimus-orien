@@ -1,15 +1,162 @@
-export type User={id:number;name:string;username:string;role:string;organisation:number|null;organisation_name?:string|null;allow_org_admin_student_access?:boolean;school:number|null;school_name?:string|null;is_staff?:boolean;is_superuser?:boolean};
-export type Dashboard={counts:{students:number;schools:number;classes:number;open_cases:number;teachers:number};stats:{academic_average:number|null;attendance_rate:number|null;grade_records:number;attendance_records:number};schools:{id:number;name:string;students:number;academic_average:number|null;attendance_rate:number|null}[];recent_cases:Case[];recent_students:Student[];attention:number;recent_notifications:{id:number;title:string;body:string}[]};
-export type Student={id:number;first_name:string;last_name:string;full_name?:string;admission_number:string;class_name?:string;school__name?:string;active?:boolean};
-export type Case={id:number;title:string;status:string;priority:string;student_id:number;student_name?:string};
-export type Resource={id:number;[key:string]:unknown};
-let csrfToken='';
-export async function request<T>(url:string,options:RequestInit={}):Promise<T>{const method=(options.method||'GET').toUpperCase();if(method!=='GET'&&!csrfToken){const r=await fetch('/api/v1/auth/csrf/',{credentials:'include'});if(!r.ok)throw new Error('Could not obtain CSRF token. Please refresh the page.');const ct=r.headers.get('content-type')||'';if(!ct.includes('application/json'))throw new Error('Unexpected server response while obtaining CSRF token. The API may be temporarily unavailable.');csrfToken=(await r.json()).csrfToken;}const response=await fetch('/api/v1/'+url.replace(/^\//,''),{...options,credentials:'include',headers:{...(options.body?{'Content-Type':'application/json'}:{}),...(method!=='GET'?{'X-CSRFToken':csrfToken}:{}),...(options.headers||{})}});if(!response.ok){const ct=response.headers.get('content-type')||'';if(!ct.includes('application/json')){if(response.status===403)throw new Error('Access denied (403). Your session may have expired — please refresh and sign in again.');if(response.status===401)throw new Error('Authentication required (401). Please sign in.');throw new Error(`Server error ${response.status}. Please try again or contact support.`);}let info:any={};try{info=await response.json()}catch{}throw new Error(info.detail||info.non_field_errors?.join(', ')||JSON.stringify(info)||`HTTP ${response.status}`);}return response.json() as Promise<T>}
-export const login=(username:string,password:string)=>request<User>('auth/login/',{method:'POST',body:JSON.stringify({username,password})});
-export const logout=()=>request('auth/logout/',{method:'POST'});
-export const list=async<T>(name:string)=>{const x=await request<{results:T[]} | T[]>(name+'/');return Array.isArray(x)?x:x.results};
-export const create=(name:string,data:Record<string,unknown>)=>request<Resource>(name+'/',{method:'POST',body:JSON.stringify(data)});
-export const update=(name:string,id:number,data:Record<string,unknown>)=>request<Resource>(`${name}/${id}/`,{method:'PATCH',body:JSON.stringify(data)});
-export const createAccount=(data:Record<string,unknown>)=>request<Record<string,unknown>>('accounts/',{method:'POST',body:JSON.stringify(data)});
-export const registerCampus=(data:Record<string,unknown>)=>request<Resource>('campuses/register/',{method:'POST',body:JSON.stringify(data)});
-export const schoolUsers=(schoolId:number)=>request<{results:Array<{id:number;name:string;username:string;email?:string;role:string;date_joined?:string;admission_number?:string}>}>(`schools/${schoolId}/users/`);
+export type User = {
+  id: number;
+  name: string;
+  username: string;
+  role: string;
+  organisation: number | null;
+  organisation_name?: string | null;
+  allow_org_admin_student_access?: boolean;
+  school: number | null;
+  school_name?: string | null;
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  csrfToken?: string;
+};
+
+export type Dashboard = {
+  counts: { students: number; schools: number; classes: number; open_cases: number; teachers: number };
+  stats: { academic_average: number | null; attendance_rate: number | null; grade_records: number; attendance_records: number };
+  schools: { id: number; name: string; students: number; academic_average: number | null; attendance_rate: number | null }[];
+  recent_cases: Case[];
+  recent_students: Student[];
+  attention: number;
+  recent_notifications: { id: number; title: string; body: string }[];
+};
+
+export type Student = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  full_name?: string;
+  admission_number: string;
+  class_name?: string;
+  school__name?: string;
+  active?: boolean;
+};
+
+export type Case = { id: number; title: string; status: string; priority: string; student_id: number; student_name?: string };
+export type Resource = { id: number; [key: string]: unknown };
+
+let csrfToken = '';
+
+export function getCookieCsrf(): string {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
+  return match ? decodeURIComponent(match[2]) : '';
+}
+
+export async function fetchCsrfToken(force = false): Promise<string> {
+  const cookieVal = getCookieCsrf();
+  if (!force && cookieVal) {
+    csrfToken = cookieVal;
+    return csrfToken;
+  }
+  try {
+    const r = await fetch('/api/v1/auth/csrf/', { credentials: 'include' });
+    if (r.ok) {
+      const data = await r.json();
+      if (data && data.csrfToken) {
+        csrfToken = data.csrfToken;
+        return csrfToken;
+      }
+    }
+  } catch {}
+  return csrfToken || cookieVal;
+}
+
+export async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const method = (options.method || 'GET').toUpperCase();
+  if (method !== 'GET') {
+    const cookieVal = getCookieCsrf();
+    if (cookieVal) {
+      csrfToken = cookieVal;
+    } else if (!csrfToken) {
+      await fetchCsrfToken(true);
+    }
+  }
+
+  const makeReq = (token: string) => fetch('/api/v1/' + url.replace(/^\//, ''), {
+    ...options,
+    credentials: 'include',
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(method !== 'GET' && token ? { 'X-CSRFToken': token } : {}),
+      ...(options.headers || {})
+    }
+  });
+
+  let response = await makeReq(csrfToken);
+
+  // If 403 CSRF failure occurs on a mutation, get fresh token and retry once
+  if (!response.ok && response.status === 403 && method !== 'GET') {
+    let clonedText = '';
+    try { clonedText = await response.clone().text(); } catch {}
+    if (clonedText.toLowerCase().includes('csrf')) {
+      const freshToken = await fetchCsrfToken(true);
+      response = await makeReq(freshToken);
+    }
+  }
+
+  if (!response.ok) {
+    const ct = response.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      if (response.status === 403) throw new Error('Access denied (403). Your session may have expired — please refresh and sign in again.');
+      if (response.status === 401) throw new Error('Authentication required (401). Please sign in.');
+      throw new Error(`Server error ${response.status}. Please try again or contact support.`);
+    }
+    let info: any = {};
+    try { info = await response.json(); } catch {}
+    throw new Error(info.detail || info.non_field_errors?.join(', ') || JSON.stringify(info) || `HTTP ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+export const login = async (username: string, password: string) => {
+  const u = await request<User & { csrfToken?: string }>('auth/login/', { method: 'POST', body: JSON.stringify({ username, password }) });
+  if (u.csrfToken) {
+    csrfToken = u.csrfToken;
+  } else {
+    await fetchCsrfToken(true);
+  }
+  return u;
+};
+
+export const register = async (data: Record<string, unknown>) => {
+  const u = await request<User & { csrfToken?: string }>('auth/register/', { method: 'POST', body: JSON.stringify(data) });
+  if (u.csrfToken) {
+    csrfToken = u.csrfToken;
+  } else {
+    await fetchCsrfToken(true);
+  }
+  return u;
+};
+
+export const logout = async () => {
+  try {
+    await request('auth/logout/', { method: 'POST' });
+  } finally {
+    csrfToken = '';
+  }
+};
+
+export const list = async <T>(name: string) => {
+  const x = await request<{ results: T[] } | T[]>(name + '/');
+  return Array.isArray(x) ? x : x.results;
+};
+
+export const create = (name: string, data: Record<string, unknown>) =>
+  request<Resource>(name + '/', { method: 'POST', body: JSON.stringify(data) });
+
+export const update = (name: string, id: number, data: Record<string, unknown>) =>
+  request<Resource>(`${name}/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+
+export const createAccount = (data: Record<string, unknown>) =>
+  request<Record<string, unknown>>('accounts/', { method: 'POST', body: JSON.stringify(data) });
+
+export const registerCampus = (data: Record<string, unknown>) =>
+  request<Resource>('campuses/register/', { method: 'POST', body: JSON.stringify(data) });
+
+export const schoolUsers = (schoolId: number) =>
+  request<{ results: Array<{ id: number; name: string; username: string; email?: string; role: string; date_joined?: string; admission_number?: string }> }>(
+    `schools/${schoolId}/users/`
+  );

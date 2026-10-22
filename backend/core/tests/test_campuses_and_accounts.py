@@ -201,3 +201,57 @@ class CampusesAndAccountsTests(TestCase):
   usernames = [u['username'] for u in res.data['results']]
   self.assertIn('trust_school_admin', usernames)
   self.assertIn('trust_teacher', usernames)
+
+ def test_public_registration_endpoint(self):
+  payload = {
+   'first_name': 'Eleanor',
+   'last_name': 'Vance',
+   'email': 'eleanor@beaconridge.edu',
+   'username': 'eleanor_admin',
+   'password': 'StrongPassword2026!',
+   'organisation_name': 'Beacon Ridge Academy Trust',
+   'school_name': 'Beacon Ridge Main Campus',
+   'city': 'Lahore',
+   'country': 'PK',
+   'role': 'organisation_admin'
+  }
+  res = self.client.post('/api/v1/auth/register/', payload, format='json')
+  self.assertEqual(res.status_code, 201)
+  self.assertEqual(res.data['username'], 'eleanor_admin')
+  self.assertEqual(res.data['role'], 'organisation_admin')
+  self.assertIn('csrfToken', res.data)
+  self.assertTrue(len(res.data['csrfToken']) > 10)
+
+  # Verify created entities
+  u = User.objects.get(username='eleanor_admin')
+  self.assertEqual(u.email, 'eleanor@beaconridge.edu')
+  self.assertIsNotNone(u.organisation)
+  self.assertEqual(u.organisation.name, 'Beacon Ridge Academy Trust')
+  self.assertIsNotNone(u.school)
+  self.assertEqual(u.school.name, 'Beacon Ridge Main Campus')
+  self.assertTrue(SchoolConfiguration.objects.filter(school=u.school).exists())
+
+ def test_public_registration_duplicate_username_rejected(self):
+  payload = {
+   'first_name': 'Eleanor',
+   'last_name': 'Vance',
+   'email': 'different@school.edu',
+   'username': 'trust_org_admin',
+   'password': 'StrongPassword2026!',
+   'organisation_name': 'Another Org',
+  }
+  res = self.client.post('/api/v1/auth/register/', payload, format='json')
+  self.assertEqual(res.status_code, 400)
+  self.assertIn('already taken', res.data['detail'])
+
+ def test_signin_returns_csrf_token(self):
+  res = self.client.post('/api/v1/auth/login/', {'username': 'trust_org_admin', 'password': 'ValidPassword123!'}, format='json')
+  self.assertEqual(res.status_code, 200)
+  self.assertIn('csrfToken', res.data)
+  self.assertTrue(len(res.data['csrfToken']) > 10)
+
+ def test_me_returns_csrf_token(self):
+  self.client.force_authenticate(user=self.org_admin)
+  res = self.client.get('/api/v1/auth/me/')
+  self.assertEqual(res.status_code, 200)
+  self.assertIn('csrfToken', res.data)
