@@ -103,14 +103,16 @@
 :root {
   --brand-primary: #715ee8;
   --brand-primary-hover: #5d4cd0;
+  --brand-primary-lighter: #9f8df9;
   --brand-primary-light: rgba(113, 94, 232, 0.16);
   --brand-primary-border: rgba(113, 94, 232, 0.38);
   --brand-primary-glow: rgba(113, 94, 232, 0.28);
-  --brand-primary-gradient: linear-gradient(135deg, #9f8df9, #715ee8);
+  --brand-primary-gradient: linear-gradient(135deg, #9f8df9 0%, #715ee8 55%, #5d4cd0 100%);
   --brand-primary-dark-bg: rgba(113, 94, 232, 0.24);
   --brand-primary-dark-text: #a89cf6;
   --brand-primary-contrast: #ffffff;
   --brand-primary-text: #715ee8;
+  --hero-contrast: #ffffff;
 }
 
 /* Primary Action Buttons */
@@ -137,6 +139,52 @@
   color: var(--brand-primary-contrast, #ffffff) !important;
 }
 
+/* Hero Banner on Overview */
+.hero-banner {
+  background: var(--brand-primary-gradient) !important;
+}
+.hero-kicker {
+  color: var(--hero-contrast, #ffffff) !important;
+  opacity: 0.92 !important;
+}
+.hero-copy h2 {
+  color: var(--hero-contrast, #ffffff) !important;
+}
+.hero-copy h2 span {
+  color: var(--hero-contrast, #ffffff) !important;
+  opacity: 0.9 !important;
+}
+.hero-copy p {
+  color: var(--hero-contrast, #ffffff) !important;
+  opacity: 0.85 !important;
+}
+.hero-copy button {
+  background: var(--hero-contrast, #ffffff) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+  font-weight: 800 !important;
+  border-radius: 10px !important;
+  padding: 10px 18px !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12) !important;
+  border: 0 !important;
+}
+.hero-copy button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+}
+.mini-orb {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+.mini-bars i {
+  background: rgba(255, 255, 255, 0.75) !important;
+}
+.glass-b svg {
+  color: var(--brand-primary) !important;
+}
+.floating-star {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
 /* Sidebar Navigation Items */
 .nav-item:hover {
   background: var(--brand-primary-light) !important;
@@ -157,6 +205,67 @@
 .dark .nav-item.selected svg {
   color: var(--brand-primary-dark-text, var(--brand-primary)) !important;
   stroke: var(--brand-primary-dark-text, var(--brand-primary)) !important;
+}
+
+/* Sidebar Help Card */
+.help-card {
+  background: var(--brand-primary-light) !important;
+  border: 1px solid var(--brand-primary-border) !important;
+}
+.help-icon {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.help-card b {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.help-card p {
+  color: #64748b !important;
+}
+.dark .help-card p {
+  color: #94a3b8 !important;
+}
+.help-card button {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+
+/* Workspace Pulse */
+.pulse-ring {
+  border: 11px solid var(--brand-primary-light) !important;
+  border-right-color: var(--brand-primary) !important;
+  border-bottom-color: var(--brand-primary) !important;
+}
+.pulse-ring strong {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.pulse-chip {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+
+/* Empty State Icons */
+.empty>span {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+
+/* Chart Footer & Legend */
+.legend-dot {
+  background: var(--brand-primary) !important;
+}
+
+/* Support Case Badge */
+.case-badge.c1 {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+
+/* Status Pills */
+.pill.purple {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.pill.purple .pill-dot {
+  background: var(--brand-primary) !important;
 }
 
 /* Branding & Workspace Identifiers */
@@ -193,18 +302,16 @@
 .setting-icon,
 .resource-icon,
 .modal-icon,
-.head-chip,
-.pulse-chip {
+.head-chip {
   background: var(--brand-primary-light) !important;
   color: var(--brand-primary-text, var(--brand-primary)) !important;
 }
 .dark .setting-icon,
 .dark .resource-icon,
 .dark .modal-icon,
-.dark .head-chip,
-.dark .pulse-chip {
+.dark .head-chip {
   background: var(--brand-primary-dark-bg) !important;
-  color: var(--brand-primary-dark-text) !important;
+  color: var(--brand-primary-dark-text, var(--brand-primary)) !important;
 }
 
 /* User Profile Avatar in Shell */
@@ -214,12 +321,7 @@
 }
 .dark .avatar {
   background: var(--brand-primary-dark-bg) !important;
-  color: var(--brand-primary-dark-text) !important;
-}
-
-/* Pulse Card Ring */
-.pulse-ring strong {
-  color: var(--brand-primary-text, var(--brand-primary)) !important;
+  color: var(--brand-primary-dark-text, var(--brand-primary)) !important;
 }
 
 /* Toggles & Active Tabs */
@@ -238,17 +340,14 @@
 .dark .login-tab.on {
   background: var(--brand-primary-dark-bg) !important;
   border-color: var(--brand-primary-border) !important;
-  color: var(--brand-primary-dark-text) !important;
+  color: var(--brand-primary-dark-text, var(--brand-primary)) !important;
 }
 
 /* Interactive Links & Badges */
 .view-link,
 .text-link,
 .text-link-btn,
-.help-card button,
-.help-icon,
-.setup-table-button,
-.hero-copy button {
+.setup-table-button {
   color: var(--brand-primary-text, var(--brand-primary)) !important;
 }
 .active-btn,
@@ -384,6 +483,53 @@ input:focus-visible,
 }
 .comm-official-tag,
 .comm-reply-btn:hover {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+
+/* Reports & HR Theme Overrides */
+.rp-crumbs button,
+.rp-link {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.rp-chip {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.rp-dist i {
+  background: var(--brand-primary) !important;
+}
+.hr-kpi svg {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.hr-mini {
+  background: var(--brand-primary-light) !important;
+  border-color: var(--brand-primary-border) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.hr-timeline li {
+  border-left-color: var(--brand-primary-border) !important;
+}
+
+/* Login Page Overrides */
+.login-left {
+  background: linear-gradient(135deg, var(--brand-primary-hover) 0%, var(--brand-primary) 64%, var(--brand-primary-light) 100%) !important;
+}
+.login-welcome-icon,
+.login-insight-icon {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.login-line i {
+  background: var(--brand-primary) !important;
+}
+.demo-credentials {
+  background: var(--brand-primary-light) !important;
+  border-color: var(--brand-primary-border) !important;
+}
+.demo-credentials>div {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.demo-credentials button {
   color: var(--brand-primary-text, var(--brand-primary)) !important;
 }
 

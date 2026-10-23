@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { request, type User } from './api';
 import { GenderPanel } from './GenderCharts';
+import { getStoredTheme } from './theme';
 import './reports.css';
 import './hr.css';
 
@@ -94,6 +95,7 @@ function Dist({ bands }: { bands: { band: string; count: number }[] }) {
 function AvgChart({ rows, label, field = 'average' }: { rows: R[]; label: string; field?: string }) {
   const data = rows.map(r => ({ name: r.name as string, average: r[field] as number | null })).filter(r => r.average !== null);
   if (!data.length) return <div className="rp-empty">No published results to chart for this selection.</div>;
+  const themeHex = getStoredTheme().colorHex;
   return (
     <div className="rp-chart" aria-label={label}>
       <ResponsiveContainer width="100%" height="100%">
@@ -102,9 +104,7 @@ function AvgChart({ rows, label, field = 'average' }: { rows: R[]; label: string
           <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#8c96a7' }} />
           <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#8c96a7' }} />
           <Tooltip formatter={v => `${v}%`} />
-          <Bar dataKey="average" radius={[9, 9, 0, 0]} maxBarSize={54}>
-            {data.map((_, i) => <Cell key={i} fill={COLOR[i % COLOR.length]} />)}
-          </Bar>
+          <Bar dataKey="average" radius={[9, 9, 0, 0]} maxBarSize={54} fill={themeHex} />
         </BarChart>
       </ResponsiveContainer>
     </div>

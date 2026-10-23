@@ -83,7 +83,7 @@ export function applyTheme(mode: ThemeMode, colorInput?: string) {
   const lightBg = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.16)`;
   const lightBorder = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.38)`;
   const glow = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.28)`;
-  const gradient = `linear-gradient(135deg, ${lighterHex}, ${hex})`;
+  const gradient = `linear-gradient(135deg, ${lighterHex} 0%, ${hex} 55%, ${hoverHex} 100%)`;
   const darkBg = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.24)`;
 
   // Luminance: for bright yellow (#eab308), ensure readable dark text on buttons
@@ -91,6 +91,7 @@ export function applyTheme(mode: ThemeMode, colorInput?: string) {
   const contrastText = lum > 0.62 ? '#1e2433' : '#ffffff';
   // Text color on light backgrounds: deep shade for bright hues so it remains legible
   const lightBgText = lum > 0.62 ? adjustBrightness(hex, -35) : hex;
+  const heroContrast = lum > 0.62 ? '#1e2433' : '#ffffff';
 
   const isDark =
     mode === 'dark' ||
@@ -99,6 +100,7 @@ export function applyTheme(mode: ThemeMode, colorInput?: string) {
   const root = document.documentElement;
   root.style.setProperty('--brand-primary', hex);
   root.style.setProperty('--brand-primary-hover', hoverHex);
+  root.style.setProperty('--brand-primary-lighter', lighterHex);
   root.style.setProperty('--brand-primary-light', lightBg);
   root.style.setProperty('--brand-primary-border', lightBorder);
   root.style.setProperty('--brand-primary-glow', glow);
@@ -107,10 +109,13 @@ export function applyTheme(mode: ThemeMode, colorInput?: string) {
   root.style.setProperty('--brand-primary-dark-text', lighterHex);
   root.style.setProperty('--brand-primary-contrast', contrastText);
   root.style.setProperty('--brand-primary-text', isDark ? lighterHex : lightBgText);
+  root.style.setProperty('--hero-contrast', heroContrast);
 
   if (isDark) {
     root.classList.add('dark');
   } else {
     root.classList.remove('dark');
   }
+
+  window.dispatchEvent(new CustomEvent('optimus_theme_change', { detail: { mode, hex } }));
 }

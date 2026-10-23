@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags } from 'lucide-react';
 import { list, request, type User } from './api';
+import { getStoredTheme } from './theme';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -9,7 +10,7 @@ type Tab = 'overview' | 'income' | 'expense' | 'categories';
 const CUR = 'Rs';
 const INCOME = '#22a06b';
 const EXPENSE = '#e5484d';
-const PIE = ['#7966e9', '#f29d50', '#23b7a0', '#e477a1', '#6c9eff', '#b4a0e9', '#f2c94c', '#8d99ae', '#10b981', '#ef4444', '#06b6d4'];
+const PIE = [getStoredTheme().colorHex, '#f29d50', '#23b7a0', '#e477a1', '#6c9eff', '#b4a0e9', '#f2c94c', '#8d99ae', '#10b981', '#ef4444', '#06b6d4'];
 const money = (n: number) => `${CUR} ${Math.round(n).toLocaleString()}`;
 const tick = { fontSize: 12, fill: '#8c96a7' };
 
