@@ -6,7 +6,6 @@ import {
   KeyRound,
   Lock,
   Moon,
-  Paintbrush,
   Palette,
   Save,
   School,
@@ -16,7 +15,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { updateProfile, type User } from './api';
-import { applyTheme, getStoredTheme, THEME_COLORS, type ThemeColor, type ThemeMode } from './theme';
+import { applyTheme, getStoredTheme, resolveHex, THEME_PRESETS, type ThemeMode } from './theme';
 import './style.css';
 
 interface SettingsProps {
@@ -25,27 +24,16 @@ interface SettingsProps {
   notify: (msg: string) => void;
 }
 
-const AVATAR_COLORS = [
-  '#715ee8',
-  '#10b981',
-  '#2563eb',
-  '#e11d48',
-  '#f59e0b',
-  '#8b5cf6',
-  '#06b6d4',
-  '#475569',
-];
-
 export default function Settings({ user, onUserUpdated, notify }: SettingsProps) {
   const stored = getStoredTheme();
   const [mode, setMode] = useState<ThemeMode>(stored.mode);
-  const [accent, setAccent] = useState<ThemeColor>(stored.color);
+  const [accent, setAccent] = useState<string>(stored.colorHex);
 
   // Profile state
   const [firstName, setFirstName] = useState(user.first_name || user.name.split(' ')[0] || '');
   const [lastName, setLastName] = useState(user.last_name || user.name.split(' ').slice(1).join(' ') || '');
   const [email, setEmail] = useState(user.email || '');
-  const [avatarColor, setAvatarColor] = useState(user.avatar_color || '#715ee8');
+  const [avatarColor, setAvatarColor] = useState(user.avatar_color ? resolveHex(user.avatar_color) : stored.colorHex);
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -65,10 +53,13 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
     notify(`Theme mode switched to ${newMode}`);
   };
 
-  const handleColorChange = (newColor: ThemeColor) => {
-    setAccent(newColor);
-    applyTheme(mode, newColor);
-    notify(`Accent color theme updated`);
+  const handleColorChange = (hexOrId: string) => {
+    const hex = resolveHex(hexOrId);
+    setAccent(hex);
+    setAvatarColor(hex);
+    applyTheme(mode, hex);
+    const preset = THEME_PRESETS.find(p => p.hex.toLowerCase() === hex.toLowerCase());
+    notify(`Theme color updated to ${preset?.name || hex}`);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -143,8 +134,8 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
           </div>
           <h3>Appearance &amp; Theme Customisation</h3>
           <p>
-            Choose your preferred theme mode and primary color palette. Your selection is automatically remembered
-            across all sessions and page refreshes.
+            Choose your preferred theme mode and primary color palette. Changing color transforms all primary
+            buttons, sidebar tabs, highlights, and your profile avatar across the entire system.
           </p>
 
           <div style={{ marginTop: 18, marginBottom: 20 }}>
@@ -181,21 +172,22 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
               Workspace Accent Color
             </span>
             <div className="theme-color-grid">
-              {THEME_COLORS.map(tc => {
-                const isSelected = accent === tc.id;
+              {THEME_PRESETS.map(tc => {
+                const isSelected = accent.toLowerCase() === tc.hex.toLowerCase();
+                const isYellow = tc.hex === '#eab308';
                 return (
                   <button
                     key={tc.id}
                     type="button"
                     className={`theme-color-card ${isSelected ? 'active' : ''}`}
-                    onClick={() => handleColorChange(tc.id)}
+                    onClick={() => handleColorChange(tc.hex)}
                   >
-                    <div className="theme-swatch" style={{ background: tc.primary }}>
-                      {isSelected && <Check size={16} color="#fff" strokeWidth={3} />}
+                    <div className="theme-swatch" style={{ background: tc.hex }}>
+                      {isSelected && <Check size={16} color={isYellow ? '#1e2433' : '#fff'} strokeWidth={3} />}
                     </div>
                     <div className="theme-color-info">
                       <strong>{tc.name}</strong>
-                      <span style={{ color: tc.primary }}>{tc.primary}</span>
+                      <span style={{ color: tc.hex }}>{tc.hex}</span>
                     </div>
                   </button>
                 );
@@ -262,18 +254,23 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
               <span className="settings-field-label" style={{ display: 'block', marginBottom: 6 }}>
                 Avatar Color
               </span>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {AVATAR_COLORS.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={`avatar-swatch ${avatarColor === c ? 'selected' : ''}`}
-                    style={{ background: c }}
-                    onClick={() => setAvatarColor(c)}
-                  >
-                    {avatarColor === c && <Check size={14} color="#fff" strokeWidth={3} />}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                {THEME_PRESETS.map(preset => {
+                  const isSelected = avatarColor.toLowerCase() === preset.hex.toLowerCase();
+                  const isYellow = preset.hex === '#eab308';
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      title={preset.name}
+                      className={`avatar-swatch ${isSelected ? 'selected' : ''}`}
+                      style={{ background: preset.hex }}
+                      onClick={() => handleColorChange(preset.hex)}
+                    >
+                      {isSelected && <Check size={14} color={isYellow ? '#1e2433' : '#fff'} strokeWidth={3} />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

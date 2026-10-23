@@ -1,108 +1,116 @@
-export type ThemeColor = 'purple' | 'emerald' | 'blue' | 'rose' | 'amber' | 'slate';
 export type ThemeMode = 'light' | 'dark' | 'system';
 
-export interface ThemeOption {
-  id: ThemeColor;
+export interface ThemePreset {
+  id: string;
   name: string;
-  primary: string;
-  hover: string;
-  light: string;
-  border: string;
-  glow: string;
-  gradient: string;
+  hex: string;
 }
 
-export const THEME_COLORS: ThemeOption[] = [
-  {
-    id: 'purple',
-    name: 'Imperial Purple',
-    primary: '#715ee8',
-    hover: '#5d4cd0',
-    light: '#f0edff',
-    border: '#c8bffd',
-    glow: 'rgba(113, 94, 232, 0.22)',
-    gradient: 'linear-gradient(135deg, #9f8df9, #6056d4)',
-  },
-  {
-    id: 'emerald',
-    name: 'Emerald Growth',
-    primary: '#10b981',
-    hover: '#059669',
-    light: '#ecfdf5',
-    border: '#a7f3d0',
-    glow: 'rgba(16, 185, 129, 0.22)',
-    gradient: 'linear-gradient(135deg, #34d399, #059669)',
-  },
-  {
-    id: 'blue',
-    name: 'Ocean Sapphire',
-    primary: '#2563eb',
-    hover: '#1d4ed8',
-    light: '#eff6ff',
-    border: '#bfdbfe',
-    glow: 'rgba(37, 99, 235, 0.22)',
-    gradient: 'linear-gradient(135deg, #60a5fa, #2563eb)',
-  },
-  {
-    id: 'rose',
-    name: 'Crimson Ember',
-    primary: '#e11d48',
-    hover: '#be123c',
-    light: '#fff1f2',
-    border: '#fecdd3',
-    glow: 'rgba(225, 29, 72, 0.22)',
-    gradient: 'linear-gradient(135deg, #fb7185, #e11d48)',
-  },
-  {
-    id: 'amber',
-    name: 'Amber Sunrise',
-    primary: '#f59e0b',
-    hover: '#d97706',
-    light: '#fffbeb',
-    border: '#fde68a',
-    glow: 'rgba(245, 158, 11, 0.22)',
-    gradient: 'linear-gradient(135deg, #fbbf24, #d97706)',
-  },
-  {
-    id: 'slate',
-    name: 'Midnight Slate',
-    primary: '#475569',
-    hover: '#334155',
-    light: '#f1f5f9',
-    border: '#cbd5e1',
-    glow: 'rgba(71, 85, 105, 0.22)',
-    gradient: 'linear-gradient(135deg, #94a3b8, #334155)',
-  },
+export const THEME_PRESETS: ThemePreset[] = [
+  { id: 'yellow', name: 'Vibrant Yellow', hex: '#eab308' },
+  { id: 'purple', name: 'Imperial Purple', hex: '#715ee8' },
+  { id: 'emerald', name: 'Emerald Green', hex: '#10b981' },
+  { id: 'blue', name: 'Ocean Blue', hex: '#2563eb' },
+  { id: 'rose', name: 'Crimson Rose', hex: '#e11d48' },
+  { id: 'violet', name: 'Amethyst Violet', hex: '#8b5cf6' },
+  { id: 'cyan', name: 'Aqua Cyan', hex: '#06b6d4' },
+  { id: 'slate', name: 'Midnight Slate', hex: '#475569' },
 ];
 
-export function getStoredTheme(): { mode: ThemeMode; color: ThemeColor } {
-  if (typeof window === 'undefined') return { mode: 'light', color: 'purple' };
-  const mode = (localStorage.getItem('optimus_theme_mode') as ThemeMode) || 'light';
-  const color = (localStorage.getItem('optimus_accent_color') as ThemeColor) || 'purple';
-  return { mode, color };
+export const THEME_COLORS = THEME_PRESETS.map(p => ({
+  id: p.id,
+  name: p.name,
+  primary: p.hex,
+  light: p.hex + '22',
+  hover: p.hex,
+}));
+
+export type ThemeColor = string;
+
+export function resolveHex(input?: string): string {
+  if (!input) return '#715ee8';
+  const trimmed = input.trim();
+  const found = THEME_PRESETS.find(
+    p => p.id.toLowerCase() === trimmed.toLowerCase() || p.hex.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (found) return found.hex;
+  if (trimmed.startsWith('#')) return trimmed;
+  if (/^[0-9a-fA-F]{3,8}$/.test(trimmed)) return `#${trimmed}`;
+  return '#715ee8';
 }
 
-export function applyTheme(mode: ThemeMode, color: ThemeColor) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem('optimus_theme_mode', mode);
-  localStorage.setItem('optimus_accent_color', color);
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  hex = hex.replace('#', '').trim();
+  if (hex.length === 3) {
+    hex = hex.split('').map(c => c + c).join('');
+  }
+  const num = parseInt(hex, 16);
+  if (isNaN(num)) {
+    return { r: 113, g: 94, b: 232 };
+  }
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255,
+  };
+}
 
-  const root = document.documentElement;
+function adjustBrightness(hex: string, percent: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  const adjust = (c: number) => Math.min(255, Math.max(0, Math.round(c * (1 + percent / 100))));
+  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${toHex(adjust(r))}${toHex(adjust(g))}${toHex(adjust(b))}`;
+}
+
+export function getStoredTheme(): { mode: ThemeMode; colorHex: string; color: string } {
+  if (typeof window === 'undefined') return { mode: 'light', colorHex: '#715ee8', color: '#715ee8' };
+  const mode = (localStorage.getItem('optimus_theme_mode') as ThemeMode) || 'light';
+  const raw = localStorage.getItem('optimus_accent_hex') || '#715ee8';
+  const colorHex = resolveHex(raw);
+  return { mode, colorHex, color: colorHex };
+}
+
+export function applyTheme(mode: ThemeMode, colorInput?: string) {
+  if (typeof window === 'undefined') return;
+
+  const hex = resolveHex(colorInput || localStorage.getItem('optimus_accent_hex') || '#715ee8');
+  localStorage.setItem('optimus_theme_mode', mode);
+  localStorage.setItem('optimus_accent_hex', hex);
+
+  const rgb = hexToRgb(hex);
+  const hoverHex = adjustBrightness(hex, -15);
+  const lighterHex = adjustBrightness(hex, 25);
+  const lightBg = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.16)`;
+  const lightBorder = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.38)`;
+  const glow = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.28)`;
+  const gradient = `linear-gradient(135deg, ${lighterHex}, ${hex})`;
+  const darkBg = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.24)`;
+
+  // Luminance: for bright yellow (#eab308), ensure readable dark text on buttons
+  const lum = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  const contrastText = lum > 0.62 ? '#1e2433' : '#ffffff';
+  // Text color on light backgrounds: deep shade for bright hues so it remains legible
+  const lightBgText = lum > 0.62 ? adjustBrightness(hex, -35) : hex;
+
   const isDark =
     mode === 'dark' ||
     (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  const root = document.documentElement;
+  root.style.setProperty('--brand-primary', hex);
+  root.style.setProperty('--brand-primary-hover', hoverHex);
+  root.style.setProperty('--brand-primary-light', lightBg);
+  root.style.setProperty('--brand-primary-border', lightBorder);
+  root.style.setProperty('--brand-primary-glow', glow);
+  root.style.setProperty('--brand-primary-gradient', gradient);
+  root.style.setProperty('--brand-primary-dark-bg', darkBg);
+  root.style.setProperty('--brand-primary-dark-text', lighterHex);
+  root.style.setProperty('--brand-primary-contrast', contrastText);
+  root.style.setProperty('--brand-primary-text', isDark ? lighterHex : lightBgText);
 
   if (isDark) {
     root.classList.add('dark');
   } else {
     root.classList.remove('dark');
   }
-
-  const selected = THEME_COLORS.find(c => c.id === color) || THEME_COLORS[0];
-  root.style.setProperty('--brand-primary', selected.primary);
-  root.style.setProperty('--brand-primary-hover', selected.hover);
-  root.style.setProperty('--brand-primary-light', selected.light);
-  root.style.setProperty('--brand-primary-border', selected.border);
-  root.style.setProperty('--brand-primary-glow', selected.glow);
-  root.style.setProperty('--brand-primary-gradient', selected.gradient);
 }

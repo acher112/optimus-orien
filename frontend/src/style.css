@@ -21,7 +21,7 @@
 .campus-card-meta span{font-size:10px;color:#a0a8bc;font-weight:700;text-transform:uppercase;letter-spacing:.8px}
 .campus-card-meta strong{font-size:13px;font-weight:800;color:#363d55}
 .campus-card-actions{display:flex;gap:10px;flex-wrap:wrap}
-.active-btn{background:#f0edff!important;color:#7460e5!important;border-color:#c8bffd!important}
+.active-btn{background:var(--brand-primary-light)!important;color:var(--brand-primary-text, var(--brand-primary))!important;border-color:var(--brand-primary-border)!important}
 
 .accounts-panel{background:#f8f9fd;border-radius:13px;padding:18px;display:flex;flex-direction:column;gap:12px;border:1px solid #eceefa}
 .accounts-panel-head{font-size:12px;font-weight:800;color:#555d78}
@@ -51,7 +51,7 @@
 @media(max-width:760px){.campus-grid{grid-template-columns:1fr}.acf-row{grid-template-columns:1fr}}
 
 .modal-fields-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.modal-section-title{grid-column:1 / -1;font-size:10px;font-weight:800;color:#715ee8;letter-spacing:1px;text-transform:uppercase;margin-top:10px;padding-bottom:5px;border-bottom:1px solid #edf0f8}
+.modal-section-title{grid-column:1 / -1;font-size:10px;font-weight:800;color:var(--brand-primary-text, var(--brand-primary));letter-spacing:1px;text-transform:uppercase;margin-top:10px;padding-bottom:5px;border-bottom:1px solid #edf0f8}
 .dark .modal-section-title{color:#a295f5;border-bottom-color:#35374c}
 .campus-badge-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 .campus-tag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:#f0edff;color:#6956e3}
@@ -97,6 +97,225 @@
 
 .modal-fields select{width:100%;margin-top:9px;border:1px solid #e4e7f0;border-radius:9px;padding:12px;font-size:12px;background:#fff;color:#3c435c}
 
+/* ==========================================================================
+   DYNAMIC WORKSPACE THEME SYSTEM (Applies chosen color to the entire app)
+   ========================================================================== */
+:root {
+  --brand-primary: #715ee8;
+  --brand-primary-hover: #5d4cd0;
+  --brand-primary-light: rgba(113, 94, 232, 0.16);
+  --brand-primary-border: rgba(113, 94, 232, 0.38);
+  --brand-primary-glow: rgba(113, 94, 232, 0.28);
+  --brand-primary-gradient: linear-gradient(135deg, #9f8df9, #715ee8);
+  --brand-primary-dark-bg: rgba(113, 94, 232, 0.24);
+  --brand-primary-dark-text: #a89cf6;
+  --brand-primary-contrast: #ffffff;
+  --brand-primary-text: #715ee8;
+}
+
+/* Primary Action Buttons */
+.primary-btn,
+.login-submit,
+.setup-btn.primary,
+.btn-primary {
+  background: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+  color: var(--brand-primary-contrast, #ffffff) !important;
+  box-shadow: 0 8px 18px var(--brand-primary-glow) !important;
+}
+.primary-btn svg,
+.login-submit svg,
+.setup-btn.primary svg {
+  color: var(--brand-primary-contrast, #ffffff) !important;
+  stroke: var(--brand-primary-contrast, #ffffff) !important;
+}
+.primary-btn:hover,
+.login-submit:hover,
+.setup-btn.primary:hover {
+  background: var(--brand-primary-hover) !important;
+  border-color: var(--brand-primary-hover) !important;
+  color: var(--brand-primary-contrast, #ffffff) !important;
+}
+
+/* Sidebar Navigation Items */
+.nav-item:hover {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.nav-item.selected {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.nav-item.selected svg {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+  stroke: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.dark .nav-item.selected {
+  background: var(--brand-primary-dark-bg) !important;
+  color: var(--brand-primary-dark-text, var(--brand-primary)) !important;
+}
+.dark .nav-item.selected svg {
+  color: var(--brand-primary-dark-text, var(--brand-primary)) !important;
+  stroke: var(--brand-primary-dark-text, var(--brand-primary)) !important;
+}
+
+/* Branding & Workspace Identifiers */
+.brand-symbol {
+  background: var(--brand-primary-gradient) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+}
+.brand-copy strong span,
+.login-brand strong span {
+  color: var(--brand-primary) !important;
+}
+.workspace-icon {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+  background: var(--brand-primary-light) !important;
+}
+.dark .workspace-icon {
+  color: var(--brand-primary-dark-text) !important;
+  background: var(--brand-primary-dark-bg) !important;
+}
+
+/* Eyebrows & Nav Accents */
+.eyebrow {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.eyebrow-dot {
+  background: var(--brand-primary) !important;
+}
+.nav-sublabel-admin {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+
+/* Feature & Section Icons */
+.setting-icon,
+.resource-icon,
+.modal-icon,
+.head-chip,
+.pulse-chip {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.dark .setting-icon,
+.dark .resource-icon,
+.dark .modal-icon,
+.dark .head-chip,
+.dark .pulse-chip {
+  background: var(--brand-primary-dark-bg) !important;
+  color: var(--brand-primary-dark-text) !important;
+}
+
+/* User Profile Avatar in Shell */
+.avatar {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.dark .avatar {
+  background: var(--brand-primary-dark-bg) !important;
+  color: var(--brand-primary-dark-text) !important;
+}
+
+/* Pulse Card Ring */
+.pulse-ring strong {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+
+/* Toggles & Active Tabs */
+.toggle.on {
+  background: var(--brand-primary) !important;
+}
+.fx-tabs button.on,
+.login-tab.active,
+.login-tab.on {
+  background: var(--brand-primary-light) !important;
+  border-color: var(--brand-primary-border) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.dark .fx-tabs button.on,
+.dark .login-tab.active,
+.dark .login-tab.on {
+  background: var(--brand-primary-dark-bg) !important;
+  border-color: var(--brand-primary-border) !important;
+  color: var(--brand-primary-dark-text) !important;
+}
+
+/* Interactive Links & Badges */
+.view-link,
+.text-link,
+.text-link-btn,
+.help-card button,
+.help-icon,
+.setup-table-button,
+.hero-copy button {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.active-btn,
+.campus-tag {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+  border-color: var(--brand-primary-border) !important;
+}
+.dark .campus-tag {
+  background: var(--brand-primary-dark-bg) !important;
+  color: var(--brand-primary-dark-text) !important;
+}
+
+/* Theme Customization & Swatches */
+.avatar-swatch.selected {
+  box-shadow: 0 0 0 3px var(--brand-primary), 0 0 0 5px var(--brand-primary-light) !important;
+  border-color: #fff !important;
+}
+.theme-color-card.active {
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 3px var(--brand-primary-glow) !important;
+}
+
+/* School Setup Components */
+.setup-header-icon,
+.setup-stage-symbol,
+.setup-review-emblem {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.setup-side nav button:hover,
+.setup-side nav button.active {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.setup-side nav button.active b {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.setup-side nav button.active .setup-step-icon {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.setup-progress-track i {
+  background: var(--brand-primary-gradient) !important;
+}
+.setup-activation button {
+  background: var(--brand-primary) !important;
+  color: var(--brand-primary-contrast, #ffffff) !important;
+}
+
+/* Form Inputs, Outlines & Focus Rings */
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+input:focus-visible,
+.searchbox input:focus,
+.comm-input:focus,
+.fx-select:focus,
+.acf-row input:focus,
+.acf-row select:focus,
+.modal-fields select:focus,
+.login-form-wrap select:focus {
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 3px var(--brand-primary-glow) !important;
+}
+
 /* Sticky Settings Button (Mobile & Desktop) */
 .sticky-settings-btn {
   position: fixed;
@@ -105,10 +324,10 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: var(--brand-primary, #715ee8);
-  color: #fff;
+  background: var(--brand-primary) !important;
+  color: var(--brand-primary-contrast, #ffffff) !important;
   border: 2px solid #fff;
-  box-shadow: 0 4px 16px var(--brand-primary-glow, rgba(113,94,232,0.25)), 0 2px 6px rgba(0,0,0,0.14);
+  box-shadow: 0 4px 16px var(--brand-primary-glow), 0 2px 6px rgba(0,0,0,0.14) !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -116,10 +335,14 @@
   z-index: 9999;
   transition: transform .2s, background .2s, box-shadow .2s;
 }
+.sticky-settings-btn svg {
+  color: var(--brand-primary-contrast, #ffffff) !important;
+  stroke: var(--brand-primary-contrast, #ffffff) !important;
+}
 .sticky-settings-btn:hover {
-  background: var(--brand-primary-hover, #5d4cd0);
+  background: var(--brand-primary-hover) !important;
   transform: scale(1.08) rotate(30deg);
-  box-shadow: 0 6px 20px var(--brand-primary-glow, rgba(113,94,232,0.35));
+  box-shadow: 0 6px 20px var(--brand-primary-glow);
 }
 .dark .sticky-settings-btn {
   border-color: #2e3046;
@@ -131,6 +354,37 @@
     width: 38px;
     height: 38px;
   }
+}
+
+/* Classroom Communication Overrides */
+.comm-subject-btn.active {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.comm-subject-btn.active .comm-subject-info strong {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.comm-subject-icon {
+  background: var(--brand-primary-light) !important;
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
+}
+.dark .comm-subject-btn.active {
+  background: var(--brand-primary-dark-bg) !important;
+}
+.dark .comm-subject-icon {
+  background: var(--brand-primary-dark-bg) !important;
+  color: var(--brand-primary-dark-text) !important;
+}
+.comm-bubble.teacher-message {
+  border-color: var(--brand-primary-border) !important;
+  box-shadow: 0 4px 14px var(--brand-primary-glow) !important;
+}
+.comm-reply-quote {
+  border-left-color: var(--brand-primary) !important;
+}
+.comm-official-tag,
+.comm-reply-btn:hover {
+  color: var(--brand-primary-text, var(--brand-primary)) !important;
 }
 
 /* Theme Color Cards & Customizer */
