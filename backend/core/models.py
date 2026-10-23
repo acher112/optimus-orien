@@ -67,6 +67,8 @@ class Student(models.Model):
  first_name=models.CharField(max_length=100)
  last_name=models.CharField(max_length=100)
  date_of_birth=models.DateField(null=True,blank=True)
+ GENDER=[('male','Boy'),('female','Girl')]
+ gender=models.CharField(max_length=8,choices=GENDER,blank=True,default='')
  user=models.OneToOneField(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='student_record')
  guardians=models.ManyToManyField(User,related_name='wards',blank=True)
  enrolled_on=models.DateField()
@@ -295,3 +297,65 @@ class PublishedSchoolIndicator(models.Model):
     raise ValidationError('Aggregate below 10 participants is withheld by the current privacy release policy')
    if not self.methodology.strip() or not self.completeness_note.strip():
     raise ValidationError('Methodology and data completeness must be documented')
+
+
+# ------------------------------------------------------------------ Staff (HR records)
+class StaffMember(models.Model):
+    """Employment record. Deliberately separate from the sign-in User: a person can be on
+    the staff list without a login, and terminating them switches any linked login off."""
+    STATUS=[('active','Active'),('terminated','Terminated')]
+    school=models.ForeignKey(School,on_delete=models.PROTECT,related_name='staff')
+    user=models.OneToOneField(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='staff_record')
+    first_name=models.CharField(max_length=100)
+    last_name=models.CharField(max_length=100)
+    email=models.EmailField(blank=True)
+    phone=models.CharField(max_length=40,blank=True)
+    position=models.CharField(max_length=120,help_text='Job title, e.g. Maths Teacher')
+    role=models.CharField(max_length=32,default='teacher',help_text='Assigned role: teacher, principal, school_admin or any non-login role such as accountant')
+    status=models.CharField(max_length=16,choices=STATUS,default='active')
+    hired_on=models.DateField()
+    terminated_on=models.DateField(null=True,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:ordering=['last_name','first_name']
+    @property
+    def full_name(self):return f'{self.first_name} {self.last_name}'.strip()
+    def __str__(self):return self.full_name
+
+class StaffEvent(models.Model):
+    KINDS=[('hired','Hired'),('promoted','Promoted'),('role_changed','Role changed'),('terminated','Terminated'),('reinstated','Reinstated'),('updated','Updated')]
+    staff=models.ForeignKey(StaffMember,on_delete=models.CASCADE,related_name='events')
+    kind=models.CharField(max_length=16,choices=KINDS)
+    from_value=models.CharField(max_length=160,blank=True)
+    to_value=models.CharField(max_length=160,blank=True)
+    note=models.CharField(max_length=255,blank=True)
+    actor=models.ForeignKey(User,null=True,on_delete=models.SET_NULL,related_name='+')
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:ordering=['-created_at','-id']
+
+# ------------------------------------------------------------------ Finance (simple ledger)
+class FinanceCategory(models.Model):
+    KINDS=[('income','Income'),('expense','Expense')]
+    school=models.ForeignKey(School,on_delete=models.PROTECT,related_name='finance_categories')
+    kind=models.CharField(max_length=8,choices=KINDS)
+    name=models.CharField(max_length=80)
+    active=models.BooleanField(default=True)
+    class Meta:
+        ordering=['kind','name']
+        constraints=[models.UniqueConstraint(fields=['school','kind','name'],name='unique_finance_category')]
+    def __str__(self):return f'{self.name} ({self.kind})'
+
+class FinanceEntry(models.Model):
+    """One income or expense line. Never deleted; mistakes are voided so history stays intact."""
+    school=models.ForeignKey(School,on_delete=models.PROTECT,related_name='finance_entries')
+    category=models.ForeignKey(FinanceCategory,on_delete=models.PROTECT,related_name='entries')
+    amount=models.DecimalField(max_digits=12,decimal_places=2,validators=[MinValueValidator(0.01)])
+    date=models.DateField()
+    description=models.CharField(max_length=255,blank=True)
+    voided=models.BooleanField(default=False)
+    created_by=models.ForeignKey(User,null=True,on_delete=models.SET_NULL,related_name='+')
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['-date','-id']
+        indexes=[models.Index(fields=['school','date'],name='finance_school_date_idx')]
+    @property
+    def kind(self):return self.category.kind

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AlertCircle, ChevronRight, Info, RefreshCw, ShieldCheck } from 'lucide-react';
 import { request, type User } from './api';
+import { GenderPanel } from './GenderCharts';
 import './reports.css';
 
 type R = Record<string, any>;
@@ -163,6 +164,11 @@ export default function Reports({ user }: { user: User }) {
             <Kpi label="Valid results" value={num(overall.valid_results)} foot="Included in calculation" />
             <Kpi label="Missing results" value={num(overall.missing_results)} foot={`Completeness ${pct(overall.completeness)} · never counted as zero`} />
           </div>
+
+          {data.level === 'organisation' && <GenderPanel title="Boys vs girls" subtitle="Academic average across all campuses, then by campus" split={overall.gender} rows={data.campuses} />}
+          {data.level === 'campus' && <GenderPanel title="Boys vs girls" subtitle="Academic average for this campus, then by class" split={overall.gender} rows={data.classes} />}
+          {data.level === 'class' && <GenderPanel title="Boys vs girls" subtitle="Academic average for this class, then by subject" split={overall.gender} rows={data.subjects} />}
+          {data.level === 'subject' && <GenderPanel title="Boys vs girls" subtitle="This subject, then by class" split={overall.gender} rows={data.classes.filter((c: R) => c.assessments > 0 || c.valid_students > 0).map((c: R) => ({ name: c.class_name, gender: c.gender }))} />}
 
           {data.level === 'organisation' && (
             <>

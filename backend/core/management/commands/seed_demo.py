@@ -82,4 +82,31 @@ class Command(BaseCommand):
    SchoolConfiguration.objects.get_or_create(school=sch,defaults={'country':'GB','timezone':'Europe/London','language':'en','reporting_periods':[
     {'name':'Term 1','start':(today-timedelta(days=90)).isoformat(),'end':(today-timedelta(days=30)).isoformat()},
     {'name':'Term 2','start':(today-timedelta(days=29)).isoformat(),'end':(today+timedelta(days=60)).isoformat()}]})
-  self.stdout.write(self.style.SUCCESS('Demo ready: admin / teacher / principal / teacher_west / principal_west — password DemoPass123!'))
+  # Gender (drives the pink / blue / gray charts) - fictional first names only
+  girls={'Sophia','Emma','Ava','Isabella','Mia','Charlotte','Amelia','Zara','Lina','Maya','Nora','Aisha','Ines','Sana'}
+  for st in Student.objects.filter(school__in=[school,sister],gender=''):
+   st.gender='female' if (st.first_name in girls) else 'male';st.save(update_fields=['gender'])
+  # Student and parent demo logins for the "My performance" page
+  first=Student.objects.filter(school=school,admission_number='NS-1001').first()
+  if first:
+   pupil,_=User.objects.get_or_create(username='student_demo',defaults={'first_name':first.first_name,'last_name':first.last_name,'role':'student','organisation':org,'school':school});pupil.set_password('DemoPass123!');pupil.save()
+   if not first.user_id:first.user=pupil;first.save(update_fields=['user'])
+   guardian,_=User.objects.get_or_create(username='parent_demo',defaults={'first_name':'Hannah','last_name':first.last_name,'role':'parent','organisation':org});guardian.set_password('DemoPass123!');guardian.save()
+   first.guardians.add(guardian)
+  # Staff directory and finance ledger demo data
+  for sch,people in ((school,[('Ethan','Cole','Maths Teacher','teacher',teacher),('Grace','Morgan','Principal','principal',principal),('Maria','Lopez','Accountant','accountant',None),('Samir','Patel','Librarian','librarian',None)]),
+                     (sister,[('Priya','Nair','Science Teacher','teacher',west_teacher),('Daniel','Hughes','Principal','principal',west_principal),('Chloe','Evans','Front Office','support',None)])):
+   for fn,ln,pos,role,acct in people:
+    sm,created=StaffMember.objects.get_or_create(school=sch,first_name=fn,last_name=ln,defaults={'position':pos,'role':role,'user':acct,'hired_on':today-timedelta(days=400)})
+    if created:StaffEvent.objects.create(staff=sm,kind='hired',to_value=f'{pos} ({role})',actor=admin)
+  for sch in (school,sister):
+   if FinanceCategory.objects.filter(school=sch).exists():continue
+   cats={}
+   for kind,names in (('income',['Tuition fees','Admission fees','Annual fees','Other income']),('expense',['Salaries','Utilities','Maintenance','Stationery','Other expenses'])):
+    for n in names:cats[n]=FinanceCategory.objects.create(school=sch,kind=kind,name=n)
+   base=1 if sch==school else 0.8
+   for m in range(3):
+    d=today.replace(day=1)-timedelta(days=30*m)
+    for n,amt in (('Tuition fees',480000),('Admission fees',60000),('Annual fees',90000 if m==2 else 20000),('Salaries',350000),('Utilities',42000),('Maintenance',27000+m*4000),('Stationery',11000)):
+     FinanceEntry.objects.create(school=sch,category=cats[n],amount=Decimal(int(amt*base)),date=d,description='Demo entry',created_by=admin)
+  self.stdout.write(self.style.SUCCESS('Demo ready: admin / teacher / principal / teacher_west / principal_west / student_demo / parent_demo — password DemoPass123!'))

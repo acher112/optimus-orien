@@ -38,6 +38,7 @@ from core.models import (Assessment, Attendance, Enrollment, Grade, School, Scho
                          SchoolConfiguration)
 from core.services.access import classes_scope, schools_scope
 
+MIN_GROUP = 3   # smallest boy/girl group whose average may be shown
 REPORT_ROLES = ('organisation_admin', 'school_admin', 'principal', 'teacher')
 BINS = [(0, 40, '0–39'), (40, 50, '40–49'), (50, 60, '50–59'), (60, 70, '60–69'),
         (70, 80, '70–79'), (80, 90, '80–89'), (90, 101, '90–100')]
@@ -236,6 +237,34 @@ class Data:
             'distribution': [{'band': label, 'count': sum(1 for v in values if lo <= v < hi)} for lo, hi, label in BINS],
         }
 
+    def gender_split(self, keys):
+        """Boys / girls average over the same student results as rollup().
+
+        Privacy: if any non-empty group is smaller than MIN_GROUP, BOTH averages are hidden
+        (otherwise a hidden small group could be back-calculated from the total)."""
+        per_student = defaultdict(list)
+        for k in keys:
+            f = self.cs[k]
+            for sid, val in f['results'].items():
+                per_student[(sid, f['class_id'])].append(val)
+        if not hasattr(self, '_gender'):
+            from core.models import Student
+            ids = {sid for f in self.cs.values() for sid in f['results']}
+            self._gender = dict(Student.objects.filter(pk__in=ids).values_list('id', 'gender'))
+        groups = {'male': [], 'female': []}
+        unspecified = 0
+        for (sid, _), vals in per_student.items():
+            g = self._gender.get(sid, '')
+            if g in groups:
+                groups[g].append(sum(vals) / len(vals))
+            else:
+                unspecified += 1
+        hidden = any(0 < len(v) < MIN_GROUP for v in groups.values())
+        def pack(v):
+            return {'students': len(v), 'average': None if hidden or not v else _mean(v)}
+        return {'boys': pack(groups['male']), 'girls': pack(groups['female']),
+                'unspecified': unspecified, 'hidden': hidden, 'min_group': MIN_GROUP}
+
     def basis(self, class_id):
         """Assessment structure signature used to decide whether classes are comparable."""
         sig = sorted((f['subject'].code, len(f['assessments']),
@@ -315,7 +344,8 @@ def overview(request):
             students |= data.population[cid]
         campuses.append({
             'id': s.id, 'name': s.name, 'city': s.city, 'classes': len(cids), 'students': len(students),
-            **roll, 'attendance_rate': _att_summary([att[c] for c in cids])['rate'],
+            **roll, 'gender': data.gender_split(data.keys(cids)),
+            'attendance_rate': _att_summary([att[c] for c in cids])['rate'],
             'period_available': windows[s.id][2],
         })
     subjects = {}
@@ -335,12 +365,14 @@ def overview(request):
         st = data.subject_stats(info['keys'])
         subject_rows.append({'code': code, 'name': ' / '.join(sorted(info['names'])), 'average': st['average'],
                              'valid_students': st['valid_students'], 'valid_results': st['valid_results'],
-                             'missing_results': st['missing_results'], 'by_campus': by_campus})
+                             'missing_results': st['missing_results'], 'by_campus': by_campus,
+                             'gender': data.gender_split(info['keys'])})
     students_all = set()
     for cid in data.population:
         students_all |= data.population[cid]
     overall = {**data.rollup(data.keys()), 'attendance_rate': _att_summary(att.values())['rate'],
-               'students': len(students_all), 'campuses': len(schools), 'classes': len(classes)}
+               'students': len(students_all), 'campuses': len(schools), 'classes': len(classes),
+               'gender': data.gender_split(data.keys())}
     return Response(_envelope(
         user, level='organisation', period=_period_payload(period, windows, schools), overall=overall,
         campuses=campuses, subjects=subject_rows,
@@ -365,7 +397,7 @@ def campus(request, school_id):
         class_rows.append({
             'id': c.id, 'name': c.name, 'grade_level': c.grade_level,
             'teacher': (c.teacher.get_full_name() or c.teacher.username) if c.teacher else 'Unassigned',
-            'students': len(data.population[c.id]), **roll,
+            'students': len(data.population[c.id]), **roll, 'gender': data.gender_split(data.keys({c.id})),
             'attendance_rate': _att_summary([att[c.id]])['rate'], 'assessment_basis': _basis_text(sig)})
     subject_rows = {}
     for k, f in data.cs.items():
@@ -385,14 +417,14 @@ def campus(request, school_id):
         comparable = len(sigs) <= 1
         subjects.append({'code': code, 'name': data.cs[keys[0]]['subject'].name, **{k: st[k] for k in (
             'average', 'valid_students', 'eligible_students', 'valid_results', 'missing_results', 'assessments')},
-            'classes': per_class, 'comparable': comparable,
+            'classes': per_class, 'comparable': comparable, 'gender': data.gender_split(keys),
             'comparability_note': None if comparable else
             'Classes use different assessment structures (number, weights or maximum marks) for this subject, so their averages are not directly equivalent.'})
     students_all = set()
     for cid in data.population:
         students_all |= data.population[cid]
     overall = {**data.rollup(data.keys()), 'attendance_rate': _att_summary(att.values())['rate'],
-               'students': len(students_all), 'classes': len(classes)}
+               'students': len(students_all), 'classes': len(classes), 'gender': data.gender_split(data.keys())}
     return Response(_envelope(
         user, level='campus', period=_period_payload(period, windows, [school]),
         campus={'id': school.id, 'name': school.name, 'city': school.city},
@@ -411,7 +443,8 @@ def class_report(request, class_id):
     subjects = []
     for k in sorted(data.keys({klass.id}), key=lambda k: data.cs[k]['subject'].name):
         f = data.cs[k]
-        subjects.append({'code': f['subject'].code, 'name': f['subject'].name, **data.subject_stats([k])})
+        subjects.append({'code': f['subject'].code, 'name': f['subject'].name, **data.subject_stats([k]),
+                         'gender': data.gender_split([k])})
     students = []
     if can_see_students(user):
         from core.models import Student
@@ -432,7 +465,7 @@ def class_report(request, class_id):
         campus={'id': klass.school_id, 'name': klass.school.name},
         klass={'id': klass.id, 'name': klass.name, 'grade_level': klass.grade_level,
                'teacher': (klass.teacher.get_full_name() or klass.teacher.username) if klass.teacher else 'Unassigned'},
-        overall={**data.rollup(data.keys()), 'students': len(data.population[klass.id]),
+        overall={**data.rollup(data.keys()), 'gender': data.gender_split(data.keys()), 'students': len(data.population[klass.id]),
                  'attendance': _att_summary([att[klass.id]])},
         subjects=subjects, students=students))
 
@@ -463,7 +496,8 @@ def subject_report(request, school_id, code):
     for c in classes:
         ck = data.keys({c.id}, code)
         st = data.subject_stats(ck)
-        per_class.append({'class_id': c.id, 'class_name': c.name, 'grade_level': c.grade_level, **st})
+        per_class.append({'class_id': c.id, 'class_name': c.name, 'grade_level': c.grade_level, **st,
+                          'gender': data.gender_split(ck)})
     assessments = []
     for a in sorted(data.assessments, key=lambda a: (a.date, a.id)):
         graded = data.grades[a.id]
@@ -489,5 +523,54 @@ def subject_report(request, school_id, code):
     return Response(_envelope(
         user, level='subject', period=_period_payload(period, windows, [school]),
         campus={'id': school.id, 'name': school.name}, subject={'code': code, 'name': name},
-        overall=data.subject_stats(keys), classes=per_class, assessments=assessments, students=students,
+        overall={**data.subject_stats(keys), 'gender': data.gender_split(keys)}, classes=per_class, assessments=assessments, students=students,
         comparable=comparable))
+
+
+# ----------------------------------------------------------------------------- student "My performance"
+@api_view(['GET'])
+def my_performance(request):
+    """A student (or parent, for one ward) sees own subject results next to the boys and girls
+    averages of the same class. Cohort averages are hidden when a group is too small."""
+    from core.models import Student
+    user = request.user
+    if not user.is_authenticated or not user.is_active:
+        raise PermissionDenied('Active account required')
+    if user.role == 'student':
+        students = Student.objects.filter(user=user)
+    elif user.role == 'parent':
+        students = Student.objects.filter(guardians=user)
+    else:
+        raise PermissionDenied('This page is for students and parents')
+    wards = list(students.select_related('school'))
+    if not wards:
+        raise NotFound('No student record is linked to this account')
+    pick = request.query_params.get('student')
+    student = next((w for w in wards if str(w.id) == pick), wards[0])
+    enrol = Enrollment.objects.filter(student=student, end_date__isnull=True).select_related('school_class').first() \
+        or Enrollment.objects.filter(student=student).select_related('school_class').order_by('-start_date').first()
+    base = {'student': {'id': student.id, 'name': student.full_name, 'gender': student.gender},
+            'wards': [{'id': w.id, 'name': w.full_name} for w in wards], 'min_group': MIN_GROUP,
+            'method': {'basis': METHOD['average_basis'], 'missing': METHOD['missing_policy'], 'assessments': METHOD['assessments']}}
+    if not enrol:
+        return Response({**base, 'class': None, 'subjects': [], 'overall': None})
+    klass = enrol.school_class
+    period = request.query_params.get('period', '')
+    windows = _windows([klass.school], period)
+    data = Data([klass], windows)
+    rows = []
+    for k in sorted(data.keys({klass.id}), key=lambda k: data.cs[k]['subject'].name):
+        f = data.cs[k]
+        split = data.gender_split([k])
+        own = f['results'].get(student.id)
+        rows.append({'code': f['subject'].code, 'name': f['subject'].name,
+                     'mine': None if own is None else round(own, 1),
+                     'boys': split['boys']['average'], 'girls': split['girls']['average'],
+                     'hidden': split['hidden'], 'class_average': data.subject_stats([k])['average']})
+    mine_vals = [r['mine'] for r in rows if r['mine'] is not None]
+    overall_split = data.gender_split(data.keys())
+    return Response({**base, 'class': {'id': klass.id, 'name': klass.name, 'school': klass.school.name},
+                     'period': _period_payload(period, windows, [klass.school]),
+                     'overall': {'mine': _mean(mine_vals), 'boys': overall_split['boys']['average'],
+                                 'girls': overall_split['girls']['average'], 'hidden': overall_split['hidden']},
+                     'subjects': rows})

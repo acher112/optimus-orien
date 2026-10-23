@@ -213,7 +213,7 @@ class StudentSerializer(DynamicSerializer):
  def get_class_name(self,o):
   e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
   return e.school_class.name if e else 'Unassigned'
- class Meta:model=Student;fields=['id','school','admission_number','first_name','last_name','full_name','date_of_birth','enrolled_on','active','user','guardians','class_name']
+ class Meta:model=Student;fields=['id','school','admission_number','first_name','last_name','full_name','date_of_birth','gender','enrolled_on','active','user','guardians','class_name']
 class SubjectSerializer(DynamicSerializer):
  school_name=serializers.CharField(source='school.name',read_only=True)
  class Meta:model=Subject;fields='__all__'
@@ -482,6 +482,9 @@ def create_account(request):
  role=(data.get('role') or '').strip()
  school_id=data.get('school')
  admission_number=(data.get('admission_number') or '').strip()
+ gender=(data.get('gender') or '').strip().lower()
+ if gender not in ('','male','female'):
+  return Response({'detail':'Gender must be male or female'},status=400)
  student_id=data.get('student_id')
  class_id=data.get('class_id')
  
@@ -551,6 +554,7 @@ def create_account(request):
      first_name=first_name,
      last_name=last_name,
      user=new_user,
+     gender=gender,
      enrolled_on=timezone.now().date(),
      active=True
     )

@@ -1,0 +1,251 @@
+"""Staff management: add, promote, assign role, terminate / reinstate, with full history.
+
+Staff records are HR records, separate from sign-in accounts. Managers are organisation
+admins, school admins and principals, each limited to their own campus scope. Terminating
+a staff member switches off any linked login at once; nothing is ever hard-deleted.
+"""
+from datetime import date
+
+from django.db import transaction
+from rest_framework.decorators import api_view
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.response import Response
+
+from core.models import StaffEvent, StaffMember, User
+from core.services.access import schools_scope
+from core.services.audit import record_event
+
+MANAGERS = ('organisation_admin', 'school_admin', 'principal')
+LOGIN_ROLES = ('school_admin', 'principal', 'teacher')       # roles that map to a sign-in role
+LEADERSHIP = ('school_admin', 'principal')                    # only senior managers may grant these
+STAFF_ROLES = ['teacher', 'principal', 'school_admin', 'accountant', 'librarian', 'counsellor', 'support', 'other']
+
+
+def _require_manager(user):
+    if not user.is_authenticated or not user.is_active:
+        raise PermissionDenied('Active account required')
+    if not user.is_superuser and user.role not in MANAGERS:
+        raise PermissionDenied('Staff management requires an administrator or principal')
+
+
+def _scope(user):
+    return StaffMember.objects.filter(school__in=schools_scope(user)).select_related('school', 'user')
+
+
+def _get(user, pk):
+    obj = _scope(user).filter(pk=pk).first()
+    if not obj:
+        raise NotFound()
+    return obj
+
+
+def _row(s):
+    return {'id': s.id, 'first_name': s.first_name, 'last_name': s.last_name, 'full_name': s.full_name,
+            'email': s.email, 'phone': s.phone, 'position': s.position, 'role': s.role,
+            'status': s.status, 'hired_on': s.hired_on, 'terminated_on': s.terminated_on,
+            'school': s.school_id, 'school_name': s.school.name,
+            'has_login': bool(s.user_id), 'username': s.user.username if s.user_id else None}
+
+
+def _event_row(e):
+    return {'id': e.id, 'kind': e.kind, 'from_value': e.from_value, 'to_value': e.to_value, 'note': e.note,
+            'actor': (e.actor.get_full_name() or e.actor.username) if e.actor_id else None,
+            'created_at': e.created_at.isoformat()}
+
+
+def _log(staff, kind, actor, frm='', to='', note=''):
+    return StaffEvent.objects.create(staff=staff, kind=kind, actor=actor, from_value=frm, to_value=to, note=note[:255])
+
+
+def _text(data, key, required=False, maxlen=120):
+    v = (data.get(key) or '').strip()
+    if required and not v:
+        raise ValidationError({key: 'This field is required.'})
+    return v[:maxlen]
+
+
+def _check_role(actor, role):
+    if role not in STAFF_ROLES:
+        raise ValidationError({'role': f'Role must be one of: {", ".join(STAFF_ROLES)}'})
+    if role in LEADERSHIP and not actor.is_superuser and actor.role not in ('organisation_admin', 'school_admin'):
+        raise PermissionDenied('Only an organisation or school administrator can assign leadership roles')
+
+
+def _own_record(actor, staff):
+    if staff.user_id and staff.user_id == actor.id:
+        raise PermissionDenied('You cannot change your own staff record')
+
+
+def _sync_login(staff, role):
+    """Keep the linked sign-in role aligned when a login-capable role is assigned."""
+    if staff.user_id and role in LOGIN_ROLES and staff.user.role != role:
+        staff.user.role = role
+        staff.user.save(update_fields=['role'])
+
+
+@api_view(['GET', 'POST'])
+def staff_list(request):
+    user = request.user
+    _require_manager(user)
+    if request.method == 'GET':
+        qs = _scope(user)
+        for key in ('status', 'role', 'school'):
+            v = request.query_params.get(key)
+            if v:
+                qs = qs.filter(**{(key if key != 'school' else 'school_id'): v})
+        q = (request.query_params.get('q') or '').strip()
+        if q:
+            from django.db.models import Q
+            qs = qs.filter(Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(position__icontains=q))
+        rows = [_row(s) for s in qs]
+        return Response({'results': rows, 'summary': {
+            'total': len(rows), 'active': sum(r['status'] == 'active' for r in rows),
+            'terminated': sum(r['status'] == 'terminated' for r in rows)}, 'roles': STAFF_ROLES})
+    data = request.data
+    school = schools_scope(user).filter(pk=data.get('school') or (user.school_id if user.role != 'organisation_admin' else None)).first()
+    if not school:
+        raise ValidationError({'school': 'Choose a campus within your scope.'})
+    role = (data.get('role') or 'teacher').strip()
+    _check_role(user, role)
+    try:
+        hired = date.fromisoformat(data.get('hired_on') or date.today().isoformat())
+    except ValueError:
+        raise ValidationError({'hired_on': 'Use YYYY-MM-DD.'})
+    link = None
+    if data.get('user'):
+        link = User.objects.filter(pk=data['user'], school=school, organisation=school.organisation).first()
+        if not link:
+            raise ValidationError({'user': 'Login account not found on this campus.'})
+        if StaffMember.objects.filter(user=link).exists():
+            raise ValidationError({'user': 'That login is already linked to a staff record.'})
+    with transaction.atomic():
+        s = StaffMember.objects.create(
+            school=school, user=link, first_name=_text(data, 'first_name', True, 100),
+            last_name=_text(data, 'last_name', True, 100), email=_text(data, 'email', maxlen=254),
+            phone=_text(data, 'phone', maxlen=40), position=_text(data, 'position', True), role=role, hired_on=hired)
+        _log(s, 'hired', user, to=f'{s.position} ({role})')
+        _sync_login(s, role)
+        record_event(actor=user, action='create', obj=s)
+    return Response(_row(s), status=201)
+
+
+@api_view(['GET', 'PATCH'])
+def staff_detail(request, pk):
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    if request.method == 'PATCH':
+        _own_record(user, s)
+        changed = []
+        for key, maxlen in (('first_name', 100), ('last_name', 100), ('email', 254), ('phone', 40)):
+            if key in request.data:
+                setattr(s, key, _text(request.data, key, key in ('first_name', 'last_name'), maxlen))
+                changed.append(key)
+        if changed:
+            s.save(update_fields=changed)
+            _log(s, 'updated', user, note='Updated: ' + ', '.join(changed))
+    return Response({**_row(s), 'history': [_event_row(e) for e in s.events.select_related('actor')]})
+
+
+def _require_active(s):
+    if s.status != 'active':
+        raise ValidationError({'detail': 'This staff member is terminated. Reinstate them first.'})
+
+
+@api_view(['POST'])
+def staff_promote(request, pk):
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    _own_record(user, s)
+    _require_active(s)
+    new_pos = _text(request.data, 'new_position', True)
+    new_role = (request.data.get('new_role') or '').strip()
+    with transaction.atomic():
+        old = s.position
+        s.position = new_pos
+        fields = ['position']
+        if new_role and new_role != s.role:
+            _check_role(user, new_role)
+            old_role, s.role = s.role, new_role
+            fields.append('role')
+            _log(s, 'role_changed', user, old_role, new_role, 'Changed with promotion')
+            _sync_login(s, new_role)
+        s.save(update_fields=fields)
+        _log(s, 'promoted', user, old, new_pos, _text(request.data, 'note', maxlen=255))
+        record_event(actor=user, action='promote', obj=s)
+    return Response(_row(s))
+
+
+@api_view(['POST'])
+def staff_assign_role(request, pk):
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    _own_record(user, s)
+    _require_active(s)
+    role = (request.data.get('role') or '').strip()
+    _check_role(user, role)
+    if s.role in LEADERSHIP and not user.is_superuser and user.role not in ('organisation_admin', 'school_admin'):
+        raise PermissionDenied('Only an organisation or school administrator can change a leadership role')
+    if role == s.role:
+        raise ValidationError({'role': 'That is already their role.'})
+    with transaction.atomic():
+        old, s.role = s.role, role
+        s.save(update_fields=['role'])
+        _sync_login(s, role)
+        _log(s, 'role_changed', user, old, role, _text(request.data, 'note', maxlen=255))
+        record_event(actor=user, action='assign_role', obj=s)
+    return Response(_row(s))
+
+
+@api_view(['POST'])
+def staff_terminate(request, pk):
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    _own_record(user, s)
+    _require_active(s)
+    if s.role in LEADERSHIP and not user.is_superuser and user.role not in ('organisation_admin', 'school_admin'):
+        raise PermissionDenied('Only an organisation or school administrator can terminate a leader')
+    with transaction.atomic():
+        s.status, s.terminated_on = 'terminated', date.today()
+        s.save(update_fields=['status', 'terminated_on'])
+        if s.user_id:                                  # access is switched off immediately
+            s.user.is_active = False
+            s.user.save(update_fields=['is_active'])
+        _log(s, 'terminated', user, 'active', 'terminated', _text(request.data, 'reason', maxlen=255))
+        record_event(actor=user, action='terminate', obj=s)
+    return Response(_row(s))
+
+
+@api_view(['POST'])
+def staff_reinstate(request, pk):
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    _own_record(user, s)
+    if s.status != 'terminated':
+        raise ValidationError({'detail': 'Only terminated staff can be reinstated.'})
+    with transaction.atomic():
+        s.status, s.terminated_on = 'active', None
+        s.save(update_fields=['status', 'terminated_on'])
+        if s.user_id:
+            s.user.is_active = True
+            s.user.save(update_fields=['is_active'])
+        _log(s, 'reinstated', user, 'terminated', 'active', _text(request.data, 'note', maxlen=255))
+        record_event(actor=user, action='reinstate', obj=s)
+    return Response(_row(s))
+
+
+@api_view(['GET'])
+def staff_history(request):
+    """Newest employment events across the actor's campuses."""
+    user = request.user
+    _require_manager(user)
+    events = StaffEvent.objects.filter(staff__in=_scope(user)).select_related('staff', 'staff__school', 'actor')
+    kind = request.query_params.get('kind')
+    if kind in dict(StaffEvent.KINDS):
+        events = events.filter(kind=kind)
+    return Response({'results': [{**_event_row(e), 'staff_id': e.staff_id, 'staff_name': e.staff.full_name,
+                                   'school_name': e.staff.school.name} for e in events[:300]]})

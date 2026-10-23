@@ -1,5 +1,5 @@
 """Transactional, minimised audit events: no free-text student details in change log."""
-from core.models import (AuditEvent, Organisation, School, SchoolClass, AcademicYear, ReviewCase,
+from core.models import (StaffMember, FinanceEntry, FinanceCategory, AuditEvent, Organisation, School, SchoolClass, AcademicYear, ReviewCase,
                          Student, Subject, Enrollment, Assessment)
 
 # Business-sensitive fields deliberately absent: name, DOB, marks, feedback,
@@ -9,6 +9,7 @@ VALUE_FIELDS={'status','priority','published','active','read','completed','assig
               'grade_alert_threshold'}
 
 def scope_for(instance):
+ if isinstance(instance,(StaffMember,FinanceEntry,FinanceCategory)):return instance.school.organisation,instance.school
  if isinstance(instance,Organisation):return instance,None
  if isinstance(instance,School):return instance.organisation,instance
  if isinstance(instance,Student):return instance.school.organisation,instance.school
