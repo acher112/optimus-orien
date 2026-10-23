@@ -25,7 +25,8 @@ class Command(BaseCommand):
   for i,(first,last) in enumerate(names):
    s,_=Student.objects.get_or_create(school=school,admission_number=f'NS-{1001+i}',defaults={'first_name':first,'last_name':last,'enrolled_on':today-timedelta(days=80+i%8)})
    c=klass if i<12 else klass2
-   Enrollment.objects.get_or_create(student=s,school_class=c,start_date=today-timedelta(days=80))
+   if not Enrollment.objects.filter(student=s,end_date__isnull=True).exists():
+    Enrollment.objects.create(student=s,school_class=c,start_date=today-timedelta(days=80))
    students.append(s)
   for code,name in [('MAT','Mathematics'),('ENG','English Language'),('SCI','Science'),('HIS','History'),('GEO','Geography')]:
    subject,_=Subject.objects.get_or_create(school=school,code=code,defaults={'name':name})
@@ -56,7 +57,8 @@ class Command(BaseCommand):
   west_students=[]
   for i,(first,last) in enumerate(west_names):
    s2,_=Student.objects.get_or_create(school=sister,admission_number=f'WS-{2001+i}',defaults={'first_name':first,'last_name':last,'enrolled_on':today-timedelta(days=80)})
-   Enrollment.objects.get_or_create(student=s2,school_class=wk1 if i<8 else wk2,start_date=today-timedelta(days=80))
+   if not Enrollment.objects.filter(student=s2,end_date__isnull=True).exists():
+    Enrollment.objects.create(student=s2,school_class=wk1 if i<8 else wk2,start_date=today-timedelta(days=80))
    west_students.append(s2)
   for code,name in [('MAT','Mathematics'),('ENG','English Language'),('SCI','Science')]:
    subject,_=Subject.objects.get_or_create(school=sister,code=code,defaults={'name':name})
@@ -109,4 +111,15 @@ class Command(BaseCommand):
     d=today.replace(day=1)-timedelta(days=30*m)
     for n,amt in (('Tuition fees',480000),('Admission fees',60000),('Annual fees',90000 if m==2 else 20000),('Salaries',350000),('Utilities',42000),('Maintenance',27000+m*4000),('Stationery',11000)):
      FinanceEntry.objects.create(school=sch,category=cats[n],amount=Decimal(int(amt*base)),date=d,description='Demo entry',created_by=admin)
+  # Subject teacher assignments & classroom communication demo
+  math_subj=Subject.objects.filter(school=school,code='MAT').first()
+  sci_subj=Subject.objects.filter(school=school,code='SCI').first()
+  if math_subj and klass:
+   ClassSubjectTeacher.objects.get_or_create(school_class=klass,subject=math_subj,defaults={'teacher':teacher})
+  if sci_subj and klass:
+   ClassSubjectTeacher.objects.get_or_create(school_class=klass,subject=sci_subj,defaults={'teacher':teacher})
+  if math_subj and klass and pupil:
+   if not SubjectMessage.objects.filter(school_class=klass,subject=math_subj).exists():
+    q1=SubjectMessage.objects.create(school_class=klass,subject=math_subj,sender=pupil,message='Hello Mr. Cole! For question 4 on page 52, should we use the quadratic formula or factorisation?')
+    SubjectMessage.objects.create(school_class=klass,subject=math_subj,sender=teacher,message='Hi Sophia, either method is completely valid. Factorisation is quicker for this problem, but the quadratic formula will yield the exact same answer.',is_teacher_answer=True,reply_to=q1)
   self.stdout.write(self.style.SUCCESS('Demo ready: admin / teacher / principal / teacher_west / principal_west / student_demo / parent_demo — password DemoPass123!'))

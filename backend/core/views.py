@@ -180,6 +180,10 @@ def user_payload(u):
   'id': u.id,
   'name': u.get_full_name() or u.username,
   'username': u.username,
+  'first_name': u.first_name,
+  'last_name': u.last_name,
+  'email': u.email,
+  'avatar_color': getattr(u, 'avatar_color', '#8276da'),
   'role': u.role,
   'organisation': u.organisation_id,
   'organisation_name': u.organisation.name if u.organisation else None,
@@ -188,10 +192,32 @@ def user_payload(u):
   'school_name': u.school.name if u.school else None,
   'is_staff': u.is_staff,
  }
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 def me(request):
  from django.middleware.csrf import get_token
- payload=user_payload(request.user)
+ u = request.user
+ if not u.is_authenticated:
+  raise PermissionDenied('Authentication required')
+ if request.method == 'PATCH':
+  data = request.data
+  if 'first_name' in data:
+   u.first_name = str(data['first_name']).strip()[:150]
+  if 'last_name' in data:
+   u.last_name = str(data['last_name']).strip()[:150]
+  if 'email' in data:
+   u.email = str(data['email']).strip()[:254]
+  if 'avatar_color' in data:
+   col = str(data['avatar_color']).strip()
+   if len(col) <= 12:
+    u.avatar_color = col
+  if data.get('password') and data.get('current_password'):
+   if not u.check_password(str(data['current_password'])):
+    raise APIValidationError({'current_password': 'Current password does not match.'})
+   if len(str(data['password'])) < 8:
+    raise APIValidationError({'password': 'New password must be at least 8 characters.'})
+   u.set_password(str(data['password']))
+  u.save()
+ payload=user_payload(u)
  payload['csrfToken']=get_token(request)
  return Response(payload)
 

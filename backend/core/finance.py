@@ -198,7 +198,7 @@ def summary(request):
     def pie(kind):
         t = total[kind]
         rows = sorted(by_cat[kind].items(), key=lambda kv: -kv[1])
-        return [{'name': n, 'amount': float(a), 'share': round(float(a / t * 100), 1) if t else 0} for n, a in rows]
+        return [{'name': n, 'amount': float(a), 'share': round(float(a / t * 100), 1) if t else 0} for n, a in rows if a > 0]
 
     campuses = []
     for s in schools_scope(user).order_by('name'):

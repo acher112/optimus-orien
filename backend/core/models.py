@@ -359,3 +359,38 @@ class FinanceEntry(models.Model):
         indexes=[models.Index(fields=['school','date'],name='finance_school_date_idx')]
     @property
     def kind(self):return self.category.kind
+
+
+class ClassSubjectTeacher(models.Model):
+    """Assigns a teacher to a specific subject within a specific school class."""
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='subject_teachers')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='class_teachers')
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subject_teaching_assignments')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['school_class', 'subject'], name='unique_class_subject_teacher')
+        ]
+
+    def __str__(self):
+        return f"{self.school_class.name} - {self.subject.name}: {self.teacher.get_full_name() or self.teacher.username}"
+
+
+class SubjectMessage(models.Model):
+    """Communication message for a particular subject in a particular class.
+    Class students and the assigned subject teacher can exchange questions and answers."""
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='subject_messages')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='class_messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_subject_messages')
+    message = models.TextField()
+    is_teacher_answer = models.BooleanField(default=False)
+    reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='replies')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"[{self.school_class.name} / {self.subject.name}] {self.sender.username}: {self.message[:30]}"
+

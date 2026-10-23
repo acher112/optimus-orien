@@ -9,7 +9,7 @@ type Tab = 'overview' | 'income' | 'expense' | 'categories';
 const CUR = 'Rs';
 const INCOME = '#22a06b';
 const EXPENSE = '#e5484d';
-const PIE = ['#7966e9', '#f29d50', '#23b7a0', '#e477a1', '#6c9eff', '#b4a0e9', '#f2c94c', '#8d99ae'];
+const PIE = ['#7966e9', '#f29d50', '#23b7a0', '#e477a1', '#6c9eff', '#b4a0e9', '#f2c94c', '#8d99ae', '#10b981', '#ef4444', '#06b6d4'];
 const money = (n: number) => `${CUR} ${Math.round(n).toLocaleString()}`;
 const tick = { fontSize: 12, fill: '#8c96a7' };
 
@@ -86,8 +86,20 @@ function Overview({ sum }: { sum: R }) {
           {exp.length ? (
             <>
               <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
-                <PieChart><Pie data={exp} dataKey="amount" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={2}>{exp.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie>
-                  <Tooltip formatter={(v: number) => money(v)} /><Legend /></PieChart>
+                <PieChart>
+                  <Pie
+                    data={exp.filter((r: R) => Number(r.amount) > 0)}
+                    dataKey="amount"
+                    nameKey="name"
+                    innerRadius={48}
+                    outerRadius={95}
+                    paddingAngle={2}
+                  >
+                    {exp.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => money(v)} />
+                  <Legend />
+                </PieChart>
               </ResponsiveContainer></div>
               <CatTable rows={exp} />
             </>

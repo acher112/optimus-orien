@@ -2,6 +2,10 @@ export type User = {
   id: number;
   name: string;
   username: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  avatar_color?: string;
   role: string;
   organisation: number | null;
   organisation_name?: string | null;
@@ -160,3 +164,6 @@ export const schoolUsers = (schoolId: number) =>
   request<{ results: Array<{ id: number; name: string; username: string; email?: string; role: string; date_joined?: string; admission_number?: string }> }>(
     `schools/${schoolId}/users/`
   );
+
+export const updateProfile = (data: Record<string, unknown>) =>
+  request<User>('auth/me/', { method: 'PATCH', body: JSON.stringify(data) });
