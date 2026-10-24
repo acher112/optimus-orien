@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags } from 'lucide-react';
+import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags, Trash2 } from 'lucide-react';
 import { list, request, type User } from './api';
 import { getStoredTheme } from './theme';
 import './hr.css';
@@ -198,6 +198,15 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: '
     if (!window.confirm(`Void this ${label} of ${money(Number(r.amount))}? It will be excluded from totals.`)) return;
     try { await request(`finance/entries/${r.id}/void/`, { method: 'POST', body: '{}' }); onChanged('Entry voided'); } catch (x) { setErr(x instanceof Error ? x.message : 'Failed'); }
   };
+  const deleteIt = async (r: R) => {
+    if (!window.confirm(`Permanently delete this ${label} of ${money(Number(r.amount))}?`)) return;
+    try {
+      await request(`finance/entries/${r.id}/`, { method: 'DELETE' });
+      onChanged('Entry deleted');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Delete failed');
+    }
+  };
   const total = rows.reduce((a, r) => a + Number(r.amount), 0);
 
   return (
@@ -221,7 +230,12 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: '
           <thead><tr><th>DATE</th><th>CATEGORY</th><th>DESCRIPTION</th><th>CAMPUS</th><th>AMOUNT</th><th /></tr></thead>
           <tbody>{rows.map(r => (
             <tr key={r.id}><td>{r.date}</td><td>{r.category_name}</td><td>{r.description || '—'}</td><td>{r.school_name}</td><td style={{ color: kind === 'income' ? INCOME : EXPENSE, fontWeight: 700 }}>{money(Number(r.amount))}</td>
-              <td><button className="hr-mini danger" onClick={() => voidIt(r)}><Ban size={13} /> Void</button></td></tr>
+              <td>
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <button className="hr-mini danger" title="Delete entry" onClick={() => deleteIt(r)}><Trash2 size={13} /> Delete</button>
+                  <button className="hr-mini" title="Void entry" onClick={() => voidIt(r)}><Ban size={13} /> Void</button>
+                </div>
+              </td></tr>
           ))}</tbody>
         </table></div>
         {!rows.length && <div className="rp-empty">Nothing recorded yet.</div>}
@@ -249,6 +263,16 @@ function Categories({ school, schools, user, onChanged }: { school: string; scho
     try { await request(`finance/categories/${c.id}/`, { method: 'PATCH', body: JSON.stringify(body) }); onChanged(msg); load(); }
     catch (x) { setErr(x instanceof Error ? x.message : 'Failed'); }
   };
+  const deleteCat = async (c: R) => {
+    if (!window.confirm(`Permanently delete category "${c.name}"?`)) return;
+    try {
+      await request(`finance/categories/${c.id}/`, { method: 'DELETE' });
+      onChanged('Category deleted');
+      load();
+    } catch (x) {
+      setErr(x instanceof Error ? x.message : 'Failed to delete category');
+    }
+  };
 
   return (
     <>
@@ -269,7 +293,8 @@ function Categories({ school, schools, user, onChanged }: { school: string; scho
             <ul className="fx-cats">{cats.filter(c => c.kind === k).map(c => (
               <li key={c.id} className={c.active ? '' : 'off'}><span>{c.name}</span>
                 <button className="hr-mini" onClick={() => { const n = window.prompt('Rename category', c.name); if (n && n.trim()) patch(c, { name: n.trim() }, 'Category renamed'); }}>Rename</button>
-                <button className="hr-mini" onClick={() => patch(c, { active: !c.active }, c.active ? 'Category hidden' : 'Category restored')}>{c.active ? 'Hide' : 'Restore'}</button></li>
+                <button className="hr-mini" onClick={() => patch(c, { active: !c.active }, c.active ? 'Category hidden' : 'Category restored')}>{c.active ? 'Hide' : 'Restore'}</button>
+                <button className="hr-mini danger" title="Delete category" onClick={() => deleteCat(c)}><Trash2 size={13} /> Delete</button></li>
             ))}</ul>
           </section>
         ))}

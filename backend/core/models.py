@@ -25,6 +25,7 @@ class User(AbstractUser):
  organisation=models.ForeignKey(Organisation,null=True,blank=True,on_delete=models.PROTECT)
  school=models.ForeignKey(School,null=True,blank=True,on_delete=models.PROTECT)
  avatar_color=models.CharField(max_length=12,default='#8276da')
+ avatar_image=models.TextField(blank=True,default='')
  def clean(self):
   super().clean()
   if self.school_id and self.school.organisation_id != self.organisation_id:raise ValidationError('School must belong to organisation')

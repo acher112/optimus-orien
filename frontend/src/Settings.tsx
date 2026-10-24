@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sun,
+  Trash2,
+  Upload,
   UserRound,
 } from 'lucide-react';
 import { updateProfile, type User } from './api';
@@ -34,6 +36,38 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
   const [lastName, setLastName] = useState(user.last_name || user.name.split(' ').slice(1).join(' ') || '');
   const [email, setEmail] = useState(user.email || '');
   const [avatarColor, setAvatarColor] = useState(user.avatar_color ? resolveHex(user.avatar_color) : stored.colorHex);
+  const [avatarImage, setAvatarImage] = useState(user.avatar_image || '');
+
+  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      notify('Image must be under 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 400;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          else { w = Math.round((w * maxDim) / h); h = maxDim; }
+        }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          setAvatarImage(canvas.toDataURL('image/jpeg', 0.88));
+          notify('Photo ready to save');
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -73,6 +107,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
         last_name: lastName.trim(),
         email: email.trim(),
         avatar_color: avatarColor,
+        avatar_image: avatarImage,
       });
       onUserUpdated(updated);
       setProfileMsg('Profile updated successfully');
@@ -216,6 +251,23 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
           )}
 
           <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, padding: 12, background: 'var(--brand-primary-light, #f7f6fe)', borderRadius: 14 }}>
+              <div style={{ width: 64, height: 64, borderRadius: 16, background: avatarColor, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 22, fontWeight: 800, overflow: 'hidden', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                {avatarImage ? <img src={avatarImage} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (firstName[0] || 'U') + (lastName[0] || '')}
+              </div>
+              <div>
+                <label className="action-btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                  <Upload size={13} /> Upload profile photo
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
+                </label>
+                {avatarImage && (
+                  <button type="button" className="action-btn-sm delete-btn" style={{ marginLeft: 8 }} onClick={() => setAvatarImage('')}>
+                    <Trash2 size={13} /> Remove
+                  </button>
+                )}
+                <p style={{ fontSize: 11, color: '#888', margin: '5px 0 0' }}>JPG, PNG or WebP image. Stored with your account profile.</p>
+              </div>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <label className="settings-field-label">
                 First name

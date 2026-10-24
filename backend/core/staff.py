@@ -129,18 +129,39 @@ def staff_list(request):
     return Response(_row(s), status=201)
 
 
-@api_view(['GET', 'PATCH'])
+@api_view(['GET', 'PATCH', 'DELETE'])
 def staff_detail(request, pk):
     user = request.user
     _require_manager(user)
     s = _get(user, pk)
+    if request.method == 'DELETE':
+        _own_record(user, s)
+        if s.role in LEADERSHIP and not user.is_superuser and user.role not in ('organisation_admin', 'school_admin'):
+            raise PermissionDenied('Only an organisation or school administrator can delete a leader')
+        with transaction.atomic():
+            s.events.all().delete()
+            record_event(actor=user, action='delete', obj=s)
+            s.delete()
+        return Response({'success': True, 'detail': 'Staff member deleted.'})
     if request.method == 'PATCH':
         _own_record(user, s)
         changed = []
-        for key, maxlen in (('first_name', 100), ('last_name', 100), ('email', 254), ('phone', 40)):
+        for key, maxlen in (('first_name', 100), ('last_name', 100), ('email', 254), ('phone', 40), ('position', 120)):
             if key in request.data:
-                setattr(s, key, _text(request.data, key, key in ('first_name', 'last_name'), maxlen))
+                setattr(s, key, _text(request.data, key, key in ('first_name', 'last_name', 'position'), maxlen))
                 changed.append(key)
+        if 'role' in request.data:
+            role = str(request.data['role']).strip()
+            _check_role(user, role)
+            s.role = role
+            changed.append('role')
+            _sync_login(s, role)
+        if 'hired_on' in request.data and request.data['hired_on']:
+            try:
+                s.hired_on = date.fromisoformat(request.data['hired_on'])
+                changed.append('hired_on')
+            except ValueError:
+                pass
         if changed:
             s.save(update_fields=changed)
             _log(s, 'updated', user, note='Updated: ' + ', '.join(changed))

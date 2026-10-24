@@ -184,6 +184,7 @@ def user_payload(u):
   'last_name': u.last_name,
   'email': u.email,
   'avatar_color': getattr(u, 'avatar_color', '#8276da'),
+  'avatar_image': getattr(u, 'avatar_image', ''),
   'role': u.role,
   'organisation': u.organisation_id,
   'organisation_name': u.organisation.name if u.organisation else None,
@@ -210,6 +211,8 @@ def me(request):
    col = str(data['avatar_color']).strip()
    if len(col) <= 12:
     u.avatar_color = col
+  if 'avatar_image' in data:
+   u.avatar_image = str(data['avatar_image'])
   if data.get('password') and data.get('current_password'):
    if not u.check_password(str(data['current_password'])):
     raise APIValidationError({'current_password': 'Current password does not match.'})
@@ -288,7 +291,38 @@ class ScopedViewSet(viewsets.ModelViewSet):
  def get_queryset(self):
   model=self.queryset.model
   ensure_action(self.request.user,model,'read')
-  return queryset_for(self.request.user,model)
+  qs=queryset_for(self.request.user,model)
+  school_param=self.request.query_params.get('school') or self.request.query_params.get('campus')
+  if school_param:
+   try:
+    sid=int(school_param)
+    if model is School:qs=qs.filter(pk=sid)
+    elif hasattr(model,'school'):qs=qs.filter(school_id=sid)
+    elif hasattr(model,'school_class'):qs=qs.filter(school_class__school_id=sid)
+    elif model is Enrollment:qs=qs.filter(student__school_id=sid)
+    elif model is Grade:qs=qs.filter(student__school_id=sid)
+    elif model is ReviewCase:qs=qs.filter(school_id=sid)
+    elif model is Intervention:qs=qs.filter(case__school_id=sid)
+   except (ValueError,TypeError):pass
+  return qs
+ def get_serializer(self,*args,**kwargs):
+  if 'data' in kwargs and hasattr(self.queryset.model,'school'):
+   data=kwargs['data']
+   if isinstance(data,dict):data=data.copy()
+   elif hasattr(data,'dict'):data=data.dict()
+   if isinstance(data,dict) and not data.get('school'):
+    target_sch=None
+    school_override=data.get('campus') or self.request.query_params.get('school') or self.request.query_params.get('campus')
+    if school_override:
+     try:target_sch=School.objects.filter(pk=int(school_override)).first()
+     except (ValueError,TypeError):pass
+    if not target_sch:
+     user=self.request.user
+     target_sch=getattr(user,'school',None) or (user.organisation.schools.first() if getattr(user,'organisation',None) else None)
+    if target_sch:
+     data['school']=target_sch.pk
+     kwargs['data']=data
+  return super().get_serializer(*args,**kwargs)
  def create(self,request,*args,**kwargs):
   ensure_action(request.user,self.queryset.model,'create')
   return super().create(request,*args,**kwargs)
@@ -304,8 +338,19 @@ class ScopedViewSet(viewsets.ModelViewSet):
  @transaction.atomic
  def perform_create(self,serializer):
   user=self.request.user;model=self.queryset.model;data=serializer.validated_data
-  validate_related(user,model,data)
   extras={}
+  if hasattr(model, 'school') and 'school' not in data:
+   school_override = self.request.data.get('school') or self.request.query_params.get('school')
+   target_sch = None
+   if school_override:
+    try:target_sch = School.objects.filter(pk=int(school_override)).first()
+    except (ValueError, TypeError):pass
+   if not target_sch:
+    target_sch = user.school or (user.organisation.schools.first() if user.organisation else None)
+   if target_sch:
+    extras['school'] = target_sch
+    data['school'] = target_sch
+  validate_related(user,model,data)
   if model is School:
    if not user.organisation_id:raise PermissionDenied('Organisation membership required')
    extras['organisation']=user.organisation
@@ -362,8 +407,66 @@ class ScopedViewSet(viewsets.ModelViewSet):
   record_event(actor=user,action='update',obj=saved,changed_fields=list(data),before=before,after=data)
  @transaction.atomic
  def perform_destroy(self,instance):
-  # Future-approved retention policy only; never hard-delete academic history here.
-  raise PermissionDenied('Deletion is disabled pending approved archival/retention policy')
+  user=self.request.user
+  model=self.queryset.model
+  ensure_action(user,model,'delete')
+  if model is Student:
+   Grade.objects.filter(student=instance).delete()
+   Attendance.objects.filter(student=instance).delete()
+   HomeworkSubmission.objects.filter(student=instance).delete()
+   Observation.objects.filter(student=instance).delete()
+   Intervention.objects.filter(case__student=instance).delete()
+   ReviewCase.objects.filter(student=instance).delete()
+   Enrollment.objects.filter(student=instance).delete()
+  elif model is SchoolClass:
+   Enrollment.objects.filter(school_class=instance).delete()
+   Grade.objects.filter(assessment__school_class=instance).delete()
+   Assessment.objects.filter(school_class=instance).delete()
+   Attendance.objects.filter(school_class=instance).delete()
+   HomeworkSubmission.objects.filter(homework__school_class=instance).delete()
+   Homework.objects.filter(school_class=instance).delete()
+   ClassSubjectTeacher.objects.filter(school_class=instance).delete()
+   SubjectMessage.objects.filter(school_class=instance).delete()
+  elif model is AcademicYear:
+   classes=SchoolClass.objects.filter(academic_year=instance)
+   for c in classes:
+    Enrollment.objects.filter(school_class=c).delete()
+    Grade.objects.filter(assessment__school_class=c).delete()
+    Assessment.objects.filter(school_class=c).delete()
+    Attendance.objects.filter(school_class=c).delete()
+    HomeworkSubmission.objects.filter(homework__school_class=c).delete()
+    Homework.objects.filter(school_class=c).delete()
+    ClassSubjectTeacher.objects.filter(school_class=c).delete()
+    SubjectMessage.objects.filter(school_class=c).delete()
+   classes.delete()
+  elif model is Subject:
+   Grade.objects.filter(assessment__subject=instance).delete()
+   Assessment.objects.filter(subject=instance).delete()
+   HomeworkSubmission.objects.filter(homework__subject=instance).delete()
+   Homework.objects.filter(subject=instance).delete()
+   Observation.objects.filter(subject=instance).delete()
+   ClassSubjectTeacher.objects.filter(subject=instance).delete()
+   SubjectMessage.objects.filter(subject=instance).delete()
+  elif model is Assessment:
+   Grade.objects.filter(assessment=instance).delete()
+  elif model is Homework:
+   HomeworkSubmission.objects.filter(homework=instance).delete()
+  elif model is ReviewCase:
+   Intervention.objects.filter(case=instance).delete()
+  elif model is School:
+   if user.organisation and School.objects.filter(organisation=user.organisation).count() <= 1:
+    raise APIValidationError({'detail':'Cannot delete the only campus in your organisation.'})
+   Student.objects.filter(school=instance).delete()
+   SchoolClass.objects.filter(school=instance).delete()
+   AcademicYear.objects.filter(school=instance).delete()
+   Subject.objects.filter(school=instance).delete()
+   StaffMember.objects.filter(school=instance).delete()
+   FinanceCategory.objects.filter(school=instance).delete()
+   FinanceEntry.objects.filter(school=instance).delete()
+   SchoolConfiguration.objects.filter(school=instance).delete()
+   ReviewCase.objects.filter(school=instance).delete()
+  record_event(actor=user,action='delete',obj=instance)
+  instance.delete()
 
 class Schools(ScopedViewSet):queryset=School.objects.all();serializer_class=SchoolSerializer
 class Classes(ScopedViewSet):queryset=SchoolClass.objects.all();serializer_class=ClassSerializer
@@ -456,6 +559,14 @@ def student_stats(students,classes=None):
 @api_view(['GET'])
 def dashboard(request):
  u=request.user;students=students_scope(u);schools=schools_scope(u);classes=classes_scope(u)
+ school_param=request.query_params.get('school') or request.query_params.get('campus')
+ if school_param:
+  try:
+   sid=int(school_param)
+   schools=schools.filter(pk=sid)
+   students=students.filter(school_id=sid)
+   classes=classes.filter(school_id=sid)
+  except (ValueError,TypeError):pass
  stats=student_stats(students,classes)
  cases=queryset_for(u,ReviewCase) if u.role not in ('parent','student') else ReviewCase.objects.none()
  school_items=[]

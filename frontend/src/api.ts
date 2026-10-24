@@ -6,6 +6,7 @@ export type User = {
   last_name?: string;
   email?: string;
   avatar_color?: string;
+  avatar_image?: string;
   role: string;
   organisation: number | null;
   organisation_name?: string | null;
@@ -110,7 +111,17 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     }
     let info: any = {};
     try { info = await response.json(); } catch {}
-    throw new Error(info.detail || info.non_field_errors?.join(', ') || JSON.stringify(info) || `HTTP ${response.status}`);
+    if (info) {
+      if (typeof info === 'string') throw new Error(info);
+      if (info.detail) throw new Error(info.detail);
+      if (Array.isArray(info.non_field_errors) && info.non_field_errors.length) throw new Error(info.non_field_errors.join(', '));
+      const entries = Object.entries(info);
+      if (entries.length > 0) {
+        const msgs = entries.map(([k, v]) => `${k.replace('_', ' ')}: ${Array.isArray(v) ? v.join(' ') : String(v)}`);
+        throw new Error(msgs.join('; '));
+      }
+    }
+    throw new Error(`HTTP ${response.status}`);
   }
   return response.json() as Promise<T>;
 }
@@ -143,8 +154,17 @@ export const logout = async () => {
   }
 };
 
-export const list = async <T>(name: string) => {
-  const x = await request<{ results: T[] } | T[]>(name + '/');
+export const list = async <T>(name: string, params?: Record<string, string | number>) => {
+  let url = name.includes('?') ? name : `${name}/`;
+  if (params) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') q.set(k, String(v));
+    }
+    const qs = q.toString();
+    if (qs) url += (url.includes('?') ? '&' : '?') + qs;
+  }
+  const x = await request<{ results: T[] } | T[]>(url);
   return Array.isArray(x) ? x : x.results;
 };
 
@@ -153,6 +173,9 @@ export const create = (name: string, data: Record<string, unknown>) =>
 
 export const update = (name: string, id: number, data: Record<string, unknown>) =>
   request<Resource>(`${name}/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+
+export const destroy = (name: string, id: number) =>
+  request<void>(`${name}/${id}/`, { method: 'DELETE' });
 
 export const createAccount = (data: Record<string, unknown>) =>
   request<Record<string, unknown>>('accounts/', { method: 'POST', body: JSON.stringify(data) });

@@ -122,13 +122,19 @@ def categories(request):
     return Response(_cat_row(c), status=201)
 
 
-@api_view(['PATCH'])
+@api_view(['PATCH', 'DELETE'])
 def category_detail(request, pk):
     user = request.user
     _require(user)
     c = FinanceCategory.objects.filter(pk=pk, school__in=schools_scope(user)).first()
     if not c:
         raise NotFound()
+    if request.method == 'DELETE':
+        with transaction.atomic():
+            c.entries.all().delete()
+            record_event(actor=user, action='delete', obj=c)
+            c.delete()
+        return Response({'success': True, 'detail': 'Category deleted'})
     if 'name' in request.data:
         name = (request.data['name'] or '').strip()[:80]
         if not name:
@@ -163,6 +169,20 @@ def entries(request):
                                         description=(request.data.get('description') or '').strip()[:255], created_by=user)
         record_event(actor=user, action='create', obj=e)
     return Response(_entry_row(e), status=201)
+
+
+@api_view(['GET', 'DELETE'])
+def entry_detail(request, pk):
+    user = request.user
+    _require(user)
+    e = FinanceEntry.objects.filter(pk=pk, school__in=schools_scope(user)).first()
+    if not e:
+        raise NotFound()
+    if request.method == 'DELETE':
+        record_event(actor=user, action='delete', obj=e)
+        e.delete()
+        return Response({'success': True, 'detail': 'Entry deleted'})
+    return Response(_entry_row(e))
 
 
 @api_view(['POST'])

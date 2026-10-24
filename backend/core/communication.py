@@ -270,3 +270,17 @@ def assign_teacher(request):
         'teacher_name': teacher.get_full_name() or teacher.username,
         'status': 'assigned'
     })
+
+
+
+@api_view(['DELETE'])
+def message_detail(request, pk):
+    user = request.user
+    _require_user(user)
+    m = SubjectMessage.objects.filter(pk=pk).first()
+    if not m:
+        raise NotFound('Message not found.')
+    if not (user.is_superuser or user.role in ('organisation_admin', 'school_admin', 'principal') or m.sender_id == user.id):
+        raise PermissionDenied('You can only delete your own messages.')
+    m.delete()
+    return Response({'success': True, 'detail': 'Message deleted.'})

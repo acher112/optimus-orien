@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowUpRight, History, Plus, RotateCcw, Search, ShieldCheck, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import { list, request, type User } from './api';
 import './hr.css';
 
 type R = Record<string, any>;
-type Action = { kind: 'add' } | { kind: 'promote' | 'role' | 'terminate' | 'history'; staff: R };
+type Action = { kind: 'add' } | { kind: 'promote' | 'role' | 'terminate' | 'history' | 'edit'; staff: R };
 const nice = (s: string) => s.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 const EVENT_TEXT: Record<string, string> = { hired: 'Hired', promoted: 'Promoted', role_changed: 'Role changed', terminated: 'Terminated', reinstated: 'Reinstated', updated: 'Updated' };
 
@@ -37,6 +37,16 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
   const reinstate = async (s: R) => {
     try { await request(`staff/${s.id}/reinstate/`, { method: 'POST', body: '{}' }); notify(`${s.full_name} reinstated`); load(); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed'); }
+  };
+  const deleteStaff = async (s: R) => {
+    if (!window.confirm(`Permanently delete staff member "${s.full_name}"? This removes their record and history.`)) return;
+    try {
+      await request(`staff/${s.id}/`, { method: 'DELETE' });
+      notify('Staff member deleted successfully');
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed');
+    }
   };
 
   return (
@@ -79,12 +89,14 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
               <td>{s.has_login ? s.username : '—'}</td>
               <td><span className={'pill ' + (s.status === 'active' ? 'green' : 'red')}><i className="pill-dot" />{nice(s.status)}</span></td>
               <td className="hr-row-actions">
+                <button className="hr-mini" title="Edit staff member" onClick={() => setAction({ kind: 'edit', staff: s })}><Pencil size={13} /> Edit</button>
                 {s.status === 'active' ? <>
                   <button className="hr-mini" onClick={() => setAction({ kind: 'promote', staff: s })}><ArrowUpRight size={13} /> Promote</button>
                   <button className="hr-mini" onClick={() => setAction({ kind: 'role', staff: s })}><UserCog size={13} /> Role</button>
                   <button className="hr-mini danger" onClick={() => setAction({ kind: 'terminate', staff: s })}><UserMinus size={13} /> Fire</button>
                 </> : <button className="hr-mini" onClick={() => reinstate(s)}><RotateCcw size={13} /> Reinstate</button>}
                 <button className="hr-mini" onClick={() => setAction({ kind: 'history', staff: s })}><History size={13} /> History</button>
+                <button className="hr-mini danger" title="Permanently delete staff member" onClick={() => deleteStaff(s)}><Trash2 size={13} /> Delete</button>
               </td>
             </tr>
           ))}</tbody>
@@ -95,6 +107,7 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
       {action?.kind === 'add' && <AddStaff schools={schools} roles={roles} leader={leader} user={user} onClose={() => setAction(null)} onDone={() => done('Staff member added')} />}
       {action?.kind === 'promote' && <Promote s={action.staff} roles={roles} leader={leader} onClose={() => setAction(null)} onDone={() => done('Promotion saved')} />}
       {action?.kind === 'role' && <AssignRole s={action.staff} roles={roles} leader={leader} onClose={() => setAction(null)} onDone={() => done('Role updated')} />}
+      {action?.kind === 'edit' && <EditStaff s={action.staff} roles={roles} leader={leader} onClose={() => setAction(null)} onDone={() => done('Staff record updated')} />}
       {action?.kind === 'terminate' && <Terminate s={action.staff} onClose={() => setAction(null)} onDone={() => done('Employment ended. Any login was switched off.')} />}
       {action?.kind === 'history' && <Timeline s={action.staff} onClose={() => setAction(null)} />}
     </>
@@ -231,4 +244,39 @@ function HistoryFeed() {
   useEffect(() => { request<R>('staff/history/').then(d => setEvents(d.results)).catch(() => {}); }, []);
   const top = useMemo(() => events.slice(0, 12), [events]);
   return <section className="panel hr-panel hr-feed"><div className="panel-head"><div><h3>Recent staff changes</h3><p>Hires, promotions, role changes and terminations</p></div></div><EventList events={top} /></section>;
+}
+
+function EditStaff({ s, roles, leader, onClose, onDone }: { s: R; roles: string[]; leader: boolean; onClose: () => void; onDone: () => void }) {
+  const [f, setF] = useState<R>({
+    first_name: s.first_name || '',
+    last_name: s.last_name || '',
+    position: s.position || '',
+    role: s.role || 'teacher',
+    hired_on: s.hired_on || '',
+    email: s.email || '',
+    phone: s.phone || '',
+  });
+  const { err, busy, submit } = useSubmit(`staff/${s.id}/`, onDone);
+  const set = (k: string, v: string) => setF(prev => ({ ...prev, [k]: v }));
+
+  return (
+    <Modal title={`Edit ${s.full_name}`} sub="Update staff position, details or contact information." onClose={onClose}>
+      <form onSubmit={e => { e.preventDefault(); submit(f, 'PATCH'); }}>
+        <div className="modal-fields hr-fields">
+          <label>First name *<input required value={f.first_name} onChange={e => set('first_name', e.target.value)} /></label>
+          <label>Last name *<input required value={f.last_name} onChange={e => set('last_name', e.target.value)} /></label>
+          <label>Position *<input required placeholder="e.g. Lead Educator" value={f.position} onChange={e => set('position', e.target.value)} /></label>
+          <label>Role<select value={f.role} onChange={e => set('role', e.target.value)}>{roleOptions(roles, leader).map(r => <option key={r} value={r}>{nice(r)}</option>)}</select></label>
+          <label>Hired on<input type="date" value={f.hired_on} onChange={e => set('hired_on', e.target.value)} /></label>
+          <label>Email<input type="email" value={f.email} onChange={e => set('email', e.target.value)} /></label>
+          <label>Phone<input value={f.phone} onChange={e => set('phone', e.target.value)} /></label>
+        </div>
+        {err && <div className="hr-error" style={{ margin: '14px 0 0' }}>{err}</div>}
+        <div className="modal-footer hr-modal-foot">
+          <button type="button" className="outline-btn" onClick={onClose}>Cancel</button>
+          <button className="primary-btn" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
 }

@@ -35,9 +35,14 @@ for role in UPDATE:UPDATE[role].add('Notification')
 UPDATE['teacher'].discard('ReviewCase')  # case owner/approval controls are a later phase
 UPDATE['teacher'].discard('Intervention')
 
-# Hard deletion is disabled for historical/educational records until a dedicated
-# retention, archival and deletion workflow is approved. Prevent API loss of history.
-DELETE = {role: set() for role in READ}
+# Configured deletion policy for authorized roles across campuses.
+DELETE = {
+ 'organisation_admin': {'School','SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
+ 'school_admin': {'SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
+ 'principal': {'SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
+ 'teacher': {'Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention'},
+ 'student': set(), 'parent': set(),
+}
 
 # Editing these related entities would rewrite historical context. Transfer and
 # assignment changes must use dedicated workflows or future governance controls.
@@ -62,7 +67,6 @@ def ensure_action(user, model, action):
      not getattr(user.organisation,'allow_org_admin_student_access',False)):
   raise PermissionDenied('Identifiable student writes require explicit organisation policy')
  if user.is_superuser:
-  if action == 'delete': raise PermissionDenied('Historical deletion is disabled')
   return
  policy = {'read':READ, 'create':CREATE, 'update':UPDATE, 'delete':DELETE}[action]
  if model.__name__ not in policy.get(user.role, set()):

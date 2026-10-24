@@ -8,6 +8,7 @@ import {
   Plus,
   RefreshCw,
   Send,
+  Trash2,
   UserCheck,
   Users,
   X,
@@ -347,6 +348,24 @@ export default function Communication({ user, notify }: { user: User; notify: (m
                           >
                             <CornerDownRight size={13} /> Reply
                           </button>
+                          {(isMe || canManageTeachers || user.is_superuser) && (
+                            <button
+                              className="comm-reply-btn"
+                              style={{ color: '#ef4444', marginLeft: 4 }}
+                              title="Delete this message"
+                              onClick={async () => {
+                                if (!window.confirm('Delete this message?')) return;
+                                try {
+                                  await request(`communication/messages/${m.id}/`, { method: 'DELETE' });
+                                  loadMessages();
+                                } catch (e) {
+                                  notify(e instanceof Error ? e.message : 'Could not delete message');
+                                }
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
 
                         {m.reply_to && (
