@@ -38,7 +38,8 @@ type View =
   | { level: 'subject'; campusId: number; campusName: string; code: string; name: string; classId?: number; className?: string };
 
 const COLOR = ['#715ee8', '#23b7a0', '#f29d50', '#6c9eff', '#e477a1', '#b4a0e9'];
-const PIE_COLORS = ['#7966e9', '#f29d50', '#23b7a0', '#e477a1', '#6c9eff', '#b4a0e9', '#f2c94c', '#8d99ae', '#10b981', '#ef4444', '#06b6d4'];
+const PIE_INCOME = ['#10b981', '#06b6d4', '#3b82f6', '#14b8a6', '#f59e0b', '#8b5cf6', '#6366f1', '#22c55e', '#eab308', '#0284c7'];
+const PIE_COLORS = ['#e11d48', '#f97316', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#b91c1c', '#d97706'];
 const CUR = 'Rs';
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? '—' : `${n}%`);
 const num = (n: number | null | undefined) => (n === null || n === undefined ? '—' : String(n));
@@ -443,18 +444,27 @@ export default function Reports({ user }: { user: User }) {
                 <div className="fx-grid">
                   <section className="panel hr-panel fx-card">
                     <div className="panel-head">
-                      <div><h3>Income by category</h3><p>Amounts and percentage share of income</p></div>
+                      <div><h3>Income by category</h3><p>Share of total revenue stream across categories</p></div>
                     </div>
-                    {financeSum.income_by_category?.length ? (
+                    {financeSum.income_by_category?.filter((r: R) => Number(r.amount) > 0).length ? (
                       <>
                         <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={financeSum.income_by_category} margin={{ top: 12, right: 16, bottom: 3, left: 0 }}>
-                            <CartesianGrid vertical={false} stroke="#edf0f6" strokeDasharray="4 6" />
-                            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={tick} />
-                            <YAxis tickLine={false} axisLine={false} tick={tick} tickFormatter={v => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
+                          <PieChart>
+                            <Pie
+                              data={financeSum.income_by_category.filter((r: R) => Number(r.amount) > 0)}
+                              dataKey="amount"
+                              nameKey="name"
+                              innerRadius={48}
+                              outerRadius={95}
+                              paddingAngle={2}
+                            >
+                              {financeSum.income_by_category.map((_: any, i: number) => (
+                                <Cell key={i} fill={PIE_INCOME[i % PIE_INCOME.length]} />
+                              ))}
+                            </Pie>
                             <Tooltip formatter={(v: number) => money(v)} />
-                            <Bar dataKey="amount" name="Income" fill="#10b981" radius={[8, 8, 0, 0]} maxBarSize={48} />
-                          </BarChart>
+                            <Legend />
+                          </PieChart>
                         </ResponsiveContainer></div>
                         <CatTable rows={financeSum.income_by_category} title="INCOME STREAM" />
                       </>
