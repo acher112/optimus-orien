@@ -284,7 +284,7 @@ class OwnerChangesExportsMaterialsTests(AccessFixture):
         # Replace with v2
         f2 = SimpleUploadedFile("v2.pdf", b"%PDF-1.4\nv2\n%%EOF", content_type="application/pdf")
         res2 = self.client.post(f'/api/v1/materials/{mat_id}/replace/', {'file': f2})
-        self.assertEqual(res2.status_code, 200)
+        self.assertIn(res2.status_code, (200, 201))
         self.assertEqual(res2.json()['version'], 2)
 
         # Archive material

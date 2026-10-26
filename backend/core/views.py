@@ -293,6 +293,12 @@ def validate_model(model,attrs,instance=None,server_attrs=None):
 class ScopedViewSet(viewsets.ModelViewSet):
  """One secured CRUD boundary, resource matrix + all FK checks + atomic audit."""
  permission_classes=[IsAuthenticated]
+ def perform_content_negotiation(self, request, force=False):
+  fmt = request.query_params.get('format')
+  if fmt in ('csv', 'xlsx', 'pdf'):
+   renderers = self.get_renderers()
+   return (renderers[0], renderers[0].media_type)
+  return super().perform_content_negotiation(request, force=force)
  def get_queryset(self):
   model=self.queryset.model
   ensure_action(self.request.user,model,'read')
@@ -537,6 +543,36 @@ class AuditLog(viewsets.ReadOnlyModelViewSet):
  permission_classes=[IsAuthenticated]
  serializer_class=AuditSerializer
  queryset=AuditEvent.objects.all()
+ def perform_content_negotiation(self, request, force=False):
+  fmt = request.query_params.get('format')
+  if fmt in ('csv', 'xlsx', 'pdf'):
+   renderers = self.get_renderers()
+   return (renderers[0], renderers[0].media_type)
+  return super().perform_content_negotiation(request, force=force)
+ def list(self, request, *args, **kwargs):
+  fmt = request.query_params.get('format')
+  if fmt in ('csv', 'xlsx', 'pdf'):
+   from core.services.exports import export_response
+   qs = self.filter_queryset(self.get_queryset())
+   data = self.get_serializer(qs, many=True).data
+   columns = [
+    {'key': 'id', 'label': 'ID'},
+    {'key': 'actor', 'label': 'Actor'},
+    {'key': 'action', 'label': 'Action'},
+    {'key': 'resource', 'label': 'Resource'},
+    {'key': 'resource_id', 'label': 'Resource ID'},
+    {'key': 'changes', 'label': 'Changes'},
+    {'key': 'created_at', 'label': 'Timestamp'}
+   ]
+   return export_response(
+    request,
+    filename="audit-log",
+    title="Audit Log",
+    columns=columns,
+    rows=data,
+    fmt=fmt
+   )
+  return super().list(request, *args, **kwargs)
  def get_queryset(self):
   ensure_action(self.request.user,AuditEvent,'read')
   return queryset_for(self.request.user,AuditEvent)
