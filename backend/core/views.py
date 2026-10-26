@@ -475,7 +475,9 @@ class Subjects(ScopedViewSet):queryset=Subject.objects.all();serializer_class=Su
 class Years(ScopedViewSet):queryset=AcademicYear.objects.all();serializer_class=YearSerializer
 class Enrollments(ScopedViewSet):queryset=Enrollment.objects.all();serializer_class=EnrollmentSerializer
 class Assessments(ScopedViewSet):queryset=Assessment.objects.all();serializer_class=AssessmentSerializer
-class Grades(ScopedViewSet):queryset=Grade.objects.all();serializer_class=GradeSerializer
+class Grades(ScopedViewSet):
+ queryset=Grade.objects.all();serializer_class=GradeSerializer
+ def destroy(self,request,*args,**kwargs):raise PermissionDenied('Grades cannot be deleted through API.')
 class AttendanceRecords(ScopedViewSet):queryset=Attendance.objects.all();serializer_class=AttendanceSerializer
 class HomeworkItems(ScopedViewSet):queryset=Homework.objects.all();serializer_class=HomeworkSerializer
 class Submissions(ScopedViewSet):queryset=HomeworkSubmission.objects.all();serializer_class=SubmissionSerializer

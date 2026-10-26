@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bell, BookOpen,
+  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Award, Banknote, BarChart3, Bell, BookOpen,
   Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft,
   ChevronRight, ClipboardCheck, ClipboardList, Download, FileBarChart, GraduationCap,
   HeartHandshake, LayoutDashboard, LogOut, Menu, MessageSquare, MoreHorizontal,
-  Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal,
-  Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UserCheck, UserRound, Users,
+  Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal,
+  Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock
 } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -20,6 +20,11 @@ import SchoolSetup from './SchoolSetup';
 import Reports from './Reports';
 import Staff from './Staff';
 import Finance from './Finance';
+import Fees from './Fees';
+import Salaries from './Salaries';
+import Examinations from './Examinations';
+import PlatformOwner from './PlatformOwner';
+import DataImport from './DataImport';
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Settings from './Settings';
@@ -37,10 +42,14 @@ const WORKSPACE_NAV = [
   { name: 'Attendance', icon: ClipboardCheck },
   { name: 'Homework', icon: ClipboardList },
   { name: 'Academics', icon: FileBarChart },
+  { name: 'Examinations', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Interventions', icon: HeartHandshake },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Student Fees', icon: Receipt, childOf: 'Finance', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Staff Salaries', icon: Banknote, childOf: 'Finance', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
 
 function BriefcaseIcon(props: any) {
@@ -50,6 +59,7 @@ function BriefcaseIcon(props: any) {
 const SYSTEM_NAV = [
   { name: 'Reports', icon: BarChart3, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'My performance', icon: TrendingUp, roles: ['student', 'parent'] },
+  { name: 'Platform owner', icon: ShieldCheck, superuserOnly: true },
   { name: 'Audit log', icon: ShieldCheck, adminOnly: true },
   { name: 'Notifications', icon: Bell },
   { name: 'Settings', icon: Settings2 },
@@ -59,9 +69,9 @@ const NAV_GROUPS = [
   { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses'] },
   { sublabel: 'ACADEMIC CONFIGURATION', adminLabel: true, items: ['Campus setup', 'Academic years'] },
   { sublabel: 'ACADEMIC STRUCTURE', items: ['Classes', 'Subjects'] },
-  { sublabel: 'STUDENTS & LEARNING', items: ['Students', 'Attendance', 'Homework', 'Academics', 'Communication'] },
+  { sublabel: 'STUDENTS & LEARNING', items: ['Students', 'Attendance', 'Homework', 'Academics', 'Examinations', 'Communication'] },
   { sublabel: 'STUDENT SUPPORT', items: ['Interventions'] },
-  { sublabel: 'PEOPLE & FINANCE', items: ['Staff', 'Finance'] },
+  { sublabel: 'PEOPLE & FINANCE', items: ['Staff', 'Finance', 'Student Fees', 'Staff Salaries', 'Data import'] },
 ];
 
 const initials = (name: string) => name.split(/\s+/).map(s => s[0]).join('').slice(0, 2).toUpperCase();
@@ -635,13 +645,20 @@ function App() {
             return (
               <React.Fragment key={group.sublabel}>
                 <div className={'nav-sublabel' + (isAdmin ? ' nav-sublabel-admin' : '')}>{group.sublabel}</div>
-                {navItems.map(({ name, icon: Icon }) => (
-                  <button key={name} onClick={() => switchPage(name)} className={'nav-item ' + (page === name ? 'selected' : '')}>
-                    <Icon size={19} strokeWidth={1.9} />
-                    <span>{name}</span>
-                    {name === 'Interventions' && !!dash?.counts.open_cases && <em>{dash.counts.open_cases}</em>}
-                  </button>
-                ))}
+                {navItems.map((item: any) => {
+                  const { name, icon: Icon, childOf } = item;
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => switchPage(name)}
+                      className={'nav-item ' + (childOf ? 'nav-child ' : '') + (page === name ? 'selected' : '')}
+                    >
+                      <Icon size={childOf ? 15 : 19} strokeWidth={1.9} />
+                      <span>{name}</span>
+                      {name === 'Interventions' && !!dash?.counts.open_cases && <em>{dash.counts.open_cases}</em>}
+                    </button>
+                  );
+                })}
               </React.Fragment>
             );
           })}
@@ -649,7 +666,11 @@ function App() {
 
         <div className="nav-label nav-lower">INSIGHTS & SYSTEM</div>
         <nav>
-          {SYSTEM_NAV.filter(item => (item as any).roles ? (item as any).roles.includes(user.role) : (!item.adminOnly || ['organisation_admin', 'school_admin', 'principal'].includes(user.role))).map(({ name, icon: Icon }) => (
+          {SYSTEM_NAV.filter(item => {
+            if ((item as any).superuserOnly && !user.is_superuser) return false;
+            if ((item as any).roles) return (item as any).roles.includes(user.role);
+            return !item.adminOnly || ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
+          }).map(({ name, icon: Icon }) => (
             <button key={name} onClick={() => switchPage(name)} className={'nav-item ' + (page === name ? 'selected' : '')}>
               <Icon size={19} strokeWidth={1.9} />
               <span>{name}</span>
@@ -1052,6 +1073,11 @@ function App() {
           {page === 'Reports' && <Reports user={user} />}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
           {page === 'Finance' && <Finance user={user} notify={notify} />}
+          {page === 'Student Fees' && <Fees user={user} notify={notify} />}
+          {page === 'Staff Salaries' && <Salaries user={user} notify={notify} />}
+          {page === 'Examinations' && <Examinations user={user} notify={notify} />}
+          {page === 'Platform owner' && <PlatformOwner user={user} notify={notify} />}
+          {page === 'Data import' && <DataImport user={user} notify={notify} />}
           {page === 'My performance' && <MyPerformance />}
           {page === 'Communication' && <Communication user={user} notify={notify} />}
           {page === 'Settings' && <Settings user={user} onUserUpdated={u => setUser(u)} notify={notify} />}

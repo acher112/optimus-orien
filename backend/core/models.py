@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator,MaxValueValidator
@@ -9,11 +10,14 @@ class Organisation(models.Model):
  allow_org_admin_student_access=models.BooleanField(default=False,help_text="Explicit policy to allow organisation-level administrators access to identifiable student records")
  def __str__(self):return self.name
 
+CURRENCIES = ['PKR', 'USD', 'GBP', 'EUR', 'AED', 'SAR', 'INR', 'CAD', 'AUD']
+
 class School(models.Model):
  organisation=models.ForeignKey(Organisation,on_delete=models.PROTECT,related_name='schools')
  name=models.CharField(max_length=160)
  code=models.CharField(max_length=32)
  city=models.CharField(max_length=120,blank=True)
+ currency=models.CharField(max_length=8,default='PKR',help_text='ISO currency code, e.g. PKR, USD')
  attendance_alert_threshold=models.DecimalField(max_digits=5,decimal_places=2,default=80,validators=[MinValueValidator(0),MaxValueValidator(100)])
  grade_alert_threshold=models.DecimalField(max_digits=5,decimal_places=2,default=60,validators=[MinValueValidator(0),MaxValueValidator(100)])
  class Meta:constraints=[models.UniqueConstraint(fields=['organisation','code'],name='unique_school_code_per_org')]
@@ -112,9 +116,11 @@ class Assessment(models.Model):
    raise ValidationError('Assessment date outside class academic year')
 
 class Grade(models.Model):
+ RESULT_STATUS=[('recorded','Recorded'),('absent','Absent'),('exempt','Exempt'),('incomplete','Incomplete'),('withdrawn','Withdrawn')]
  assessment=models.ForeignKey(Assessment,on_delete=models.PROTECT,related_name='grades')
  student=models.ForeignKey(Student,on_delete=models.PROTECT,related_name='grades')
  marks=models.DecimalField(max_digits=8,decimal_places=2,validators=[MinValueValidator(0)])
+ result_status=models.CharField(max_length=16,choices=RESULT_STATUS,default='recorded')
  feedback=models.TextField(blank=True)
  class Meta:constraints=[models.UniqueConstraint(fields=['assessment','student'],name='unique_assessment_grade')]
  def clean(self):
@@ -394,4 +400,375 @@ class SubjectMessage(models.Model):
 
     def __str__(self):
         return f"[{self.school_class.name} / {self.subject.name}] {self.sender.username}: {self.message[:30]}"
+
+
+# ------------------------------------------------------------------ Fees (student billing)
+class FeeHead(models.Model):
+    """Institutional fee category (e.g. Tuition, Admission, Annual, Transport)."""
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='fee_heads')
+    name = models.CharField(max_length=80)
+    category = models.ForeignKey(FinanceCategory, on_delete=models.PROTECT, related_name='fee_heads')
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [models.UniqueConstraint(fields=['school', 'name'], name='unique_fee_head_per_school')]
+
+    def __str__(self):
+        return f"{self.name} ({self.school.name})"
+
+
+class FeeStructure(models.Model):
+    """Standard fee rate per class or school-wide."""
+    FREQUENCIES = [('one_time', 'One-time'), ('monthly', 'Monthly'), ('term', 'Term'), ('annual', 'Annual')]
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='fee_structures')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name='fee_structures')
+    school_class = models.ForeignKey(SchoolClass, null=True, blank=True, on_delete=models.PROTECT, related_name='fee_structures')
+    head = models.ForeignKey(FeeHead, on_delete=models.PROTECT, related_name='structures')
+    amount = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    frequency = models.CharField(max_length=16, choices=FREQUENCIES, default='monthly')
+    due_day = models.PositiveSmallIntegerField(default=10, validators=[MinValueValidator(1), MaxValueValidator(31)])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['school', 'academic_year', 'school_class', 'head'], name='unique_fee_structure')]
+
+    def __str__(self):
+        cls_name = self.school_class.name if self.school_class else 'All classes'
+        return f"{cls_name} - {self.head.name}: {self.amount}"
+
+
+class Concession(models.Model):
+    """Approved student fee discount (sibling, scholarship, staff ward)."""
+    DISCOUNT_TYPES = [('percent', 'Percentage'), ('fixed', 'Fixed Amount')]
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='concessions')
+    head = models.ForeignKey(FeeHead, null=True, blank=True, on_delete=models.PROTECT, related_name='concessions')
+    discount_type = models.CharField(max_length=12, choices=DISCOUNT_TYPES, default='percent')
+    discount_value = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    reason = models.CharField(max_length=200)
+    approved_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='approved_concessions')
+    valid_from = models.DateField()
+    valid_to = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.student.full_name}: {self.discount_value}{'%' if self.discount_type == 'percent' else ' fixed'} ({self.reason})"
+
+
+class StudentFee(models.Model):
+    """Voucher line item for a student in a specific billing period."""
+    STATUSES = [('unpaid', 'Unpaid'), ('partial', 'Partial'), ('paid', 'Paid'), ('waived', 'Waived'), ('void', 'Void')]
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='fee_lines')
+    head = models.ForeignKey(FeeHead, on_delete=models.PROTECT, related_name='student_fees')
+    period = models.CharField(max_length=30, help_text='YYYY-MM or term code')
+    amount_due = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    discount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    status = models.CharField(max_length=16, choices=STATUSES, default='unpaid')
+    due_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['due_date', 'id']
+        constraints = [models.UniqueConstraint(fields=['student', 'head', 'period'], name='unique_student_fee_period')]
+
+    @property
+    def net_due(self):
+        return max(Decimal('0.00'), self.amount_due - self.discount)
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.head.name} ({self.period}): {self.net_due} [{self.status}]"
+
+
+class FeePayment(models.Model):
+    """Fee collection receipt. Automatically creates a linked FinanceEntry (Income)."""
+    METHODS = [('cash', 'Cash'), ('bank', 'Bank Transfer'), ('online', 'Online / Card'), ('cheque', 'Cheque')]
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='fee_payments')
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='fee_payments')
+    receipt_number = models.CharField(max_length=60, unique=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    method = models.CharField(max_length=16, choices=METHODS, default='cash')
+    paid_on = models.DateField()
+    reference = models.CharField(max_length=100, blank=True)
+    received_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='received_fee_payments')
+    voided = models.BooleanField(default=False)
+    void_reason = models.CharField(max_length=255, blank=True)
+    finance_entry = models.OneToOneField(FinanceEntry, null=True, blank=True, on_delete=models.SET_NULL, related_name='linked_fee_payment')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-paid_on', '-id']
+
+    def __str__(self):
+        return f"Receipt #{self.receipt_number}: {self.student.full_name} ({self.amount})"
+
+
+class FeePaymentAllocation(models.Model):
+    """Allocates part or all of a payment receipt to a specific StudentFee voucher line."""
+    payment = models.ForeignKey(FeePayment, on_delete=models.CASCADE, related_name='allocations')
+    student_fee = models.ForeignKey(StudentFee, on_delete=models.PROTECT, related_name='allocations')
+    amount = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+
+
+# ------------------------------------------------------------------ Staff Salaries
+class SalaryStructure(models.Model):
+    """Staff compensation blueprint. New row per revision; history is never overwritten."""
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name='salary_structures')
+    effective_from = models.DateField()
+    basic = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    allowances = models.JSONField(default=list, blank=True)
+    fixed_deductions = models.JSONField(default=list, blank=True)
+    currency = models.CharField(max_length=8, default='PKR')
+    created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-effective_from', '-id']
+
+    def __str__(self):
+        return f"{self.staff.full_name}: Basic {self.basic} (effective {self.effective_from})"
+
+
+class SalaryRecord(models.Model):
+    """Monthly salary sheet row. When marked paid, auto-creates linked FinanceEntry (Expense)."""
+    STATUSES = [('draft', 'Draft'), ('approved', 'Approved'), ('paid', 'Paid'), ('void', 'Void')]
+    METHODS = [('bank', 'Bank Transfer'), ('cash', 'Cash'), ('cheque', 'Cheque')]
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name='salary_records')
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='salary_records')
+    month = models.CharField(max_length=7, help_text='YYYY-MM')
+    basic = models.DecimalField(max_digits=14, decimal_places=2)
+    allowances_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    deductions_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    additions_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    advance_recovered = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    gross = models.DecimalField(max_digits=14, decimal_places=2)
+    net = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=16, choices=STATUSES, default='draft')
+    paid_on = models.DateField(null=True, blank=True)
+    method = models.CharField(max_length=16, choices=METHODS, default='bank', blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+    void_reason = models.CharField(max_length=255, blank=True)
+    finance_entry = models.OneToOneField(FinanceEntry, null=True, blank=True, on_delete=models.SET_NULL, related_name='linked_salary_record')
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-month', 'staff__last_name']
+        constraints = [models.UniqueConstraint(fields=['staff', 'month'], name='unique_staff_monthly_salary')]
+
+    def __str__(self):
+        return f"{self.staff.full_name} ({self.month}): Net {self.net} [{self.status}]"
+
+
+class SalaryAdjustment(models.Model):
+    """One-off bonus, penalty deduction, or advance payment."""
+    KINDS = [('bonus', 'Bonus / Incentive'), ('deduction', 'Deduction / Fine'), ('advance', 'Salary Advance')]
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name='adjustments')
+    month = models.CharField(max_length=7, help_text='YYYY-MM')
+    kind = models.CharField(max_length=16, choices=KINDS)
+    amount = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    reason = models.CharField(max_length=255)
+    approved_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.staff.full_name} [{self.kind}] {self.amount}: {self.reason}"
+
+
+# ------------------------------------------------------------------ Examinations
+class ExamSession(models.Model):
+    """Formal assessment term (Mid-term, Final, Monthly)."""
+    STATUSES = [('draft', 'Draft'), ('scheduled', 'Scheduled'), ('marking', 'Marking'), ('published', 'Published'), ('closed', 'Closed')]
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='exam_sessions')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name='exam_sessions')
+    name = models.CharField(max_length=100)
+    reporting_period = models.CharField(max_length=60, blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=16, choices=STATUSES, default='draft')
+    ranking_enabled = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date']
+        constraints = [models.UniqueConstraint(fields=['school', 'academic_year', 'name'], name='unique_exam_session_per_year')]
+
+    def __str__(self):
+        return f"{self.name} ({self.school.name})"
+
+
+class AssessmentCategory(models.Model):
+    """Assessment component (Quiz, Midterm, Final, Practical) with weight totaling 100 per subject."""
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='assessment_categories')
+    subject = models.ForeignKey(Subject, null=True, blank=True, on_delete=models.PROTECT, related_name='assessment_categories')
+    name = models.CharField(max_length=80)
+    weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('25.00'), validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('100.00'))])
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['school', 'subject', 'name'], name='unique_assessment_category_subject')]
+
+    def __str__(self):
+        subj_name = self.subject.name if self.subject else 'All subjects'
+        return f"{subj_name} - {self.name} ({self.weight}%)"
+
+
+class GradingScale(models.Model):
+    """Institutional grading scale (e.g. Letter Grade A-F, GPA 4.0)."""
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='grading_scales')
+    name = models.CharField(max_length=80)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.school.name})"
+
+
+class GradeBand(models.Model):
+    """Letter and grade point band inside a grading scale."""
+    grading_scale = models.ForeignKey(GradingScale, on_delete=models.CASCADE, related_name='bands')
+    min_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    max_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    letter = models.CharField(max_length=8)
+    grade_point = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('0.00'))
+    description = models.CharField(max_length=60, blank=True)
+
+    class Meta:
+        ordering = ['-min_percent']
+
+    def __str__(self):
+        return f"{self.letter} ({self.min_percent}% - {self.max_percent}%)"
+
+
+class ExamPaper(models.Model):
+    """Individual subject paper in an exam session (date sheet row)."""
+    session = models.ForeignKey(ExamSession, on_delete=models.PROTECT, related_name='papers')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.PROTECT, related_name='exam_papers')
+    subject = models.ForeignKey(Subject, on_delete=models.PROTECT, related_name='exam_papers')
+    date = models.DateField()
+    start_time = models.TimeField()
+    duration_min = models.PositiveIntegerField(default=120)
+    max_marks = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('100.00'), validators=[MinValueValidator(Decimal('1.00'))])
+    room = models.CharField(max_length=60, blank=True)
+    invigilator = models.ForeignKey(StaffMember, null=True, blank=True, on_delete=models.SET_NULL, related_name='invigilated_papers')
+    assessment = models.OneToOneField(Assessment, null=True, blank=True, on_delete=models.SET_NULL, related_name='exam_paper')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['date', 'start_time']
+        constraints = [models.UniqueConstraint(fields=['session', 'school_class', 'subject'], name='unique_paper_per_session_class_subject')]
+
+    def __str__(self):
+        return f"{self.session.name}: {self.school_class.name} - {self.subject.name} on {self.date}"
+
+
+class ExamMarkCorrection(models.Model):
+    """Audited mark correction for a published examination result."""
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='corrections')
+    old_marks = models.DecimalField(max_digits=8, decimal_places=2)
+    new_marks = models.DecimalField(max_digits=8, decimal_places=2)
+    old_status = models.CharField(max_length=16)
+    new_status = models.CharField(max_length=16)
+    reason = models.CharField(max_length=255)
+    actor = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+# ------------------------------------------------------------------ Platform Owner & Security
+class PlatformPlan(models.Model):
+    """SaaS tier for institutional subscription."""
+    BASIS_CHOICES = [('per_student', 'Per Student'), ('per_campus', 'Per Campus'), ('flat', 'Flat Subscription')]
+    name = models.CharField(max_length=80)
+    billing_basis = models.CharField(max_length=24, choices=BASIS_CHOICES, default='per_student')
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=8, default='USD')
+    active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.price_per_unit} {self.currency} / {self.billing_basis})"
+
+
+class OrganisationSubscription(models.Model):
+    """Active subscription plan for an educational organisation."""
+    STATUSES = [('active', 'Active'), ('trial', 'Trial'), ('past_due', 'Past Due'), ('cancelled', 'Cancelled')]
+    organisation = models.OneToOneField(Organisation, on_delete=models.PROTECT, related_name='subscription')
+    plan = models.ForeignKey(PlatformPlan, on_delete=models.PROTECT, related_name='subscriptions')
+    status = models.CharField(max_length=20, choices=STATUSES, default='active')
+    active_students_count = models.PositiveIntegerField(default=0)
+    monthly_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    started_on = models.DateField(auto_now_add=True)
+    renewal_date = models.DateField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.organisation.name} - {self.plan.name} [{self.status}]"
+
+
+class SupportAccessGrant(models.Model):
+    """Explicit, time-limited permission for platform support to access institution data."""
+    organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='support_grants')
+    school = models.ForeignKey(School, null=True, blank=True, on_delete=models.CASCADE, related_name='support_grants')
+    granted_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_support_grants')
+    granted_to = models.ForeignKey(User, on_delete=models.PROTECT, related_name='received_support_grants')
+    reason = models.CharField(max_length=255)
+    starts_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-starts_at']
+
+    def __str__(self):
+        return f"Support grant: {self.organisation.name} -> {self.granted_to.username} ({self.reason})"
+
+
+class UserInvitation(models.Model):
+    """Admin-issued invitation token replacing open self-registration."""
+    token = models.CharField(max_length=64, unique=True)
+    email = models.EmailField()
+    role = models.CharField(max_length=32)
+    organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='invitations')
+    school = models.ForeignKey(School, null=True, blank=True, on_delete=models.CASCADE, related_name='invitations')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='issued_invitations')
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Invite: {self.email} as {self.role} ({'Used' if self.used_at else 'Pending'})"
+
+
+class HolidayCalendar(models.Model):
+    """Holiday schedule excluded from the attendance calculation denominator."""
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='holidays')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name='holidays')
+    name = models.CharField(max_length=100)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['start_date']
+
+    def __str__(self):
+        return f"{self.name} ({self.start_date} - {self.end_date})"
+
+
+class ClassTimetable(models.Model):
+    """Weekly class timetable period schedule."""
+    DAYS = [(0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday')]
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='timetable_entries')
+    day_of_week = models.PositiveSmallIntegerField(choices=DAYS)
+    period_number = models.PositiveSmallIntegerField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    teacher = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    room = models.CharField(max_length=40, blank=True)
+
+    class Meta:
+        ordering = ['day_of_week', 'period_number']
+        constraints = [models.UniqueConstraint(fields=['school_class', 'day_of_week', 'period_number'], name='unique_class_period')]
+
 

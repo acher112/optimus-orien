@@ -37,10 +37,10 @@ UPDATE['teacher'].discard('Intervention')
 
 # Configured deletion policy for authorized roles across campuses.
 DELETE = {
- 'organisation_admin': {'School','SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
- 'school_admin': {'SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
- 'principal': {'SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
- 'teacher': {'Assessment','Grade','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention'},
+ 'organisation_admin': {'School','SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
+ 'school_admin': {'SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
+ 'principal': {'SchoolClass','AcademicYear','Subject','Student','Enrollment','Assessment','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention','Notification'},
+ 'teacher': {'Assessment','Attendance','Homework','HomeworkSubmission','Observation','ReviewCase','Intervention'},
  'student': set(), 'parent': set(),
 }
 
