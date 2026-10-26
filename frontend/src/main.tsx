@@ -289,6 +289,18 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [campusDropdownOpen, setCampusDropdownOpen] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
+
+  const toggleDropdown = (name: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setOpenDropdowns(prev => ({
+      ...prev,
+      [name]: !prev[name]
+    }));
+  };
   const [campuses, setCampuses] = useState<Array<{ id: number; name: string; code?: string; city?: string }>>([]);
   const [activeCampusId, setActiveCampusId] = useState<number | null>(() => {
     const saved = localStorage.getItem('optimus_active_campus_id');
@@ -705,13 +717,69 @@ function App() {
                 <div className={'nav-sublabel' + (isAdmin ? ' nav-sublabel-admin' : '')}>{group.sublabel}</div>
                 {navItems.map((item: any) => {
                   const { name, icon: Icon, childOf } = item;
+                  if (childOf) return null; // rendered inside parent dropdown
+
+                  const children = navItems.filter((c: any) => c.childOf === name);
+                  const isDropdown = children.length > 0;
+                  const isChildActive = isDropdown && children.some((c: any) => c.name === page);
+                  const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page));
+                  const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
+
+                  if (isDropdown) {
+                    return (
+                      <div key={name} className="nav-dropdown-group">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isSelfActive) {
+                              toggleDropdown(name);
+                            } else {
+                              setOpenDropdowns(prev => ({ ...prev, [name]: true }));
+                              switchPage(name);
+                            }
+                          }}
+                          className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '')}
+                        >
+                          <Icon size={19} strokeWidth={1.9} />
+                          <span className="nav-item-title">{name}</span>
+                          <span
+                            className={'nav-chevron-wrap' + (isOpen ? ' open' : '')}
+                            onClick={(e) => toggleDropdown(name, e)}
+                            title={isOpen ? 'Collapse' : 'Expand'}
+                          >
+                            <ChevronDown size={15} strokeWidth={2.2} />
+                          </span>
+                        </button>
+                        {isOpen && (
+                          <div className="nav-dropdown-children">
+                            {children.map((child: any) => {
+                              const ChildIcon = child.icon;
+                              const isChildSelected = page === child.name;
+                              return (
+                                <button
+                                  key={child.name}
+                                  type="button"
+                                  onClick={() => switchPage(child.name)}
+                                  className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '')}
+                                >
+                                  <ChildIcon size={14} strokeWidth={1.8} />
+                                  <span>{child.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
                   return (
                     <button
                       key={name}
                       onClick={() => switchPage(name)}
-                      className={'nav-item ' + (childOf ? 'nav-child ' : '') + (page === name ? 'selected' : '')}
+                      className={'nav-item ' + (page === name ? 'selected' : '')}
                     >
-                      <Icon size={childOf ? 15 : 19} strokeWidth={1.9} />
+                      <Icon size={19} strokeWidth={1.9} />
                       <span>{name}</span>
                       {name === 'Interventions' && !!dash?.counts.open_cases && <em>{dash.counts.open_cases}</em>}
                     </button>
