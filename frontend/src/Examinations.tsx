@@ -5,6 +5,7 @@ import {
   Search, ShieldAlert, ShieldCheck, Sparkles, Trash2, User, Users, X
 } from 'lucide-react';
 import { list, request, type User as ApiUser } from './api';
+import ExportMenu from './ExportMenu';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -371,11 +372,29 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
               <h3>Exam Date Sheet & Schedule</h3>
               <p>Clash-checked schedule of papers per class and room</p>
             </div>
-            {isManager && (
-              <button className="primary-btn" onClick={() => { setClashError(''); setPaperModal(true); }}>
-                <Plus size={15} /> Schedule Paper
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <ExportMenu
+                title="Examination Date Sheet"
+                filename="exam-datesheet"
+                columns={[
+                  { key: 'date', label: 'Date' },
+                  { key: 'start_time', label: 'Time' },
+                  { key: 'duration_min', label: 'Duration (min)' },
+                  { key: 'class_name', label: 'Class' },
+                  { key: 'subject_name', label: 'Subject' },
+                  { key: 'max_marks', label: 'Max Marks' },
+                  { key: 'room', label: 'Room' },
+                  { key: 'invigilator_name', label: 'Invigilator' }
+                ]}
+                rows={papers}
+                notify={notify}
+              />
+              {isManager && (
+                <button className="primary-btn" onClick={() => { setClashError(''); setPaperModal(true); }}>
+                  <Plus size={15} /> Schedule Paper
+                </button>
+              )}
+            </div>
           </div>
           <div className="table-scroll">
             <table className="data-table">
@@ -538,7 +557,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
               <h3>Class Results Matrix</h3>
               <p>Student × Subject results sheet with total score and grade points</p>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select
                 className="fx-select"
                 value={activeClassId || ''}
@@ -547,6 +566,41 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 <option value="">Select a class…</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+
+              {resultsSheet && (
+                <ExportMenu
+                  title={`Exam Results Sheet — ${resultsSheet.class_name || 'Class'}`}
+                  filename={`exam-results-${(resultsSheet.class_name || 'class').toLowerCase().replace(/\s+/g, '-')}`}
+                  columns={[
+                    { key: 'roll_number', label: 'Roll #' },
+                    { key: 'student_name', label: 'Student' },
+                    ...(resultsSheet.subjects || []).map((s: R) => ({
+                      key: `sub_${s.id}`,
+                      label: `${s.code || s.name} (${s.max_marks}m)`
+                    })),
+                    { key: 'total_obtained', label: 'Total Score' },
+                    { key: 'total_max', label: 'Max Total' },
+                    { key: 'percentage', label: 'Percentage' },
+                    { key: 'grade', label: 'Grade' }
+                  ]}
+                  rows={() => (resultsSheet.matrix || []).map((row: R) => {
+                    const obj: Record<string, any> = {
+                      roll_number: row.admission_number || '—',
+                      student_name: row.student_name,
+                      total_obtained: row.total_obtained,
+                      total_max: row.total_max,
+                      percentage: `${row.percentage}%`,
+                      grade: row.grade || '—'
+                    };
+                    for (const s of (resultsSheet.subjects || [])) {
+                      const entry = row.subjects?.[s.id];
+                      obj[`sub_${s.id}`] = entry ? (entry.result_status !== 'recorded' ? entry.result_status : entry.marks) : '—';
+                    }
+                    return obj;
+                  })}
+                  notify={notify}
+                />
+              )}
             </div>
           </div>
           {resultsSheet ? (

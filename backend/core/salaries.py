@@ -386,6 +386,26 @@ def salaries_sheet(request):
             'reference': r.reference,
             'has_finance_entry': bool(r.finance_entry_id)
         } for r in qs]
+        from core.services.exports import handle_export
+        export_res = handle_export(
+            request, results, filename='salaries-sheet', title='Staff Salaries & Payroll Sheet',
+            columns=[
+                {'key': 'staff_name', 'label': 'Staff Member'},
+                {'key': 'position', 'label': 'Position'},
+                {'key': 'school_name', 'label': 'Campus'},
+                {'key': 'month', 'label': 'Payroll Month'},
+                {'key': 'basic', 'label': 'Base (Rs)'},
+                {'key': 'allowances_total', 'label': 'Allowances (Rs)'},
+                {'key': 'deductions_total', 'label': 'Deductions (Rs)'},
+                {'key': 'gross', 'label': 'Gross (Rs)'},
+                {'key': 'net', 'label': 'Net Salary (Rs)'},
+                {'key': 'status', 'label': 'Status'},
+                {'key': 'paid_on', 'label': 'Paid On'},
+                {'key': 'method', 'label': 'Method'},
+            ]
+        )
+        if export_res:
+            return export_res
         return Response({'results': results})
 
     # PATCH: bulk approve records

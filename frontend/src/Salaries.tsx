@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User as ApiUser } from './api';
+import ExportMenu from './ExportMenu';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -267,7 +268,13 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
               <h3>Payroll Sheet for {month}</h3>
               <p>Review draft salaries, prorations, bulk-approve, and mark paid</p>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <ExportMenu
+                title={`Payroll Sheet (${month})`}
+                filename={`payroll-sheet-${month}`}
+                endpoint={`salaries/sheet/?month=${month}${school ? `&school=${school}` : ''}`}
+                notify={notify}
+              />
               {selectedIds.length > 0 && (
                 <button className="outline-btn" onClick={handleBulkApprove}>
                   <CheckCircle2 size={15} /> Approve Selected ({selectedIds.length})

@@ -102,6 +102,23 @@ def staff_list(request):
             from django.db.models import Q
             qs = qs.filter(Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(position__icontains=q))
         rows = [_row(s) for s in qs]
+        from core.services.exports import handle_export
+        export_res = handle_export(
+            request, rows, filename='staff-directory', title='Staff Directory',
+            columns=[
+                {'key': 'first_name', 'label': 'First Name'},
+                {'key': 'last_name', 'label': 'Last Name'},
+                {'key': 'role', 'label': 'Role'},
+                {'key': 'position', 'label': 'Position'},
+                {'key': 'school_name', 'label': 'Campus'},
+                {'key': 'email', 'label': 'Email'},
+                {'key': 'phone', 'label': 'Phone'},
+                {'key': 'status', 'label': 'Status'},
+                {'key': 'hired_on', 'label': 'Hired On'}
+            ]
+        )
+        if export_res:
+            return export_res
         return Response({'results': rows, 'summary': {
             'total': len(rows), 'active': sum(r['status'] == 'active' for r in rows),
             'terminated': sum(r['status'] == 'terminated' for r in rows)}, 'roles': STAFF_ROLES})

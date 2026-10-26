@@ -47,5 +47,7 @@ X_FRAME_OPTIONS='DENY'
 LANGUAGE_CODE='en-us'; TIME_ZONE='UTC'; USE_I18N=True; USE_TZ=True
 STATIC_URL='static/'; STATIC_ROOT=BASE_DIR/'staticfiles'
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
+PRIVATE_STORAGE_ROOT=Path(os.getenv('PRIVATE_STORAGE_ROOT',str(BASE_DIR/'private_storage')))
+os.makedirs(PRIVATE_STORAGE_ROOT,exist_ok=True)
 
 LOGGING={'version':1,'disable_existing_loggers':False,'handlers':{'console':{'class':'logging.StreamHandler'}},'loggers':{'django.request':{'handlers':['console'],'level':'WARNING','propagate':False},'core':{'handlers':['console'],'level':'INFO','propagate':False}}}

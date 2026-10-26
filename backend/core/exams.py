@@ -293,6 +293,23 @@ def exam_papers(request):
             'invigilator_name': p.invigilator.full_name if p.invigilator else None,
             'assessment_id': p.assessment_id,
         } for p in qs]
+        from core.services.exports import handle_export
+        export_res = handle_export(
+            request, results, filename='exam-date-sheet', title='Exam Date Sheet & Papers',
+            columns=[
+                {'key': 'session_name', 'label': 'Exam Session'},
+                {'key': 'class_name', 'label': 'Class'},
+                {'key': 'subject_name', 'label': 'Subject'},
+                {'key': 'date', 'label': 'Date'},
+                {'key': 'start_time', 'label': 'Start Time'},
+                {'key': 'duration_min', 'label': 'Duration (min)'},
+                {'key': 'max_marks', 'label': 'Max Marks'},
+                {'key': 'room', 'label': 'Room'},
+                {'key': 'invigilator_name', 'label': 'Invigilator'}
+            ]
+        )
+        if export_res:
+            return export_res
         return Response({'results': results})
 
     # POST: create new paper with clash check

@@ -121,8 +121,22 @@ def structures(request):
             'academic_year': s.academic_year_id, 'academic_year_name': s.academic_year.name,
             'school_class': s.school_class_id, 'school_class_name': s.school_class.name if s.school_class else 'All Classes',
             'head': s.head_id, 'head_name': s.head.name,
-            'amount': str(s.amount), 'frequency': s.frequency, 'due_day': s.due_day
         } for s in qs]
+        from core.services.exports import handle_export
+        export_res = handle_export(
+            request, rows, filename='fee-structures', title='Fee Structures',
+            columns=[
+                {'key': 'school_name', 'label': 'Campus'},
+                {'key': 'academic_year_name', 'label': 'Academic Year'},
+                {'key': 'school_class_name', 'label': 'Class'},
+                {'key': 'head_name', 'label': 'Fee Head'},
+                {'key': 'amount', 'label': 'Amount (Rs)'},
+                {'key': 'frequency', 'label': 'Frequency'},
+                {'key': 'due_day', 'label': 'Due Day of Month'}
+            ]
+        )
+        if export_res:
+            return export_res
         return Response({'results': rows})
 
     school = _school(user, request.data.get('school'))
@@ -506,7 +520,24 @@ def payments(request):
             'school_name': p.school.name, 'amount': str(p.amount), 'method': p.method,
             'paid_on': str(p.paid_on), 'reference': p.reference, 'voided': p.voided,
             'received_by': (p.received_by.get_full_name() or p.received_by.username) if p.received_by else None
-        } for p in qs[:200]]
+        } for p in (qs if request.query_params.get('format') else qs[:200])]
+        from core.services.exports import handle_export
+        export_res = handle_export(
+            request, rows, filename='fee-payments-receipts', title='Fee Payments & Receipts Ledger',
+            columns=[
+                {'key': 'receipt_number', 'label': 'Receipt #'},
+                {'key': 'student_name', 'label': 'Student Name'},
+                {'key': 'admission_number', 'label': 'Admission #'},
+                {'key': 'school_name', 'label': 'Campus'},
+                {'key': 'amount', 'label': 'Amount (Rs)'},
+                {'key': 'method', 'label': 'Method'},
+                {'key': 'paid_on', 'label': 'Payment Date'},
+                {'key': 'reference', 'label': 'Reference / Memo'},
+                {'key': 'received_by', 'label': 'Cashier / Received By'}
+            ]
+        )
+        if export_res:
+            return export_res
         return Response({'results': rows})
 
     data = request.data
@@ -678,6 +709,22 @@ def defaulters(request):
             'oldest_due_date': str(s['oldest_due_date']), 'days_overdue': days
         })
     results.sort(key=lambda x: -x['days_overdue'])
+    from core.services.exports import handle_export
+    export_res = handle_export(
+        request, results, filename='fee-defaulters', title='Fee Defaulters Report',
+        columns=[
+            {'key': 'student_name', 'label': 'Student Name'},
+            {'key': 'admission_number', 'label': 'Admission #'},
+            {'key': 'class_name', 'label': 'Class'},
+            {'key': 'school_name', 'label': 'Campus'},
+            {'key': 'overdue_count', 'label': 'Overdue Months'},
+            {'key': 'total_overdue', 'label': 'Total Overdue (Rs)'},
+            {'key': 'days_overdue', 'label': 'Days Overdue'},
+            {'key': 'oldest_due_date', 'label': 'Oldest Due Date'}
+        ]
+    )
+    if export_res:
+        return export_res
     return Response({'results': results, 'total_defaulters': len(results)})
 
 

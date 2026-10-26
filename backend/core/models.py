@@ -806,3 +806,37 @@ class Announcement(models.Model):
         return f"[{self.priority.upper()}] {self.title} ({self.target_role})"
 
 
+class StudyMaterial(models.Model):
+    """Educational materials uploaded for students by teachers, principals, or administrators."""
+    STATUSES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+        ('archived', 'Archived'),
+    ]
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='study_materials')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='study_materials')
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name='study_materials')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    file_path = models.CharField(max_length=300, help_text='Relative path within private_storage directory')
+    original_filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    size_bytes = models.BigIntegerField()
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='materials_uploaded')
+    visible_from = models.DateTimeField(null=True, blank=True, help_text='Optional scheduled publication datetime')
+    status = models.CharField(max_length=20, choices=STATUSES, default='published')
+    download_count = models.PositiveIntegerField(default=0)
+    version = models.PositiveSmallIntegerField(default=1)
+    previous_version = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='next_versions')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({self.school_class.name}) [{self.status}]"
+
+
+

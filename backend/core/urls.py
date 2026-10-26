@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from . import (
     views, onboarding_views, reports, staff, finance, communication,
-    fees, salaries, exams, platform_owner, imports, announcements
+    fees, salaries, exams, platform_owner, imports, announcements, study_materials
 )
 
 r = DefaultRouter()
@@ -127,6 +127,16 @@ urlpatterns = [
     # Announcements
     path('announcements/', announcements.announcements_list),
     path('announcements/<int:pk>/', announcements.announcement_detail),
+
+    # Universal Export
+    path('export/', views.universal_export),
+
+    # Study Materials
+    path('materials/', study_materials.materials_list),
+    path('materials/<int:pk>/', study_materials.material_detail),
+    path('materials/<int:pk>/archive/', study_materials.material_archive),
+    path('materials/<int:pk>/download/', study_materials.material_download),
+    path('materials/<int:pk>/replace/', study_materials.material_replace),
 
     path('', include(r.urls))
 ]

@@ -5,9 +5,9 @@ import {
   Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft,
   ChevronRight, ClipboardCheck, ClipboardList, Download, FileBarChart, GraduationCap,
   HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, MoreHorizontal,
-  Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal,
+  Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
-  Wallet, X, AlertCircle, Clock
+  Wallet, X, AlertCircle, Clock, FileSpreadsheet
 } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
@@ -29,6 +29,8 @@ import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
 import Timetable from './Timetable';
+import StudyMaterials from './StudyMaterials';
+import ExportMenu from './ExportMenu';
 import Settings from './Settings';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import './style.css';
@@ -41,17 +43,25 @@ const WORKSPACE_NAV = [
   { name: 'Classes', icon: Users },
   { name: 'Subjects', icon: BookOpen },
   { name: 'Students', icon: GraduationCap },
-  { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Attendance', icon: ClipboardCheck },
   { name: 'Homework', icon: ClipboardList },
   { name: 'Academics', icon: FileBarChart },
   { name: 'Examinations', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  { name: 'Study materials', icon: BookOpen, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
+  { name: 'Student fees', icon: Receipt, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Fee overview', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Fee structure', icon: FileSpreadsheet, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Collect fee', icon: UserCheck, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Vouchers', icon: ShieldAlert, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Defaulters', icon: AlertCircle, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Concessions', icon: Sparkles, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Receipts', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Interventions', icon: HeartHandshake },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Student Fees', icon: Receipt, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
@@ -73,11 +83,19 @@ const NAV_GROUPS = [
   { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses'] },
   { sublabel: 'ACADEMIC CONFIGURATION', adminLabel: true, items: ['Campus setup', 'Academic years'] },
   { sublabel: 'ACADEMIC STRUCTURE', items: ['Classes', 'Subjects'] },
-  { sublabel: 'STUDENTS & LEARNING', items: ['Students', 'Timetable', 'Attendance', 'Homework', 'Academics', 'Examinations'] },
+  {
+    sublabel: 'STUDENTS & LEARNING',
+    items: [
+      'Students', 'Attendance', 'Homework', 'Academics', 'Examinations',
+      'Study materials', 'Student fees', 'Fee overview', 'Fee structure',
+      'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts',
+      'Timetable'
+    ]
+  },
   { sublabel: 'STUDENT SUPPORT', items: ['Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
-  { sublabel: 'FINANCE & BILLING', items: ['Finance', 'Student Fees'] },
+  { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
 ];
 
@@ -349,7 +367,7 @@ function App() {
     try {
       if (page === 'Overview') {
         setDash(await request<Dashboard>(`dashboard/${qs}`));
-      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Staff', 'Finance', 'My performance', 'Communication', 'Settings'].includes(page)) {
+      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings'].includes(page)) {
         // subcomponents handle own data
       } else if (resourceInfo[page]) {
         setRecords(await list<Resource>(`${resourceInfo[page].api}/${qs}`));
@@ -363,7 +381,14 @@ function App() {
 
   useEffect(() => { load(); }, [load]);
 
-  const switchPage = (p: string) => { setPage(p); setSearch(''); setFilter('All'); setSidebar(false); };
+  const switchPage = (p: string) => {
+    let target = p;
+    if (target === 'Fees' || target === 'Student Fees') target = 'Student fees';
+    setPage(target);
+    setSearch('');
+    setFilter('All');
+    setSidebar(false);
+  };
   const changeTheme = () => {
     const nextMode = dark ? 'light' : 'dark';
     setDark(!dark);
@@ -1041,7 +1066,21 @@ function App() {
                   <div className="toolbar-right">
                     <span className="result-count">{filtered.length} results</span>
                     <button className="outline-btn" onClick={() => load()}><RefreshCw size={16} /> Refresh</button>
-                    {page === 'Students' && <a className="outline-btn" href="/api/v1/exports/students.csv"><Download size={16} /> Export CSV</a>}
+                    <ExportMenu
+                      title={`${page} Directory`}
+                      filename={`${page.toLowerCase().replace(/\s+/g, '-')}-list`}
+                      columns={config.columns.map(c => ({ key: c.key, label: c.label }))}
+                      rows={() => filtered.map(r => {
+                        const obj: Record<string, any> = {};
+                        for (const col of config.columns) {
+                          if (col.key === 'name') obj[col.key] = r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name;
+                          else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
+                          else obj[col.key] = r[col.key] ?? '—';
+                        }
+                        return obj;
+                      })}
+                      notify={notify}
+                    />
                   </div>
                 </div>
 
@@ -1106,7 +1145,10 @@ function App() {
           {page === 'Reports' && <Reports user={user} />}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
           {page === 'Finance' && <Finance user={user} notify={notify} />}
-          {page === 'Student Fees' && <Fees user={user} notify={notify} />}
+          {['Student fees', 'Student Fees', 'Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page) && (
+            <Fees user={user} notify={notify} initialTab={page} />
+          )}
+          {page === 'Study materials' && <StudyMaterials user={user} notify={notify} />}
           {page === 'Staff Salaries' && <Salaries user={user} notify={notify} />}
           {page === 'Examinations' && <Examinations user={user} notify={notify} />}
           {page === 'Timetable' && <Timetable user={user} notify={notify} />}
@@ -2156,7 +2198,28 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
       <section className="panel audit-panel">
         <div className="toolbar">
           <div className="searchbox"><Search size={18} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter audit events by actor, action, or resource…" />{search && <button onClick={() => setSearch('')}><X size={14} /></button>}</div>
-          <div className="toolbar-right"><span className="result-count">{filtered.length} events</span></div>
+          <div className="toolbar-right">
+            <span className="result-count">{filtered.length} events</span>
+            <ExportMenu
+              title="Security Audit Trail"
+              filename="security-audit-trail"
+              columns={[
+                { key: 'created_at', label: 'Timestamp' },
+                { key: 'action', label: 'Action' },
+                { key: 'resource', label: 'Resource' },
+                { key: 'resource_id', label: 'Target ID' },
+                { key: 'changes', label: 'Changes Summary' },
+              ]}
+              rows={() => filtered.map(l => ({
+                created_at: l.created_at ? new Date(String(l.created_at)).toLocaleString() : '—',
+                action: String(l.action || '—'),
+                resource: String(l.resource || '—'),
+                resource_id: String(l.resource_id || '—'),
+                changes: l.changes ? JSON.stringify(l.changes) : '—'
+              }))}
+              notify={notify}
+            />
+          </div>
         </div>
         <div className="table-scroll">
           <table className="audit-table">

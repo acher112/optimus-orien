@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags, Trash2 } from 'lucide-react';
 import { list, request, type User } from './api';
+import ExportMenu from './ExportMenu';
 import { getStoredTheme } from './theme';
 import './hr.css';
 
@@ -225,7 +226,33 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: '
       </section>
 
       <section className="panel hr-panel">
-        <div className="toolbar"><strong>{kind === 'income' ? 'Income' : 'Expense'} entries</strong><span className="result-count">{rows.length} shown · {money(total)}</span></div>
+        <div className="toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <strong>{kind === 'income' ? 'Income' : 'Expense'} entries</strong>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span className="result-count">{rows.length} shown · {money(total)}</span>
+            <ExportMenu
+              title={`${kind === 'income' ? 'Income' : 'Expense'} Ledger Entries`}
+              filename={`finance-${kind}-entries`}
+              columns={[
+                { key: 'date', label: 'Date' },
+                { key: 'category_name', label: 'Category' },
+                { key: 'description', label: 'Description' },
+                { key: 'school_name', label: 'Campus' },
+                { key: 'amount', label: 'Amount (Rs)' },
+                { key: 'voided', label: 'Status' }
+              ]}
+              rows={() => rows.map(r => ({
+                date: r.date,
+                category_name: r.category_name,
+                description: r.description || '—',
+                school_name: r.school_name,
+                amount: r.amount,
+                voided: r.voided ? 'Voided' : 'Valid'
+              }))}
+              notify={onChanged}
+            />
+          </div>
+        </div>
         <div className="table-scroll"><table className="data-table">
           <thead><tr><th>DATE</th><th>CATEGORY</th><th>DESCRIPTION</th><th>CAMPUS</th><th>AMOUNT</th><th /></tr></thead>
           <tbody>{rows.map(r => (

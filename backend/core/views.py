@@ -328,6 +328,43 @@ class ScopedViewSet(viewsets.ModelViewSet):
      data['school']=target_sch.pk
      kwargs['data']=data
   return super().get_serializer(*args,**kwargs)
+ def list(self,request,*args,**kwargs):
+  fmt=request.query_params.get('format')
+  if fmt in ('csv','xlsx','pdf'):
+   from core.services.exports import export_response
+   qs=self.filter_queryset(self.get_queryset())
+   serializer=self.get_serializer(qs,many=True)
+   data=serializer.data
+   model=self.queryset.model
+   model_name=getattr(model._meta,'verbose_name_plural',None) or model.__name__
+   columns=[]
+   if data and isinstance(data[0],dict):
+    for k in data[0].keys():
+     if k in ('password','tokens','secret','hash','csrfToken'):continue
+     columns.append({'key':k,'label':k.replace('_',' ').title()})
+   else:
+    for f in model._meta.fields:
+     if f.name in ('password','tokens','secret','hash'):continue
+     columns.append({'key':f.name,'label':f.verbose_name.title()})
+   rows=[]
+   for item in data:
+    row={}
+    for col in columns:
+     k=col['key'];v=item.get(k)
+     if isinstance(v,dict):v=v.get('name') or v.get('username') or v.get('title') or str(v)
+     row[k]=v
+    rows.append(row)
+   campus_name=getattr(getattr(request.user,'school',None),'name','')
+   return export_response(
+    request,
+    filename=f"{model.__name__.lower()}-list",
+    title=f"{str(model_name).title()} Directory",
+    columns=columns,
+    rows=rows,
+    fmt=fmt,
+    meta={'school_name':campus_name,'filters':f"Campus: {campus_name or 'All'}"}
+   )
+  return super().list(request,*args,**kwargs)
  def create(self,request,*args,**kwargs):
   ensure_action(request.user,self.queryset.model,'create')
   return super().create(request,*args,**kwargs)
@@ -594,10 +631,43 @@ def export_students(request):
   raise PermissionDenied('Student export requires school leadership')
  if request.user.role=='organisation_admin' and not request.user.organisation.allow_org_admin_student_access:
   raise PermissionDenied('Individual student export requires explicit organisation policy')
- response=HttpResponse(content_type='text/csv');response['Content-Disposition']='attachment; filename="students.csv"'
- writer=csv.writer(response);writer.writerow(['Admission #','First name','Last name','School','Enrolled','Active'])
- for s in students_scope(request.user).select_related('school'):writer.writerow([s.admission_number,s.first_name,s.last_name,s.school.name,s.enrolled_on,s.active])
- return response
+ fmt=request.query_params.get('format') or 'csv'
+ from core.services.exports import export_response
+ qs=students_scope(request.user).select_related('school')
+ columns=[
+  {'key':'admission_number','label':'Admission #'},
+  {'key':'first_name','label':'First Name'},
+  {'key':'last_name','label':'Last Name'},
+  {'key':'school_name','label':'Campus'},
+  {'key':'enrolled_on','label':'Enrolled On'},
+  {'key':'active','label':'Active Status'},
+ ]
+ rows=[{
+  'admission_number':s.admission_number,
+  'first_name':s.first_name,
+  'last_name':s.last_name,
+  'school_name':s.school.name,
+  'enrolled_on':str(s.enrolled_on),
+  'active':'Yes' if s.active else 'No'
+ } for s in qs]
+ campus_name=getattr(getattr(request.user,'school',None),'name','')
+ return export_response(request,filename='students',title='Student Directory',columns=columns,rows=rows,fmt=fmt,meta={'school_name':campus_name})
+
+@api_view(['POST','GET'])
+def universal_export(request):
+ """Shared export endpoint for client-side tables and charts."""
+ user=request.user
+ if not user.is_authenticated:
+  raise PermissionDenied('Authentication required')
+ data=request.data if request.method=='POST' else request.query_params
+ title=data.get('title') or 'Data Export'
+ filename=data.get('filename') or 'export'
+ columns=data.get('columns') or []
+ rows=data.get('rows') or []
+ fmt=data.get('format') or 'csv'
+ meta=data.get('meta') or {}
+ from core.services.exports import export_response
+ return export_response(request,filename=filename,title=title,columns=columns,rows=rows,fmt=fmt,meta=meta)
 
 @api_view(['GET'])
 def teachers_list(request):

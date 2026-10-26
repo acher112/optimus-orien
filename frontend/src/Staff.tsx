@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowUpRight, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import { list, request, type User } from './api';
+import ExportMenu from './ExportMenu';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -79,6 +80,12 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
             <select className="hr-select" value={status} onChange={e => setStatus(e.target.value)} aria-label="Status">
               <option value="active">Active</option><option value="terminated">Terminated</option><option value="">All</option>
             </select>
+            <ExportMenu
+              title="Staff Directory"
+              filename="staff-directory"
+              endpoint={`staff/?${new URLSearchParams({ ...(status ? { status } : {}), ...(q ? { q } : {}) }).toString()}`}
+              notify={notify}
+            />
           </div>
         </div>
         <div className="table-scroll"><table className="data-table">

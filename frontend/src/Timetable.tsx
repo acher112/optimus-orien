@@ -5,6 +5,7 @@ import {
   Building2, GraduationCap, Sparkles
 } from 'lucide-react';
 import { request, type User } from './api';
+import ExportMenu from './ExportMenu';
 
 type School = { id: number; name: string };
 type SchoolClass = { id: number; name: string; school: number };
@@ -273,7 +274,30 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
           <h1>Class & Teacher Timetable</h1>
           <p>Weekly period scheduling, room allocations, and faculty timetables across academic cycles.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <ExportMenu
+            title={`Weekly Timetable — ${viewMode === 'class' ? selectedClassName : selectedTeacherName}`}
+            filename={`timetable-${(viewMode === 'class' ? selectedClassName : selectedTeacherName).toLowerCase().replace(/\s+/g, '-')}`}
+            columns={[
+              { key: 'day_name', label: 'Day' },
+              { key: 'period_label', label: 'Period' },
+              { key: 'time', label: 'Time' },
+              { key: 'school_class_name', label: 'Class' },
+              { key: 'subject_name', label: 'Subject' },
+              { key: 'teacher_name', label: 'Teacher' },
+              { key: 'room', label: 'Room' }
+            ]}
+            rows={() => timetables.map((e: TimetableEntry) => ({
+              day_name: e.day_name,
+              period_label: `Period ${e.period_number}`,
+              time: `${e.start_time} - ${e.end_time}`,
+              school_class_name: e.school_class_name,
+              subject_name: e.subject_name,
+              teacher_name: e.teacher_name || 'Unassigned',
+              room: e.room || '—'
+            }))}
+            notify={notify}
+          />
           <button type="button" className="outline-btn" onClick={handlePrint} title="Print Timetable">
             <Printer size={16} /> Print schedule
           </button>

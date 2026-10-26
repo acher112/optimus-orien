@@ -24,6 +24,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { request, type User } from './api';
+import ExportMenu from './ExportMenu';
 import { GenderPanel } from './GenderCharts';
 import { getStoredTheme } from './theme';
 import './reports.css';
@@ -240,6 +241,60 @@ export default function Reports({ user }: { user: User }) {
               </optgroup>
             </select>
           </label>
+          <ExportMenu
+            title={`Institutional Analytics Report — ${domain === 'academic' ? (view.level === 'org' ? 'Organisation Wide' : (view as any).name || 'Academic') : 'Financial Overview'}`}
+            filename={`report-${domain}-${view.level}`}
+            columns={domain === 'academic' ? (
+              view.level === 'org' ? [
+                { key: 'name', label: 'Campus' },
+                { key: 'students', label: 'Students' },
+                { key: 'classes', label: 'Classes' },
+                { key: 'academic_average', label: 'Academic Avg (%)' },
+                { key: 'attendance_rate', label: 'Attendance (%)' },
+                { key: 'valid_results', label: 'Valid Results' },
+                { key: 'missing_results', label: 'Missing Results' },
+                { key: 'completeness', label: 'Completeness (%)' }
+              ] : [
+                { key: 'name', label: 'Name' },
+                { key: 'academic_average', label: 'Average (%)' },
+                { key: 'attendance_rate', label: 'Attendance (%)' }
+              ]
+            ) : [
+              { key: 'month', label: 'Month' },
+              { key: 'income', label: 'Income (Rs)' },
+              { key: 'expense', label: 'Expense (Rs)' },
+              { key: 'net', label: 'Net Surplus / Deficit (Rs)' }
+            ]}
+            rows={() => {
+              if (domain === 'academic') {
+                if (view.level === 'org') {
+                  return (data?.campuses || []).map((c: R) => ({
+                    name: c.name,
+                    students: c.students,
+                    classes: c.classes,
+                    academic_average: c.academic_average,
+                    attendance_rate: c.attendance_rate,
+                    valid_results: c.valid_results,
+                    missing_results: c.missing_results,
+                    completeness: c.completeness
+                  }));
+                }
+                const items = (data?.classes || data?.subjects || []);
+                return items.map((x: R) => ({
+                  name: x.name,
+                  academic_average: x.academic_average || x.average,
+                  attendance_rate: x.attendance_rate
+                }));
+              } else {
+                return (financeSum?.monthly || []).map((m: R) => ({
+                  month: m.month,
+                  income: m.income,
+                  expense: m.expense,
+                  net: m.net
+                }));
+              }
+            }}
+          />
           <button className="outline-btn" onClick={() => domain === 'academic' ? loadAcademic() : loadFinance()}>
             <RefreshCw size={16} /> Refresh
           </button>
