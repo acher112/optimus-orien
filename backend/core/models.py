@@ -772,3 +772,37 @@ class ClassTimetable(models.Model):
         constraints = [models.UniqueConstraint(fields=['school_class', 'day_of_week', 'period_number'], name='unique_class_period')]
 
 
+class Announcement(models.Model):
+    """Institutional or campus broadcast announcement targeted by role."""
+    TARGET_ROLES = [
+        ('all', 'All Roles'),
+        ('students', 'Students'),
+        ('staff', 'Staff'),
+        ('teachers', 'Teachers'),
+        ('principals', 'Principals'),
+        ('parents', 'Parents'),
+    ]
+    PRIORITIES = [
+        ('normal', 'Normal'),
+        ('important', 'Important'),
+        ('urgent', 'Urgent'),
+    ]
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='announcements', null=True, blank=True)
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    target_role = models.CharField(max_length=32, choices=TARGET_ROLES, default='all')
+    priority = models.CharField(max_length=20, choices=PRIORITIES, default='normal')
+    pinned = models.BooleanField(default=False)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='announcements_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-pinned', '-created_at']
+
+    def __str__(self):
+        return f"[{self.priority.upper()}] {self.title} ({self.target_role})"
+
+

@@ -239,6 +239,7 @@ class ClassSerializer(DynamicSerializer):
 class StudentSerializer(DynamicSerializer):
  full_name=serializers.CharField(read_only=True)
  class_name=serializers.SerializerMethodField()
+ gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=True)
  def get_class_name(self,o):
   e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
   return e.school_class.name if e else 'Unassigned'
@@ -334,7 +335,9 @@ class ScopedViewSet(viewsets.ModelViewSet):
   return super().partial_update(request,*args,**kwargs)
  def destroy(self,request,*args,**kwargs):
   ensure_action(request.user,self.queryset.model,'delete')
-  return super().destroy(request,*args,**kwargs)
+  instance=self.get_object()
+  self.perform_destroy(instance)
+  return Response({'success':True,'detail':'Record deleted successfully'},status=status.HTTP_200_OK)
  @transaction.atomic
  def perform_create(self,serializer):
   user=self.request.user;model=self.queryset.model;data=serializer.validated_data

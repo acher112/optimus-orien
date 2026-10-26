@@ -159,7 +159,14 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
           <label>Hired on<input type="date" value={f.hired_on} onChange={e => set('hired_on', e.target.value)} /></label>
           <label>Email<input type="email" value={f.email || ''} onChange={e => set('email', e.target.value)} /></label>
           <label>Phone<input value={f.phone || ''} onChange={e => set('phone', e.target.value)} /></label>
+          <label>Monthly base salary<input type="number" step="0.01" min="0" placeholder="e.g. 75000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>
           <label className="wide">Link existing login (optional)<select value={f.user || ''} onChange={e => set('user', e.target.value)}><option value="">No login</option>{logins.map(u => <option key={u.id} value={u.id}>{u.name} ({u.username})</option>)}</select></label>
+          {Boolean(f.salary && Number(f.salary) > 0) && (
+            <label className="wide" style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#4a5568', background: '#f7f6fe', padding: '10px 14px', borderRadius: 8, border: '1px solid #e7e4fb' }}>
+              <input type="checkbox" checked={f.record_expense !== false} onChange={e => setF(s => ({ ...s, record_expense: e.target.checked }))} style={{ width: 'auto', margin: 0 }} />
+              <span>Auto-record initial salary disbursement as Expense in Finance</span>
+            </label>
+          )}
         </div>
         {err && <div className="hr-error">{err}</div>}
         <div className="modal-footer"><button type="button" className="outline-btn" onClick={onClose}>Cancel</button><button className="primary-btn" disabled={busy}><Plus size={15} /> {busy ? 'Saving…' : 'Add staff'}</button></div>

@@ -5,13 +5,17 @@ admins, school admins and principals, each limited to their own campus scope. Te
 a staff member switches off any linked login at once; nothing is ever hard-deleted.
 """
 from datetime import date
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from core.models import StaffEvent, StaffMember, User
+from core.models import (
+    StaffEvent, StaffMember, User,
+    SalaryStructure, SalaryRecord, FinanceCategory, FinanceEntry
+)
 from core.services.access import schools_scope
 from core.services.audit import record_event
 
@@ -125,6 +129,56 @@ def staff_list(request):
             phone=_text(data, 'phone', maxlen=40), position=_text(data, 'position', True), role=role, hired_on=hired)
         _log(s, 'hired', user, to=f'{s.position} ({role})')
         _sync_login(s, role)
+
+        salary_str = str(data.get('salary') or '').strip()
+        if salary_str:
+            try:
+                salary_val = Decimal(salary_str)
+                if salary_val < 0:
+                    raise ValidationError({'salary': 'Salary cannot be negative.'})
+            except InvalidOperation:
+                raise ValidationError({'salary': 'Invalid salary amount.'})
+            if salary_val > 0:
+                currency = getattr(school, 'currency', None) or 'PKR'
+                SalaryStructure.objects.create(
+                    staff=s,
+                    effective_from=hired,
+                    basic=salary_val,
+                    allowances=[],
+                    fixed_deductions=[],
+                    currency=currency
+                )
+                record_exp = data.get('record_expense')
+                if record_exp is None or str(record_exp).lower() in ('true', '1'):
+                    cat = FinanceCategory.objects.filter(school=school, name__iexact='Staff salaries', active=True).first()
+                    if not cat:
+                        cat = FinanceCategory.objects.filter(school=school, active=True).first()
+                    if not cat:
+                        cat = FinanceCategory.objects.create(school=school, name='Staff salaries', is_operational=True)
+                    f_entry = FinanceEntry.objects.create(
+                        school=school,
+                        category=cat,
+                        amount=salary_val,
+                        date=hired,
+                        description=f"Initial salary disbursement for {s.full_name} ({s.position})",
+                        created_by=user
+                    )
+                    SalaryRecord.objects.create(
+                        staff=s,
+                        school=school,
+                        month=hired.strftime('%Y-%m'),
+                        gross=salary_val,
+                        deductions=Decimal('0.00'),
+                        additions=Decimal('0.00'),
+                        advance_recovered=Decimal('0.00'),
+                        net=salary_val,
+                        status='paid',
+                        paid_on=hired,
+                        method=data.get('payment_method') or 'bank',
+                        reference=f"HIRE-SAL-{s.id}",
+                        finance_entry=f_entry
+                    )
+
         record_event(actor=user, action='create', obj=s)
     return Response(_row(s), status=201)
 

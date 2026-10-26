@@ -157,14 +157,14 @@ export default function DataImport({ user, notify }: { user: User; notify: (m: s
 
       {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
 
-      <div className="fx-grid" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
+      <div className="fx-grid data-import-grid">
         <section className="panel hr-panel">
-          <div className="panel-head">
+          <div className="panel-head" style={{ flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h3>CSV Source Data</h3>
               <p>Upload a file or paste comma-separated values directly</p>
             </div>
-            <label className="outline-btn" style={{ cursor: 'pointer', margin: 0 }}>
+            <label className="outline-btn" style={{ cursor: 'pointer', margin: 0, whiteSpace: 'nowrap' }}>
               <Upload size={14} /> Upload CSV File
               <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileUpload} />
             </label>
@@ -200,10 +200,10 @@ export default function DataImport({ user, notify }: { user: User; notify: (m: s
               onChange={e => { setCsvData(e.target.value); setValidationResult(null); }}
             />
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
               <button
                 className="outline-btn"
-                style={{ flex: 1 }}
+                style={{ flex: '1 1 180px', minWidth: 160, justifyContent: 'center' }}
                 onClick={() => handleRunValidation(true)}
                 disabled={loading || !csvData.trim()}
               >
@@ -212,7 +212,7 @@ export default function DataImport({ user, notify }: { user: User; notify: (m: s
 
               <button
                 className="primary-btn"
-                style={{ flex: 1 }}
+                style={{ flex: '1 1 180px', minWidth: 160, justifyContent: 'center' }}
                 onClick={() => handleRunValidation(false)}
                 disabled={Boolean(loading || !csvData.trim() || (validationResult && validationResult.errors_count > 0))}
               >

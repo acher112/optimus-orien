@@ -4,7 +4,7 @@ import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Award, Banknote, BarChart3, Bell, BookOpen,
   Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft,
   ChevronRight, ClipboardCheck, ClipboardList, Download, FileBarChart, GraduationCap,
-  HeartHandshake, LayoutDashboard, LogOut, Menu, MessageSquare, MoreHorizontal,
+  HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, MoreHorizontal,
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock
@@ -27,6 +27,7 @@ import PlatformOwner from './PlatformOwner';
 import DataImport from './DataImport';
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
+import Announcements from './Announcements';
 import Settings from './Settings';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import './style.css';
@@ -46,9 +47,10 @@ const WORKSPACE_NAV = [
   { name: 'Interventions', icon: HeartHandshake },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Student Fees', icon: Receipt, childOf: 'Finance', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Staff Salaries', icon: Banknote, childOf: 'Finance', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  { name: 'Student Fees', icon: Receipt, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
 
@@ -69,9 +71,12 @@ const NAV_GROUPS = [
   { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses'] },
   { sublabel: 'ACADEMIC CONFIGURATION', adminLabel: true, items: ['Campus setup', 'Academic years'] },
   { sublabel: 'ACADEMIC STRUCTURE', items: ['Classes', 'Subjects'] },
-  { sublabel: 'STUDENTS & LEARNING', items: ['Students', 'Attendance', 'Homework', 'Academics', 'Examinations', 'Communication'] },
+  { sublabel: 'STUDENTS & LEARNING', items: ['Students', 'Attendance', 'Homework', 'Academics', 'Examinations'] },
   { sublabel: 'STUDENT SUPPORT', items: ['Interventions'] },
-  { sublabel: 'PEOPLE & FINANCE', items: ['Staff', 'Finance', 'Student Fees', 'Staff Salaries', 'Data import'] },
+  { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
+  { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
+  { sublabel: 'FINANCE & BILLING', items: ['Finance', 'Student Fees'] },
+  { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
 ];
 
 const initials = (name: string) => name.split(/\s+/).map(s => s[0]).join('').slice(0, 2).toUpperCase();
@@ -95,7 +100,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'first_name', label: 'First name', required: true },
       { key: 'last_name', label: 'Last name', required: true },
       { key: 'admission_number', label: 'Admission number', required: true },
-      { key: 'gender', label: 'Gender' },
+      { key: 'gender', label: 'Gender', required: true },
       { key: 'school', label: 'Campus', required: true },
       { key: 'enrolled_on', label: 'Enrolment date', type: 'date', required: true }
     ]
@@ -417,10 +422,35 @@ function App() {
           data[f.key] = isNum ? Number(val) : val;
         }
       }
-      if (!data.school && activeCampusId) {
-        data.school = activeCampusId;
+      const created = await create(config.api, data);
+      if (page === 'Students' && created && created.id) {
+        if (form.assign_class) {
+          try {
+            await create('enrollments', {
+              student: created.id,
+              school_class: Number(form.assign_class),
+              start_date: data.enrolled_on || new Date().toISOString().slice(0, 10)
+            });
+          } catch {}
+        }
+        if (form.admission_fee && Number(form.admission_fee) > 0) {
+          try {
+            await request('fees/payments/', {
+              method: 'POST',
+              body: JSON.stringify({
+                student: created.id,
+                school: data.school,
+                amount: Number(form.admission_fee),
+                paid_on: data.enrolled_on || new Date().toISOString().slice(0, 10),
+                method: form.payment_method || 'cash',
+                reference: `ADM-${created.admission_number || created.id}`
+              })
+            });
+          } catch (feeErr) {
+            console.error('Initial fee payment error:', feeErr);
+          }
+        }
       }
-      await create(config.api, data);
       setModal(false);
       setForm({});
       notify('Record created successfully');
@@ -1080,6 +1110,7 @@ function App() {
           {page === 'Data import' && <DataImport user={user} notify={notify} />}
           {page === 'My performance' && <MyPerformance />}
           {page === 'Communication' && <Communication user={user} notify={notify} />}
+          {page === 'Announcements' && <Announcements user={user} notify={notify} />}
           {page === 'Settings' && <Settings user={user} onUserUpdated={u => setUser(u)} notify={notify} />}
 
         </main>
@@ -1171,11 +1202,11 @@ function App() {
                   }
                   if (f.key === 'gender') return (
                     <label key={f.key}>
-                      {f.label}
-                      <select value={form.gender || ''} onChange={e => setForm(s => ({ ...s, gender: e.target.value }))}>
-                        <option value="">Not specified</option>
-                        <option value="male">Boy</option>
-                        <option value="female">Girl</option>
+                      {f.label}<span className="required"> *</span>
+                      <select required value={form.gender || ''} onChange={e => setForm(s => ({ ...s, gender: e.target.value }))}>
+                        <option value="">Select gender *</option>
+                        <option value="male">Boy (Male)</option>
+                        <option value="female">Girl (Female)</option>
                       </select>
                     </label>
                   );
@@ -1218,6 +1249,63 @@ function App() {
                     </label>
                   );
                 })}
+
+                {page === 'Students' && (
+                  <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #edf0f8', paddingTop: 14, marginTop: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                      Student Fees & Class Enrollment (Optional)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <label>
+                        Initial / Admission Fee
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="e.g. 5000"
+                          value={form.admission_fee || ''}
+                          onChange={e => setForm(s => ({ ...s, admission_fee: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Fee Collection Action
+                        <select
+                          value={form.fee_status || 'collect_now'}
+                          onChange={e => setForm(s => ({ ...s, fee_status: e.target.value }))}
+                        >
+                          <option value="collect_now">Collect now (Link with Income)</option>
+                          <option value="pending_voucher">Generate pending voucher</option>
+                        </select>
+                      </label>
+                      {form.fee_status !== 'pending_voucher' && (
+                        <label>
+                          Payment Method
+                          <select
+                            value={form.payment_method || 'cash'}
+                            onChange={e => setForm(s => ({ ...s, payment_method: e.target.value }))}
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="bank">Bank Transfer</option>
+                            <option value="online">Online</option>
+                            <option value="cheque">Cheque</option>
+                          </select>
+                        </label>
+                      )}
+                      <label>
+                        Assign Class (Optional)
+                        <select
+                          value={form.assign_class || ''}
+                          onChange={e => setForm(s => ({ ...s, assign_class: e.target.value }))}
+                        >
+                          <option value="">Select class…</option>
+                          {(form.school ? refData.classes.filter(c => String(c.school) === form.school) : refData.classes).map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="outline-btn" onClick={() => setModal(false)}>Cancel</button>
@@ -1258,11 +1346,11 @@ function App() {
                   );
                   if (f.key === 'gender') return (
                     <label key={f.key}>
-                      {f.label}
-                      <select value={editForm.gender || ''} onChange={e => setEditForm(s => ({ ...s, gender: e.target.value }))}>
-                        <option value="">Not specified</option>
-                        <option value="male">Boy</option>
-                        <option value="female">Girl</option>
+                      {f.label}<span className="required"> *</span>
+                      <select required value={editForm.gender || ''} onChange={e => setEditForm(s => ({ ...s, gender: e.target.value }))}>
+                        <option value="">Select gender *</option>
+                        <option value="male">Boy (Male)</option>
+                        <option value="female">Girl (Female)</option>
                       </select>
                     </label>
                   );

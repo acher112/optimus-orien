@@ -148,7 +148,7 @@ def exam_sessions(request):
     }, status=201)
 
 
-@api_view(['GET', 'PATCH', 'POST'])
+@api_view(['GET', 'PATCH', 'POST', 'DELETE'])
 def exam_session_detail(request, pk):
     user = request.user
     _require_manager(user)
@@ -183,9 +183,54 @@ def exam_session_detail(request, pk):
                 session.status = st
         session.save()
         record_event(actor=user, action='update', obj=session)
-        return Response({'id': session.id, 'status': session.status, 'name': session.name})
+    if request.method == 'DELETE':
+        with transaction.atomic():
+            record_event(actor=user, action='delete', obj=session)
+            session.delete()
+        return Response({'success': True, 'detail': 'Exam session deleted successfully'})
 
     return Response({'error': 'Method not allowed'}, status=405)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+def exam_paper_detail(request, pk):
+    user = request.user
+    _require_manager(user)
+    paper = ExamPaper.objects.filter(pk=pk).select_related('session__school', 'assessment').first()
+    if not paper:
+        raise NotFound()
+    if paper.session.school not in schools_scope(user):
+        raise PermissionDenied('Outside your authorised campus scope.')
+
+    if request.method == 'DELETE':
+        with transaction.atomic():
+            if paper.assessment:
+                Grade.objects.filter(assessment=paper.assessment).delete()
+                paper.assessment.delete()
+            record_event(actor=user, action='delete', obj=paper)
+            paper.delete()
+        return Response({'success': True, 'detail': 'Paper deleted successfully'})
+
+    if request.method == 'PATCH':
+        if 'room' in request.data:
+            paper.room = str(request.data['room']).strip()[:40]
+        if 'max_marks' in request.data:
+            paper.max_marks = Decimal(str(request.data['max_marks']))
+            if paper.assessment:
+                paper.assessment.max_marks = paper.max_marks
+                paper.assessment.save(update_fields=['max_marks'])
+        paper.save()
+        record_event(actor=user, action='update', obj=paper)
+        return Response({'id': paper.id, 'room': paper.room, 'max_marks': str(paper.max_marks)})
+
+    return Response({
+        'id': paper.id,
+        'date': str(paper.date),
+        'start_time': paper.start_time.strftime('%H:%M'),
+        'duration_min': paper.duration_min,
+        'max_marks': str(paper.max_marks),
+        'room': paper.room
+    })
 
 
 @api_view(['POST'])

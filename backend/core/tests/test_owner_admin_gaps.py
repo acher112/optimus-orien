@@ -10,7 +10,7 @@ from core.models import (
     FinanceCategory, FinanceEntry, FeeHead, FeeStructure, Concession, StudentFee, FeePayment,
     SalaryStructure, SalaryRecord, SalaryAdjustment,
     ExamSession, ExamPaper, Grade, ExamMarkCorrection,
-    PlatformPlan, SupportAccessGrant, UserInvitation
+    PlatformPlan, SupportAccessGrant, UserInvitation, Announcement
 )
 from core.tests.test_phase1 import AccessFixture
 
@@ -358,3 +358,172 @@ Maryam,Khan,ADM-9902,2,2013-07-15,female,Grade 8A"""
         self.assertEqual(res.json()['created_count'], 2)
         self.assertTrue(Student.objects.filter(admission_number='ADM-9901').exists())
         self.assertTrue(Student.objects.filter(admission_number='ADM-9902').exists())
+
+    # =========================================================================
+    # 7. NEW OWNER/ADMIN CAPABILITY TESTS
+    # =========================================================================
+    def test_announcements_crud_and_scoping(self):
+        # 1. School Admin broadcasts announcement for all
+        res = self.call(self.school_admin, 'announcements', {
+            'school': self.s1.id,
+            'title': 'School Closed on Friday',
+            'content': 'Campus will remain closed for maintenance.',
+            'target_role': 'all',
+            'priority': 'urgent',
+            'pinned': True
+        })
+        self.assertEqual(res.status_code, 201)
+        ann_id = res.json()['id']
+        self.assertEqual(res.json()['priority'], 'urgent')
+
+        # 2. Teacher can read the broadcast
+        t_res = self.call(self.teacher, 'announcements', method='get')
+        self.assertEqual(t_res.status_code, 200)
+        self.assertTrue(any(a['id'] == ann_id for a in t_res.json()['results']))
+
+        # 3. Create teacher-only announcement
+        res2 = self.call(self.school_admin, 'announcements', {
+            'school': self.s1.id,
+            'title': 'Staff Meeting at 3pm',
+            'content': 'Agenda: upcoming midterm exams.',
+            'target_role': 'teachers',
+            'priority': 'important'
+        })
+        self.assertEqual(res2.status_code, 201)
+        ann_staff_id = res2.json()['id']
+
+        # Teacher sees it
+        t_res2 = self.call(self.teacher, 'announcements', method='get')
+        self.assertTrue(any(a['id'] == ann_staff_id for a in t_res2.json()['results']))
+
+        # Update announcement
+        up_res = self.call(self.school_admin, f'announcements/{ann_id}', {'title': 'Updated Title', 'pinned': False}, method='patch')
+        self.assertEqual(up_res.status_code, 200)
+        self.assertEqual(up_res.json()['title'], 'Updated Title')
+        self.assertFalse(up_res.json()['pinned'])
+
+        # Delete announcement returns 200 with JSON payload
+        del_res = self.call(self.school_admin, f'announcements/{ann_id}', method='delete')
+        self.assertEqual(del_res.status_code, 200)
+        self.assertTrue(del_res.json().get('success'))
+        self.assertFalse(Announcement.objects.filter(pk=ann_id).exists())
+
+    def test_staff_creation_with_salary_and_linked_expense(self):
+        # Create staff with salary
+        res = self.call(self.school_admin, 'staff', {
+            'school': self.s1.id,
+            'first_name': 'Rashid',
+            'last_name': 'Mehmood',
+            'position': 'Head Librarian',
+            'role': 'librarian',
+            'salary': '42000.00',
+            'record_expense': True
+        })
+        self.assertEqual(res.status_code, 201)
+        staff_id = res.json()['id']
+
+        # Verify SalaryStructure created
+        struct = SalaryStructure.objects.filter(staff_id=staff_id).first()
+        self.assertIsNotNone(struct)
+        self.assertEqual(struct.basic, Decimal('42000.00'))
+
+        # Verify SalaryRecord created
+        record = SalaryRecord.objects.filter(staff_id=staff_id).first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.status, 'paid')
+        self.assertEqual(record.net, Decimal('42000.00'))
+
+        # Verify FinanceEntry (expense) created
+        entry = FinanceEntry.objects.filter(
+            school=self.s1,
+            kind='expense',
+            amount=Decimal('42000.00')
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.category.name, 'Staff salaries')
+
+    def test_mandatory_student_gender_and_fee_income(self):
+        # 1. Attempt to create student without gender -> 400
+        res = self.call(self.school_admin, 'students', {
+            'school': self.s1.id,
+            'first_name': 'Fatima',
+            'last_name': 'Noor',
+            'admission_number': 'FAT-1001',
+            'gender': '',
+            'enrolled_on': str(self.today)
+        })
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('gender', res.json())
+
+        # 2. Create student with valid gender -> 201
+        res = self.call(self.school_admin, 'students', {
+            'school': self.s1.id,
+            'first_name': 'Fatima',
+            'last_name': 'Noor',
+            'admission_number': 'FAT-1001',
+            'gender': 'female',
+            'enrolled_on': str(self.today)
+        })
+        self.assertEqual(res.status_code, 201)
+        student_id = res.json()['id']
+        self.assertEqual(res.json()['gender'], 'female')
+
+        # 3. Pay fee for student without pre-existing voucher: auto-creates voucher and linked finance income
+        pay_res = self.call(self.school_admin, 'fees/payments', {
+            'student': student_id,
+            'amount': '15000.00',
+            'method': 'cash',
+            'reference': 'ADM-INITIAL-FEES'
+        })
+        self.assertEqual(pay_res.status_code, 201)
+        receipt_num = pay_res.json()['receipt_number']
+
+        # Verify FinanceEntry (income) created
+        income_entry = FinanceEntry.objects.filter(
+            school=self.s1,
+            kind='income',
+            amount=Decimal('15000.00')
+        ).first()
+        self.assertIsNotNone(income_entry)
+        self.assertIn(receipt_num, income_entry.reference)
+
+    def test_delete_endpoints_return_json(self):
+        # 1. ScopedViewSet (e.g. classes)
+        cls = SchoolClass.objects.create(school=self.s1, academic_year=self.year1, name='Test Class Delete')
+        del_cls = self.call(self.school_admin, f'classes/{cls.id}', method='delete')
+        self.assertEqual(del_cls.status_code, 200)
+        self.assertTrue(del_cls.json().get('success'))
+
+        # 2. Fee structure
+        head = FeeHead.objects.create(school=self.s1, name='Sports Fee', category=self.income_cat)
+        fs = FeeStructure.objects.create(school=self.s1, academic_year=self.year1, head=head, amount=Decimal('500.00'))
+        del_fs = self.call(self.school_admin, f'fees/structures/{fs.id}', method='delete')
+        self.assertEqual(del_fs.status_code, 200)
+        self.assertTrue(del_fs.json().get('success'))
+
+        # 3. Concession
+        conc = Concession.objects.create(
+            student=self.a, head=head, discount_type='percent',
+            discount_value=Decimal('10.00'), reason='Sports', approved_by=self.school_admin, valid_from=date.today()
+        )
+        del_conc = self.call(self.school_admin, f'fees/concessions/{conc.id}', method='delete')
+        self.assertEqual(del_conc.status_code, 200)
+        self.assertTrue(del_conc.json().get('success'))
+
+        # 4. Exam Session & Paper
+        sess = ExamSession.objects.create(
+            school=self.s1, academic_year=self.year1, name='Pre-Board 2026',
+            start_date=date.today(), end_date=date.today() + timedelta(days=5)
+        )
+        sub = Subject.objects.create(school=self.s1, name='Physics', code='PHY-9')
+        paper = ExamPaper.objects.create(
+            session=sess, school_class=self.c1, subject=sub,
+            date=date.today(), start_time='09:00:00', max_marks=Decimal('75.00')
+        )
+        del_paper = self.call(self.school_admin, f'exams/papers/{paper.id}', method='delete')
+        self.assertEqual(del_paper.status_code, 200)
+        self.assertTrue(del_paper.json().get('success'))
+
+        del_sess = self.call(self.school_admin, f'exams/sessions/{sess.id}', method='delete')
+        self.assertEqual(del_sess.status_code, 200)
+        self.assertTrue(del_sess.json().get('success'))

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle, Award, Calendar, Check, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, RefreshCw,
-  Search, ShieldAlert, ShieldCheck, Sparkles, User, Users, X
+  Search, ShieldAlert, ShieldCheck, Sparkles, Trash2, User, Users, X
 } from 'lucide-react';
 import { list, request, type User as ApiUser } from './api';
 import './hr.css';
@@ -239,6 +239,28 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
     }
   };
 
+  const handleDeleteSession = async (sid: number, sname: string) => {
+    if (!window.confirm(`Delete exam session "${sname}" and all scheduled papers?`)) return;
+    try {
+      await request(`exams/sessions/${sid}/`, { method: 'DELETE' });
+      notify('Exam session deleted');
+      setBump(b => b + 1);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not delete exam session');
+    }
+  };
+
+  const handleDeletePaper = async (pid: number, pname: string) => {
+    if (!window.confirm(`Delete paper "${pname}" from date sheet?`)) return;
+    try {
+      await request(`exams/papers/${pid}/`, { method: 'DELETE' });
+      notify('Paper deleted from date sheet');
+      setBump(b => b + 1);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not delete paper');
+    }
+  };
+
   return (
     <>
       <div className="page-header">
@@ -265,7 +287,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
         </div>
       </div>
 
-      <nav className="fx-tabs" aria-label="Exam sections">
+      <nav className="fx-tabs" aria-label="Exam sections" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 6 }}>
         <button className={tab === 'sessions' ? 'on' : ''} onClick={() => setTab('sessions')}><Award size={15} /> Exam Sessions</button>
         <button className={tab === 'datesheet' ? 'on' : ''} onClick={() => setTab('datesheet')}><Calendar size={15} /> Date Sheet</button>
         <button className={tab === 'marks' ? 'on' : ''} onClick={() => setTab('marks')}><FileSpreadsheet size={15} /> Enter Marks Grid</button>
@@ -323,6 +345,11 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                             <CheckCircle2 size={13} /> Publish
                           </button>
                         )}
+                        {isManager && (
+                          <button className="hr-mini danger" title="Delete exam session" onClick={() => handleDeleteSession(s.id, s.name)}>
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -375,9 +402,16 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                     <td>{p.room || '—'}</td>
                     <td>{p.invigilator_name || 'Unassigned'}</td>
                     <td>
-                      <button className="sm-btn" onClick={() => loadMarksGrid(p.id)}>
-                        <FileSpreadsheet size={13} /> Enter Marks
-                      </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="sm-btn" onClick={() => loadMarksGrid(p.id)}>
+                          <FileSpreadsheet size={13} /> Enter Marks
+                        </button>
+                        {isManager && (
+                          <button className="hr-mini danger" title="Delete paper" onClick={() => handleDeletePaper(p.id, p.subject_name)}>
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

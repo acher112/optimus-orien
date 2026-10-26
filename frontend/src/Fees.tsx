@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, Receipt,
-  RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X
+  RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User } from './api';
@@ -44,6 +44,7 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
   const [headName, setHeadName] = useState('');
 
   const [structureModal, setStructureModal] = useState(false);
+  const [editingStructureId, setEditingStructureId] = useState<number | null>(null);
   const [structHead, setStructHead] = useState('');
   const [structClass, setStructClass] = useState('');
   const [structAmount, setStructAmount] = useState('');
@@ -185,25 +186,79 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
     }
   };
 
+  const openNewStructure = () => {
+    setEditingStructureId(null);
+    setStructHead(heads[0]?.id ? String(heads[0].id) : '');
+    setStructClass('');
+    setStructAmount('');
+    setStructFreq('monthly');
+    setStructDueDay('10');
+    setStructureModal(true);
+  };
+
+  const openEditStructure = (s: R) => {
+    setEditingStructureId(s.id);
+    setStructHead(s.head ? String(s.head) : '');
+    setStructClass(s.school_class ? String(s.school_class) : '');
+    setStructAmount(String(s.amount || ''));
+    setStructFreq(s.frequency || 'monthly');
+    setStructDueDay(String(s.due_day || 10));
+    setStructureModal(true);
+  };
+
   const handleCreateStructure = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await request<R>('fees/structures/', {
-        method: 'POST',
-        body: JSON.stringify({
-          head: structHead,
-          school_class: structClass || undefined,
-          amount: structAmount,
-          frequency: structFreq,
-          due_day: structDueDay,
-          school: school || (schools[0]?.id ? String(schools[0].id) : undefined)
-        })
-      });
-      notify('Fee structure saved');
+      if (editingStructureId) {
+        await request<R>(`fees/structures/${editingStructureId}/`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            amount: structAmount,
+            due_day: structDueDay
+          })
+        });
+        notify('Fee structure rate updated');
+      } else {
+        await request<R>('fees/structures/', {
+          method: 'POST',
+          body: JSON.stringify({
+            head: structHead,
+            school_class: structClass || undefined,
+            amount: structAmount,
+            frequency: structFreq,
+            due_day: structDueDay,
+            school: school || (schools[0]?.id ? String(schools[0].id) : undefined)
+          })
+        });
+        notify('Fee structure saved');
+      }
       setStructureModal(false);
+      setEditingStructureId(null);
       setBump(b => b + 1);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Failed to save fee structure');
+    }
+  };
+
+  const handleDeleteStructure = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this fee structure?')) return;
+    try {
+      await request(`fees/structures/${id}/`, { method: 'DELETE' });
+      notify('Fee structure deleted successfully');
+      setBump(b => b + 1);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Failed to delete fee structure');
+    }
+  };
+
+  const handleDeleteConcession = async (id: number) => {
+    if (!window.confirm('Are you sure you want to revoke/delete this concession?')) return;
+    try {
+      await request(`fees/concessions/${id}/`, { method: 'DELETE' });
+      notify('Concession deleted successfully');
+      setBump(b => b + 1);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Failed to delete concession');
     }
   };
 
@@ -319,7 +374,7 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
                 <button className="outline-btn" onClick={() => setVoucherModal(true)}>
                   <Receipt size={16} /> Generate Monthly Billing Vouchers
                 </button>
-                <button className="outline-btn" onClick={() => setStructureModal(true)}>
+                <button className="outline-btn" onClick={() => openNewStructure()}>
                   <Plus size={16} /> Define Fee Structure / Rates
                 </button>
                 <button className="outline-btn" onClick={() => setTab('vouchers')}>
@@ -512,7 +567,7 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
             <div><h3>Fee Structures & Heads</h3><p>Active institutional fee rates and schedule</p></div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="outline-btn" onClick={() => setHeadModal(true)}><Plus size={15} /> Add Fee Head</button>
-              <button className="primary-btn" onClick={() => setStructureModal(true)}><Plus size={15} /> Set Fee Rate</button>
+              <button className="primary-btn" onClick={() => openNewStructure()}><Plus size={15} /> Set Fee Rate</button>
             </div>
           </div>
           <div className="table-scroll">
@@ -525,6 +580,7 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
                   <th>AMOUNT</th>
                   <th>FREQUENCY</th>
                   <th>DUE DAY</th>
+                  <th style={{ textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -536,10 +592,20 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
                     <td><strong>Rs {s.amount}</strong></td>
                     <td><span className="pill purple">{s.frequency}</span></td>
                     <td>Day {s.due_day} of month</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button className="sm-btn" title="Edit rate" onClick={() => openEditStructure(s)}>
+                          <Edit2 size={13} /> Edit
+                        </button>
+                        <button className="sm-btn danger" title="Delete structure" onClick={() => handleDeleteStructure(s.id)}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {!structures.length && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 30 }}>No fee structures configured yet. Click 'Set Fee Rate' to define tuition rates.</td></tr>
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 30 }}>No fee structures configured yet. Click 'Set Fee Rate' to define tuition rates.</td></tr>
                 )}
               </tbody>
             </table>
@@ -564,6 +630,7 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
                   <th>REASON</th>
                   <th>APPROVED BY</th>
                   <th>VALIDITY</th>
+                  <th style={{ textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -575,10 +642,15 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
                     <td>{c.reason}</td>
                     <td>{c.approved_by}</td>
                     <td>{c.valid_from} {c.valid_to ? `to ${c.valid_to}` : '(ongoing)'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="sm-btn danger" title="Revoke/Delete concession" onClick={() => handleDeleteConcession(c.id)}>
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {!concessions.length && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 30 }}>No concessions granted yet.</td></tr>
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 30 }}>No concessions granted yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -643,19 +715,19 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setStructureModal(false); }}>
           <div className="modal-card">
             <div className="modal-head">
-              <h3>Set Fee Structure Rate</h3>
+              <h3>{editingStructureId ? 'Edit Fee Structure Rate' : 'Set Fee Structure Rate'}</h3>
               <button onClick={() => setStructureModal(false)}><X size={18} /></button>
             </div>
             <form onSubmit={handleCreateStructure}>
               <div className="modal-fields">
                 <label>Fee Head *
-                  <select required value={structHead} onChange={e => setStructHead(e.target.value)}>
+                  <select required disabled={!!editingStructureId} value={structHead} onChange={e => setStructHead(e.target.value)}>
                     <option value="">Select fee head…</option>
                     {heads.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                   </select>
                 </label>
                 <label>Class (optional - leave blank for school-wide)
-                  <select value={structClass} onChange={e => setStructClass(e.target.value)}>
+                  <select disabled={!!editingStructureId} value={structClass} onChange={e => setStructClass(e.target.value)}>
                     <option value="">All Classes</option>
                     {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -664,7 +736,7 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
                   <input type="number" step="0.01" min="1" required value={structAmount} onChange={e => setStructAmount(e.target.value)} />
                 </label>
                 <label>Frequency
-                  <select value={structFreq} onChange={e => setStructFreq(e.target.value)}>
+                  <select disabled={!!editingStructureId} value={structFreq} onChange={e => setStructFreq(e.target.value)}>
                     <option value="monthly">Monthly</option>
                     <option value="term">Per Term</option>
                     <option value="annual">Annual</option>
@@ -677,7 +749,7 @@ export default function Fees({ user, notify }: { user: User; notify: (m: string)
               </div>
               <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <button type="button" className="outline-btn" onClick={() => setStructureModal(false)}>Cancel</button>
-                <button type="submit" className="primary-btn">Save Rate</button>
+                <button type="submit" className="primary-btn">{editingStructureId ? 'Update Rate' : 'Save Rate'}</button>
               </div>
             </form>
           </div>

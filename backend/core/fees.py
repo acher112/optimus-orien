@@ -191,7 +191,7 @@ def structure_detail(request, pk):
     if request.method == 'DELETE':
         record_event(actor=user, action='delete', obj=fs)
         fs.delete()
-        return Response(status=204)
+        return Response({'success': True, 'detail': 'Fee structure deleted successfully'}, status=200)
 
 
 # ------------------------------------------------------------------ Concessions / Discounts
@@ -264,7 +264,7 @@ def concession_detail(request, pk):
         raise NotFound()
     record_event(actor=user, action='delete', obj=c)
     c.delete()
-    return Response(status=204)
+    return Response({'success': True, 'detail': 'Concession deleted successfully'}, status=200)
 
 
 # ------------------------------------------------------------------ Billing Generator
@@ -446,6 +446,23 @@ def payments(request):
                 else:
                     fee.status = 'partial'
                 fee.save(update_fields=['status'])
+        if remaining > Decimal('0.00'):
+            head = FeeHead.objects.filter(school=student.school, active=True).first()
+            if not head:
+                cat = FinanceCategory.objects.filter(school=student.school, kind='income', name__icontains='fee').first()
+                if not cat:
+                    cat = FinanceCategory.objects.filter(school=student.school, kind='income').first()
+                if not cat:
+                    cat = FinanceCategory.objects.create(school=student.school, kind='income', name='Fee Collections')
+                head = FeeHead.objects.create(school=student.school, name='Admission Fee', category=cat, active=True)
+            cur_period = paid_on.strftime('%Y-%m')
+            sf, _ = StudentFee.objects.get_or_create(
+                student=student, head=head, period=cur_period,
+                defaults={'amount_due': remaining, 'discount': Decimal('0.00'), 'status': 'paid', 'due_date': paid_on}
+            )
+            FeePaymentAllocation.objects.create(payment=payment, student_fee=sf, amount=remaining)
+            sf.status = 'paid'
+            sf.save(update_fields=['status'])
 
         record_event(actor=user, action='create', obj=payment)
         record_event(actor=user, action='create', obj=f_entry)
