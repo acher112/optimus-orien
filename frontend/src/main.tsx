@@ -23,7 +23,7 @@ import Finance from './Finance';
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Settings from './Settings';
-import { getStoredTheme, applyTheme } from './theme';
+import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -279,8 +279,14 @@ function App() {
   const [accentHex, setAccentHex] = useState(() => getStoredTheme().colorHex);
   useEffect(() => {
     const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ hex: string }>;
+      const ce = e as CustomEvent<{ hex?: string; mode?: ThemeMode; isDark?: boolean }>;
       if (ce.detail?.hex) setAccentHex(ce.detail.hex);
+      if (typeof ce.detail?.isDark === 'boolean') {
+        setDark(ce.detail.isDark);
+      } else if (ce.detail?.mode) {
+        const isD = ce.detail.mode === 'dark' || (ce.detail.mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        setDark(isD);
+      }
     };
     window.addEventListener('optimus_theme_change', handler);
     return () => window.removeEventListener('optimus_theme_change', handler);
@@ -514,8 +520,18 @@ function App() {
   };
 
   if (loading) return <div className="loader-screen"><div className="brand-symbol">◈</div><div>Preparing your workspace…</div></div>;
-  if (window.location.pathname === '/' || window.location.pathname === '/home') return <PublicHome authenticated={!!user} />;
-  if (!user) return <Login onLogin={u => { window.history.replaceState(null, '', '/app'); setUser(u); }} />;
+  if (!user) return (
+    <Login
+      onLogin={u => {
+        window.history.replaceState(null, '', '/app');
+        const { mode, color } = getStoredTheme();
+        const isD = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        setDark(isD);
+        applyTheme(mode, color);
+        setUser(u);
+      }}
+    />
+  );
 
   return (
     <div className={'app ' + (dark ? 'dark' : '')}>

@@ -117,5 +117,16 @@ export function applyTheme(mode: ThemeMode, colorInput?: string) {
     root.classList.remove('dark');
   }
 
-  window.dispatchEvent(new CustomEvent('optimus_theme_change', { detail: { mode, hex } }));
+  window.dispatchEvent(new CustomEvent('optimus_theme_change', { detail: { mode, hex, isDark } }));
+}
+
+if (typeof window !== 'undefined' && window.matchMedia) {
+  try {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      const stored = getStoredTheme();
+      if (stored.mode === 'system') {
+        applyTheme('system', stored.colorHex);
+      }
+    });
+  } catch {}
 }

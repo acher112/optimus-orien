@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Check,
@@ -30,6 +30,19 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
   const stored = getStoredTheme();
   const [mode, setMode] = useState<ThemeMode>(stored.mode);
   const [accent, setAccent] = useState<string>(stored.colorHex);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ hex?: string; mode?: ThemeMode; isDark?: boolean }>;
+      if (ce.detail?.mode) setMode(ce.detail.mode);
+      if (ce.detail?.hex) {
+        setAccent(ce.detail.hex);
+        setAvatarColor(ce.detail.hex);
+      }
+    };
+    window.addEventListener('optimus_theme_change', handler);
+    return () => window.removeEventListener('optimus_theme_change', handler);
+  }, []);
 
   // Profile state
   const [firstName, setFirstName] = useState(user.first_name || user.name.split(' ')[0] || '');
