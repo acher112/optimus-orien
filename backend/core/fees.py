@@ -5,7 +5,7 @@ voids the linked FinanceEntry so there is zero double counting or orphaned entri
 Access is strictly scoped by campus and role. Teachers have no access to fees.
 Students and parents can only see their own ledger and receipts.
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.db.models import Sum, Q
@@ -322,6 +322,129 @@ def generate_vouchers(request):
                     created_count += 1
 
     return Response({'success': True, 'period': period, 'vouchers_created': created_count})
+
+
+@api_view(['POST'])
+def student_voucher_create(request):
+    """Create or bill a voucher for an individual student (Annual, Monthly, or Admission fee).
+    Optionally collects payment immediately, linking directly to a FinanceEntry (Income).
+    """
+    user = request.user
+    _require_manager(user)
+
+    data = request.data
+    student_id = data.get('student')
+    student = Student.objects.filter(pk=student_id, school__in=schools_scope(user)).select_related('school').first()
+    if not student:
+        raise ValidationError({'student': 'Valid student within your campus scope required.'})
+
+    amount = _money(data.get('amount'))
+    if amount <= Decimal('0.00'):
+        raise ValidationError({'amount': 'Amount must be greater than zero.'})
+
+    frequency = (data.get('frequency') or 'monthly').lower()
+    if frequency not in ('monthly', 'annual', 'one_time', 'term'):
+        frequency = 'monthly'
+
+    collect_now = bool(data.get('collect_now', False))
+    method = data.get('payment_method') or 'cash'
+    ref = (data.get('reference') or '').strip()[:100] or f"FEE-{student.admission_number or student.id}"
+
+    today = date.today()
+    if frequency == 'annual':
+        period = data.get('period') or f"{today.year}-Annual"
+        head_name = "Annual Tuition Fee"
+    elif frequency == 'one_time':
+        period = data.get('period') or f"{today.year}-Admission"
+        head_name = "Admission Fee"
+    else:
+        period = data.get('period') or today.strftime('%Y-%m')
+        head_name = "Monthly Tuition Fee"
+
+    due_str = data.get('due_date')
+    due_date = date.fromisoformat(due_str) if due_str else today + timedelta(days=10)
+
+    with transaction.atomic():
+        # 1. Resolve or create FeeHead
+        head = FeeHead.objects.filter(school=student.school, name__iexact=head_name).first()
+        if not head:
+            cat = FinanceCategory.objects.filter(school=student.school, kind='income', name__icontains='fee').first()
+            if not cat:
+                cat = FinanceCategory.objects.filter(school=student.school, kind='income').first()
+            if not cat:
+                cat = FinanceCategory.objects.create(school=student.school, kind='income', name='Tuition fees')
+            head = FeeHead.objects.create(school=student.school, name=head_name, category=cat, active=True)
+
+        # 2. Get or create StudentFee voucher line
+        voucher, created = StudentFee.objects.get_or_create(
+            student=student, head=head, period=period,
+            defaults={
+                'amount_due': amount,
+                'discount': Decimal('0.00'),
+                'status': 'paid' if collect_now else 'unpaid',
+                'due_date': due_date
+            }
+        )
+        if not created:
+            voucher.amount_due = amount
+            if collect_now:
+                voucher.status = 'paid'
+            voucher.save(update_fields=['amount_due', 'status'])
+
+        # 3. If class is assigned, also ensure FeeStructure exists for future automated runs
+        class_id = data.get('school_class')
+        if class_id:
+            sc = SchoolClass.objects.filter(pk=class_id, school=student.school).first()
+            if sc and sc.academic_year:
+                FeeStructure.objects.update_or_create(
+                    school=student.school, academic_year=sc.academic_year, school_class=sc, head=head,
+                    defaults={'amount': amount, 'frequency': frequency, 'due_day': 10}
+                )
+
+        # 4. If collect_now is True, record payment and linked FinanceEntry (income)
+        payment = None
+        if collect_now:
+            count = FeePayment.objects.filter(school=student.school).count() + 1
+            code = student.school.code or f"SCH{student.school.id}"
+            receipt_num = f"REC-{code}-{count:05d}"
+            while FeePayment.objects.filter(receipt_number=receipt_num).exists():
+                count += 1
+                receipt_num = f"REC-{code}-{count:05d}"
+
+            cat = head.category or FinanceCategory.objects.filter(school=student.school, kind='income').first()
+            if not cat:
+                cat = FinanceCategory.objects.create(school=student.school, kind='income', name='Tuition fees')
+
+            f_entry = FinanceEntry.objects.create(
+                school=student.school, category=cat, amount=amount, date=today,
+                description=f"Fee payment #{receipt_num} - {student.full_name} ({head_name})",
+                created_by=user
+            )
+
+            payment = FeePayment.objects.create(
+                student=student, school=student.school, receipt_number=receipt_num,
+                amount=amount, method=method, paid_on=today, reference=ref,
+                received_by=user, finance_entry=f_entry
+            )
+
+            FeePaymentAllocation.objects.create(payment=payment, student_fee=voucher, amount=amount)
+            voucher.status = 'paid'
+            voucher.save(update_fields=['status'])
+            record_event(actor=user, action='create_payment', obj=payment)
+
+        record_event(actor=user, action='create' if created else 'update', obj=voucher)
+
+    return Response({
+        'success': True,
+        'voucher_id': voucher.id,
+        'period': voucher.period,
+        'head': head.name,
+        'frequency': frequency,
+        'amount': str(voucher.amount_due),
+        'status': voucher.status,
+        'payment_id': payment.id if payment else None,
+        'receipt_number': payment.receipt_number if payment else None
+    }, status=201 if created else 200)
 
 
 # ------------------------------------------------------------------ Student Ledger

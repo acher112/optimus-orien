@@ -53,6 +53,8 @@ urlpatterns = [
     path('fees/concessions/', fees.concessions),
     path('fees/concessions/<int:pk>/', fees.concession_detail),
     path('fees/vouchers/generate/', fees.generate_vouchers),
+    path('fees/student-voucher/', fees.student_voucher_create),
+    path('fees/vouchers/', fees.student_voucher_create),
     path('fees/ledger/<int:student_id>/', fees.student_ledger),
     path('fees/payments/', fees.payments),
     path('fees/payments/<int:pk>/void/', fees.payment_void),
@@ -92,6 +94,7 @@ urlpatterns = [
     path('holidays/', platform_owner.holiday_calendar),
     path('holidays/<int:pk>/', platform_owner.holiday_calendar),
     path('timetables/', platform_owner.class_timetables),
+    path('timetables/<int:pk>/', platform_owner.timetable_detail),
     path('imports/csv/', imports.csv_import),
 
     # Existing core endpoints

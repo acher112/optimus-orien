@@ -150,11 +150,11 @@ def staff_list(request):
                 )
                 record_exp = data.get('record_expense')
                 if record_exp is None or str(record_exp).lower() in ('true', '1'):
-                    cat = FinanceCategory.objects.filter(school=school, name__iexact='Staff salaries', active=True).first()
+                    cat = FinanceCategory.objects.filter(school=school, kind='expense', name__iexact='Staff salaries', active=True).first()
                     if not cat:
-                        cat = FinanceCategory.objects.filter(school=school, active=True).first()
+                        cat = FinanceCategory.objects.filter(school=school, kind='expense', active=True).first()
                     if not cat:
-                        cat = FinanceCategory.objects.create(school=school, name='Staff salaries', is_operational=True)
+                        cat = FinanceCategory.objects.create(school=school, kind='expense', name='Staff salaries', active=True)
                     f_entry = FinanceEntry.objects.create(
                         school=school,
                         category=cat,
@@ -167,9 +167,10 @@ def staff_list(request):
                         staff=s,
                         school=school,
                         month=hired.strftime('%Y-%m'),
+                        basic=salary_val,
                         gross=salary_val,
-                        deductions=Decimal('0.00'),
-                        additions=Decimal('0.00'),
+                        deductions_total=Decimal('0.00'),
+                        additions_total=Decimal('0.00'),
                         advance_recovered=Decimal('0.00'),
                         net=salary_val,
                         status='paid',

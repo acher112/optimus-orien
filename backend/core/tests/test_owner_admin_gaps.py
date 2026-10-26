@@ -10,7 +10,7 @@ from core.models import (
     FinanceCategory, FinanceEntry, FeeHead, FeeStructure, Concession, StudentFee, FeePayment,
     SalaryStructure, SalaryRecord, SalaryAdjustment,
     ExamSession, ExamPaper, Grade, ExamMarkCorrection,
-    PlatformPlan, SupportAccessGrant, UserInvitation, Announcement
+    PlatformPlan, SupportAccessGrant, UserInvitation, Announcement, ClassTimetable
 )
 from core.tests.test_phase1 import AccessFixture
 
@@ -436,7 +436,7 @@ Maryam,Khan,ADM-9902,2,2013-07-15,female,Grade 8A"""
         # Verify FinanceEntry (expense) created
         entry = FinanceEntry.objects.filter(
             school=self.s1,
-            kind='expense',
+            category__kind='expense',
             amount=Decimal('42000.00')
         ).first()
         self.assertIsNotNone(entry)
@@ -481,11 +481,11 @@ Maryam,Khan,ADM-9902,2,2013-07-15,female,Grade 8A"""
         # Verify FinanceEntry (income) created
         income_entry = FinanceEntry.objects.filter(
             school=self.s1,
-            kind='income',
+            category__kind='income',
             amount=Decimal('15000.00')
         ).first()
         self.assertIsNotNone(income_entry)
-        self.assertIn(receipt_num, income_entry.reference)
+        self.assertIn(receipt_num, income_entry.description)
 
     def test_delete_endpoints_return_json(self):
         # 1. ScopedViewSet (e.g. classes)
@@ -527,3 +527,97 @@ Maryam,Khan,ADM-9902,2,2013-07-15,female,Grade 8A"""
         del_sess = self.call(self.school_admin, f'exams/sessions/{sess.id}', method='delete')
         self.assertEqual(del_sess.status_code, 200)
         self.assertTrue(del_sess.json().get('success'))
+
+    def test_student_fee_frequency_annual_and_monthly(self):
+        # 1. Monthly fee with collect_now=True (links to Income)
+        res_m = self.call(self.school_admin, 'fees/student-voucher', {
+            'student': self.a.id,
+            'amount': '4500.00',
+            'frequency': 'monthly',
+            'collect_now': True,
+            'payment_method': 'cash',
+            'school_class': self.c1.id
+        })
+        self.assertEqual(res_m.status_code, 201)
+        data_m = res_m.json()
+        self.assertEqual(data_m['status'], 'paid')
+        self.assertEqual(data_m['frequency'], 'monthly')
+        self.assertEqual(data_m['head'], 'Monthly Tuition Fee')
+        self.assertIsNotNone(data_m['payment_id'])
+
+        # Verify linked income
+        inc_m = FinanceEntry.objects.filter(
+            school=self.s1,
+            category__kind='income',
+            amount=Decimal('4500.00')
+        ).first()
+        self.assertIsNotNone(inc_m)
+
+        # Verify fee structure was created for the class
+        fs_m = FeeStructure.objects.filter(school=self.s1, school_class=self.c1, frequency='monthly').first()
+        self.assertIsNotNone(fs_m)
+        self.assertEqual(fs_m.amount, Decimal('4500.00'))
+
+        # 2. Annual fee with collect_now=False (unpaid pending voucher)
+        res_a = self.call(self.school_admin, 'fees/student-voucher', {
+            'student': self.b.id,
+            'amount': '36000.00',
+            'frequency': 'annual',
+            'collect_now': False,
+            'school_class': self.c1.id
+        })
+        self.assertEqual(res_a.status_code, 201)
+        data_a = res_a.json()
+        self.assertEqual(data_a['status'], 'unpaid')
+        self.assertEqual(data_a['frequency'], 'annual')
+        self.assertEqual(data_a['head'], 'Annual Tuition Fee')
+        self.assertIsNone(data_a['payment_id'])
+        self.assertIn('Annual', data_a['period'])
+
+        # Verify voucher in DB
+        v_a = StudentFee.objects.get(pk=data_a['voucher_id'])
+        self.assertEqual(v_a.status, 'unpaid')
+        self.assertEqual(v_a.amount_due, Decimal('36000.00'))
+
+    def test_timetable_crud_and_filters(self):
+        # 1. Create timetable period slot
+        sub = Subject.objects.create(school=self.s1, name='Computer Science', code='CS-10')
+        res_create = self.call(self.school_admin, 'timetables', {
+            'school_class': self.c1.id,
+            'day_of_week': 0,  # Monday
+            'period_number': 1,
+            'start_time': '08:30',
+            'end_time': '09:15',
+            'subject': sub.id,
+            'teacher': self.teacher.id,
+            'room': 'Lab 1'
+        })
+        self.assertEqual(res_create.status_code, 201)
+        t_id = res_create.json()['id']
+
+        # 2. Query timetable by class
+        res_class = self.call(self.school_admin, 'timetables', {'class': self.c1.id}, method='get')
+        self.assertEqual(res_class.status_code, 200)
+        items = res_class.json()['results']
+        self.assertTrue(any(it['id'] == t_id for it in items))
+        item = next(it for it in items if it['id'] == t_id)
+        self.assertEqual(item['subject_name'], 'Computer Science')
+        self.assertEqual(item['room'], 'Lab 1')
+        self.assertEqual(item['period_number'], 1)
+
+        # 3. Query timetable by teacher
+        res_teacher = self.call(self.teacher, 'timetables', {'teacher': self.teacher.id}, method='get')
+        self.assertEqual(res_teacher.status_code, 200)
+        t_items = res_teacher.json()['results']
+        self.assertTrue(any(it['id'] == t_id for it in t_items))
+
+        # 4. Teacher scope query without query params defaults to teacher schedule
+        res_self = self.call(self.teacher, 'timetables', method='get')
+        self.assertEqual(res_self.status_code, 200)
+        self.assertTrue(any(it['id'] == t_id for it in res_self.json()['results']))
+
+        # 5. Delete timetable period slot
+        res_del = self.call(self.school_admin, f'timetables/{t_id}', method='delete')
+        self.assertEqual(res_del.status_code, 200)
+        self.assertTrue(res_del.json().get('success'))
+        self.assertFalse(ClassTimetable.objects.filter(pk=t_id).exists())

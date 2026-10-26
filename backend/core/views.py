@@ -239,7 +239,11 @@ class ClassSerializer(DynamicSerializer):
 class StudentSerializer(DynamicSerializer):
  full_name=serializers.CharField(read_only=True)
  class_name=serializers.SerializerMethodField()
- gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=True)
+ gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=False)
+ def validate(self,attrs):
+  if 'gender' in self.initial_data and not self.initial_data.get('gender'):
+   raise serializers.ValidationError({'gender':'Gender is mandatory. Please select Boy or Girl.'})
+  return super().validate(attrs)
  def get_class_name(self,o):
   e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
   return e.school_class.name if e else 'Unassigned'

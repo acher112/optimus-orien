@@ -401,12 +401,23 @@ def class_timetables(request):
 
     if request.method == 'GET':
         class_id = request.query_params.get('class')
-        if not class_id:
-            raise ValidationError({'class': 'Class ID query parameter required.'})
+        teacher_id = request.query_params.get('teacher')
+        school_id = request.query_params.get('school')
 
-        qs = ClassTimetable.objects.filter(school_class_id=class_id).select_related('subject', 'teacher')
+        qs = ClassTimetable.objects.filter(school_class__school__in=schools_scope(user)).select_related('school_class', 'subject', 'teacher')
+        if class_id:
+            qs = qs.filter(school_class_id=class_id)
+        if teacher_id:
+            qs = qs.filter(teacher_id=teacher_id)
+        elif user.role == 'teacher' and not class_id and not school_id:
+            qs = qs.filter(teacher=user)
+        if school_id:
+            qs = qs.filter(school_class__school_id=school_id)
+
         results = [{
             'id': t.id,
+            'school_class_id': t.school_class_id,
+            'school_class_name': t.school_class.name,
             'day_of_week': t.day_of_week,
             'day_name': t.get_day_of_week_display(),
             'period_number': t.period_number,
@@ -414,7 +425,9 @@ def class_timetables(request):
             'end_time': t.end_time.strftime('%H:%M'),
             'subject_id': t.subject_id,
             'subject_name': t.subject.name,
-            'teacher_name': t.teacher.username if t.teacher else None,
+            'subject_code': t.subject.code,
+            'teacher_id': t.teacher_id,
+            'teacher_name': (t.teacher.get_full_name() or t.teacher.username) if t.teacher else None,
             'room': t.room
         } for t in qs]
         return Response({'results': results})
@@ -430,8 +443,10 @@ def class_timetables(request):
 
     day = int(request.data.get('day_of_week', 0))
     period = int(request.data.get('period_number', 1))
-    start_t = datetime.strptime(request.data.get('start_time', '09:00'), '%H:%M').time()
-    end_t = datetime.strptime(request.data.get('end_time', '09:45'), '%H:%M').time()
+    start_str = (request.data.get('start_time', '09:00') or '09:00')[:5]
+    end_str = (request.data.get('end_time', '09:45') or '09:45')[:5]
+    start_t = datetime.strptime(start_str, '%H:%M').time()
+    end_t = datetime.strptime(end_str, '%H:%M').time()
 
     subj_id = request.data.get('subject')
     subject = Subject.objects.filter(pk=subj_id, school=school_class.school).first()
@@ -459,4 +474,74 @@ def class_timetables(request):
         )
         record_event(actor=user, action='update_timetable', obj=entry)
 
-    return Response({'id': entry.id, 'class_id': school_class.id, 'period': period}, status=201)
+    return Response({
+        'id': entry.id,
+        'school_class_id': school_class.id,
+        'school_class_name': school_class.name,
+        'period_number': period,
+        'day_of_week': day,
+        'start_time': entry.start_time.strftime('%H:%M'),
+        'end_time': entry.end_time.strftime('%H:%M'),
+        'subject_id': subject.id,
+        'subject_name': subject.name,
+        'teacher_id': teacher.id if teacher else None,
+        'teacher_name': (teacher.get_full_name() or teacher.username) if teacher else None,
+        'room': room
+    }, status=201)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+def timetable_detail(request, pk):
+    user = request.user
+    if not user.is_authenticated or not user.is_active:
+        raise PermissionDenied('Active account required.')
+
+    entry = ClassTimetable.objects.filter(pk=pk, school_class__school__in=schools_scope(user)).select_related('school_class', 'subject', 'teacher').first()
+    if not entry:
+        raise NotFound('Timetable period not found.')
+
+    if request.method == 'GET':
+        return Response({
+            'id': entry.id,
+            'school_class_id': entry.school_class_id,
+            'school_class_name': entry.school_class.name,
+            'day_of_week': entry.day_of_week,
+            'day_name': entry.get_day_of_week_display(),
+            'period_number': entry.period_number,
+            'start_time': entry.start_time.strftime('%H:%M'),
+            'end_time': entry.end_time.strftime('%H:%M'),
+            'subject_id': entry.subject_id,
+            'subject_name': entry.subject.name,
+            'teacher_id': entry.teacher_id,
+            'teacher_name': (entry.teacher.get_full_name() or entry.teacher.username) if entry.teacher else None,
+            'room': entry.room
+        })
+
+    if user.role not in ('organisation_admin', 'school_admin', 'principal') and not user.is_superuser:
+        raise PermissionDenied('Timetable editing requires administrator permission.')
+
+    if request.method == 'DELETE':
+        record_event(actor=user, action='delete_timetable_period', obj=entry)
+        entry.delete()
+        return Response({'success': True, 'detail': 'Timetable period cleared successfully'}, status=200)
+
+    if request.method == 'PATCH':
+        if 'start_time' in request.data:
+            s = (request.data['start_time'] or '09:00')[:5]
+            entry.start_time = datetime.strptime(s, '%H:%M').time()
+        if 'end_time' in request.data:
+            s = (request.data['end_time'] or '09:45')[:5]
+            entry.end_time = datetime.strptime(s, '%H:%M').time()
+        if 'subject' in request.data:
+            subj = Subject.objects.filter(pk=request.data['subject'], school=entry.school_class.school).first()
+            if not subj:
+                raise ValidationError({'subject': 'Valid subject required.'})
+            entry.subject = subj
+        if 'teacher' in request.data:
+            t_id = request.data['teacher']
+            entry.teacher = User.objects.filter(pk=t_id, school=entry.school_class.school).first() if t_id else None
+        if 'room' in request.data:
+            entry.room = (request.data['room'] or '').strip()[:40]
+        entry.save()
+        record_event(actor=user, action='update_timetable_period', obj=entry)
+        return Response({'success': True, 'id': entry.id})

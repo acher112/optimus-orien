@@ -28,6 +28,7 @@ import DataImport from './DataImport';
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
+import Timetable from './Timetable';
 import Settings from './Settings';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import './style.css';
@@ -40,6 +41,7 @@ const WORKSPACE_NAV = [
   { name: 'Classes', icon: Users },
   { name: 'Subjects', icon: BookOpen },
   { name: 'Students', icon: GraduationCap },
+  { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Attendance', icon: ClipboardCheck },
   { name: 'Homework', icon: ClipboardList },
   { name: 'Academics', icon: FileBarChart },
@@ -71,7 +73,7 @@ const NAV_GROUPS = [
   { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses'] },
   { sublabel: 'ACADEMIC CONFIGURATION', adminLabel: true, items: ['Campus setup', 'Academic years'] },
   { sublabel: 'ACADEMIC STRUCTURE', items: ['Classes', 'Subjects'] },
-  { sublabel: 'STUDENTS & LEARNING', items: ['Students', 'Attendance', 'Homework', 'Academics', 'Examinations'] },
+  { sublabel: 'STUDENTS & LEARNING', items: ['Students', 'Timetable', 'Attendance', 'Homework', 'Academics', 'Examinations'] },
   { sublabel: 'STUDENT SUPPORT', items: ['Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
@@ -435,19 +437,20 @@ function App() {
         }
         if (form.admission_fee && Number(form.admission_fee) > 0) {
           try {
-            await request('fees/payments/', {
+            await request('fees/student-voucher/', {
               method: 'POST',
               body: JSON.stringify({
                 student: created.id,
-                school: data.school,
                 amount: Number(form.admission_fee),
-                paid_on: data.enrolled_on || new Date().toISOString().slice(0, 10),
-                method: form.payment_method || 'cash',
+                frequency: form.fee_frequency || 'monthly',
+                collect_now: form.fee_status !== 'pending_voucher',
+                payment_method: form.payment_method || 'cash',
+                school_class: form.assign_class ? Number(form.assign_class) : undefined,
                 reference: `ADM-${created.admission_number || created.id}`
               })
             });
           } catch (feeErr) {
-            console.error('Initial fee payment error:', feeErr);
+            console.error('Student fee voucher error:', feeErr);
           }
         }
       }
@@ -1106,6 +1109,7 @@ function App() {
           {page === 'Student Fees' && <Fees user={user} notify={notify} />}
           {page === 'Staff Salaries' && <Salaries user={user} notify={notify} />}
           {page === 'Examinations' && <Examinations user={user} notify={notify} />}
+          {page === 'Timetable' && <Timetable user={user} notify={notify} />}
           {page === 'Platform owner' && <PlatformOwner user={user} notify={notify} />}
           {page === 'Data import' && <DataImport user={user} notify={notify} />}
           {page === 'My performance' && <MyPerformance />}
@@ -1257,7 +1261,18 @@ function App() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <label>
-                        Initial / Admission Fee
+                        Fee Frequency / Schedule
+                        <select
+                          value={form.fee_frequency || 'monthly'}
+                          onChange={e => setForm(s => ({ ...s, fee_frequency: e.target.value }))}
+                        >
+                          <option value="monthly">Monthly Fee</option>
+                          <option value="annual">Annual Fee</option>
+                          <option value="one_time">One-Time Admission Fee</option>
+                        </select>
+                      </label>
+                      <label>
+                        Fee Amount (Rs)
                         <input
                           type="number"
                           step="0.01"
@@ -1274,7 +1289,7 @@ function App() {
                           onChange={e => setForm(s => ({ ...s, fee_status: e.target.value }))}
                         >
                           <option value="collect_now">Collect now (Link with Income)</option>
-                          <option value="pending_voucher">Generate pending voucher</option>
+                          <option value="pending_voucher">Generate pending voucher (Due later)</option>
                         </select>
                       </label>
                       {form.fee_status !== 'pending_voucher' && (
@@ -1291,7 +1306,7 @@ function App() {
                           </select>
                         </label>
                       )}
-                      <label>
+                      <label style={{ gridColumn: form.fee_status === 'pending_voucher' ? '1 / -1' : 'auto' }}>
                         Assign Class (Optional)
                         <select
                           value={form.assign_class || ''}
@@ -1411,7 +1426,7 @@ function App() {
 }
 
 function LayersIcon({ page }: { page: string }) {
-  return page === 'Students' ? <GraduationCap size={23} /> : page === 'Attendance' ? <ClipboardCheck size={23} /> : page === 'Interventions' ? <HeartHandshake size={23} /> : page === 'Academic years' ? <CalendarDays size={23} /> : page === 'Subjects' ? <BookOpen size={23} /> : page === 'Classes' ? <Users size={23} /> : <FileBarChart size={23} />;
+  return page === 'Students' ? <GraduationCap size={23} /> : page === 'Timetable' ? <CalendarDays size={23} /> : page === 'Attendance' ? <ClipboardCheck size={23} /> : page === 'Interventions' ? <HeartHandshake size={23} /> : page === 'Academic years' ? <CalendarDays size={23} /> : page === 'Subjects' ? <BookOpen size={23} /> : page === 'Classes' ? <Users size={23} /> : <FileBarChart size={23} />;
 }
 
 function Stat({ icon: Icon, label, value, foot, tone }: { icon: typeof Users; label: string; value: string | number; foot: string; tone: string }) {
