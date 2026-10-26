@@ -1357,64 +1357,197 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
           <span className="brand-symbol">◈</span>
           <strong>optimus<span>orien</span></strong>
         </div>
+        <div className="login-art">
+          <div className="login-circle one" />
+          <div className="login-circle two" />
+          <div className="login-glass">
+            <div className="login-insight-icon"><TrendingUp size={23} /></div>
+            <span>Student performance</span>
+            <strong>Growing together</strong>
+            <div className="login-line"><i /><i /><i /><i /><i /><i /></div>
+          </div>
+          <div className="login-glass second"><CheckCircle2 size={20} /> Meaningful progress, every day</div>
+        </div>
         <div className="login-left-copy">
-          <h2>Educational intelligence for modern schools.</h2>
+          <div className="hero-kicker"><Sparkles size={15} /> INTELLIGENCE WITH EMPATHY</div>
+          <h1>Every learner has<br />a story. <em>See the full picture.</em></h1>
           <p>Multi-campus management, analytics, attendance, assessments, and communication in one unified workspace.</p>
         </div>
-        <div className="login-copyright">© {new Date().getFullYear()} Optimus Orien. All rights reserved.</div>
+        <span className="login-copyright">© {new Date().getFullYear()} Optimus Orien. All rights reserved.</span>
       </div>
       <div className="login-right">
-        <div className="login-card">
+        <div className="login-form-wrap login-card">
+          <div className="login-welcome-icon"><GraduationCap size={26} /></div>
+
           <div className="login-tabs">
-            <button className={`login-tab ${tab === 'signin' ? 'active' : ''}`} onClick={() => { setTab('signin'); setError(''); }}>
+            <button
+              type="button"
+              className={`login-tab ${tab === 'signin' ? 'active' : ''}`}
+              onClick={() => { setTab('signin'); setError(''); }}
+            >
               Sign In
             </button>
-            <button className={`login-tab ${tab === 'register' ? 'active' : ''}`} onClick={() => { setTab('register'); setError(''); }}>
+            <button
+              type="button"
+              className={`login-tab ${tab === 'register' ? 'active' : ''}`}
+              onClick={() => { setTab('register'); setError(''); }}
+            >
               Create Account
             </button>
           </div>
 
           {tab === 'signin' ? (
-            <form onSubmit={submitLogin}>
-              <h2>Welcome back</h2>
+            <>
+              <span className="eyebrow">WELCOME BACK</span>
+              <h2>Your workspace awaits.</h2>
               <p className="login-subtitle">Sign in to your education workspace</p>
-              {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
-              <label>
-                Username or Email
-                <input required value={name} onChange={e => setName(e.target.value)} placeholder="Enter username" />
-              </label>
-              <label>
-                Password
-                <input required type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Enter password" />
-              </label>
-              <button type="submit" className="login-submit" disabled={pending}>
-                {pending ? 'Signing in…' : 'Sign in'} <ArrowRight size={16} />
-              </button>
-            </form>
+              <form onSubmit={submitLogin}>
+                <label>
+                  Username or Email
+                  <input
+                    autoComplete="username"
+                    required
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Enter your username or email"
+                  />
+                </label>
+                <label>
+                  Password
+                  <input
+                    autoComplete="current-password"
+                    required
+                    type="password"
+                    value={pass}
+                    onChange={e => setPass(e.target.value)}
+                    placeholder="Enter your password"
+                  />
+                </label>
+                {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
+                <button type="submit" className="login-submit" disabled={pending}>
+                  {pending ? 'Signing in…' : 'Sign in to workspace'} <ArrowRight size={18} />
+                </button>
+              </form>
+              <div className="login-switch-row">
+                <span>New educational institution?</span>
+                <button type="button" className="text-link-btn" onClick={() => { setTab('register'); setError(''); }}>
+                  Create account & register campus →
+                </button>
+              </div>
+              <div className="demo-credentials">
+                <div><ShieldCheck size={16} /><strong>Authorised Workspace Access</strong></div>
+                <p>Sign in with your educational credentials. For account recovery or access requests, contact your school administrator.</p>
+              </div>
+            </>
           ) : (
-            <form onSubmit={submitRegister}>
+            <>
+              <span className="eyebrow">INSTITUTION SETUP</span>
               <h2>Register your institution</h2>
-              <p className="login-subtitle">Set up your organisation and initial campus</p>
-              {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
-              <div className="login-grid-2">
-                <label>First name <input required value={regForm.first_name} onChange={e => setRegForm({ ...regForm, first_name: e.target.value })} placeholder="Eleanor" /></label>
-                <label>Last name <input required value={regForm.last_name} onChange={e => setRegForm({ ...regForm, last_name: e.target.value })} placeholder="Vance" /></label>
+              <p className="login-subtitle">Set up your organisation, initial campus, and administrator</p>
+              <form onSubmit={submitRegister}>
+                <div className="login-grid-2">
+                  <label>
+                    First name
+                    <input
+                      required
+                      value={regForm.first_name}
+                      onChange={e => setRegForm({ ...regForm, first_name: e.target.value })}
+                      placeholder="Eleanor"
+                    />
+                  </label>
+                  <label>
+                    Last name
+                    <input
+                      required
+                      value={regForm.last_name}
+                      onChange={e => setRegForm({ ...regForm, last_name: e.target.value })}
+                      placeholder="Vance"
+                    />
+                  </label>
+                </div>
+                <label>
+                  Official email
+                  <input
+                    required
+                    type="email"
+                    autoComplete="email"
+                    value={regForm.email}
+                    onChange={e => setRegForm({ ...regForm, email: e.target.value })}
+                    placeholder="admin@school.org"
+                  />
+                </label>
+                <div className="login-grid-2">
+                  <label>
+                    Username
+                    <input
+                      required
+                      autoComplete="username"
+                      value={regForm.username}
+                      onChange={e => setRegForm({ ...regForm, username: e.target.value })}
+                      placeholder="admin_eleanor"
+                    />
+                  </label>
+                  <label>
+                    Password (min 8 chars)
+                    <input
+                      required
+                      type="password"
+                      autoComplete="new-password"
+                      value={regForm.password}
+                      onChange={e => setRegForm({ ...regForm, password: e.target.value })}
+                      placeholder="Password"
+                    />
+                  </label>
+                </div>
+                <label>
+                  Organisation / Trust Name
+                  <input
+                    required
+                    value={regForm.organisation_name}
+                    onChange={e => setRegForm({ ...regForm, organisation_name: e.target.value })}
+                    placeholder="St. Jude Educational Trust"
+                  />
+                </label>
+                <div className="login-grid-2">
+                  <label>
+                    Initial Campus Name
+                    <input
+                      value={regForm.school_name}
+                      onChange={e => setRegForm({ ...regForm, school_name: e.target.value })}
+                      placeholder="Main City Campus"
+                    />
+                  </label>
+                  <label>
+                    City
+                    <input
+                      value={regForm.city}
+                      onChange={e => setRegForm({ ...regForm, city: e.target.value })}
+                      placeholder="Lahore, London"
+                    />
+                  </label>
+                </div>
+                <label>
+                  Administrative Role
+                  <select value={regForm.role} onChange={e => setRegForm({ ...regForm, role: e.target.value })}>
+                    <option value="organisation_admin">Organisation Administrator (Full trust & multi-campus control)</option>
+                    <option value="school_admin">Campus Administrator (Single school management)</option>
+                    <option value="teacher">Educator / Academic Lead</option>
+                  </select>
+                </label>
+                {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
+                <button type="submit" className="login-submit" disabled={pending}>
+                  {pending ? 'Creating workspace…' : 'Create workspace & sign in'} <ArrowRight size={18} />
+                </button>
+              </form>
+              <div className="login-switch-row">
+                <span>Already registered?</span>
+                <button type="button" className="text-link-btn" onClick={() => { setTab('signin'); setError(''); }}>
+                  Sign in to existing account →
+                </button>
               </div>
-              <label>Official email <input required type="email" value={regForm.email} onChange={e => setRegForm({ ...regForm, email: e.target.value })} placeholder="admin@school.org" /></label>
-              <div className="login-grid-2">
-                <label>Username <input required value={regForm.username} onChange={e => setRegForm({ ...regForm, username: e.target.value })} placeholder="admin_eleanor" /></label>
-                <label>Password (min 8 chars) <input required type="password" value={regForm.password} onChange={e => setRegForm({ ...regForm, password: e.target.value })} placeholder="Password" /></label>
-              </div>
-              <label>Organisation / Trust Name <input required value={regForm.organisation_name} onChange={e => setRegForm({ ...regForm, organisation_name: e.target.value })} placeholder="St. Jude Educational Trust" /></label>
-              <div className="login-grid-2">
-                <label>Initial Campus Name <input value={regForm.school_name} onChange={e => setRegForm({ ...regForm, school_name: e.target.value })} placeholder="Main City Campus" /></label>
-                <label>City <input value={regForm.city} onChange={e => setRegForm({ ...regForm, city: e.target.value })} placeholder="Lahore, London" /></label>
-              </div>
-              <button type="submit" className="login-submit" disabled={pending}>
-                {pending ? 'Creating workspace…' : 'Create workspace & sign in'} <ArrowRight size={16} />
-              </button>
-            </form>
+            </>
           )}
+
           <div className="login-security"><ShieldCheck size={16} /> Your data belongs to your school community.</div>
           <a className="login-home-link" href="/"><ChevronLeft size={16} /> Back to public homepage</a>
         </div>
