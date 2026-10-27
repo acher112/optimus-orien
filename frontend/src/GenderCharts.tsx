@@ -77,8 +77,14 @@ export function GenderPanel({ title, subtitle, split, rows }: {
   title: string; subtitle: string; split?: Split;
   rows: { name: string; gender?: Split }[];
 }) {
-  if (!split) return null;
-  const grouped = rows.map(r => ({ name: r.name, boys: r.gender?.boys.average ?? null, girls: r.gender?.girls.average ?? null }));
+  const grouped = rows
+    .map(r => ({ name: r.name, boys: r.gender?.boys.average ?? null, girls: r.gender?.girls.average ?? null }))
+    .sort((a, b) => {
+      const avgA = (a.boys !== null && a.girls !== null) ? (a.boys + a.girls) / 2 : (a.boys ?? a.girls ?? -1);
+      const avgB = (b.boys !== null && b.girls !== null) ? (b.boys + b.girls) / 2 : (b.boys ?? b.girls ?? -1);
+      if (avgA === avgB) return a.name.localeCompare(b.name);
+      return avgB - avgA;
+    });
   return (
     <section className="panel rp-panel">
       <div className="panel-head">
@@ -87,10 +93,10 @@ export function GenderPanel({ title, subtitle, split, rows }: {
       </div>
       <PrivacyNote split={split} />
       <div className="rp-gender-grid">
-        <GenderOverall split={split} label="Academic average" />
+        {split && <GenderOverall split={split} label="Academic average" />}
         <GenderGrouped rows={grouped} />
       </div>
-      {split.unspecified ? <small className="rp-sub">{split.unspecified} student(s) have no gender recorded and are not in these charts.</small> : null}
+      {split?.unspecified ? <small className="rp-sub">{split.unspecified} student(s) have no gender recorded and are not in these charts.</small> : null}
     </section>
   );
 }

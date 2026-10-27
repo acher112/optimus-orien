@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowUpRight, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
+import { FilterBar } from './FilterBar';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -14,8 +15,7 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
   const [roles, setRoles] = useState<string[]>([]);
   const [summary, setSummary] = useState<R>({ total: 0, active: 0, terminated: 0 });
   const [schools, setSchools] = useState<R[]>([]);
-  const [q, setQ] = useState('');
-  const [status, setStatus] = useState('active');
+  const [filterValues, setFilterValues] = useState<Record<string, any>>({ status: 'active' });
   const [error, setError] = useState('');
   const [action, setAction] = useState<Action | null>(null);
   const [feed, setFeed] = useState(false);
@@ -24,12 +24,12 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
     setError('');
     try {
       const p = new URLSearchParams();
-      if (status) p.set('status', status);
-      if (q.trim()) p.set('q', q.trim());
+      if (filterValues.status) p.set('status', filterValues.status);
+      if (filterValues.q?.trim()) p.set('q', filterValues.q.trim());
       const d = await request<R>(`staff/?${p.toString()}`);
       setRows(d.results); setSummary(d.summary); setRoles(d.roles);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not load staff'); }
-  }, [status, q]);
+  }, [filterValues]);
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
   useEffect(() => { list<R>('schools').then(setSchools).catch(() => {}); }, []);
 
@@ -74,16 +74,31 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
       {feed && <HistoryFeed />}
 
       <section className="panel hr-panel">
-        <div className="toolbar">
-          <div className="searchbox"><Search size={15} /><input placeholder="Search name or position…" value={q} onChange={e => setQ(e.target.value)} /></div>
+        <div style={{ padding: '16px 20px 0 20px' }}>
+          <FilterBar
+            searchPlaceholder="Search staff name or position..."
+            filters={[
+              {
+                key: 'status',
+                label: 'Status',
+                options: [
+                  { label: 'Active', value: 'active' },
+                  { label: 'Terminated', value: 'terminated' },
+                ]
+              }
+            ]}
+            values={filterValues}
+            onChange={setFilterValues}
+            onClear={() => setFilterValues({})}
+          />
+        </div>
+        <div className="toolbar" style={{ paddingTop: 6 }}>
+          <span className="result-count">{rows.length} staff members</span>
           <div className="toolbar-right">
-            <select className="hr-select" value={status} onChange={e => setStatus(e.target.value)} aria-label="Status">
-              <option value="active">Active</option><option value="terminated">Terminated</option><option value="">All</option>
-            </select>
             <ExportMenu
               title="Staff Directory"
               filename="staff-directory"
-              endpoint={`staff/?${new URLSearchParams({ ...(status ? { status } : {}), ...(q ? { q } : {}) }).toString()}`}
+              endpoint={`staff/?${new URLSearchParams({ ...(filterValues.status ? { status: filterValues.status } : {}), ...(filterValues.q ? { q: filterValues.q } : {}) }).toString()}`}
               notify={notify}
             />
           </div>

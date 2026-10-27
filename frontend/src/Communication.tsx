@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   BookOpen,
@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Plus,
   RefreshCw,
+  Search,
   Send,
   Trash2,
   UserCheck,
@@ -59,8 +60,15 @@ export default function Communication({ user, notify }: { user: User; notify: (m
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState('');
+  const [msgSearch, setMsgSearch] = useState('');
   const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
   const [error, setError] = useState('');
+
+  const displayMessages = useMemo(() => {
+    if (!msgSearch.trim()) return messages;
+    const lower = msgSearch.toLowerCase();
+    return messages.filter(m => m.message.toLowerCase().includes(lower) || m.sender_name.toLowerCase().includes(lower));
+  }, [messages, msgSearch]);
   const [teachers, setTeachers] = useState<R[]>([]);
   const [assignModal, setAssignModal] = useState(false);
   const [assignTeacherId, setAssignTeacherId] = useState('');
@@ -286,32 +294,44 @@ export default function Communication({ user, notify }: { user: User; notify: (m
                     Lead Teacher: <strong>{activeSubject.teacher_name}</strong>
                   </p>
                 </div>
-                {canManageTeachers && (
-                  <button
-                    className="outline-btn"
-                    style={{ fontSize: 11, padding: '7px 12px' }}
-                    onClick={() => {
-                      setAssignTeacherId(activeSubject.teacher_id ? String(activeSubject.teacher_id) : '');
-                      setAssignModal(true);
-                    }}
-                  >
-                    <UserCheck size={14} /> Assign Teacher
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div className="searchbox" style={{ width: 220 }}>
+                    <Search size={14} />
+                    <input
+                      placeholder="Search messages..."
+                      value={msgSearch}
+                      onChange={e => setMsgSearch(e.target.value)}
+                      style={{ fontSize: 12, padding: '4px 8px 4px 28px' }}
+                    />
+                    {msgSearch && <button onClick={() => setMsgSearch('')}><X size={12} /></button>}
+                  </div>
+                  {canManageTeachers && (
+                    <button
+                      className="outline-btn"
+                      style={{ fontSize: 11, padding: '7px 12px' }}
+                      onClick={() => {
+                        setAssignTeacherId(activeSubject.teacher_id ? String(activeSubject.teacher_id) : '');
+                        setAssignModal(true);
+                      }}
+                    >
+                      <UserCheck size={14} /> Assign Teacher
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Message Feed */}
               <div className="comm-messages">
                 {loadingMsgs ? (
                   <div className="rp-empty">Loading messages...</div>
-                ) : messages.length === 0 ? (
+                ) : displayMessages.length === 0 ? (
                   <div className="comm-empty">
                     <MessageSquare size={32} />
-                    <p>No questions or messages posted for <strong>{activeSubject.name}</strong> yet.</p>
-                    <small>Be the first to post a question or topic for your teacher and classmates!</small>
+                    <p>{msgSearch ? 'No messages matching your search.' : `No questions or messages posted for ${activeSubject.name} yet.`}</p>
+                    <small>{msgSearch ? 'Try a different search term.' : 'Be the first to post a question or topic for your teacher and classmates!'}</small>
                   </div>
                 ) : (
-                  messages.map(m => {
+                  displayMessages.map(m => {
                     const isMe = m.sender_id === user.id;
                     const isTeacher = m.is_teacher_answer || m.sender_role === 'teacher';
 

@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags, Trash2, Users } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
+import FilterBar from './FilterBar';
 import { getStoredTheme } from './theme';
 import './hr.css';
 
@@ -99,6 +100,30 @@ export default function Finance({ user, notify }: { user: User; notify: (m: stri
 
 function Overview({ sum }: { sum: R }) {
   const exp: R[] = sum.expense_by_category, inc: R[] = sum.income_by_category, months: R[] = sum.monthly;
+  const [campusSortCol, setCampusSortCol] = useState<'income' | 'expense' | 'net' | 'name'>('income');
+  const [campusSortDir, setCampusSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (col: 'income' | 'expense' | 'net' | 'name') => {
+    if (campusSortCol === col) {
+      setCampusSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    } else {
+      setCampusSortCol(col);
+      setCampusSortDir('desc');
+    }
+  };
+
+  const sortedCampuses = useMemo(() => {
+    return [...(sum.campuses || [])].sort((a, b) => {
+      if (campusSortCol === 'name') {
+        const cmp = a.name.localeCompare(b.name);
+        return campusSortDir === 'desc' ? -cmp : cmp;
+      }
+      const valA = Number(a[campusSortCol] ?? 0);
+      const valB = Number(b[campusSortCol] ?? 0);
+      if (valA === valB) return a.name.localeCompare(b.name);
+      return campusSortDir === 'desc' ? valB - valA : valA - valB;
+    });
+  }, [sum.campuses, campusSortCol, campusSortDir]);
   return (
     <>
       <div className="fx-kpis">
@@ -216,8 +241,32 @@ function Overview({ sum }: { sum: R }) {
         ) : <div className="rp-empty">No entries yet.</div>}
         {sum.campuses.length > 1 && (
           <div className="table-scroll"><table className="data-table">
-            <thead><tr><th>CAMPUS</th><th>INCOME</th><th>EXPENSE</th><th>NET</th></tr></thead>
-            <tbody>{sum.campuses.map((c: R) => <tr key={c.id}><td>{c.name}</td><td>{money(c.income)}</td><td>{money(c.expense)}</td><td style={{ color: c.net >= 0 ? INCOME : EXPENSE, fontWeight: 700 }}>{money(c.net)}</td></tr>)}</tbody>
+            <thead>
+              <tr>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('name')}>
+                  CAMPUS {campusSortCol === 'name' && (campusSortDir === 'desc' ? '▼' : '▲')}
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('income')}>
+                  INCOME {campusSortCol === 'income' && (campusSortDir === 'desc' ? '▼' : '▲')}
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('expense')}>
+                  EXPENSE {campusSortCol === 'expense' && (campusSortDir === 'desc' ? '▼' : '▲')}
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('net')}>
+                  NET {campusSortCol === 'net' && (campusSortDir === 'desc' ? '▼' : '▲')}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedCampuses.map((c: R) => (
+                <tr key={c.id}>
+                  <td><strong>{c.name}</strong></td>
+                  <td style={{ color: INCOME, fontWeight: 600 }}>{money(c.income)}</td>
+                  <td style={{ color: EXPENSE, fontWeight: 600 }}>{money(c.expense)}</td>
+                  <td style={{ color: c.net >= 0 ? INCOME : EXPENSE, fontWeight: 700 }}>{money(c.net)}</td>
+                </tr>
+              ))}
+            </tbody>
           </table></div>
         )}
       </section>
@@ -238,13 +287,20 @@ function CatTable({ rows }: { rows: R[] }) {
 function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: 'income' | 'expense'; school: string; schools: R[]; user: User; qs: string; bump: number; onChanged: (m: string) => void }) {
   const [rows, setRows] = useState<R[]>([]);
   const [cats, setCats] = useState<R[]>([]);
+  const [filters, setFilters] = useState<Record<string, any>>({});
   const [f, setF] = useState<R>({ date: new Date().toISOString().slice(0, 10) });
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const target = school || f.school || (user.role !== 'organisation_admin' ? String(user.school || '') : '') || String(schools[0]?.id || '');
 
   const load = useCallback(async () => {
-    try { setRows((await request<R>(`finance/entries/?kind=${kind}&${qs}`)).results); } catch { setRows([]); }
-  }, [kind, qs]);
+    const p = new URLSearchParams();
+    p.set('kind', kind);
+    if (school) p.set('school', school);
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+    }
+    try { setRows((await request<R>(`finance/entries/?${p.toString()}`)).results); } catch { setRows([]); }
+  }, [kind, school, filters]);
   useEffect(() => { load(); }, [load, bump]);
   useEffect(() => {
     if (!target) return;
@@ -316,6 +372,31 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: '
               notify={onChanged}
             />
           </div>
+        </div>
+        <div style={{ padding: '0 16px 12px' }}>
+          <FilterBar
+            searchPlaceholder={`Search ${kind} entries by description, category...`}
+            filters={[
+              {
+                key: 'category',
+                label: 'Category',
+                options: cats.map(c => ({ label: c.name, value: c.id }))
+              },
+              {
+                key: 'from',
+                label: 'From Date',
+                type: 'date'
+              },
+              {
+                key: 'to',
+                label: 'To Date',
+                type: 'date'
+              }
+            ]}
+            values={filters}
+            onChange={setFilters}
+            onClear={() => setFilters({})}
+          />
         </div>
         <div className="table-scroll"><table className="data-table">
           <thead><tr><th>DATE</th><th>CATEGORY</th><th>DESCRIPTION</th><th>CAMPUS</th><th>AMOUNT</th><th /></tr></thead>

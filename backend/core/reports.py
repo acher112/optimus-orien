@@ -37,6 +37,7 @@ from rest_framework.response import Response
 from core.models import (Assessment, Attendance, Enrollment, Grade, School, SchoolClass,
                          SchoolConfiguration)
 from core.services.access import classes_scope, schools_scope
+from core.services.filters import sort_comparison_rows
 
 MIN_GROUP = 3   # smallest boy/girl group whose average may be shown
 REPORT_ROLES = ('organisation_admin', 'school_admin', 'principal', 'teacher')
@@ -344,7 +345,7 @@ def overview(request):
             students |= data.population[cid]
         campuses.append({
             'id': s.id, 'name': s.name, 'city': s.city, 'classes': len(cids), 'students': len(students),
-            **roll, 'gender': data.gender_split(data.keys(cids)),
+            **roll, 'average': roll.get('academic_average'), 'gender': data.gender_split(data.keys(cids)),
             'attendance_rate': _att_summary([att[c] for c in cids])['rate'],
             'period_available': windows[s.id][2],
         })
@@ -373,6 +374,14 @@ def overview(request):
     overall = {**data.rollup(data.keys()), 'attendance_rate': _att_summary(att.values())['rate'],
                'students': len(students_all), 'campuses': len(schools), 'classes': len(classes),
                'gender': data.gender_split(data.keys())}
+
+    sort_by = request.query_params.get('sort_by') or 'average'
+    order = request.query_params.get('order') or 'desc'
+    campuses = sort_comparison_rows(campuses, metric_key=sort_by, name_key='name', reverse=(order != 'asc'))
+    for sub in subject_rows:
+        sub['by_campus'] = sort_comparison_rows(sub['by_campus'], metric_key='average', name_key='school_name', reverse=True)
+    subject_rows = sort_comparison_rows(subject_rows, metric_key='average', name_key='name', reverse=True)
+
     return Response(_envelope(
         user, level='organisation', period=_period_payload(period, windows, schools), overall=overall,
         campuses=campuses, subjects=subject_rows,
@@ -415,6 +424,7 @@ def campus(request, school_id):
                               'average': cstat['average'], 'valid_students': cstat['valid_students'],
                               'missing_results': cstat['missing_results'], 'assessments': cstat['assessments']})
         comparable = len(sigs) <= 1
+        per_class = sort_comparison_rows(per_class, metric_key='average', name_key='class_name', reverse=True)
         subjects.append({'code': code, 'name': data.cs[keys[0]]['subject'].name, **{k: st[k] for k in (
             'average', 'valid_students', 'eligible_students', 'valid_results', 'missing_results', 'assessments')},
             'classes': per_class, 'comparable': comparable, 'gender': data.gender_split(keys),
@@ -425,6 +435,12 @@ def campus(request, school_id):
         students_all |= data.population[cid]
     overall = {**data.rollup(data.keys()), 'attendance_rate': _att_summary(att.values())['rate'],
                'students': len(students_all), 'classes': len(classes), 'gender': data.gender_split(data.keys())}
+
+    sort_by = request.query_params.get('sort_by') or 'average'
+    order = request.query_params.get('order') or 'desc'
+    class_rows = sort_comparison_rows(class_rows, metric_key=sort_by, name_key='name', reverse=(order != 'asc'))
+    subjects = sort_comparison_rows(subjects, metric_key='average', name_key='name', reverse=True)
+
     return Response(_envelope(
         user, level='campus', period=_period_payload(period, windows, [school]),
         campus={'id': school.id, 'name': school.name, 'city': school.city},
@@ -460,6 +476,8 @@ def class_report(request, class_id):
                              'admission_number': names[sid].admission_number if sid in names else '',
                              'overall': _mean(vals.values()), 'subjects': vals,
                              'has_results': bool(vals)})
+        students = sort_comparison_rows(students, metric_key='overall', name_key='name', reverse=True)
+    subjects = sort_comparison_rows(subjects, metric_key='average', name_key='name', reverse=True)
     return Response(_envelope(
         user, level='class', period=_period_payload(period, windows, [klass.school]),
         campus={'id': klass.school_id, 'name': klass.school.name},
@@ -498,6 +516,7 @@ def subject_report(request, school_id, code):
         st = data.subject_stats(ck)
         per_class.append({'class_id': c.id, 'class_name': c.name, 'grade_level': c.grade_level, **st,
                           'gender': data.gender_split(ck)})
+    per_class = sort_comparison_rows(per_class, metric_key='average', name_key='class_name', reverse=True)
     assessments = []
     for a in sorted(data.assessments, key=lambda a: (a.date, a.id)):
         graded = data.grades[a.id]
@@ -519,6 +538,7 @@ def subject_report(request, school_id, code):
         for (sid, cid), val in sorted(rows.items(), key=lambda kv: (data.cmap[kv[0][1]].name, -kv[1])):
             students.append({'id': sid, 'name': names[sid].full_name, 'admission_number': names[sid].admission_number,
                              'class_name': data.cmap[cid].name, 'result': val})
+        students = sort_comparison_rows(students, metric_key='result', name_key='name', reverse=True)
     comparable = len({tuple(sorted((float(a.max_marks), float(a.weight)) for a in data.cs[k]['assessments'])) for k in keys}) <= 1
     return Response(_envelope(
         user, level='subject', period=_period_payload(period, windows, [school]),

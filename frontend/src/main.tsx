@@ -33,6 +33,7 @@ import StudyMaterials from './StudyMaterials';
 import ExportMenu from './ExportMenu';
 import Settings from './Settings';
 import Permissions from './Permissions';
+import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import './style.css';
 
@@ -115,12 +116,16 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'admission_number', label: 'Admission ID' },
       { key: 'class_name', label: 'Class' },
       { key: 'school_name', label: 'Campus' },
+      { key: 'father_name', label: 'Father Name' },
       { key: 'gender', label: 'Gender' },
       { key: 'active', label: 'Status' }
     ],
     fields: [
       { key: 'first_name', label: 'First name', required: true },
       { key: 'last_name', label: 'Last name', required: true },
+      { key: 'father_name', label: 'Father name', required: true },
+      { key: 'mother_name', label: 'Mother name' },
+      { key: 'guardian_phone', label: 'Guardian phone' },
       { key: 'admission_number', label: 'Admission number', required: true },
       { key: 'gender', label: 'Gender', required: true },
       { key: 'school', label: 'Campus', required: true },
@@ -151,6 +156,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
     desc: 'Classroom groups, teaching assignments and academic structure.',
     columns: [
       { key: 'name', label: 'Class' },
+      { key: 'section', label: 'Section' },
       { key: 'grade_level', label: 'Grade' },
       { key: 'teacher_name', label: 'Lead teacher' },
       { key: 'school_name', label: 'Campus' },
@@ -158,6 +164,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
     ],
     fields: [
       { key: 'name', label: 'Class name', required: true },
+      { key: 'section', label: 'Section (e.g. A, B)' },
       { key: 'school', label: 'Campus', required: true },
       { key: 'academic_year', label: 'Academic year', required: true },
       { key: 'grade_level', label: 'Grade level (e.g. Grade 8)' },
@@ -268,6 +275,124 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
   },
 };
 
+function getResourceFilterConfigs(pageName: string): FilterConfig[] {
+  switch (pageName) {
+    case 'Students':
+      return [
+        {
+          key: 'gender',
+          label: 'Gender',
+          options: [
+            { label: 'Boy', value: 'male' },
+            { label: 'Girl', value: 'female' },
+          ]
+        },
+        {
+          key: 'active',
+          label: 'Status',
+          options: [
+            { label: 'Active', value: 'true' },
+            { label: 'Inactive', value: 'false' },
+          ]
+        }
+      ];
+    case 'Classes':
+      return [
+        {
+          key: 'grade_level',
+          label: 'Grade Level',
+          options: [
+            { label: 'Grade 1', value: 'Grade 1' },
+            { label: 'Grade 2', value: 'Grade 2' },
+            { label: 'Grade 3', value: 'Grade 3' },
+            { label: 'Grade 4', value: 'Grade 4' },
+            { label: 'Grade 5', value: 'Grade 5' },
+            { label: 'Grade 6', value: 'Grade 6' },
+            { label: 'Grade 7', value: 'Grade 7' },
+            { label: 'Grade 8', value: 'Grade 8' },
+            { label: 'Grade 9', value: 'Grade 9' },
+            { label: 'Grade 10', value: 'Grade 10' },
+          ]
+        }
+      ];
+    case 'Academic years':
+      return [
+        {
+          key: 'active',
+          label: 'Status',
+          options: [
+            { label: 'Active Session', value: 'true' },
+            { label: 'Closed Session', value: 'false' },
+          ]
+        }
+      ];
+    case 'Subjects':
+      return [
+        {
+          key: 'active',
+          label: 'Status',
+          options: [
+            { label: 'Active', value: 'true' },
+            { label: 'Inactive', value: 'false' },
+          ]
+        }
+      ];
+    case 'Academics':
+      return [
+        {
+          key: 'published',
+          label: 'Status',
+          options: [
+            { label: 'Published', value: 'true' },
+            { label: 'Draft', value: 'false' },
+          ]
+        }
+      ];
+    case 'Attendance':
+      return [
+        {
+          key: 'status',
+          label: 'Status',
+          options: [
+            { label: 'Present', value: 'present' },
+            { label: 'Absent', value: 'absent' },
+            { label: 'Late', value: 'late' },
+            { label: 'Excused', value: 'excused' },
+          ]
+        },
+        {
+          key: 'date',
+          label: 'Date',
+          type: 'date',
+        }
+      ];
+    case 'Interventions':
+      return [
+        {
+          key: 'priority',
+          label: 'Priority',
+          options: [
+            { label: 'High Priority', value: 'high' },
+            { label: 'Medium Priority', value: 'medium' },
+            { label: 'Low Priority', value: 'low' },
+          ]
+        },
+        {
+          key: 'status',
+          label: 'Progress',
+          options: [
+            { label: 'Open', value: 'open' },
+            { label: 'In Progress', value: 'in_progress' },
+            { label: 'Resolved', value: 'resolved' },
+            { label: 'Closed', value: 'closed' },
+          ]
+        }
+      ];
+    default:
+      return [];
+  }
+}
+
 const Pill = ({ value }: { value: string | boolean | undefined }) => {
   const text = typeof value === 'boolean' ? (value ? 'Active' : 'Inactive') : nice(String(value || '—'));
   const tone = /resolved|completed|present|active|published|true/i.test(text) ? 'green' : /high|absent|overdue|false/i.test(text) ? 'red' : /medium|in progress|late|monitoring/i.test(text) ? 'amber' : 'purple';
@@ -280,6 +405,7 @@ function App() {
   const [page, setPage] = useState('Overview');
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [records, setRecords] = useState<Resource[]>([]);
+  const [resourceFilters, setResourceFilters] = useState<Record<string, any>>({});
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
@@ -385,10 +511,18 @@ function App() {
   const load = useCallback(async () => {
     if (!user) return;
     setError('');
-    const qs = activeCampusId ? `?school=${activeCampusId}` : '';
+    const params = new URLSearchParams();
+    if (activeCampusId) params.set('school', String(activeCampusId));
+    Object.entries(resourceFilters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        params.set(k, String(v));
+      }
+    });
+    const qs = params.toString() ? `?${params.toString()}` : '';
     try {
       if (page === 'Overview') {
-        setDash(await request<Dashboard>(`dashboard/${qs}`));
+        const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
+        setDash(await request<Dashboard>(`dashboard/${campusQs}`));
       } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings'].includes(page)) {
         // subcomponents handle own data
       } else if (resourceInfo[page]) {
@@ -399,7 +533,7 @@ function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load data');
     }
-  }, [page, user, activeCampusId]);
+  }, [page, user, activeCampusId, resourceFilters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -409,6 +543,7 @@ function App() {
     setPage(target);
     setSearch('');
     setFilter('All');
+    setResourceFilters({});
     setSidebar(false);
   };
   const changeTheme = () => {
@@ -419,11 +554,7 @@ function App() {
   };
 
   const config = resourceInfo[page];
-  const filtered = useMemo(() => records.filter(r => {
-    const match = JSON.stringify(r).toLowerCase().includes(search.toLowerCase());
-    const byFilter = filter === 'All' || String(r.status || r.priority || r.active || '').toLowerCase() === filter.toLowerCase();
-    return match && byFilter;
-  }), [records, search, filter]);
+  const filtered = records;
 
   const activeCampus = useMemo(() => campuses.find(c => c.id === activeCampusId) || null, [campuses, activeCampusId]);
 
@@ -1166,14 +1297,18 @@ function App() {
               </div>
 
               <section className="panel resource-panel">
-                <div className="toolbar">
-                  <div className="searchbox">
-                    <Search size={18} />
-                    <input aria-label="Search records" value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${page.toLowerCase()}...`} />
-                    {search && <button onClick={() => setSearch('')}><X size={14} /></button>}
-                  </div>
+                <div style={{ marginBottom: 14 }}>
+                  <FilterBar
+                    searchPlaceholder={`Search ${page.toLowerCase()} (name, section, keyword)...`}
+                    filters={getResourceFilterConfigs(page)}
+                    values={resourceFilters}
+                    onChange={setResourceFilters}
+                    onClear={() => setResourceFilters({})}
+                  />
+                </div>
+                <div className="toolbar" style={{ marginTop: 0, paddingTop: 0 }}>
+                  <span className="result-count">{filtered.length} records found</span>
                   <div className="toolbar-right">
-                    <span className="result-count">{filtered.length} results</span>
                     <button className="outline-btn" onClick={() => load()}><RefreshCw size={16} /> Refresh</button>
                     <ExportMenu
                       title={`${page} Directory`}
@@ -1338,7 +1473,7 @@ function App() {
                         {f.label}{f.required && <span className="required"> *</span>}
                         <select required={f.required} value={form.school_class || ''} onChange={e => setForm(s => ({ ...s, school_class: e.target.value }))}>
                           <option value="">Select class…</option>
-                          {cls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          {cls.map(c => <option key={c.id} value={c.id}>{(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}</option>)}
                         </select>
                       </label>
                     );
@@ -1464,7 +1599,7 @@ function App() {
                         >
                           <option value="">Select class…</option>
                           {(form.school ? refData.classes.filter(c => String(c.school) === form.school) : refData.classes).map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
+                            <option key={c.id} value={c.id}>{(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}</option>
                           ))}
                         </select>
                       </label>
@@ -2414,11 +2549,29 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
 function AuditLogView({ notify }: { notify: (m: string) => void }) {
   const [logs, setLogs] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<Record<string, any>>({});
+
+  const loadAudit = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+    });
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    try {
+      const data = await list<Resource>(`audit/${qs}`);
+      setLogs(data);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
   useEffect(() => {
-    list<Resource>('audit').then(setLogs).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-  const filtered = useMemo(() => logs.filter(l => JSON.stringify(l).toLowerCase().includes(search.toLowerCase())), [logs, search]);
+    loadAudit();
+  }, [loadAudit]);
+
+  const filtered = logs;
   return (
     <>
       <div className="page-header">
@@ -2434,10 +2587,32 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
         <div className="resource-side"><CheckCircle2 size={17} /> Tamper-evident ledger</div>
       </div>
       <section className="panel audit-panel">
-        <div className="toolbar">
-          <div className="searchbox"><Search size={18} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter audit events by actor, action, or resource…" />{search && <button onClick={() => setSearch('')}><X size={14} /></button>}</div>
+        <div style={{ marginBottom: 14 }}>
+          <FilterBar
+            searchPlaceholder="Search audit events by actor, action, resource, or changes..."
+            filters={[
+              {
+                key: 'action',
+                label: 'Action',
+                options: [
+                  { label: 'Create', value: 'create' },
+                  { label: 'Update', value: 'update' },
+                  { label: 'Transfer', value: 'transfer' },
+                  { label: 'Role Change', value: 'role_change' },
+                  { label: 'Setup', value: 'setup' },
+                  { label: 'Void', value: 'void' },
+                ]
+              }
+            ]}
+            values={filters}
+            onChange={setFilters}
+            onClear={() => setFilters({})}
+          />
+        </div>
+        <div className="toolbar" style={{ marginTop: 0, paddingTop: 0 }}>
+          <span className="result-count">{filtered.length} events</span>
           <div className="toolbar-right">
-            <span className="result-count">{filtered.length} events</span>
+            <button className="outline-btn" onClick={loadAudit}><RefreshCw size={16} /> Refresh</button>
             <ExportMenu
               title="Security Audit Trail"
               filename="security-audit-trail"
@@ -2487,7 +2662,7 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
               })}
             </tbody>
           </table>
-          {!filtered.length && <Empty text={search ? 'No matching audit events found.' : 'No audit events recorded yet.'} />}
+          {!filtered.length && <Empty text={filters.q ? 'No matching audit events found.' : 'No audit events recorded yet.'} />}
         </div>
       </section>
     </>

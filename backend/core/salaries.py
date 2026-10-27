@@ -23,6 +23,7 @@ from core.models import (
 )
 from core.services.access import schools_scope
 from core.services.audit import record_event
+from core.services.filters import apply_query_filters, sort_comparison_rows
 from core.staff import resolve_salary_category
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
@@ -371,14 +372,23 @@ def salaries_sheet(request):
 
     if request.method == 'GET':
         qs = SalaryRecord.objects.filter(school__in=schools_scope(user)).select_related('staff', 'school')
-        if request.query_params.get('month'):
-            qs = qs.filter(month=request.query_params['month'])
-        if request.query_params.get('school'):
-            qs = qs.filter(school_id=request.query_params['school'])
-        if request.query_params.get('status'):
-            qs = qs.filter(status=request.query_params['status'])
-        if request.query_params.get('staff'):
-            qs = qs.filter(staff_id=request.query_params['staff'])
+        qs, _ = apply_query_filters(
+            request,
+            qs,
+            search_fields=['staff__first_name', 'staff__last_name', 'staff__position', 'reference'],
+            filter_map={
+                'month': 'month',
+                'school': 'school_id',
+                'campus': 'school_id',
+                'status': 'status',
+                'staff': 'staff_id',
+                'position': 'staff__position',
+                'amount_min': 'net__gte',
+                'amount_max': 'net__lte',
+            },
+            allowed_orderings=['month', 'net', 'gross', 'paid_on', 'status'],
+            default_ordering=['-month', 'staff__first_name']
+        )
 
         results = [{
             'id': r.id,
@@ -748,8 +758,23 @@ def salaries_summary(request):
             'count': monthly[m]['count']
         })
 
+    campus_breakdown = []
+    for s in schools:
+        s_recs = records.filter(school=s)
+        s_paid = s_recs.filter(status='paid').aggregate(s=Sum('net'))['s'] or Decimal('0.00')
+        s_pending = s_recs.filter(status__in=['draft', 'approved']).aggregate(s=Sum('net'))['s'] or Decimal('0.00')
+        campus_breakdown.append({
+            'school_id': s.id,
+            'name': s.name,
+            'paid': float(s_paid),
+            'pending': float(s_pending),
+            'total': float(s_paid + s_pending)
+        })
+    campus_breakdown = sort_comparison_rows(campus_breakdown, metric_key='paid', name_key='name', reverse=True)
+
     return Response({
         'total_paid': str(total_paid),
         'total_pending': str(total_pending),
-        'monthly': monthly_list
+        'monthly': monthly_list,
+        'campuses': campus_breakdown
     })

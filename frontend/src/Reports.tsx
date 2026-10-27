@@ -95,7 +95,10 @@ function Dist({ bands }: { bands: { band: string; count: number }[] }) {
 }
 
 function AvgChart({ rows, label, field = 'average' }: { rows: R[]; label: string; field?: string }) {
-  const data = rows.map(r => ({ name: r.name as string, average: r[field] as number | null })).filter(r => r.average !== null);
+  const data = rows
+    .map(r => ({ name: r.name as string, average: r[field] as number | null }))
+    .filter(r => r.average !== null)
+    .sort((a, b) => (b.average ?? 0) - (a.average ?? 0));
   if (!data.length) return <div className="rp-empty">No published results to chart for this selection.</div>;
   const themeHex = getStoredTheme().colorHex;
   return (

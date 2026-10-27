@@ -8,6 +8,7 @@ import csv
 from django.views.decorators.csrf import csrf_protect
 from core.services.access import (ensure_action, queryset_for, schools_scope, students_scope, classes_scope, require_visible, validate_related, IMMUTABLE_RELATIONS)
 from core.services.audit import record_event
+from core.services.filters import apply_query_filters, sort_comparison_rows
 from django.db.models import Avg,Count,Q
 from django.http import JsonResponse,HttpResponse
 from django.utils import timezone
@@ -234,20 +235,43 @@ class ClassSerializer(DynamicSerializer):
  school_name=serializers.CharField(source='school.name',read_only=True)
  academic_year_name=serializers.CharField(source='academic_year.name',read_only=True)
  teacher_name=serializers.SerializerMethodField()
+ display_name=serializers.CharField(read_only=True)
  def get_teacher_name(self,o):return o.teacher.get_full_name() if o.teacher else 'Unassigned'
  class Meta:model=SchoolClass;fields='__all__'
 class StudentSerializer(DynamicSerializer):
  full_name=serializers.CharField(read_only=True)
  class_name=serializers.SerializerMethodField()
+ school_class_id=serializers.SerializerMethodField()
+ section=serializers.SerializerMethodField()
  gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=False)
  def validate(self,attrs):
+  if not self.instance:
+   fn = attrs.get('father_name') or self.initial_data.get('father_name')
+   if not fn or not str(fn).strip():
+    raise serializers.ValidationError({'father_name':'Father name is mandatory for new student registrations.'})
   if 'gender' in self.initial_data and not self.initial_data.get('gender'):
    raise serializers.ValidationError({'gender':'Gender is mandatory. Please select Boy or Girl.'})
   return super().validate(attrs)
  def get_class_name(self,o):
   e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
-  return e.school_class.name if e else 'Unassigned'
- class Meta:model=Student;fields=['id','school','admission_number','first_name','last_name','full_name','date_of_birth','gender','enrolled_on','active','user','guardians','class_name']
+  if not e or not e.school_class:
+   return 'Unassigned'
+  sc = e.school_class
+  return f"{sc.name} – {sc.section}" if sc.section else sc.name
+ def get_school_class_id(self,o):
+  e=o.enrollments.filter(end_date__isnull=True).first()
+  return e.school_class_id if e else None
+ def get_section(self,o):
+  e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
+  return e.school_class.section if (e and e.school_class) else ''
+ class Meta:
+  model=Student
+  fields=[
+   'id','school','admission_number','first_name','last_name','full_name',
+   'father_name','mother_name','guardian_phone',
+   'date_of_birth','gender','enrolled_on','active','user','guardians',
+   'class_name','school_class_id','section'
+  ]
 class SubjectSerializer(DynamicSerializer):
  school_name=serializers.CharField(source='school.name',read_only=True)
  class Meta:model=Subject;fields='__all__'
@@ -290,6 +314,188 @@ def validate_model(model,attrs,instance=None,server_attrs=None):
   raise APIValidationError(getattr(exc,'message_dict',None) or getattr(exc,'messages',None) or str(exc))
  return obj
 
+def _filter_student_class(qs, val):
+ if isinstance(val, (list, tuple)):
+  return qs.filter(enrollments__school_class_id__in=val, enrollments__end_date__isnull=True)
+ return qs.filter(enrollments__school_class_id=val, enrollments__end_date__isnull=True)
+
+def _filter_student_section(qs, val):
+ if isinstance(val, (list, tuple)):
+  return qs.filter(enrollments__school_class__section__in=val, enrollments__end_date__isnull=True)
+ return qs.filter(enrollments__school_class__section__iexact=str(val).strip(), enrollments__end_date__isnull=True)
+
+MODEL_FILTER_SPECS = {
+ Student: {
+  'search_fields': ['first_name', 'last_name', 'admission_number', 'father_name', 'mother_name', 'guardian_phone'],
+  'filter_map': {
+   'admission_number': 'admission_number',
+   'name': 'first_name',
+   'first_name': 'first_name',
+   'last_name': 'last_name',
+   'father_name': 'father_name',
+   'mother_name': 'mother_name',
+   'guardian_phone': 'guardian_phone',
+   'gender': 'gender',
+   'active': 'active',
+   'status': 'active',
+   'class': _filter_student_class,
+   'school_class': _filter_student_class,
+   'section': _filter_student_section,
+   'enrolled_from': 'enrolled_on__gte',
+   'enrolled_to': 'enrolled_on__lte',
+   'dob_from': 'date_of_birth__gte',
+   'dob_to': 'date_of_birth__lte',
+  },
+  'allowed_orderings': ['admission_number', 'first_name', 'last_name', 'enrolled_on', 'active', 'father_name', 'gender'],
+  'default_ordering': ['first_name', 'last_name']
+ },
+ SchoolClass: {
+  'search_fields': ['name', 'section'],
+  'filter_map': {
+   'name': 'name',
+   'section': 'section',
+   'academic_year': 'academic_year_id',
+   'teacher': 'teacher_id',
+  },
+  'allowed_orderings': ['name', 'section'],
+  'default_ordering': ['name', 'section']
+ },
+ Subject: {
+  'search_fields': ['name', 'code'],
+  'filter_map': {
+   'name': 'name',
+   'code': 'code',
+  },
+  'allowed_orderings': ['name', 'code'],
+  'default_ordering': ['name']
+ },
+ School: {
+  'search_fields': ['name', 'code', 'city'],
+  'filter_map': {
+   'name': 'name',
+   'code': 'code',
+   'city': 'city',
+  },
+  'allowed_orderings': ['name', 'code', 'city'],
+  'default_ordering': ['name']
+ },
+ AcademicYear: {
+  'search_fields': ['name'],
+  'filter_map': {
+   'name': 'name',
+   'start_date_from': 'start_date__gte',
+   'start_date_to': 'start_date__lte',
+   'end_date_from': 'end_date__gte',
+   'end_date_to': 'end_date__lte',
+  },
+  'allowed_orderings': ['name', 'start_date', 'end_date'],
+  'default_ordering': ['-start_date']
+ },
+ Attendance: {
+  'search_fields': ['student__first_name', 'student__last_name', 'student__admission_number'],
+  'filter_map': {
+   'student': 'student_id',
+   'school_class': 'school_class_id',
+   'class': 'school_class_id',
+   'status': 'status',
+   'date': 'date',
+   'date_from': 'date__gte',
+   'date_to': 'date__lte',
+  },
+  'allowed_orderings': ['date', 'status'],
+  'default_ordering': ['-date']
+ },
+ Homework: {
+  'search_fields': ['title', 'description', 'subject__name'],
+  'filter_map': {
+   'school_class': 'school_class_id',
+   'class': 'school_class_id',
+   'subject': 'subject_id',
+   'due_date_from': 'due_date__gte',
+   'due_date_to': 'due_date__lte',
+  },
+  'allowed_orderings': ['due_date', 'title'],
+  'default_ordering': ['-due_date']
+ },
+ HomeworkSubmission: {
+  'search_fields': ['student__first_name', 'student__last_name', 'homework__title'],
+  'filter_map': {
+   'homework': 'homework_id',
+   'student': 'student_id',
+   'status': 'status',
+   'submitted_from': 'submitted_at__gte',
+   'submitted_to': 'submitted_at__lte',
+  },
+  'allowed_orderings': ['submitted_at', 'status'],
+  'default_ordering': ['-submitted_at']
+ },
+ Assessment: {
+  'search_fields': ['name', 'subject__name'],
+  'filter_map': {
+   'name': 'name',
+   'kind': 'kind',
+   'subject': 'subject_id',
+   'school_class': 'school_class_id',
+   'class': 'school_class_id',
+   'date_from': 'date__gte',
+   'date_to': 'date__lte',
+  },
+  'allowed_orderings': ['date', 'name', 'weightage', 'total_marks'],
+  'default_ordering': ['-date']
+ },
+ Grade: {
+  'search_fields': ['student__first_name', 'student__last_name', 'assessment__name'],
+  'filter_map': {
+   'assessment': 'assessment_id',
+   'student': 'student_id',
+   'class': 'assessment__school_class_id',
+   'school_class': 'assessment__school_class_id',
+  },
+  'allowed_orderings': ['score'],
+  'default_ordering': ['-score']
+ },
+ ReviewCase: {
+  'search_fields': ['title', 'description', 'student__first_name', 'student__last_name'],
+  'filter_map': {
+   'student': 'student_id',
+   'status': 'status',
+   'priority': 'priority',
+  },
+  'allowed_orderings': ['created_at', 'priority', 'status'],
+  'default_ordering': ['-created_at']
+ },
+ Intervention: {
+  'search_fields': ['action', 'notes', 'case__student__first_name', 'case__student__last_name'],
+  'filter_map': {
+   'case': 'case_id',
+   'status': 'status',
+   'kind': 'kind',
+  },
+  'allowed_orderings': ['created_at', 'status'],
+  'default_ordering': ['-created_at']
+ },
+ Notification: {
+  'search_fields': ['title', 'body'],
+  'filter_map': {
+   'read': 'read',
+   'user': 'user_id',
+  },
+  'allowed_orderings': ['created_at'],
+  'default_ordering': ['-created_at']
+ },
+ AuditEvent: {
+  'search_fields': ['action', 'resource', 'actor__username', 'actor__first_name', 'actor__last_name'],
+  'filter_map': {
+   'action': 'action',
+   'resource': 'resource',
+   'date_from': 'created_at__gte',
+   'date_to': 'created_at__lte',
+  },
+  'allowed_orderings': ['created_at', 'action', 'resource'],
+  'default_ordering': ['-created_at']
+ }
+}
+
 class ScopedViewSet(viewsets.ModelViewSet):
  """One secured CRUD boundary, resource matrix + all FK checks + atomic audit."""
  permission_classes=[IsAuthenticated]
@@ -299,6 +505,20 @@ class ScopedViewSet(viewsets.ModelViewSet):
    renderers = self.get_renderers()
    return (renderers[0], renderers[0].media_type)
   return super().perform_content_negotiation(request, force=force)
+ def filter_queryset(self, queryset):
+  model=getattr(queryset, 'model', None) or getattr(self.queryset, 'model', None)
+  spec=MODEL_FILTER_SPECS.get(model)
+  if spec:
+   qs, _ = apply_query_filters(
+    self.request,
+    queryset,
+    search_fields=spec.get('search_fields'),
+    filter_map=spec.get('filter_map'),
+    allowed_orderings=spec.get('allowed_orderings'),
+    default_ordering=spec.get('default_ordering'),
+   )
+   return qs
+  return queryset
  def get_queryset(self):
   model=self.queryset.model
   ensure_action(self.request.user,model,'read')
@@ -573,6 +793,19 @@ class AuditLog(viewsets.ReadOnlyModelViewSet):
     fmt=fmt
    )
   return super().list(request, *args, **kwargs)
+ def filter_queryset(self, queryset):
+  spec=MODEL_FILTER_SPECS.get(AuditEvent)
+  if spec:
+   qs, _ = apply_query_filters(
+    self.request,
+    queryset,
+    search_fields=spec.get('search_fields'),
+    filter_map=spec.get('filter_map'),
+    allowed_orderings=spec.get('allowed_orderings'),
+    default_ordering=spec.get('default_ordering'),
+   )
+   return qs
+  return queryset
  def get_queryset(self):
   ensure_action(self.request.user,AuditEvent,'read')
   return queryset_for(self.request.user,AuditEvent)
@@ -670,10 +903,22 @@ def export_students(request):
  fmt=request.query_params.get('format') or 'csv'
  from core.services.exports import export_response
  qs=students_scope(request.user).select_related('school')
+ spec=MODEL_FILTER_SPECS.get(Student)
+ if spec:
+  qs, _ = apply_query_filters(
+   request,
+   qs,
+   search_fields=spec.get('search_fields'),
+   filter_map=spec.get('filter_map'),
+   allowed_orderings=spec.get('allowed_orderings'),
+   default_ordering=spec.get('default_ordering'),
+  )
  columns=[
   {'key':'admission_number','label':'Admission #'},
   {'key':'first_name','label':'First Name'},
   {'key':'last_name','label':'Last Name'},
+  {'key':'father_name','label':'Father Name'},
+  {'key':'gender','label':'Gender'},
   {'key':'school_name','label':'Campus'},
   {'key':'enrolled_on','label':'Enrolled On'},
   {'key':'active','label':'Active Status'},
@@ -682,6 +927,8 @@ def export_students(request):
   'admission_number':s.admission_number,
   'first_name':s.first_name,
   'last_name':s.last_name,
+  'father_name':s.father_name,
+  'gender':s.gender or '',
   'school_name':s.school.name,
   'enrolled_on':str(s.enrolled_on),
   'active':'Yes' if s.active else 'No'

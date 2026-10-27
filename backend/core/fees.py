@@ -21,6 +21,7 @@ from core.models import (
 )
 from core.services.access import schools_scope, students_scope
 from core.services.audit import record_event
+from core.services.filters import sort_comparison_rows, apply_query_filters
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
 
@@ -637,14 +638,27 @@ def payments(request):
     _require_manager(user)
     if request.method == 'GET':
         qs = FeePayment.objects.filter(school__in=schools_scope(user)).select_related('student', 'school', 'received_by', 'approved_by')
-        if request.query_params.get('school'):
-            qs = qs.filter(school_id=request.query_params['school'])
-        if request.query_params.get('student'):
-            qs = qs.filter(student_id=request.query_params['student'])
-        if request.query_params.get('status'):
-            qs = qs.filter(status=request.query_params['status'])
         if request.query_params.get('voided') != '1':
             qs = qs.filter(voided=False)
+        qs, _ = apply_query_filters(
+            request,
+            qs,
+            search_fields=['receipt_number', 'reference', 'student__first_name', 'student__last_name', 'student__admission_number'],
+            filter_map={
+                'school': 'school_id',
+                'campus': 'school_id',
+                'student': 'student_id',
+                'status': 'status',
+                'method': 'method',
+                'voided': 'voided',
+                'date_from': 'paid_on__gte',
+                'date_to': 'paid_on__lte',
+                'amount_min': 'amount__gte',
+                'amount_max': 'amount__lte',
+            },
+            allowed_orderings=['paid_on', 'amount', 'receipt_number', 'status'],
+            default_ordering=['-paid_on', '-id'],
+        )
         rows = [{
             'id': p.id, 'receipt_number': p.receipt_number, 'student_id': p.student_id,
             'student_name': p.student.full_name, 'admission_number': p.student.admission_number,
@@ -937,16 +951,30 @@ def defaulters(request):
         qs = qs.filter(student__school_id=request.query_params['school'])
     if request.query_params.get('class'):
         qs = qs.filter(student__enrollments__school_class_id=request.query_params['class'], student__enrollments__end_date__isnull=True)
+    if request.query_params.get('section'):
+        qs = qs.filter(student__enrollments__school_class__section__iexact=str(request.query_params['section']).strip(), student__enrollments__end_date__isnull=True)
+    if request.query_params.get('q'):
+        q_val = str(request.query_params['q']).strip()[:100]
+        qs = qs.filter(
+            Q(student__first_name__icontains=q_val) |
+            Q(student__last_name__icontains=q_val) |
+            Q(student__admission_number__icontains=q_val) |
+            Q(student__father_name__icontains=q_val)
+        )
 
     student_map = {}
     for fee in qs:
         sid = fee.student_id
         if sid not in student_map:
             en = fee.student.enrollments.filter(end_date__isnull=True).select_related('school_class').first()
+            cls_name = 'Unassigned'
+            if en and en.school_class:
+                sc = en.school_class
+                cls_name = f"{sc.name} – {sc.section}" if sc.section else sc.name
             student_map[sid] = {
                 'student_id': sid, 'student_name': fee.student.full_name,
                 'admission_number': fee.student.admission_number, 'school_name': fee.student.school.name,
-                'class_name': en.school_class.name if en else 'Unassigned',
+                'class_name': cls_name,
                 'overdue_count': 0, 'total_overdue': Decimal('0.00'), 'oldest_due_date': fee.due_date
             }
         already_paid = fee.allocations.filter(payment__voided=False, payment__status='approved').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
@@ -963,7 +991,9 @@ def defaulters(request):
             **s, 'total_overdue': str(s['total_overdue']),
             'oldest_due_date': str(s['oldest_due_date']), 'days_overdue': days
         })
-    results.sort(key=lambda x: -x['days_overdue'])
+    sort_by = request.query_params.get('sort_by') or 'total_overdue'
+    order = request.query_params.get('order') or 'desc'
+    results = sort_comparison_rows(results, metric_key=sort_by, name_key='student_name', reverse=(order != 'asc'))
     from core.services.exports import handle_export
     export_res = handle_export(
         request, results, filename='fee-defaulters', title='Fee Defaulters Report',

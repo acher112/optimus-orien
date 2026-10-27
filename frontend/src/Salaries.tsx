@@ -7,6 +7,7 @@ import {
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User as ApiUser } from './api';
 import ExportMenu from './ExportMenu';
+import { FilterBar } from './FilterBar';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -20,6 +21,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [staffList, setStaffList] = useState<R[]>([]);
   const [records, setRecords] = useState<R[]>([]);
+  const [sheetFilters, setSheetFilters] = useState<Record<string, any>>({});
   const [structures, setStructures] = useState<R[]>([]);
   const [adjustments, setAdjustments] = useState<R[]>([]);
   const [myPayslips, setMyPayslips] = useState<R[]>([]);
@@ -68,6 +70,16 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
     request<R>('staff/').then(res => setStaffList(res.results || [])).catch(() => {});
   }, []);
 
+  const sheetQs = useCallback(() => {
+    const params = new URLSearchParams();
+    params.set('month', month);
+    if (school) params.set('school', school);
+    Object.entries(sheetFilters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+    });
+    return `?${params.toString()}`;
+  }, [month, school, sheetFilters]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -78,7 +90,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
         setMyPayslips(myRes.results || []);
       } else {
         const [sheetRes, sumRes, structRes, adjRes] = await Promise.all([
-          request<R>(`salaries/sheet/${qs}`),
+          request<R>(`salaries/sheet/${sheetQs()}`),
           request<R>(`salaries/summary/${qs}`),
           request<R>(`salaries/structures/${school ? `?school=${school}` : ''}`),
           request<R>(`salaries/adjustments/${qs}`)
@@ -93,7 +105,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
     } finally {
       setLoading(false);
     }
-  }, [month, school, isTeacher]);
+  }, [month, school, isTeacher, sheetQs]);
 
   useEffect(() => { loadData(); }, [loadData, bump]);
 
@@ -295,7 +307,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
               <ExportMenu
                 title={`Payroll Sheet (${month})`}
                 filename={`payroll-sheet-${month}`}
-                endpoint={`salaries/sheet/?month=${month}${school ? `&school=${school}` : ''}`}
+                endpoint={`salaries/sheet/${sheetQs()}`}
                 notify={notify}
               />
               {selectedIds.length > 0 && (
@@ -307,6 +319,27 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
                 <Plus size={15} /> Generate Monthly Sheet
               </button>
             </div>
+          </div>
+          <div style={{ padding: '0 20px 14px 20px' }}>
+            <FilterBar
+              searchPlaceholder="Search staff name or position..."
+              filters={[
+                {
+                  key: 'status',
+                  label: 'Status',
+                  options: [
+                    { label: 'Draft', value: 'draft' },
+                    { label: 'Approved', value: 'approved' },
+                    { label: 'Paid', value: 'paid' },
+                    { label: 'Cancelled', value: 'cancelled' },
+                    { label: 'Void', value: 'void' },
+                  ]
+                }
+              ]}
+              values={sheetFilters}
+              onChange={setSheetFilters}
+              onClear={() => setSheetFilters({})}
+            />
           </div>
           <div className="table-scroll">
             <table className="data-table">
@@ -432,6 +465,39 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
               </ResponsiveContainer>
             </div>
           </section>
+
+          {summary.campuses && summary.campuses.length > 0 && (
+            <section className="panel hr-panel fx-card" style={{ marginTop: 20 }}>
+              <div className="panel-head">
+                <div>
+                  <h3>Campus Payroll Comparison (Highest Payout on Top)</h3>
+                  <p>Campus breakdown sorted descending by total paid salaries</p>
+                </div>
+              </div>
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>CAMPUS</th>
+                      <th>TOTAL PAID OUT</th>
+                      <th>PENDING / APPROVED</th>
+                      <th>STAFF COUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.campuses.map((c: any) => (
+                      <tr key={c.id}>
+                        <td><strong>{c.name}</strong></td>
+                        <td><strong style={{ color: '#16a34a' }}>Rs {Number(c.paid).toLocaleString()}</strong></td>
+                        <td><span style={{ color: '#f59e0b' }}>Rs {Number(c.pending).toLocaleString()}</span></td>
+                        <td>{c.staff_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </div>
       )}
 

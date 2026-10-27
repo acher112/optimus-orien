@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu, { type ExportColumn } from './ExportMenu';
+import { FilterBar } from './FilterBar';
 
 interface StudyMaterialItem {
   id: number;
@@ -37,10 +38,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
   const [materials, setMaterials] = useState<StudyMaterialItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [selectedClass, setSelectedClass] = useState<string>('all');
-  const [selectedSubject, setSelectedSubject] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [filterValues, setFilterValues] = useState<Record<string, any>>({});
   const [school, setSchool] = useState<string>('');
 
   // Dropdown reference data
@@ -88,10 +86,10 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
     setError('');
     const params = new URLSearchParams();
     if (school) params.append('school', school);
-    if (selectedClass !== 'all') params.append('class', selectedClass);
-    if (selectedSubject !== 'all') params.append('subject', selectedSubject);
-    if (selectedStatus !== 'all') params.append('status', selectedStatus);
-    if (search.trim()) params.append('q', search.trim());
+    if (filterValues.class && filterValues.class !== 'all') params.append('class', filterValues.class);
+    if (filterValues.subject && filterValues.subject !== 'all') params.append('subject', filterValues.subject);
+    if (filterValues.status && filterValues.status !== 'all') params.append('status', filterValues.status);
+    if (filterValues.q?.trim()) params.append('q', filterValues.q.trim());
 
     try {
       const res = await request<{ results: StudyMaterialItem[] }>(`materials/?${params.toString()}`);
@@ -101,7 +99,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
     } finally {
       setLoading(false);
     }
-  }, [school, selectedClass, selectedSubject, selectedStatus, search]);
+  }, [school, filterValues]);
 
   useEffect(() => {
     loadMaterials();
@@ -343,9 +341,10 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
             filename="study-materials"
             endpoint={`materials/?${new URLSearchParams({
               ...(school ? { school } : {}),
-              ...(selectedClass !== 'all' ? { class: selectedClass } : {}),
-              ...(selectedSubject !== 'all' ? { subject: selectedSubject } : {}),
-              ...(selectedStatus !== 'all' ? { status: selectedStatus } : {})
+              ...(filterValues.class && filterValues.class !== 'all' ? { class: filterValues.class } : {}),
+              ...(filterValues.subject && filterValues.subject !== 'all' ? { subject: filterValues.subject } : {}),
+              ...(filterValues.status && filterValues.status !== 'all' ? { status: filterValues.status } : {}),
+              ...(filterValues.q ? { q: filterValues.q } : {})
             }).toString()}`}
             notify={notify}
           />
@@ -393,65 +392,49 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
       )}
 
       {/* Filter and Search Bar */}
-      <div className="toolbar" style={{ marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-        <div className="searchbox" style={{ minWidth: '240px' }}>
-          <Search size={17} />
-          <input
-            type="text"
-            placeholder="Search by title, description or file name..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          {search && <button onClick={() => setSearch('')}><X size={14} /></button>}
-        </div>
-
-        <div className="toolbar-right" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          {schools.length > 1 && (
-            <select
-              className="outline-btn"
-              value={school}
-              onChange={e => setSchool(e.target.value)}
-              style={{ padding: '8px 12px', fontSize: '13px' }}
-            >
-              <option value="">All Campuses</option>
-              {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          )}
-
-          <select
-            className="outline-btn"
-            value={selectedClass}
-            onChange={e => setSelectedClass(e.target.value)}
-            style={{ padding: '8px 12px', fontSize: '13px' }}
-          >
-            <option value="all">All Classes</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-
-          <select
-            className="outline-btn"
-            value={selectedSubject}
-            onChange={e => setSelectedSubject(e.target.value)}
-            style={{ padding: '8px 12px', fontSize: '13px' }}
-          >
-            <option value="all">All Subjects</option>
-            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-
-          {isStaffOrAdmin && (
-            <select
-              className="outline-btn"
-              value={selectedStatus}
-              onChange={e => setSelectedStatus(e.target.value)}
-              style={{ padding: '8px 12px', fontSize: '13px' }}
-            >
-              <option value="all">All Statuses</option>
-              <option value="published">Published</option>
-              <option value="draft">Drafts</option>
-              <option value="archived">Archived</option>
-            </select>
-          )}
-
+      <div style={{ marginBottom: 14 }}>
+        <FilterBar
+          searchPlaceholder="Search materials by title, description, or file name..."
+          filters={[
+            ...(schools.length > 1 ? [{
+              key: 'school',
+              label: 'Campus',
+              options: schools.map(s => ({ label: s.name, value: s.id }))
+            }] : []),
+            {
+              key: 'class',
+              label: 'Class',
+              options: classes.map(c => ({
+                label: (c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name),
+                value: c.id
+              }))
+            },
+            {
+              key: 'subject',
+              label: 'Subject',
+              options: subjects.map(s => ({
+                label: `${s.name}${s.code ? ` (${s.code})` : ''}`,
+                value: s.id
+              }))
+            },
+            ...(isStaffOrAdmin ? [{
+              key: 'status',
+              label: 'Status',
+              options: [
+                { label: 'Published', value: 'published' },
+                { label: 'Drafts', value: 'draft' },
+                { label: 'Archived', value: 'archived' }
+              ]
+            }] : [])
+          ]}
+          values={filterValues}
+          onChange={setFilterValues}
+          onClear={() => setFilterValues({})}
+        />
+      </div>
+      <div className="toolbar" style={{ marginBottom: 16, marginTop: 0, paddingTop: 0 }}>
+        <span className="result-count">{materials.length} learning resources</span>
+        <div className="toolbar-right">
           <button className="outline-btn" onClick={loadMaterials} title="Refresh list">
             <RefreshCw size={15} /> Refresh
           </button>
@@ -595,7 +578,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
                 <BookOpen size={36} strokeWidth={1.5} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                 <h3 style={{ margin: '0 0 6px', fontSize: '16px' }}>No study materials found</h3>
                 <p style={{ margin: 0, fontSize: '13px' }}>
-                  {search ? 'Try adjusting your filters or search keyword.' : 'Upload study notes, slides, or reading lists for your classes.'}
+                  {filterValues.q ? 'Try adjusting your filters or search keyword.' : 'Upload study notes, slides, or reading lists for your classes.'}
                 </p>
               </div>
             )}

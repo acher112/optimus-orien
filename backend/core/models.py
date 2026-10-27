@@ -51,13 +51,17 @@ class SchoolClass(models.Model):
  school=models.ForeignKey(School,on_delete=models.PROTECT)
  academic_year=models.ForeignKey(AcademicYear,on_delete=models.PROTECT)
  name=models.CharField(max_length=100)
+ section=models.CharField(max_length=40,blank=True,default='',db_index=True)
  grade_level=models.CharField(max_length=40,blank=True)
  teacher=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='classes_taught')
- class Meta:constraints=[models.UniqueConstraint(fields=['academic_year','name'],name='unique_class_in_year')]
+ class Meta:constraints=[models.UniqueConstraint(fields=['academic_year','name','section'],name='unique_class_in_year')]
  def clean(self):
   if self.academic_year_id and self.school_id and self.academic_year.school_id!=self.school_id:raise ValidationError('Invalid class academic year')
   if self.teacher_id and (self.teacher.role!='teacher' or self.teacher.school_id!=self.school_id):raise ValidationError('Assigned teacher must belong to class school')
- def __str__(self):return self.name
+ @property
+ def display_name(self):
+  return f"{self.name} – {self.section}" if self.section else self.name
+ def __str__(self):return self.display_name
 
 class Subject(models.Model):
  school=models.ForeignKey(School,on_delete=models.PROTECT)
@@ -68,16 +72,19 @@ class Subject(models.Model):
 
 class Student(models.Model):
  school=models.ForeignKey(School,on_delete=models.PROTECT)
- admission_number=models.CharField(max_length=35)
- first_name=models.CharField(max_length=100)
- last_name=models.CharField(max_length=100)
+ admission_number=models.CharField(max_length=35,db_index=True)
+ first_name=models.CharField(max_length=100,db_index=True)
+ last_name=models.CharField(max_length=100,db_index=True)
+ father_name=models.CharField(max_length=100,blank=True,default='',db_index=True)
+ mother_name=models.CharField(max_length=100,blank=True,default='')
+ guardian_phone=models.CharField(max_length=40,blank=True,default='')
  date_of_birth=models.DateField(null=True,blank=True)
  GENDER=[('male','Boy'),('female','Girl')]
- gender=models.CharField(max_length=8,choices=GENDER,blank=True,default='')
+ gender=models.CharField(max_length=8,choices=GENDER,blank=True,default='',db_index=True)
  user=models.OneToOneField(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='student_record')
  guardians=models.ManyToManyField(User,related_name='wards',blank=True)
- enrolled_on=models.DateField()
- active=models.BooleanField(default=True)
+ enrolled_on=models.DateField(db_index=True)
+ active=models.BooleanField(default=True,db_index=True)
  class Meta:constraints=[models.UniqueConstraint(fields=['school','admission_number'],name='unique_admission_per_school')]
  def clean(self):
   if self.user_id and (self.user.role!='student' or (self.user.organisation_id!=self.school.organisation_id)):

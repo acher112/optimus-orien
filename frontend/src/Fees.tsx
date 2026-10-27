@@ -8,6 +8,7 @@ import {
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User } from './api';
 import ExportMenu, { type ExportColumn } from './ExportMenu';
+import { FilterBar } from './FilterBar';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -30,6 +31,8 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
   const [concessions, setConcessions] = useState<R[]>([]);
   const [receiptsList, setReceiptsList] = useState<R[]>([]);
   const [classes, setClasses] = useState<R[]>([]);
+  const [defaulterFilters, setDefaulterFilters] = useState<Record<string, any>>({});
+  const [receiptFilters, setReceiptFilters] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [bump, setBump] = useState(0);
@@ -92,6 +95,24 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
     list<R>('classes').then(setClasses).catch(() => {});
   }, []);
 
+  const defaulterQs = useMemo(() => {
+    const params = new URLSearchParams();
+    if (school) params.set('school', school);
+    Object.entries(defaulterFilters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+    });
+    return params.toString() ? `?${params.toString()}` : '';
+  }, [school, defaulterFilters]);
+
+  const receiptQs = useMemo(() => {
+    const params = new URLSearchParams();
+    if (school) params.set('school', school);
+    Object.entries(receiptFilters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+    });
+    return params.toString() ? `?${params.toString()}` : '';
+  }, [school, receiptFilters]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -99,11 +120,11 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
     try {
       const [sumRes, defRes, headRes, structRes, concRes, payRes] = await Promise.all([
         request<R>(`fees/summary/${qs}`),
-        request<R>(`fees/defaulters/${qs}`),
+        request<R>(`fees/defaulters/${defaulterQs}`),
         request<R>(`fees/heads/${qs}`),
         request<R>(`fees/structures/${qs}`),
         request<R>(`fees/concessions/${qs}`),
-        request<R>(`fees/payments/${qs}`).catch(() => ({ results: [] }))
+        request<R>(`fees/payments/${receiptQs}`).catch(() => ({ results: [] }))
       ]);
       setSummary(sumRes);
       setDefaulters(defRes.results || []);
@@ -116,7 +137,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
     } finally {
       setLoading(false);
     }
-  }, [school]);
+  }, [school, defaulterQs, receiptQs]);
 
   useEffect(() => { loadData(); }, [loadData, bump]);
 
@@ -681,11 +702,30 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
               <ExportMenu
                 title="Fee Defaulters Directory"
                 filename="fee-defaulters"
-                endpoint={`fees/defaulters/${school ? `?school=${school}` : ''}`}
+                endpoint={`fees/defaulters/${defaulterQs}`}
                 notify={notify}
               />
               <button className="primary-btn" onClick={() => setVoucherModal(true)}><Receipt size={15} /> Generate Vouchers</button>
             </div>
+          </div>
+          <div style={{ padding: '0 20px 14px 20px' }}>
+            <FilterBar
+              searchPlaceholder="Search defaulters by student name, admission #, or father name..."
+              filters={[
+                {
+                  key: 'section',
+                  label: 'Section',
+                  options: [
+                    { label: 'Section A', value: 'A' },
+                    { label: 'Section B', value: 'B' },
+                    { label: 'Section C', value: 'C' },
+                  ]
+                }
+              ]}
+              values={defaulterFilters}
+              onChange={setDefaulterFilters}
+              onClear={() => setDefaulterFilters({})}
+            />
           </div>
           <div className="table-scroll">
             <table className="data-table">
@@ -889,10 +929,39 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
               <ExportMenu
                 title="Payment Receipts Log"
                 filename="payment-receipts"
-                endpoint={`fees/payments/${school ? `?school=${school}` : ''}`}
+                endpoint={`fees/payments/${receiptQs}`}
                 notify={notify}
               />
             </div>
+          </div>
+          <div style={{ padding: '0 20px 14px 20px' }}>
+            <FilterBar
+              searchPlaceholder="Search receipts by student, admission #, or transaction reference..."
+              filters={[
+                {
+                  key: 'status',
+                  label: 'Status',
+                  options: [
+                    { label: 'Pending', value: 'pending' },
+                    { label: 'Approved', value: 'approved' },
+                    { label: 'Rejected', value: 'rejected' },
+                  ]
+                },
+                {
+                  key: 'method',
+                  label: 'Method',
+                  options: [
+                    { label: 'Cash', value: 'cash' },
+                    { label: 'Bank Transfer', value: 'bank_transfer' },
+                    { label: 'Online Gateway', value: 'online' },
+                    { label: 'Cheque', value: 'cheque' },
+                  ]
+                }
+              ]}
+              values={receiptFilters}
+              onChange={setReceiptFilters}
+              onClear={() => setReceiptFilters({})}
+            />
           </div>
           <div className="table-scroll">
             <table className="data-table">

@@ -109,11 +109,15 @@ def csv_import(request):
             validated_rows.append({
                 'first_name': first_name,
                 'last_name': last_name,
+                'father_name': row_clean.get('father_name', ''),
+                'mother_name': row_clean.get('mother_name', ''),
+                'guardian_phone': row_clean.get('guardian_phone', ''),
                 'admission_number': adm,
                 'roll_number': row_clean.get('roll_number', ''),
                 'date_of_birth': dob,
                 'gender': gender,
-                'class_name': row_clean.get('class', '')
+                'class_name': row_clean.get('class', ''),
+                'section': row_clean.get('section', '')
             })
 
     elif entity_type == 'staff':
@@ -209,13 +213,19 @@ def csv_import(request):
                     school=school,
                     first_name=r['first_name'],
                     last_name=r['last_name'],
+                    father_name=r.get('father_name', ''),
+                    mother_name=r.get('mother_name', ''),
+                    guardian_phone=r.get('guardian_phone', ''),
                     admission_number=r['admission_number'],
                     date_of_birth=r['date_of_birth'],
                     gender=r['gender'],
                     enrolled_on=r.get('date_of_birth') or date.today()
                 )
                 if r['class_name'] and ay:
-                    cls = SchoolClass.objects.filter(school=school, academic_year=ay, name__iexact=r['class_name']).first()
+                    cls_qs = SchoolClass.objects.filter(school=school, academic_year=ay, name__iexact=r['class_name'])
+                    if r.get('section'):
+                        cls_qs = cls_qs.filter(section__iexact=r['section'])
+                    cls = cls_qs.first()
                     if cls:
                         Enrollment.objects.create(student=st, school_class=cls, start_date=st.date_of_birth)
                 record_event(actor=user, action='import_student', obj=st)

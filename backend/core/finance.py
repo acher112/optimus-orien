@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from core.models import FinanceCategory, FinanceEntry
 from core.services.access import schools_scope
 from core.services.audit import record_event
+from core.services.filters import apply_query_filters, sort_comparison_rows
 
 ROLES = ('organisation_admin', 'school_admin', 'principal')
 DEFAULTS = {
@@ -78,15 +79,42 @@ def _entry_row(e):
             'created_by': (e.created_by.get_full_name() or e.created_by.username) if e.created_by_id else None}
 
 
-def _entries(user, params):
+def _entries(user, params, request=None):
     qs = FinanceEntry.objects.filter(school__in=schools_scope(user)).select_related('school', 'category', 'created_by')
+    if request:
+        qs, _ = apply_query_filters(
+            request,
+            qs,
+            search_fields=['description', 'category__name', 'school__name'],
+            filter_map={
+                'school': 'school_id',
+                'campus': 'school_id',
+                'kind': 'category__kind',
+                'category': 'category_id',
+                'date_from': 'date__gte',
+                'date_to': 'date__lte',
+                'from': 'date__gte',
+                'to': 'date__lte',
+                'amount_min': 'amount__gte',
+                'amount_max': 'amount__lte',
+                'voided': 'voided',
+            },
+            allowed_orderings=['date', 'amount', 'created_at', 'school__name'],
+            default_ordering=['-date', '-id'],
+            extra_allowed_params={'include_voided', 'sort_by', 'order'}
+        )
+        return qs
+
     if params.get('school') and str(params['school']).lower() not in ('all', '', 'overall', 'none'):
         qs = qs.filter(school_id=params['school'])
     if params.get('kind') in ('income', 'expense'):
         qs = qs.filter(category__kind=params['kind'])
     if params.get('category'):
         qs = qs.filter(category_id=params['category'])
-    start, end = _date(params.get('from'), 'from'), _date(params.get('to'), 'to')
+    if params.get('q'):
+        raw_q = str(params['q']).strip()[:100]
+        qs = qs.filter(Q(description__icontains=raw_q) | Q(category__name__icontains=raw_q) | Q(school__name__icontains=raw_q))
+    start, end = _date(params.get('from') or params.get('date_from'), 'from'), _date(params.get('to') or params.get('date_to'), 'to')
     if start:
         qs = qs.filter(date__gte=start)
     if end:
@@ -107,6 +135,14 @@ def categories(request):
             qs = qs.filter(school_id=request.query_params['school'])
         if request.query_params.get('kind') in ('income', 'expense'):
             qs = qs.filter(kind=request.query_params['kind'])
+        if request.query_params.get('q'):
+            qs = qs.filter(name__icontains=request.query_params['q'].strip()[:100])
+        if request.query_params.get('active'):
+            act_str = str(request.query_params['active']).lower()
+            if act_str in ('true', '1', 'active'):
+                qs = qs.filter(active=True)
+            elif act_str in ('false', '0', 'inactive'):
+                qs = qs.filter(active=False)
         return Response({'results': [_cat_row(c) for c in qs]})
     school = _school(user, request.data.get('school'))
     kind = request.data.get('kind')
@@ -154,7 +190,7 @@ def entries(request):
     user = request.user
     _require(user)
     if request.method == 'GET':
-        qs = _entries(user, request.query_params)
+        qs = _entries(user, request.query_params, request=request)
         include_void = request.query_params.get('include_voided') == '1'
         if not include_void:
             qs = qs.filter(voided=False)
@@ -205,7 +241,7 @@ def summary(request):
     """Totals plus chart-ready breakdowns: expense pie, income by category, monthly trend."""
     user = request.user
     _require(user)
-    qs = _entries(user, request.query_params).filter(voided=False)
+    qs = _entries(user, request.query_params, request=request).filter(voided=False)
     total = {'income': Decimal('0'), 'expense': Decimal('0')}
     by_cat = {'income': defaultdict(Decimal), 'expense': defaultdict(Decimal)}
     monthly = defaultdict(lambda: {'income': Decimal('0'), 'expense': Decimal('0')})
@@ -217,8 +253,8 @@ def summary(request):
 
     def pie(kind):
         t = total[kind]
-        rows = sorted(by_cat[kind].items(), key=lambda kv: -kv[1])
-        return [{'name': n, 'amount': float(a), 'share': round(float(a / t * 100), 1) if t else 0} for n, a in rows if a > 0]
+        rows = [{'name': n, 'amount': float(a), 'share': round(float(a / t * 100), 1) if t else 0} for n, a in by_cat[kind].items() if a > 0]
+        return sort_comparison_rows(rows, metric_key='amount', name_key='name', reverse=True)
 
     campuses = []
     selected_school = request.query_params.get('school')
@@ -230,6 +266,12 @@ def summary(request):
         inc = sum((e.amount for e in qs if e.school_id == s.id and e.category.kind == 'income'), Decimal('0'))
         exp = sum((e.amount for e in qs if e.school_id == s.id and e.category.kind == 'expense'), Decimal('0'))
         campuses.append({'id': s.id, 'name': s.name, 'income': float(inc), 'expense': float(exp), 'net': float(inc - exp)})
+
+    sort_metric = request.query_params.get('sort_by') or 'income'
+    order_dir = request.query_params.get('order') or 'desc'
+    campuses_sorted = sort_comparison_rows(campuses, metric_key=sort_metric, name_key='name', reverse=(order_dir != 'asc'))
+    income_by_campus = sort_comparison_rows(campuses, metric_key='income', name_key='name', reverse=True)
+    expense_by_campus = sort_comparison_rows(campuses, metric_key='expense', name_key='name', reverse=True)
 
     # Calculate student fee revenue projection within scope
     from core.models import Student, StudentFee, FeePayment
@@ -250,7 +292,9 @@ def summary(request):
         'net': float(total['income'] - total['expense']), 'entries': qs.count(),
         'expense_by_category': pie('expense'), 'income_by_category': pie('income'),
         'monthly': [{'month': m, 'income': float(v['income']), 'expense': float(v['expense'])} for m, v in sorted(monthly.items())],
-        'campuses': campuses,
+        'campuses': campuses_sorted,
+        'income_by_campus': income_by_campus,
+        'expense_by_campus': expense_by_campus,
         'student_projection': {
             'total_students': st_count,
             'expected': float(st_expected),
