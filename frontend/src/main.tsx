@@ -7,7 +7,7 @@ import {
   HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, MoreHorizontal,
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
-  Wallet, X, AlertCircle, Clock, FileSpreadsheet
+  Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound
 } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
@@ -32,6 +32,7 @@ import Timetable from './Timetable';
 import StudyMaterials from './StudyMaterials';
 import ExportMenu from './ExportMenu';
 import Settings from './Settings';
+import Permissions from './Permissions';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import './style.css';
 
@@ -74,6 +75,7 @@ const SYSTEM_NAV = [
   { name: 'Reports', icon: BarChart3, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'My performance', icon: TrendingUp, roles: ['student', 'parent'] },
   { name: 'Platform owner', icon: ShieldCheck, superuserOnly: true },
+  { name: 'Permissions', icon: KeyRound, roles: ['organisation_admin', 'school_admin'] },
   { name: 'Audit log', icon: ShieldCheck, adminOnly: true },
   { name: 'Notifications', icon: Bell },
   { name: 'Settings', icon: Settings2 },
@@ -384,7 +386,7 @@ function App() {
     try {
       if (page === 'Overview') {
         setDash(await request<Dashboard>(`dashboard/${qs}`));
-      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings'].includes(page)) {
+      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings'].includes(page)) {
         // subcomponents handle own data
       } else if (resourceInfo[page]) {
         setRecords(await list<Resource>(`${resourceInfo[page].api}/${qs}`));
@@ -1255,6 +1257,7 @@ function App() {
           {page === 'Communication' && <Communication user={user} notify={notify} />}
           {page === 'Announcements' && <Announcements user={user} notify={notify} />}
           {page === 'Settings' && <Settings user={user} onUserUpdated={u => setUser(u)} notify={notify} />}
+          {page === 'Permissions' && <Permissions user={user} notify={notify} />}
 
         </main>
         <footer className="footer">

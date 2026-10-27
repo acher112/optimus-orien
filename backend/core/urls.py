@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 
 from . import (
     views, onboarding_views, reports, staff, finance, communication,
-    fees, salaries, exams, platform_owner, imports, announcements, study_materials
+    fees, salaries, exams, platform_owner, imports, announcements, study_materials,
+    permission_views
 )
 
 r = DefaultRouter()
@@ -98,6 +99,10 @@ urlpatterns = [
     path('timetables/', platform_owner.class_timetables),
     path('timetables/<int:pk>/', platform_owner.timetable_detail),
     path('imports/csv/', imports.csv_import),
+
+    # Role Permissions Management
+    path('permissions/', permission_views.permissions_list),
+    path('permissions/reset/', permission_views.permissions_reset),
 
     # Existing core endpoints
     path('public/indicators/', onboarding_views.public_school_indicators),

@@ -843,4 +843,25 @@ class StudyMaterial(models.Model):
         return f"{self.title} ({self.school_class.name}) [{self.status}]"
 
 
+class RolePermission(models.Model):
+    """Custom granular permission overrides for institutional roles per campus or organization."""
+    school = models.ForeignKey(School, null=True, blank=True, on_delete=models.CASCADE, related_name='role_permissions')
+    role = models.CharField(max_length=40, choices=User.ROLE_CHOICES)
+    permission_key = models.CharField(max_length=80)
+    granted = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        ordering = ['role', 'permission_key']
+        constraints = [
+            models.UniqueConstraint(fields=['school', 'role', 'permission_key'], name='unique_school_role_permission')
+        ]
+
+    def __str__(self):
+        campus = self.school.name if self.school else 'Global'
+        state = 'Granted' if self.granted else 'Revoked'
+        return f"[{campus}] {self.role} -> {self.permission_key}: {state}"
+
+
 
