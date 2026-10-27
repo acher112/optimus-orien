@@ -496,7 +496,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* COLLECT FEE TAB */}
       {tab === 'collect' && (
-        <div className="fx-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="collect-fee-grid">
           <section className="panel hr-panel">
             <div className="panel-head">
               <div><h3>Student Search</h3><p>Locate student to inspect ledger or record payment</p></div>

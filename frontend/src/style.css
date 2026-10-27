@@ -2188,3 +2188,88 @@ input:checked + .toggle-slider:before {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Responsive grid for Fee Collection and two-column panels on mobile */
+.collect-fee-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 900px) {
+  .collect-fee-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Multi-campus Switcher Pills */
+.campus-switcher-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 12px;
+  margin-bottom: 12px;
+  scrollbar-width: thin;
+}
+.campus-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s ease;
+}
+.campus-pill:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+.campus-pill.active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.28);
+}
+.campus-pill.overall {
+  font-weight: 700;
+}
+.dark .campus-pill {
+  background: #1e2235;
+  border-color: #2e344e;
+  color: #cbd5e1;
+}
+.dark .campus-pill:hover {
+  background: #252a42;
+  border-color: #3b4263;
+  color: #ffffff;
+}
+.dark .campus-pill.active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #ffffff;
+}
+
+/* Dynamic custom charge row */
+.custom-charge-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  background: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 6px;
+}
+.dark .custom-charge-row {
+  background: #1e2235;
+  border-color: #2e344e;
+}
+

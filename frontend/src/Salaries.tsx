@@ -34,6 +34,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
   // Modals
   const [generateModal, setGenerateModal] = useState(false);
   const [genMonth, setGenMonth] = useState(month);
+  const [genDueDate, setGenDueDate] = useState('');
 
   const [payModal, setPayModal] = useState(false);
   const [activePayRecord, setActivePayRecord] = useState<R | null>(null);
@@ -103,6 +104,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
         method: 'POST',
         body: JSON.stringify({
           month: genMonth,
+          due_date: genDueDate || undefined,
           school: school || (schools[0]?.id ? String(schools[0].id) : undefined)
         })
       });
@@ -127,6 +129,27 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
       setBump(b => b + 1);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Approval failed');
+    }
+  };
+
+  const handleStatusChange = async (recordId: number, newStatus: string) => {
+    if (newStatus === 'paid') {
+      const rec = records.find(r => r.id === recordId);
+      if (rec) {
+        setActivePayRecord(rec);
+        setPayModal(true);
+        return;
+      }
+    }
+    try {
+      await request<R>(`salaries/sheet/${recordId}/status/`, {
+        method: 'POST',
+        body: JSON.stringify({ status: newStatus })
+      });
+      notify(`Salary status updated to ${newStatus}.`);
+      setBump(b => b + 1);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Failed to update salary status');
     }
   };
 
@@ -304,6 +327,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
                   </th>
                   <th>STAFF MEMBER</th>
                   <th>POSITION</th>
+                  <th>DUE DATE</th>
                   <th>BASIC</th>
                   <th>ALLOWANCES</th>
                   <th>ADDITIONS</th>
@@ -331,6 +355,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
                     </td>
                     <td><strong>{r.staff_name}</strong></td>
                     <td>{r.position}</td>
+                    <td><span style={{ fontSize: 12, color: '#64748b' }}>{r.due_date || '—'}</span></td>
                     <td>Rs {r.basic}</td>
                     <td>Rs {r.allowances_total}</td>
                     <td><span style={{ color: '#16a34a' }}>+Rs {r.additions_total}</span></td>
@@ -338,19 +363,28 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
                     <td>Rs {r.gross}</td>
                     <td><strong style={{ fontSize: 14 }}>Rs {r.net}</strong></td>
                     <td>
-                      <span className={`pill ${r.status === 'paid' ? 'green' : r.status === 'approved' ? 'amber' : r.status === 'void' ? 'red' : 'purple'}`}>
+                      <span className={`pill ${r.status === 'paid' ? 'green' : r.status === 'approved' ? 'blue' : r.status === 'cancelled' || r.status === 'void' ? 'red' : 'amber'}`}>
                         {r.status}
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button className="sm-btn" onClick={() => openPayslip(r.id)} title="View Payslip">
                           <FileText size={13} />
                         </button>
-                        {r.status !== 'paid' && r.status !== 'void' && (
-                          <button className="sm-btn" onClick={() => { setActivePayRecord(r); setPayModal(true); }} style={{ color: '#16a34a' }} title="Pay Salary">
-                            <Banknote size={13} /> Pay
-                          </button>
+                        {r.status !== 'void' && (
+                          <select
+                            className="fx-select"
+                            style={{ fontSize: 11, padding: '2px 6px', height: 26, width: 'auto' }}
+                            value={r.status}
+                            onChange={e => handleStatusChange(r.id, e.target.value)}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="cancelled">Cancelled</option>
+                            {r.status === 'draft' && <option value="draft">Draft</option>}
+                            {r.status === 'approved' && <option value="approved">Approved</option>}
+                          </select>
                         )}
                         {r.status !== 'void' && (
                           <button className="sm-btn" onClick={() => { setActiveVoidRecord(r); setVoidModal(true); }} style={{ color: '#dc2626' }} title="Void Record">
@@ -363,7 +397,7 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
                 ))}
                 {!records.length && (
                   <tr>
-                    <td colSpan={11} style={{ textAlign: 'center', padding: 30 }}>
+                    <td colSpan={12} style={{ textAlign: 'center', padding: 30 }}>
                       No salary records generated for {month}. Click 'Generate Monthly Sheet' to generate.
                     </td>
                   </tr>
@@ -535,6 +569,9 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
               <div className="modal-fields">
                 <label>Billing Month (YYYY-MM) *
                   <input type="month" required value={genMonth} onChange={e => setGenMonth(e.target.value)} />
+                </label>
+                <label>Disbursement Due Date (Optional)
+                  <input type="date" value={genDueDate} onChange={e => setGenDueDate(e.target.value)} />
                 </label>
               </div>
               <p style={{ fontSize: 13, color: 'var(--text-muted, #64748b)', marginTop: 10 }}>

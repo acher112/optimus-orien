@@ -23,6 +23,7 @@ from core.models import (
 )
 from core.services.access import schools_scope
 from core.services.audit import record_event
+from core.staff import resolve_salary_category
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
 
@@ -233,6 +234,19 @@ def salaries_generate(request):
     month_start = date(year, month, 1)
     month_end = date(year, month, days_in_month)
 
+    due_date_str = request.data.get('due_date')
+    gen_due_date = None
+    if due_date_str:
+        try:
+            gen_due_date = date.fromisoformat(str(due_date_str)[:10])
+        except ValueError:
+            pass
+    if not gen_due_date:
+        if month == 12:
+            gen_due_date = date(year + 1, 1, 5)
+        else:
+            gen_due_date = date(year, month + 1, 5)
+
     # Active staff who were employed at some point in this month
     staff_qs = StaffMember.objects.filter(
         school=school,
@@ -326,6 +340,7 @@ def salaries_generate(request):
                 gross=gross,
                 net=net,
                 status='draft',
+                due_date=gen_due_date,
                 details={
                     'days_in_month': days_in_month,
                     'active_days': active_days,
@@ -381,6 +396,7 @@ def salaries_sheet(request):
             'gross': str(r.gross),
             'net': str(r.net),
             'status': r.status,
+            'due_date': str(r.due_date) if r.due_date else None,
             'paid_on': str(r.paid_on) if r.paid_on else None,
             'method': r.method,
             'reference': r.reference,
@@ -400,6 +416,7 @@ def salaries_sheet(request):
                 {'key': 'gross', 'label': 'Gross (Rs)'},
                 {'key': 'net', 'label': 'Net Salary (Rs)'},
                 {'key': 'status', 'label': 'Status'},
+                {'key': 'due_date', 'label': 'Due Date'},
                 {'key': 'paid_on', 'label': 'Paid On'},
                 {'key': 'method', 'label': 'Method'},
             ]
@@ -459,18 +476,8 @@ def salary_pay(request, pk):
     reference = (request.data.get('reference') or '').strip()[:100]
 
     with transaction.atomic():
-        # Find or create expense category "Staff Salaries"
-        cat = FinanceCategory.objects.filter(
-            school=record.school,
-            kind='expense',
-            name__icontains='salar'
-        ).first()
-        if not cat:
-            cat = FinanceCategory.objects.create(
-                school=record.school,
-                kind='expense',
-                name='Staff Salaries'
-            )
+        # Find or create role-specific expense category ("Teacher Salary", "Principal Salary", etc.)
+        cat = resolve_salary_category(record.school, record.staff)
 
         finance_entry = FinanceEntry.objects.create(
             school=record.school,
@@ -496,6 +503,108 @@ def salary_pay(request, pk):
         'paid_on': str(record.paid_on),
         'net': str(record.net),
         'finance_entry_id': finance_entry.id
+    })
+
+
+@api_view(['POST'])
+def salary_status_update(request, pk):
+    """
+    Update status of salary record (pending, paid, cancelled, draft) and optionally due_date.
+    When marked 'paid', creates linked FinanceEntry (Expense) under role-specific category.
+    When reverted from 'paid' to 'pending' or 'cancelled', voids/removes linked FinanceEntry so expenses are not inflated.
+    """
+    user = request.user
+    _require_manager(user)
+
+    record = SalaryRecord.objects.filter(pk=pk, school__in=schools_scope(user)).select_related('staff', 'school', 'finance_entry').first()
+    if not record:
+        raise NotFound()
+
+    target_status = (request.data.get('status') or '').strip().lower()
+    valid_statuses = [s[0] for s in SalaryRecord.STATUSES]
+    if target_status and target_status not in valid_statuses:
+        raise ValidationError({'status': f"Invalid status. Must be one of: {', '.join(valid_statuses)}"})
+
+    due_date_str = request.data.get('due_date')
+    if due_date_str:
+        try:
+            record.due_date = date.fromisoformat(str(due_date_str)[:10])
+        except ValueError:
+            raise ValidationError({'due_date': 'Use YYYY-MM-DD format.'})
+
+    if not target_status:
+        record.save()
+        return Response({
+            'id': record.id,
+            'status': record.status,
+            'due_date': str(record.due_date) if record.due_date else None,
+            'paid_on': str(record.paid_on) if record.paid_on else None,
+            'net': str(record.net)
+        })
+
+    with transaction.atomic():
+        if target_status == 'paid':
+            paid_on_str = request.data.get('paid_on')
+            try:
+                paid_on = datetime.strptime(paid_on_str, '%Y-%m-%d').date() if paid_on_str else date.today()
+            except (ValueError, TypeError):
+                paid_on = date.today()
+            method = request.data.get('method') or record.method or 'bank'
+            ref = (request.data.get('reference') or record.reference or '').strip()[:100]
+
+            cat = resolve_salary_category(record.school, record.staff)
+            if not record.finance_entry:
+                f_entry = FinanceEntry.objects.create(
+                    school=record.school,
+                    category=cat,
+                    amount=record.net,
+                    date=paid_on,
+                    description=f"Salary {record.month}: {record.staff.full_name} ({record.staff.position})",
+                    created_by=user
+                )
+                record.finance_entry = f_entry
+            else:
+                record.finance_entry.voided = False
+                record.finance_entry.category = cat
+                record.finance_entry.amount = record.net
+                record.finance_entry.date = paid_on
+                record.finance_entry.save(update_fields=['voided', 'category', 'amount', 'date'])
+
+            record.status = 'paid'
+            record.paid_on = paid_on
+            record.method = method
+            record.reference = ref
+            record.save()
+            record_event(actor=user, action='pay', obj=record)
+
+        elif target_status in ('pending', 'cancelled', 'draft'):
+            if record.finance_entry:
+                old_f = record.finance_entry
+                record.finance_entry = None
+                record.save(update_fields=['finance_entry'])
+                old_f.delete()
+
+            record.status = target_status
+            record.paid_on = None
+            record.save()
+            record_event(actor=user, action='update_status', obj=record)
+
+        elif target_status == 'void':
+            record.status = 'void'
+            record.void_reason = (request.data.get('reason') or 'Voided').strip()[:255]
+            if record.finance_entry and not record.finance_entry.voided:
+                record.finance_entry.voided = True
+                record.finance_entry.save(update_fields=['voided'])
+            record.save()
+            record_event(actor=user, action='void', obj=record)
+
+    return Response({
+        'id': record.id,
+        'status': record.status,
+        'due_date': str(record.due_date) if record.due_date else None,
+        'paid_on': str(record.paid_on) if record.paid_on else None,
+        'net': str(record.net),
+        'finance_entry_id': record.finance_entry_id
     })
 
 

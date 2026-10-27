@@ -535,7 +535,7 @@ class SalaryStructure(models.Model):
 
 class SalaryRecord(models.Model):
     """Monthly salary sheet row. When marked paid, auto-creates linked FinanceEntry (Expense)."""
-    STATUSES = [('draft', 'Draft'), ('approved', 'Approved'), ('paid', 'Paid'), ('void', 'Void')]
+    STATUSES = [('draft', 'Draft'), ('pending', 'Pending'), ('approved', 'Approved'), ('paid', 'Paid'), ('cancelled', 'Cancelled'), ('void', 'Void')]
     METHODS = [('bank', 'Bank Transfer'), ('cash', 'Cash'), ('cheque', 'Cheque')]
     staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name='salary_records')
     school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='salary_records')
@@ -548,6 +548,7 @@ class SalaryRecord(models.Model):
     gross = models.DecimalField(max_digits=14, decimal_places=2)
     net = models.DecimalField(max_digits=14, decimal_places=2)
     status = models.CharField(max_length=16, choices=STATUSES, default='draft')
+    due_date = models.DateField(null=True, blank=True)
     paid_on = models.DateField(null=True, blank=True)
     method = models.CharField(max_length=16, choices=METHODS, default='bank', blank=True)
     reference = models.CharField(max_length=100, blank=True)

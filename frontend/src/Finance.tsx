@@ -61,6 +61,29 @@ export default function Finance({ user, notify }: { user: User; notify: (m: stri
         </div>
       </div>
 
+      {schools.length > 1 && (
+        <div className="campus-switcher-bar">
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginRight: 4 }}>Campus:</span>
+          <button
+            type="button"
+            className={`campus-pill overall ${!school ? 'active' : ''}`}
+            onClick={() => setSchool('')}
+          >
+            Overall (All Campuses Combined)
+          </button>
+          {schools.map(s => (
+            <button
+              key={s.id}
+              type="button"
+              className={`campus-pill ${school === String(s.id) ? 'active' : ''}`}
+              onClick={() => setSchool(String(s.id))}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <nav className="fx-tabs" aria-label="Finance sections">
         {tabs.map(([k, label, Icon]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}><Icon size={15} /> {label}</button>)}
       </nav>

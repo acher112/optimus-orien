@@ -23,7 +23,7 @@ import {
   Scale,
   ShieldCheck,
 } from 'lucide-react';
-import { request, type User } from './api';
+import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import { GenderPanel } from './GenderCharts';
 import { getStoredTheme } from './theme';
@@ -136,9 +136,15 @@ export default function Reports({ user }: { user: User }) {
   const [singleCampus, setSingleCampus] = useState(false);
 
   // Financial Analytics State
+  const [schools, setSchools] = useState<R[]>([]);
+  const [financeSchool, setFinanceSchool] = useState('');
   const [financeSum, setFinanceSum] = useState<R | null>(null);
   const [financeLoading, setFinanceLoading] = useState(false);
   const [financeError, setFinanceError] = useState('');
+
+  useEffect(() => {
+    list<R>('schools').then(setSchools).catch(() => {});
+  }, []);
 
   const path = useCallback((v: View) => {
     const q = period && !['this_month', 'last_30_days', 'last_3_months', 'last_6_months', 'this_year'].includes(period)
@@ -177,6 +183,7 @@ export default function Reports({ user }: { user: User }) {
       const p = new URLSearchParams();
       if (from) p.set('from', from);
       if (to) p.set('to', to);
+      if (financeSchool) p.set('school', financeSchool);
       const res = await request<R>(`finance/summary/?${p.toString()}`);
       setFinanceSum(res);
     } catch (e) {
@@ -185,7 +192,7 @@ export default function Reports({ user }: { user: User }) {
     } finally {
       setFinanceLoading(false);
     }
-  }, [period]);
+  }, [period, financeSchool]);
 
   useEffect(() => {
     if (domain === 'academic') {
@@ -316,6 +323,30 @@ export default function Reports({ user }: { user: User }) {
           <Scale size={15} /> Financial overview
         </button>
       </div>
+
+      {/* Financial Domain Campus Switcher */}
+      {domain !== 'academic' && schools.length > 1 && (
+        <div className="campus-switcher-bar">
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginRight: 4 }}>Campus:</span>
+          <button
+            type="button"
+            className={`campus-pill overall ${!financeSchool ? 'active' : ''}`}
+            onClick={() => setFinanceSchool('')}
+          >
+            Overall (All Campuses Combined)
+          </button>
+          {schools.map(s => (
+            <button
+              key={s.id}
+              type="button"
+              className={`campus-pill ${financeSchool === String(s.id) ? 'active' : ''}`}
+              onClick={() => setFinanceSchool(String(s.id))}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Academic Domain View */}
       {domain === 'academic' && (

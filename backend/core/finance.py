@@ -80,7 +80,7 @@ def _entry_row(e):
 
 def _entries(user, params):
     qs = FinanceEntry.objects.filter(school__in=schools_scope(user)).select_related('school', 'category', 'created_by')
-    if params.get('school'):
+    if params.get('school') and str(params['school']).lower() not in ('all', '', 'overall', 'none'):
         qs = qs.filter(school_id=params['school'])
     if params.get('kind') in ('income', 'expense'):
         qs = qs.filter(category__kind=params['kind'])
@@ -100,10 +100,10 @@ def categories(request):
     _require(user)
     if request.method == 'GET':
         for s in schools_scope(user):
-            if not request.query_params.get('school') or str(s.id) == request.query_params['school']:
+            if not request.query_params.get('school') or str(request.query_params.get('school')).lower() in ('all', '', 'overall', 'none') or str(s.id) == request.query_params['school']:
                 _ensure_defaults(s)
         qs = FinanceCategory.objects.filter(school__in=schools_scope(user))
-        if request.query_params.get('school'):
+        if request.query_params.get('school') and str(request.query_params['school']).lower() not in ('all', '', 'overall', 'none'):
             qs = qs.filter(school_id=request.query_params['school'])
         if request.query_params.get('kind') in ('income', 'expense'):
             qs = qs.filter(kind=request.query_params['kind'])
@@ -221,8 +221,11 @@ def summary(request):
         return [{'name': n, 'amount': float(a), 'share': round(float(a / t * 100), 1) if t else 0} for n, a in rows if a > 0]
 
     campuses = []
+    selected_school = request.query_params.get('school')
+    is_multi_campus = not selected_school or str(selected_school).lower() in ('all', '', 'overall', 'none')
+
     for s in schools_scope(user).order_by('name'):
-        if request.query_params.get('school') and str(s.id) != request.query_params['school']:
+        if not is_multi_campus and str(s.id) != str(selected_school):
             continue
         inc = sum((e.amount for e in qs if e.school_id == s.id and e.category.kind == 'income'), Decimal('0'))
         exp = sum((e.amount for e in qs if e.school_id == s.id and e.category.kind == 'expense'), Decimal('0'))
@@ -231,8 +234,8 @@ def summary(request):
     # Calculate student fee revenue projection within scope
     from core.models import Student, StudentFee, FeePayment
     schools = schools_scope(user)
-    if request.query_params.get('school'):
-        schools = schools.filter(pk=request.query_params['school'])
+    if not is_multi_campus:
+        schools = schools.filter(pk=selected_school)
     active_students = Student.objects.filter(school__in=schools, active=True)
     st_count = active_students.count()
     st_fees = StudentFee.objects.filter(student__school__in=schools).exclude(status='void')

@@ -169,10 +169,32 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
           <label>Monthly base salary<input type="number" step="0.01" min="0" placeholder="e.g. 75000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>
           <label className="wide">Link existing login (optional)<select value={f.user || ''} onChange={e => set('user', e.target.value)}><option value="">No login</option>{logins.map(u => <option key={u.id} value={u.id}>{u.name} ({u.username})</option>)}</select></label>
           {Boolean(f.salary && Number(f.salary) > 0) && (
-            <label className="wide" style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#4a5568', background: '#f7f6fe', padding: '10px 14px', borderRadius: 8, border: '1px solid #e7e4fb' }}>
-              <input type="checkbox" checked={f.record_expense !== false} onChange={e => setF(s => ({ ...s, record_expense: e.target.checked }))} style={{ width: 'auto', margin: 0 }} />
-              <span>Auto-record initial salary disbursement as Expense in Finance</span>
-            </label>
+            <div className="wide" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, background: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0', marginTop: 4 }}>
+              <label style={{ margin: 0 }}>
+                Initial Salary Status
+                <select
+                  value={f.salary_status || 'pending'}
+                  onChange={e => set('salary_status', e.target.value)}
+                >
+                  <option value="pending">Pending (Unpaid)</option>
+                  <option value="paid">Paid (Disburse Now)</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+              <label style={{ margin: 0 }}>
+                Disbursement Due Date
+                <input
+                  type="date"
+                  value={f.salary_due_date || f.hired_on}
+                  onChange={e => set('salary_due_date', e.target.value)}
+                />
+              </label>
+              {f.salary_status === 'paid' && (
+                <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#166534', background: '#dcfce7', padding: '6px 10px', borderRadius: 6 }}>
+                  Marking as Paid will post an expense directly to Finance categorized by role (Teacher Salary, Principal Salary, etc.).
+                </div>
+              )}
+            </div>
           )}
         </div>
         {err && <div className="hr-error">{err}</div>}

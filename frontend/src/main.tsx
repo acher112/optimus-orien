@@ -313,6 +313,9 @@ function App() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState('All');
   const [saving, setSaving] = useState(false);
+  const [dueDateMode, setDueDateMode] = useState<'standard' | 'custom'>('standard');
+  const [customDueDate, setCustomDueDate] = useState<string>('');
+  const [dynamicCharges, setDynamicCharges] = useState<Array<{ id: string; name: string; amount: string }>>([]);
   const [setupSchool, setSetupSchool] = useState<number | null>(null);
   const [refData, setRefData] = useState<{
     schools: Array<{ id: number; name: string }>;
@@ -437,6 +440,9 @@ function App() {
     } else if (user?.school) {
       initialForm.school = String(user.school);
     }
+    setDueDateMode('standard');
+    setCustomDueDate(new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10));
+    setDynamicCharges([]);
     setForm(initialForm);
     setModal(true);
     try {
@@ -508,6 +514,10 @@ function App() {
                 annual_fee: form.annual_fee ? Number(form.annual_fee) : 0,
                 extra_charges: form.extra_charges ? Number(form.extra_charges) : 0,
                 extra_charges_reason: form.extra_charges_reason || '',
+                custom_charges: dynamicCharges
+                  .filter(c => c.name.trim() && Number(c.amount) > 0)
+                  .map(c => ({ name: c.name.trim(), amount: Number(c.amount) })),
+                due_date: dueDateMode === 'custom' && customDueDate ? customDueDate : undefined,
                 school_class: form.assign_class ? Number(form.assign_class) : undefined,
                 reference: `CHALLAN-${created.admission_number || created.id}`
               })
@@ -1486,6 +1496,103 @@ function App() {
                             />
                           </label>
                         </div>
+                      </div>
+
+                      {/* Due Date Options */}
+                      <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                          Fee Due Date Option
+                        </div>
+                        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: dueDateMode === 'custom' ? 10 : 0 }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                            <input
+                              type="radio"
+                              name="due_date_mode"
+                              value="standard"
+                              checked={dueDateMode === 'standard'}
+                              onChange={() => setDueDateMode('standard')}
+                            />
+                            Standard / Same date for all (Default 10 days)
+                          </label>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                            <input
+                              type="radio"
+                              name="due_date_mode"
+                              value="custom"
+                              checked={dueDateMode === 'custom'}
+                              onChange={() => setDueDateMode('custom')}
+                            />
+                            Custom due date for this student
+                          </label>
+                        </div>
+                        {dueDateMode === 'custom' && (
+                          <div style={{ marginTop: 8 }}>
+                            <label style={{ margin: 0, maxWidth: 220 }}>
+                              Custom Due Date <span className="required">*</span>
+                              <input
+                                type="date"
+                                required={dueDateMode === 'custom'}
+                                value={customDueDate}
+                                onChange={e => setCustomDueDate(e.target.value)}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Dynamic Custom Charges ("To make a new category of Charges") */}
+                      <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                            New Categories of Charges
+                          </div>
+                          <button
+                            type="button"
+                            className="outline-btn"
+                            style={{ fontSize: 12, padding: '4px 10px', height: 'auto', gap: 4 }}
+                            onClick={() => setDynamicCharges(prev => [...prev, { id: Math.random().toString(36).slice(2), name: '', amount: '' }])}
+                          >
+                            <Plus size={13} /> To make a new category of Charges
+                          </button>
+                        </div>
+
+                        {dynamicCharges.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {dynamicCharges.map((dc, idx) => (
+                              <div key={dc.id} className="custom-charge-row">
+                                <input
+                                  type="text"
+                                  placeholder="Charges Name (e.g. Science Lab, Sports Kit, ID Card)"
+                                  value={dc.name}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, name: val } : item));
+                                  }}
+                                />
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="Amount (Rs)"
+                                  value={dc.amount}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, amount: val } : item));
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  style={{ color: '#ef4444', padding: 6 }}
+                                  title="Remove charge"
+                                  onClick={() => setDynamicCharges(prev => prev.filter((_, i) => i !== idx))}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div style={{ gridColumn: '1 / -1', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 14px', borderRadius: 8, fontSize: 11, lineHeight: 1.5 }}>

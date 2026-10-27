@@ -447,8 +447,32 @@ def student_voucher_create(request):
                     defaults={'amount_due': extra_charges, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
                 )
                 v_ext.amount_due = extra_charges
-                v_ext.save(update_fields=['amount_due'])
+                v_ext.due_date = due_date
+                v_ext.save(update_fields=['amount_due', 'due_date'])
                 created_vouchers.append(v_ext)
+
+            # 5. Dynamic Custom Charges ("To make a new category of Charges")
+            custom_charges = data.get('custom_charges') or []
+            if isinstance(custom_charges, list):
+                for idx, cc in enumerate(custom_charges):
+                    if not isinstance(cc, dict):
+                        continue
+                    c_name = (cc.get('name') or '').strip()
+                    c_amt_raw = cc.get('amount')
+                    if not c_name or not c_amt_raw:
+                        continue
+                    c_amt = _money(c_amt_raw, f"custom_charge_{idx}")
+                    if c_amt <= Decimal('0.00'):
+                        continue
+                    head_c = _resolve_fee_head(student.school, c_name, "Other income")
+                    v_c, _ = StudentFee.objects.get_or_create(
+                        student=student, head=head_c, period=f"{today.strftime('%Y-%m')}-{c_name[:15]}-{idx}",
+                        defaults={'amount_due': c_amt, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
+                    )
+                    v_c.amount_due = c_amt
+                    v_c.due_date = due_date
+                    v_c.save(update_fields=['amount_due', 'due_date'])
+                    created_vouchers.append(v_c)
 
             total_due = sum((v.amount_due for v in created_vouchers), Decimal('0.00'))
             for v in created_vouchers:

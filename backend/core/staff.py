@@ -87,6 +87,32 @@ def _sync_login(staff, role):
         staff.user.save(update_fields=['role'])
 
 
+def resolve_salary_category(school, staff):
+    """
+    Resolve role-specific finance expense category for salary disbursement:
+    - Teacher / Faculty -> 'Teacher Salary'
+    - Principal / Headmaster -> 'Principal Salary'
+    - Admin / Accountant / Clerk -> 'Administration Salary'
+    - All other staff -> 'Staff Salary'
+    """
+    pos = (getattr(staff, 'position', '') or '').lower()
+    role = (getattr(staff, 'role', '') or '').lower()
+
+    if 'teacher' in pos or 'faculty' in pos or 'teacher' in role:
+        cat_name = 'Teacher Salary'
+    elif 'principal' in pos or 'headmaster' in pos or 'headmistress' in pos or 'principal' in role:
+        cat_name = 'Principal Salary'
+    elif 'admin' in pos or 'administrator' in pos or 'accountant' in pos or 'clerk' in pos or 'admin' in role:
+        cat_name = 'Administration Salary'
+    else:
+        cat_name = 'Staff Salary'
+
+    cat = FinanceCategory.objects.filter(school=school, kind='expense', name__iexact=cat_name).first()
+    if not cat:
+        cat = FinanceCategory.objects.create(school=school, kind='expense', name=cat_name, active=True)
+    return cat
+
+
 @api_view(['GET', 'POST'])
 def staff_list(request):
     user = request.user
@@ -165,37 +191,54 @@ def staff_list(request):
                     fixed_deductions=[],
                     currency=currency
                 )
+                salary_status = (data.get('salary_status') or '').strip().lower()
                 record_exp = data.get('record_expense')
-                if record_exp is None or str(record_exp).lower() in ('true', '1'):
-                    cat = FinanceCategory.objects.filter(school=school, kind='expense', name__iexact='Staff salaries', active=True).first()
-                    if not cat:
-                        cat = FinanceCategory.objects.filter(school=school, kind='expense', active=True).first()
-                    if not cat:
-                        cat = FinanceCategory.objects.create(school=school, kind='expense', name='Staff salaries', active=True)
+                if salary_status == 'paid' or str(record_exp).lower() in ('true', '1'):
+                    final_status = 'paid'
+                elif salary_status in ('pending', 'draft', 'cancelled'):
+                    final_status = salary_status
+                else:
+                    final_status = 'pending'
+
+                due_date_raw = data.get('salary_due_date') or data.get('due_date')
+                parsed_due_date = None
+                if due_date_raw:
+                    try:
+                        parsed_due_date = date.fromisoformat(str(due_date_raw)[:10])
+                    except ValueError:
+                        pass
+                if not parsed_due_date:
+                    parsed_due_date = hired
+
+                f_entry = None
+                if final_status == 'paid':
+                    cat = resolve_salary_category(school, s)
                     f_entry = FinanceEntry.objects.create(
                         school=school,
                         category=cat,
                         amount=salary_val,
                         date=hired,
-                        description=f"Initial salary disbursement for {s.full_name} ({s.position})",
+                        description=f"Salary disbursement for {s.full_name} ({s.position})",
                         created_by=user
                     )
-                    SalaryRecord.objects.create(
-                        staff=s,
-                        school=school,
-                        month=hired.strftime('%Y-%m'),
-                        basic=salary_val,
-                        gross=salary_val,
-                        deductions_total=Decimal('0.00'),
-                        additions_total=Decimal('0.00'),
-                        advance_recovered=Decimal('0.00'),
-                        net=salary_val,
-                        status='paid',
-                        paid_on=hired,
-                        method=data.get('payment_method') or 'bank',
-                        reference=f"HIRE-SAL-{s.id}",
-                        finance_entry=f_entry
-                    )
+
+                SalaryRecord.objects.create(
+                    staff=s,
+                    school=school,
+                    month=hired.strftime('%Y-%m'),
+                    basic=salary_val,
+                    gross=salary_val,
+                    deductions_total=Decimal('0.00'),
+                    additions_total=Decimal('0.00'),
+                    advance_recovered=Decimal('0.00'),
+                    net=salary_val,
+                    status=final_status,
+                    due_date=parsed_due_date,
+                    paid_on=hired if final_status == 'paid' else None,
+                    method=data.get('payment_method') or 'bank',
+                    reference=f"HIRE-SAL-{s.id}",
+                    finance_entry=f_entry
+                )
 
         record_event(actor=user, action='create', obj=s)
     return Response(_row(s), status=201)

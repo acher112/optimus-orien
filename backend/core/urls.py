@@ -70,6 +70,7 @@ urlpatterns = [
     path('salaries/generate/', salaries.salaries_generate),
     path('salaries/sheet/', salaries.salaries_sheet),
     path('salaries/sheet/<int:pk>/pay/', salaries.salary_pay),
+    path('salaries/sheet/<int:pk>/status/', salaries.salary_status_update),
     path('salaries/sheet/<int:pk>/void/', salaries.salary_void),
     path('salaries/sheet/<int:pk>/payslip/', salaries.salary_payslip),
     path('salaries/my-payslips/', salaries.my_payslips),

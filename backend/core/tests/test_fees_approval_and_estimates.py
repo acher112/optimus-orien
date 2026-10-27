@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import date
-from core.models import Student, StudentFee, FeePayment, FinanceEntry, SchoolClass, AcademicYear
+from core.models import Student, StudentFee, FeePayment, FinanceEntry, SchoolClass, AcademicYear, StaffMember, SalaryRecord, FinanceCategory
 from core.tests.test_phase1 import AccessFixture
 
 
@@ -121,3 +121,90 @@ class FeesApprovalAndEstimatesTests(AccessFixture):
         self.assertIn('student_projection', fdata)
         self.assertEqual(fdata['student_projection']['total_students'], active_count)
         self.assertEqual(fdata['student_projection']['collected'], 8000.0)
+
+    def test_dynamic_custom_charges_and_due_date(self):
+        st = Student.objects.create(school=self.s1, first_name='Zayn', last_name='Malik', admission_number='ZAYN-001', enrolled_on=date.today())
+        custom_date = '2026-11-20'
+        res = self.call(self.school_admin, 'fees/student-voucher', {
+            'student': st.id,
+            'monthly_fee': 6000,
+            'admission_fee': 4000,
+            'due_date': custom_date,
+            'custom_charges': [
+                {'name': 'Science Lab Equipment', 'amount': 1200},
+                {'name': 'Sports Uniform', 'amount': 800}
+            ]
+        })
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertEqual(data['vouchers_count'], 4)
+        self.assertEqual(data['total_challan_amount'], '12000.00')
+
+        vouchers = StudentFee.objects.filter(student=st)
+        self.assertEqual(vouchers.count(), 4)
+        for v in vouchers:
+            self.assertEqual(str(v.due_date), custom_date)
+            self.assertEqual(v.status, 'unpaid')
+
+    def test_salary_lifecycle_and_role_categories(self):
+        # 1. Add teacher staff member with pending salary
+        res_t = self.call(self.school_admin, 'staff', {
+            'school': self.s1.id,
+            'first_name': 'Ahmad',
+            'last_name': 'Teacher',
+            'position': 'Senior Science Teacher',
+            'role': 'teacher',
+            'salary': 75000,
+            'salary_status': 'pending',
+            'salary_due_date': '2026-11-05'
+        })
+        self.assertEqual(res_t.status_code, 201)
+        t_id = res_t.json()['id']
+        staff_t = StaffMember.objects.get(pk=t_id)
+
+        # Check salary record was created with pending status and due_date, but NO FinanceEntry
+        sal_rec = SalaryRecord.objects.filter(staff=staff_t).first()
+        self.assertIsNotNone(sal_rec)
+        self.assertEqual(sal_rec.status, 'pending')
+        self.assertEqual(str(sal_rec.due_date), '2026-11-05')
+        self.assertIsNone(sal_rec.finance_entry)
+
+        # 2. Update status to paid via status endpoint
+        status_res = self.call(self.school_admin, f'salaries/sheet/{sal_rec.id}/status', {
+            'status': 'paid',
+            'method': 'bank',
+            'paid_on': '2026-11-05'
+        })
+        self.assertEqual(status_res.status_code, 200)
+        sal_rec.refresh_from_db()
+        self.assertEqual(sal_rec.status, 'paid')
+        self.assertIsNotNone(sal_rec.finance_entry)
+        self.assertEqual(sal_rec.finance_entry.amount, Decimal('75000.00'))
+        self.assertEqual(sal_rec.finance_entry.category.name, 'Teacher Salary')
+
+        # 3. Cancel salary status -> removes / clears finance entry
+        cancel_res = self.call(self.school_admin, f'salaries/sheet/{sal_rec.id}/status', {
+            'status': 'cancelled'
+        })
+        self.assertEqual(cancel_res.status_code, 200)
+        sal_rec.refresh_from_db()
+        self.assertEqual(sal_rec.status, 'cancelled')
+        self.assertIsNone(sal_rec.finance_entry)
+
+    def test_multicampus_finance_summary(self):
+        # Create income in s1 and s2
+        cat1 = FinanceCategory.objects.create(school=self.s1, kind='income', name='Campus 1 Income', active=True)
+        cat2 = FinanceCategory.objects.create(school=self.s2, kind='income', name='Campus 2 Income', active=True)
+        FinanceEntry.objects.create(school=self.s1, category=cat1, amount=Decimal('5000.00'), date=date.today(), created_by=self.org_admin)
+        FinanceEntry.objects.create(school=self.s2, category=cat2, amount=Decimal('3000.00'), date=date.today(), created_by=self.org_admin)
+
+        # Org admin calls summary for s1
+        res_s1 = self.call(self.org_admin, 'finance/summary', {'school': str(self.s1.id)}, method='get')
+        self.assertEqual(res_s1.status_code, 200)
+        self.assertEqual(float(res_s1.json()['total_income']), 5000.0)
+
+        # Org admin calls summary for all campuses combined
+        res_all = self.call(self.org_admin, 'finance/summary', {'school': 'all'}, method='get')
+        self.assertEqual(res_all.status_code, 200)
+        self.assertEqual(float(res_all.json()['total_income']), 8000.0)
+
