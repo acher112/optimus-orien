@@ -700,8 +700,14 @@ def payments(request):
     amount = _money(data.get('amount'))
     method = data.get('method') or 'cash'
     paid_on = date.fromisoformat(data.get('paid_on') or date.today().isoformat())
-    ref = (data.get('reference') or '').strip()[:100]
-    auto_approve = bool(data.get('auto_approve', False)) or data.get('status') == 'approved'
+    if 'auto_approve' in data:
+        auto_approve = bool(data.get('auto_approve'))
+    elif data.get('status') == 'approved':
+        auto_approve = True
+    elif method == 'cash':
+        auto_approve = True
+    else:
+        auto_approve = False
 
     with transaction.atomic():
         count = FeePayment.objects.filter(school=student.school).count() + 1

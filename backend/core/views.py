@@ -245,6 +245,11 @@ class StudentSerializer(DynamicSerializer):
  section=serializers.SerializerMethodField()
  gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=False)
  def validate(self,attrs):
+  if 'guardians' in self.initial_data:
+   for g_id in (self.initial_data.get('guardians') or []):
+    g_user = User.objects.filter(pk=g_id if isinstance(g_id, int) else getattr(g_id, 'pk', None)).first()
+    if g_user and (g_user.role != 'parent' or not g_user.is_active):
+     raise PermissionDenied('Guardians must be verified active parents in this organisation')
   if not self.instance:
    fn = attrs.get('father_name') or self.initial_data.get('father_name')
    if not fn or not str(fn).strip():

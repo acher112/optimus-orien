@@ -449,6 +449,7 @@ Maryam,Khan,ADM-9902,2,2013-07-15,female,Grade 8A"""
             'school': self.s1.id,
             'first_name': 'Fatima',
             'last_name': 'Noor',
+            'father_name': 'Noor Ahmed',
             'admission_number': 'FAT-1001',
             'gender': '',
             'enrolled_on': str(self.today)
@@ -461,6 +462,7 @@ Maryam,Khan,ADM-9902,2,2013-07-15,female,Grade 8A"""
             'school': self.s1.id,
             'first_name': 'Fatima',
             'last_name': 'Noor',
+            'father_name': 'Noor Ahmed',
             'admission_number': 'FAT-1001',
             'gender': 'female',
             'enrolled_on': str(self.today)

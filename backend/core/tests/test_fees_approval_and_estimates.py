@@ -24,6 +24,7 @@ class FeesApprovalAndEstimatesTests(AccessFixture):
             'school': self.s1.id,
             'first_name': 'Ali',
             'last_name': 'Raza',
+            'father_name': 'Raza Ali',
             'admission_number': 'ALI-001',
             'enrolled_on': '2026-10-01'
         })

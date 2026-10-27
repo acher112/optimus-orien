@@ -105,7 +105,7 @@ def resolve_salary_category(school, staff):
     elif 'admin' in pos or 'administrator' in pos or 'accountant' in pos or 'clerk' in pos or 'admin' in role:
         cat_name = 'Administration Salary'
     else:
-        cat_name = 'Staff Salary'
+        cat_name = 'Staff salaries'
 
     cat = FinanceCategory.objects.filter(school=school, kind='expense', name__iexact=cat_name).first()
     if not cat:

@@ -143,6 +143,7 @@ urlpatterns = [
     # Study Materials
     path('materials/', study_materials.materials_list),
     path('materials/<int:pk>/', study_materials.material_detail),
+    path('materials/<int:pk>/replace/', study_materials.material_replace),
     path('materials/<int:pk>/archive/', study_materials.material_archive),
     path('materials/<int:pk>/download/', study_materials.material_download),
     # Students at Risk (INT-001..INT-040)
