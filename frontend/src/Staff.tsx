@@ -74,35 +74,33 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
       {feed && <HistoryFeed />}
 
       <section className="panel hr-panel">
-        <div style={{ padding: '16px 20px 0 20px' }}>
-          <FilterBar
-            searchPlaceholder="Search staff name or position..."
-            filters={[
-              {
-                key: 'status',
-                label: 'Status',
-                options: [
-                  { label: 'Active', value: 'active' },
-                  { label: 'Terminated', value: 'terminated' },
-                ]
-              }
-            ]}
-            values={filterValues}
-            onChange={setFilterValues}
-            onClear={() => setFilterValues({})}
-          />
-        </div>
-        <div className="toolbar" style={{ paddingTop: 6 }}>
-          <span className="result-count">{rows.length} staff members</span>
-          <div className="toolbar-right">
-            <ExportMenu
-              title="Staff Directory"
-              filename="staff-directory"
-              endpoint={`staff/?${new URLSearchParams({ ...(filterValues.status ? { status: filterValues.status } : {}), ...(filterValues.q ? { q: filterValues.q } : {}) }).toString()}`}
-              notify={notify}
-            />
-          </div>
-        </div>
+        <FilterBar
+          searchPlaceholder="Search staff name or position..."
+          filters={[
+            {
+              key: 'status',
+              label: 'Status',
+              options: [
+                { label: 'Active', value: 'active' },
+                { label: 'Terminated', value: 'terminated' },
+              ]
+            }
+          ]}
+          values={filterValues}
+          onChange={setFilterValues}
+          onClear={() => setFilterValues({})}
+          rightActions={
+            <>
+              <span className="result-count">{rows.length} staff members</span>
+              <ExportMenu
+                title="Staff Directory"
+                filename="staff-directory"
+                endpoint={`staff/?${new URLSearchParams({ ...(filterValues.status ? { status: filterValues.status } : {}), ...(filterValues.q ? { q: filterValues.q } : {}) }).toString()}`}
+                notify={notify}
+              />
+            </>
+          }
+        />
         <div className="table-scroll"><table className="data-table">
           <thead><tr><th>NAME</th><th>POSITION</th><th>ROLE</th><th>CAMPUS</th><th>HIRED</th><th>LOGIN</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
           <tbody>{rows.map(s => (

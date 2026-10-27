@@ -376,7 +376,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
           <h1>Student Fees</h1>
           <p>Institutional fee collection, heads, billing vouchers, and automated finance integration.</p>
         </div>
-        <div className="fx-filters" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div className="fx-filters">
           {schools.length > 1 && (
             <label>Campus
               <select className="fx-select" value={school} onChange={e => setSchool(e.target.value)}>
@@ -698,7 +698,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
               <h3>Fee Defaulters & Overdue Ledger</h3>
               <p>Students with outstanding balances past the institutional due date</p>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <ExportMenu
                 title="Fee Defaulters Directory"
                 filename="fee-defaulters"
@@ -831,7 +831,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
         <section className="panel hr-panel">
           <div className="panel-head">
             <div><h3>Student Fee Concessions & Scholarships</h3><p>Approved student fee discounts (sibling, staff-ward, merit)</p></div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <ExportMenu
                 title="Fee Concessions Directory"
                 filename="fee-concessions"

@@ -1297,36 +1297,34 @@ function App() {
               </div>
 
               <section className="panel resource-panel">
-                <div style={{ marginBottom: 14 }}>
-                  <FilterBar
-                    searchPlaceholder={`Search ${page.toLowerCase()} (name, section, keyword)...`}
-                    filters={getResourceFilterConfigs(page)}
-                    values={resourceFilters}
-                    onChange={setResourceFilters}
-                    onClear={() => setResourceFilters({})}
-                  />
-                </div>
-                <div className="toolbar" style={{ marginTop: 0, paddingTop: 0 }}>
-                  <span className="result-count">{filtered.length} records found</span>
-                  <div className="toolbar-right">
-                    <button className="outline-btn" onClick={() => load()}><RefreshCw size={16} /> Refresh</button>
-                    <ExportMenu
-                      title={`${page} Directory`}
-                      filename={`${page.toLowerCase().replace(/\s+/g, '-')}-list`}
-                      columns={config.columns.map(c => ({ key: c.key, label: c.label }))}
-                      rows={() => filtered.map(r => {
-                        const obj: Record<string, any> = {};
-                        for (const col of config.columns) {
-                          if (col.key === 'name') obj[col.key] = r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name;
-                          else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
-                          else obj[col.key] = r[col.key] ?? '—';
-                        }
-                        return obj;
-                      })}
-                      notify={notify}
-                    />
-                  </div>
-                </div>
+                <FilterBar
+                  searchPlaceholder={`Search ${page.toLowerCase()} (name, section, keyword)...`}
+                  filters={getResourceFilterConfigs(page)}
+                  values={resourceFilters}
+                  onChange={setResourceFilters}
+                  onClear={() => setResourceFilters({})}
+                  rightActions={
+                    <>
+                      <span className="result-count">{filtered.length} records found</span>
+                      <button className="outline-btn" onClick={() => load()}><RefreshCw size={15} /> Refresh</button>
+                      <ExportMenu
+                        title={`${page} Directory`}
+                        filename={`${page.toLowerCase().replace(/\s+/g, '-')}-list`}
+                        columns={config.columns.map(c => ({ key: c.key, label: c.label }))}
+                        rows={() => filtered.map(r => {
+                          const obj: Record<string, any> = {};
+                          for (const col of config.columns) {
+                            if (col.key === 'name') obj[col.key] = r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name;
+                            else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
+                            else obj[col.key] = r[col.key] ?? '—';
+                          }
+                          return obj;
+                        })}
+                        notify={notify}
+                      />
+                    </>
+                  }
+                />
 
                 <div className="table-scroll">
                   <table className="data-table">
@@ -2587,53 +2585,51 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
         <div className="resource-side"><CheckCircle2 size={17} /> Tamper-evident ledger</div>
       </div>
       <section className="panel audit-panel">
-        <div style={{ marginBottom: 14 }}>
-          <FilterBar
-            searchPlaceholder="Search audit events by actor, action, resource, or changes..."
-            filters={[
-              {
-                key: 'action',
-                label: 'Action',
-                options: [
-                  { label: 'Create', value: 'create' },
-                  { label: 'Update', value: 'update' },
-                  { label: 'Transfer', value: 'transfer' },
-                  { label: 'Role Change', value: 'role_change' },
-                  { label: 'Setup', value: 'setup' },
-                  { label: 'Void', value: 'void' },
-                ]
-              }
-            ]}
-            values={filters}
-            onChange={setFilters}
-            onClear={() => setFilters({})}
-          />
-        </div>
-        <div className="toolbar" style={{ marginTop: 0, paddingTop: 0 }}>
-          <span className="result-count">{filtered.length} events</span>
-          <div className="toolbar-right">
-            <button className="outline-btn" onClick={loadAudit}><RefreshCw size={16} /> Refresh</button>
-            <ExportMenu
-              title="Security Audit Trail"
-              filename="security-audit-trail"
-              columns={[
-                { key: 'created_at', label: 'Timestamp' },
-                { key: 'action', label: 'Action' },
-                { key: 'resource', label: 'Resource' },
-                { key: 'resource_id', label: 'Target ID' },
-                { key: 'changes', label: 'Changes Summary' },
-              ]}
-              rows={() => filtered.map(l => ({
-                created_at: l.created_at ? new Date(String(l.created_at)).toLocaleString() : '—',
-                action: String(l.action || '—'),
-                resource: String(l.resource || '—'),
-                resource_id: String(l.resource_id || '—'),
-                changes: l.changes ? JSON.stringify(l.changes) : '—'
-              }))}
-              notify={notify}
-            />
-          </div>
-        </div>
+        <FilterBar
+          searchPlaceholder="Search audit events by actor, action, resource, or changes..."
+          filters={[
+            {
+              key: 'action',
+              label: 'Action',
+              options: [
+                { label: 'Create', value: 'create' },
+                { label: 'Update', value: 'update' },
+                { label: 'Transfer', value: 'transfer' },
+                { label: 'Role Change', value: 'role_change' },
+                { label: 'Setup', value: 'setup' },
+                { label: 'Void', value: 'void' },
+              ]
+            }
+          ]}
+          values={filters}
+          onChange={setFilters}
+          onClear={() => setFilters({})}
+          rightActions={
+            <>
+              <span className="result-count">{filtered.length} events</span>
+              <button className="outline-btn" onClick={loadAudit}><RefreshCw size={15} /> Refresh</button>
+              <ExportMenu
+                title="Security Audit Trail"
+                filename="security-audit-trail"
+                columns={[
+                  { key: 'created_at', label: 'Timestamp' },
+                  { key: 'action', label: 'Action' },
+                  { key: 'resource', label: 'Resource' },
+                  { key: 'resource_id', label: 'Target ID' },
+                  { key: 'changes', label: 'Changes Summary' },
+                ]}
+                rows={() => filtered.map(l => ({
+                  created_at: l.created_at ? new Date(String(l.created_at)).toLocaleString() : '—',
+                  action: String(l.action || '—'),
+                  resource: String(l.resource || '—'),
+                  resource_id: String(l.resource_id || '—'),
+                  changes: l.changes_json ? JSON.stringify(l.changes_json) : '—',
+                }))}
+                notify={notify}
+              />
+            </>
+          }
+        />
         <div className="table-scroll">
           <table className="audit-table">
             <thead>

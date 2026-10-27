@@ -392,7 +392,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
       )}
 
       {/* Filter and Search Bar */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 16 }}>
         <FilterBar
           searchPlaceholder="Search materials by title, description, or file name..."
           filters={[
@@ -430,15 +430,15 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
           values={filterValues}
           onChange={setFilterValues}
           onClear={() => setFilterValues({})}
+          rightActions={
+            <>
+              <span className="result-count">{materials.length} learning resources</span>
+              <button className="outline-btn" onClick={loadMaterials} title="Refresh list">
+                <RefreshCw size={15} /> Refresh
+              </button>
+            </>
+          }
         />
-      </div>
-      <div className="toolbar" style={{ marginBottom: 16, marginTop: 0, paddingTop: 0 }}>
-        <span className="result-count">{materials.length} learning resources</span>
-        <div className="toolbar-right">
-          <button className="outline-btn" onClick={loadMaterials} title="Refresh list">
-            <RefreshCw size={15} /> Refresh
-          </button>
-        </div>
       </div>
 
       {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
