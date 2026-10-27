@@ -451,8 +451,8 @@ MODEL_FILTER_SPECS = {
    'class': 'assessment__school_class_id',
    'school_class': 'assessment__school_class_id',
   },
-  'allowed_orderings': ['score'],
-  'default_ordering': ['-score']
+  'allowed_orderings': ['marks'],
+  'default_ordering': ['-marks']
  },
  ReviewCase: {
   'search_fields': ['title', 'description', 'student__first_name', 'student__last_name'],

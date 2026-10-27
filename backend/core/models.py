@@ -223,6 +223,47 @@ class Intervention(models.Model):
   if self.owner_id and (self.owner.organisation_id!=self.case.school.organisation_id or (self.owner.role!='organisation_admin' and self.owner.school_id!=self.case.school_id)):
    raise ValidationError('Intervention owner organisation mismatch')
 
+class RiskCriteria(models.Model):
+    """Configurable and versioned criteria rules for identifying students requiring academic/attendance review."""
+    COMBINE_MODES = [('any', 'Any rule matches'), ('all', 'All rules match'), ('at_least_n', 'At least N rules match')]
+    PERIODS = [('current_term', 'Current Term'), ('last_30_days', 'Last 30 Days'), ('whole_year', 'Whole Academic Year')]
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='risk_criteria')
+    name = models.CharField(max_length=160, default='Standard Risk Criteria')
+    active = models.BooleanField(default=False)
+    version = models.PositiveIntegerField(default=1)
+    combine_mode = models.CharField(max_length=24, choices=COMBINE_MODES, default='any')
+    min_rules_match = models.PositiveIntegerField(default=1)
+    min_data_results = models.PositiveIntegerField(default=3, help_text="Minimum recorded results required to evaluate (INT-003)")
+    evaluation_period = models.CharField(max_length=32, choices=PERIODS, default='whole_year')
+    rules = models.JSONField(default=list, help_text="Configured rule items: indicator, threshold, period")
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-version']
+        constraints = [
+            models.UniqueConstraint(fields=['school', 'version'], name='unique_risk_criteria_version_per_school')
+        ]
+
+    def __str__(self):
+        return f"{self.school.name} - {self.name} (v{self.version}){' [ACTIVE]' if self.active else ''}"
+
+class RiskDismissal(models.Model):
+    """Audit log of manually dismissed risk flags with required justification reason (INT-007)."""
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='risk_dismissals')
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    dismissed_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    reason = models.TextField(help_text="Required rationale for dismissing the flag")
+    until_date = models.DateField(null=True, blank=True, help_text="Optional temporary mute date")
+    criteria_version = models.PositiveIntegerField(default=1)
+    snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
 class Notification(models.Model):
  user=models.ForeignKey(User,on_delete=models.CASCADE,related_name='notifications')
  title=models.CharField(max_length=180)

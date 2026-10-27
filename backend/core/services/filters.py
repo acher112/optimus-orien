@@ -83,6 +83,8 @@ def apply_query_filters(
             elif rv is not None:
                 values.append(rv)
 
+        # Ignore 'all' or empty sentinel values commonly sent by frontend dropdowns
+        values = [v for v in values if str(v).strip().lower() not in ('all', '', 'none')]
         if not values:
             continue
 

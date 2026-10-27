@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
-    permission_views
+    permission_views, views_risk
 )
 
 r = DefaultRouter()
@@ -62,6 +62,7 @@ urlpatterns = [
     path('fees/payments/bulk-approve/', fees.payments_bulk_approve),
     path('fees/payments/<int:pk>/void/', fees.payment_void),
     path('fees/defaulters/', fees.defaulters),
+    path('fees/defaulters/<int:student_id>/remind/', fees.defaulter_send_reminder),
     path('fees/summary/', fees.fees_summary),
 
     # Staff Salaries
@@ -144,7 +145,12 @@ urlpatterns = [
     path('materials/<int:pk>/', study_materials.material_detail),
     path('materials/<int:pk>/archive/', study_materials.material_archive),
     path('materials/<int:pk>/download/', study_materials.material_download),
-    path('materials/<int:pk>/replace/', study_materials.material_replace),
+    # Students at Risk (INT-001..INT-040)
+    path('students/at-risk/', views_risk.students_at_risk),
+    path('students/at-risk/criteria/', views_risk.risk_criteria_view),
+    path('students/at-risk/criteria/activate/', views_risk.risk_criteria_activate),
+    path('students/at-risk/<int:student_id>/case/', views_risk.risk_case_create),
+    path('students/at-risk/<int:student_id>/dismiss/', views_risk.risk_dismiss),
 
     path('', include(r.urls))
 ]

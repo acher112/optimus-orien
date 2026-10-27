@@ -5,6 +5,7 @@ voids the linked FinanceEntry so there is zero double counting or orphaned entri
 Access is strictly scoped by campus and role. Teachers have no access to fees.
 Students and parents can only see their own ledger and receipts.
 """
+from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
@@ -935,24 +936,51 @@ def payment_void(request, pk):
     return Response({'id': payment.id, 'receipt_number': payment.receipt_number, 'voided': True, 'void_reason': reason, 'status': payment.status})
 
 
-# ------------------------------------------------------------------ Defaulters & Summary
+# ------------------------------------------------------------------ Defaulters & Reminders
 @api_view(['GET'])
 def defaulters(request):
+    """
+    Fee defaulters directory:
+    Students with unpaid/partially paid fee lines whose due_date has passed.
+    Supports grace days, minimum overdue amount, overdue bands, sorting (highest outstanding first),
+    summary breakdown by class (descending), and export.
+    """
     user = request.user
     _require_manager(user)
-    today = date.today()
-    qs = StudentFee.objects.filter(
-        student__school__in=schools_scope(user),
-        status__in=['unpaid', 'partial'],
-        due_date__lt=today
-    ).select_related('student', 'student__school', 'head')
+    today = timezone.localdate()
 
-    if request.query_params.get('school'):
-        qs = qs.filter(student__school_id=request.query_params['school'])
+    # Grace days and min amount configuration
+    try:
+        grace_days = int(request.query_params.get('grace_days') or 0)
+    except (ValueError, TypeError):
+        grace_days = 0
+    try:
+        min_amount = Decimal(str(request.query_params.get('min_amount') or '0.01'))
+    except (InvalidOperation, ValueError, TypeError):
+        min_amount = Decimal('0.01')
+
+    cutoff_date = today - timedelta(days=grace_days)
+
+    schools = schools_scope(user)
+    school_id = request.query_params.get('school') or request.query_params.get('campus')
+    if school_id and str(school_id).lower() not in ('all', '', 'overall', 'none'):
+        schools = schools.filter(pk=school_id)
+
+    qs = StudentFee.objects.filter(
+        student__school__in=schools,
+        status__in=['unpaid', 'partial'],
+        due_date__lt=cutoff_date
+    ).exclude(status__in=['waived', 'void']).select_related('student', 'student__school', 'head')
+
+    # Filters
     if request.query_params.get('class'):
         qs = qs.filter(student__enrollments__school_class_id=request.query_params['class'], student__enrollments__end_date__isnull=True)
     if request.query_params.get('section'):
         qs = qs.filter(student__enrollments__school_class__section__iexact=str(request.query_params['section']).strip(), student__enrollments__end_date__isnull=True)
+    if request.query_params.get('fee_head'):
+        qs = qs.filter(head_id=request.query_params['fee_head'])
+    if request.query_params.get('month'):
+        qs = qs.filter(period__icontains=str(request.query_params['month']).strip())
     if request.query_params.get('q'):
         q_val = str(request.query_params['q']).strip()[:100]
         qs = qs.filter(
@@ -962,55 +990,243 @@ def defaulters(request):
             Q(student__father_name__icontains=q_val)
         )
 
+    # Group fee lines per student
     student_map = {}
     for fee in qs:
         sid = fee.student_id
-        if sid not in student_map:
-            en = fee.student.enrollments.filter(end_date__isnull=True).select_related('school_class').first()
-            cls_name = 'Unassigned'
-            if en and en.school_class:
-                sc = en.school_class
-                cls_name = f"{sc.name} – {sc.section}" if sc.section else sc.name
-            student_map[sid] = {
-                'student_id': sid, 'student_name': fee.student.full_name,
-                'admission_number': fee.student.admission_number, 'school_name': fee.student.school.name,
-                'class_name': cls_name,
-                'overdue_count': 0, 'total_overdue': Decimal('0.00'), 'oldest_due_date': fee.due_date
-            }
         already_paid = fee.allocations.filter(payment__voided=False, payment__status='approved').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
         unpaid = max(Decimal('0.00'), fee.net_due - already_paid)
-        student_map[sid]['overdue_count'] += 1
-        student_map[sid]['total_overdue'] += unpaid
+        if unpaid <= Decimal('0.00'):
+            continue
+
+        if sid not in student_map:
+            st = fee.student
+            en = st.enrollments.filter(end_date__isnull=True).select_related('school_class').first()
+            cls_name = 'Unassigned'
+            sec_name = ''
+            cls_id = None
+            if en and en.school_class:
+                sc = en.school_class
+                cls_id = sc.id
+                cls_name = sc.name
+                sec_name = sc.section or ''
+
+            last_pay = FeePayment.objects.filter(student=st, voided=False, status='approved').order_by('-paid_on').first()
+
+            student_map[sid] = {
+                'student_id': sid,
+                'student_name': st.full_name,
+                'admission_number': st.admission_number,
+                'father_name': st.father_name or '—',
+                'guardian_phone': st.guardian_phone or '—',
+                'school_id': st.school_id,
+                'school_name': st.school.name,
+                'currency': st.school.currency,
+                'class_id': cls_id,
+                'class_name': cls_name,
+                'section': sec_name,
+                'full_class_name': f"{cls_name} – {sec_name}" if sec_name else cls_name,
+                'last_payment_date': str(last_pay.paid_on) if last_pay else None,
+                'overdue_lines_count': 0,
+                'total_outstanding': Decimal('0.00'),
+                'oldest_due_date': fee.due_date,
+                'overdue_lines': []
+            }
+
+        student_map[sid]['overdue_lines_count'] += 1
+        student_map[sid]['total_outstanding'] += unpaid
         if fee.due_date < student_map[sid]['oldest_due_date']:
             student_map[sid]['oldest_due_date'] = fee.due_date
-
-    results = []
-    for s in student_map.values():
-        days = (today - s['oldest_due_date']).days
-        results.append({
-            **s, 'total_overdue': str(s['total_overdue']),
-            'oldest_due_date': str(s['oldest_due_date']), 'days_overdue': days
+        student_map[sid]['overdue_lines'].append({
+            'id': fee.id,
+            'head': fee.head.name,
+            'period': fee.period,
+            'due_date': str(fee.due_date),
+            'amount_due': str(fee.amount_due),
+            'discount': str(fee.discount),
+            'net_due': str(fee.net_due),
+            'balance': str(unpaid)
         })
-    sort_by = request.query_params.get('sort_by') or 'total_overdue'
+
+    # Filter out balances below min_amount, calculate overdue bands and days overdue
+    overdue_band_filter = request.query_params.get('overdue_band')
+    results = []
+    by_class_map = defaultdict(lambda: {'count': 0, 'total': Decimal('0.00')})
+    by_band_map = {
+        '1-30': {'count': 0, 'total': Decimal('0.00')},
+        '31-60': {'count': 0, 'total': Decimal('0.00')},
+        '61-90': {'count': 0, 'total': Decimal('0.00')},
+        '90+': {'count': 0, 'total': Decimal('0.00')}
+    }
+    total_all_outstanding = Decimal('0.00')
+    default_currency = 'PKR'
+
+    for s in student_map.values():
+        if s['total_outstanding'] < min_amount:
+            continue
+
+        days = (today - s['oldest_due_date']).days
+        if days <= 30:
+            band = '1-30'
+        elif days <= 60:
+            band = '31-60'
+        elif days <= 90:
+            band = '61-90'
+        else:
+            band = '90+'
+
+        s['days_overdue'] = days
+        s['overdue_band'] = band
+        default_currency = s['currency']
+
+        if overdue_band_filter and overdue_band_filter != 'all' and s['overdue_band'] != overdue_band_filter:
+            continue
+
+        total_all_outstanding += s['total_outstanding']
+        by_class_map[s['full_class_name']]['count'] += 1
+        by_class_map[s['full_class_name']]['total'] += s['total_outstanding']
+        by_band_map[band]['count'] += 1
+        by_band_map[band]['total'] += s['total_outstanding']
+
+        results.append({
+            **s,
+            'total_outstanding': str(s['total_outstanding'].quantize(Decimal('0.01'))),
+            'total_overdue': str(s['total_outstanding'].quantize(Decimal('0.01'))),  # backward compatibility
+            'oldest_due_date': str(s['oldest_due_date'])
+        })
+
+    # Sort descending by total_outstanding (highest first; tie: days_overdue desc, student_name asc)
+    sort_by = request.query_params.get('sort_by') or 'total_outstanding'
     order = request.query_params.get('order') or 'desc'
-    results = sort_comparison_rows(results, metric_key=sort_by, name_key='student_name', reverse=(order != 'asc'))
-    from core.services.exports import handle_export
-    export_res = handle_export(
-        request, results, filename='fee-defaulters', title='Fee Defaulters Report',
-        columns=[
-            {'key': 'student_name', 'label': 'Student Name'},
-            {'key': 'admission_number', 'label': 'Admission #'},
-            {'key': 'class_name', 'label': 'Class'},
-            {'key': 'school_name', 'label': 'Campus'},
-            {'key': 'overdue_count', 'label': 'Overdue Months'},
-            {'key': 'total_overdue', 'label': 'Total Overdue (Rs)'},
-            {'key': 'days_overdue', 'label': 'Days Overdue'},
-            {'key': 'oldest_due_date', 'label': 'Oldest Due Date'}
-        ]
+    results.sort(
+        key=lambda x: (
+            float(x['total_outstanding']) if sort_by in ('total_outstanding', 'total_overdue') else (x['days_overdue'] if sort_by == 'days_overdue' else x['student_name']),
+            x['days_overdue'],
+            x['student_name']
+        ),
+        reverse=(order != 'asc')
     )
-    if export_res:
-        return export_res
-    return Response({'results': results, 'total_defaulters': len(results)})
+
+    # Class summary sorted descending by outstanding amount
+    outstanding_by_class = [
+        {
+            'class_name': cls,
+            'count': data['count'],
+            'total_outstanding': str(data['total'].quantize(Decimal('0.01')))
+        }
+        for cls, data in by_class_map.items()
+    ]
+    outstanding_by_class = sort_comparison_rows(outstanding_by_class, metric_key='total_outstanding', name_key='class_name', reverse=True)
+
+    # Handle export
+    from core.services.exports import handle_export
+    if request.query_params.get('export') in ('csv', 'xlsx', 'pdf') or request.query_params.get('format') in ('csv', 'xlsx', 'pdf'):
+        export_res = handle_export(
+            request, results, filename='fee-defaulters-report', title='Fee Defaulters Directory',
+            columns=[
+                {'key': 'student_name', 'label': 'Student Name'},
+                {'key': 'admission_number', 'label': 'Admission #'},
+                {'key': 'father_name', 'label': 'Father Name'},
+                {'key': 'full_class_name', 'label': 'Class & Section'},
+                {'key': 'school_name', 'label': 'Campus'},
+                {'key': 'days_overdue', 'label': 'Days Overdue'},
+                {'key': 'overdue_band', 'label': 'Overdue Band'},
+                {'key': 'overdue_lines_count', 'label': 'Overdue Items'},
+                {'key': 'total_outstanding', 'label': f'Outstanding ({default_currency})'},
+                {'key': 'oldest_due_date', 'label': 'Oldest Due Date'},
+                {'key': 'last_payment_date', 'label': 'Last Payment'}
+            ]
+        )
+        if export_res:
+            return export_res
+
+    return Response({
+        'results': results,
+        'defaulters': results,
+        'total_defaulters': len(results),
+        'summary': {
+            'total_defaulters': len(results),
+            'number_of_defaulters': len(results),
+            'total_outstanding': str(total_all_outstanding.quantize(Decimal('0.01'))),
+            'currency': default_currency,
+            'outstanding_by_class': outstanding_by_class,
+            'by_band': {k: {'count': v['count'], 'total': str(v['total'].quantize(Decimal('0.01')))} for k, v in by_band_map.items()}
+        }
+    })
+
+
+@api_view(['POST'])
+def defaulter_send_reminder(request, student_id):
+    """
+    Send a respectful, formal fee payment reminder to student (and linked guardians).
+    Rate-limited to 1 reminder per student per day.
+    Audited via record_event.
+    """
+    user = request.user
+    _require_manager(user)
+    today = timezone.localdate()
+
+    student = Student.objects.filter(pk=student_id, school__in=schools_scope(user)).select_related('school', 'user').first()
+    if not student:
+        raise NotFound({'detail': 'Student not found or outside authorized campus scope.'})
+
+    # Daily rate limit check
+    from core.models import AuditEvent, Notification
+    already_sent = AuditEvent.objects.filter(
+        resource='Student',
+        resource_id=student.id,
+        action='send_reminder',
+        created_at__date=today
+    ).exists()
+    if already_sent:
+        return Response({'detail': f'A fee reminder was already sent to {student.full_name} today.'}, status=429)
+
+    # Calculate current outstanding balance
+    fees = StudentFee.objects.filter(student=student, status__in=['unpaid', 'partial'], due_date__lt=today).exclude(status__in=['waived', 'void'])
+    total_unpaid = Decimal('0.00')
+    oldest_due = None
+    for f in fees:
+        already_paid = f.allocations.filter(payment__voided=False, payment__status='approved').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+        bal = max(Decimal('0.00'), f.net_due - already_paid)
+        if bal > Decimal('0.00'):
+            total_unpaid += bal
+            if oldest_due is None or f.due_date < oldest_due:
+                oldest_due = f.due_date
+
+    if total_unpaid <= Decimal('0.00'):
+        raise ValidationError({'detail': f'{student.full_name} has no overdue balance.'})
+
+    currency = student.school.currency or 'PKR'
+    due_str = str(oldest_due) if oldest_due else 'past due date'
+    amount_str = str(total_unpaid.quantize(Decimal('0.01')))
+
+    title = "Fee Payment Reminder"
+    body = f"Dear {student.first_name}, an outstanding balance of {currency} {amount_str} was due on {due_str}. Please submit payment to the school accounts office."
+
+    # Send notification to student user
+    recipient_count = 0
+    if student.user_id:
+        Notification.objects.create(user=student.user, title=title, body=body)
+        recipient_count += 1
+
+    # Send notification to linked guardians
+    for g in student.guardians.all():
+        Notification.objects.create(user=g, title=title, body=body)
+        recipient_count += 1
+
+    record_event(
+        actor=user,
+        action='send_reminder',
+        obj=student
+    )
+
+    return Response({
+        'success': True,
+        'detail': f'Fee reminder sent successfully to {student.full_name} ({recipient_count} account(s) notified).',
+        'student_id': student.id,
+        'total_outstanding': amount_str,
+        'currency': currency
+    })
 
 
 @api_view(['GET'])

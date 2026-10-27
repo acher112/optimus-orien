@@ -3,7 +3,7 @@ import {
   AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, Receipt,
   RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye,
-  Clock, CheckCheck
+  Clock, CheckCheck, Bell, ChevronDown, ChevronUp, Mail, Send
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User } from './api';
@@ -32,6 +32,11 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
   const [receiptsList, setReceiptsList] = useState<R[]>([]);
   const [classes, setClasses] = useState<R[]>([]);
   const [defaulterFilters, setDefaulterFilters] = useState<Record<string, any>>({});
+  const [defaulterSummary, setDefaulterSummary] = useState<R | null>(null);
+  const [defaulterCurrency, setDefaulterCurrency] = useState('PKR');
+  const [expandedDefaulter, setExpandedDefaulter] = useState<number | null>(null);
+  const [reminderModal, setReminderModal] = useState<R | null>(null);
+  const [reminderSending, setReminderSending] = useState(false);
   const [receiptFilters, setReceiptFilters] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -127,7 +132,9 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
         request<R>(`fees/payments/${receiptQs}`).catch(() => ({ results: [] }))
       ]);
       setSummary(sumRes);
-      setDefaulters(defRes.results || []);
+      setDefaulters(defRes.defaulters || defRes.results || []);
+      setDefaulterSummary(defRes.summary || null);
+      setDefaulterCurrency(defRes.currency || 'PKR');
       setHeads(headRes.results || []);
       setStructures(structRes.results || []);
       setConcessions(concRes.results || []);
@@ -225,6 +232,19 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
       setBump(b => b + 1);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Bulk approval failed');
+    }
+  };
+
+  const handleSendReminder = async (studentId: number, studentName: string) => {
+    setReminderSending(true);
+    try {
+      const res = await request<R>(`fees/defaulters/${studentId}/remind/`, { method: 'POST' });
+      notify(res.detail || `Payment reminder sent to ${studentName}`);
+      setReminderModal(null);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not send fee reminder');
+    } finally {
+      setReminderSending(false);
     }
   };
 
@@ -692,79 +712,240 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* DEFAULTERS TAB */}
       {tab === 'defaulters' && (
-        <section className="panel hr-panel">
-          <div className="panel-head">
-            <div>
-              <h3>Fee Defaulters & Overdue Ledger</h3>
-              <p>Students with outstanding balances past the institutional due date</p>
+        <div className="fx-body">
+          {/* Defaulter KPI Cards Strip */}
+          <div className="fx-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', marginBottom: 18 }}>
+            <div className="fx-kpi">
+              <span>Total Defaulters</span>
+              <strong style={{ color: '#dc2626' }}>{defaulterSummary?.total_defaulters ?? defaulters.length} Learners</strong>
+              <small>Unpaid past due date</small>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <ExportMenu
-                title="Fee Defaulters Directory"
-                filename="fee-defaulters"
-                endpoint={`fees/defaulters/${defaulterQs}`}
-                notify={notify}
+            <div className="fx-kpi">
+              <span>Total Overdue Amount</span>
+              <strong style={{ color: '#b91c1c' }}>
+                {defaulterCurrency} {Number(defaulterSummary?.total_outstanding || 0).toLocaleString()}
+              </strong>
+              <small>Awaiting collection</small>
+            </div>
+            <div className="fx-kpi">
+              <span>1–30 Days Overdue</span>
+              <strong style={{ color: '#d97706' }}>{defaulterSummary?.by_band?.['1-30']?.count || 0}</strong>
+              <small>{defaulterCurrency} {Number(defaulterSummary?.by_band?.['1-30']?.total || 0).toLocaleString()}</small>
+            </div>
+            <div className="fx-kpi">
+              <span>31–60 Days Overdue</span>
+              <strong style={{ color: '#ea580c' }}>{defaulterSummary?.by_band?.['31-60']?.count || 0}</strong>
+              <small>{defaulterCurrency} {Number(defaulterSummary?.by_band?.['31-60']?.total || 0).toLocaleString()}</small>
+            </div>
+            <div className="fx-kpi">
+              <span>61–90 Days Overdue</span>
+              <strong style={{ color: '#dc2626' }}>{defaulterSummary?.by_band?.['61-90']?.count || 0}</strong>
+              <small>{defaulterCurrency} {Number(defaulterSummary?.by_band?.['61-90']?.total || 0).toLocaleString()}</small>
+            </div>
+            <div className="fx-kpi">
+              <span>90+ Days (Critical)</span>
+              <strong style={{ color: '#991b1b' }}>{defaulterSummary?.by_band?.['90+']?.count || 0}</strong>
+              <small>{defaulterCurrency} {Number(defaulterSummary?.by_band?.['90+']?.total || 0).toLocaleString()}</small>
+            </div>
+          </div>
+
+          <section className="panel hr-panel">
+            <div className="panel-head">
+              <div>
+                <h3>Fee Defaulters & Overdue Ledger</h3>
+                <p>Sorted by total outstanding descending (INT-031 compliant: fee status never blocks academic learning)</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <ExportMenu
+                  title="Fee Defaulters Directory"
+                  filename="fee-defaulters"
+                  endpoint={`fees/defaulters/${defaulterQs}`}
+                  notify={notify}
+                />
+                <button className="primary-btn" onClick={() => setVoucherModal(true)}>
+                  <Receipt size={15} /> Generate Vouchers
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: '0 20px 14px 20px' }}>
+              <FilterBar
+                searchPlaceholder="Search defaulters by student name, admission #, or father name..."
+                filters={[
+                  {
+                    key: 'class',
+                    label: 'Class',
+                    options: classes.map(c => ({ label: c.name, value: String(c.id) }))
+                  },
+                  {
+                    key: 'section',
+                    label: 'Section',
+                    options: [
+                      { label: 'Section A', value: 'A' },
+                      { label: 'Section B', value: 'B' },
+                      { label: 'Section C', value: 'C' },
+                      { label: 'Section D', value: 'D' },
+                    ]
+                  },
+                  {
+                    key: 'overdue_band',
+                    label: 'Overdue Band',
+                    options: [
+                      { label: '1–30 Days Overdue', value: '1-30' },
+                      { label: '31–60 Days Overdue', value: '31-60' },
+                      { label: '61–90 Days Overdue', value: '61-90' },
+                      { label: '90+ Days Overdue', value: '90+' },
+                    ]
+                  }
+                ]}
+                values={defaulterFilters}
+                onChange={setDefaulterFilters}
+                onClear={() => setDefaulterFilters({})}
               />
-              <button className="primary-btn" onClick={() => setVoucherModal(true)}><Receipt size={15} /> Generate Vouchers</button>
             </div>
-          </div>
-          <div style={{ padding: '0 20px 14px 20px' }}>
-            <FilterBar
-              searchPlaceholder="Search defaulters by student name, admission #, or father name..."
-              filters={[
-                {
-                  key: 'section',
-                  label: 'Section',
-                  options: [
-                    { label: 'Section A', value: 'A' },
-                    { label: 'Section B', value: 'B' },
-                    { label: 'Section C', value: 'C' },
-                  ]
-                }
-              ]}
-              values={defaulterFilters}
-              onChange={setDefaulterFilters}
-              onClear={() => setDefaulterFilters({})}
-            />
-          </div>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>STUDENT</th>
-                  <th>ADMISSION #</th>
-                  <th>CLASS</th>
-                  <th>CAMPUS</th>
-                  <th>OVERDUE AMOUNT</th>
-                  <th>DAYS OVERDUE</th>
-                  <th>OLDEST DUE DATE</th>
-                  <th>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {defaulters.map(d => (
-                  <tr key={d.student_id}>
-                    <td><strong>{d.student_name}</strong></td>
-                    <td>{d.admission_number}</td>
-                    <td>{d.class_name}</td>
-                    <td>{d.school_name}</td>
-                    <td><strong style={{ color: '#dc2626' }}>Rs {d.total_overdue}</strong></td>
-                    <td><span className="pill red">{d.days_overdue} days</span></td>
-                    <td>{d.oldest_due_date}</td>
-                    <td>
-                      <button className="sm-btn" onClick={() => { setTab('collect'); setStudentSearch(d.admission_number); }}>
-                        Collect <ChevronRight size={13} />
-                      </button>
-                    </td>
+
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 36 }}></th>
+                    <th>STUDENT & FATHER</th>
+                    <th>ADMISSION #</th>
+                    <th>CLASS & SECTION</th>
+                    <th>DAYS OVERDUE</th>
+                    <th>OVERDUE HEADS</th>
+                    <th>TOTAL OUTSTANDING</th>
+                    <th>LAST PAYMENT</th>
+                    <th style={{ textAlign: 'right' }}>ACTIONS</th>
                   </tr>
-                ))}
-                {!defaulters.length && (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 30 }}>No fee defaulters found. All student balances are up to date!</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody>
+                  {defaulters.map(d => {
+                    const isExpanded = expandedDefaulter === d.student_id;
+                    const band = d.overdue_band || '1-30';
+                    const bandColor = band === '90+' ? '#7f1d1d' : band === '61-90' ? '#b91c1c' : band === '31-60' ? '#ea580c' : '#d97706';
+                    const bandBg = band === '90+' ? '#fee2e2' : band === '61-90' ? '#fee2e2' : band === '31-60' ? '#ffedd5' : '#fef3c7';
+
+                    return (
+                      <React.Fragment key={d.student_id}>
+                        <tr>
+                          <td>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4 }}
+                              onClick={() => setExpandedDefaulter(isExpanded ? null : d.student_id)}
+                              title={isExpanded ? 'Collapse fee lines' : 'Inspect overdue fee heads'}
+                            >
+                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </button>
+                          </td>
+                          <td>
+                            <div>
+                              <strong>{d.student_name}</strong>
+                              <div style={{ fontSize: 11, color: '#64748b' }}>Father: {d.father_name}</div>
+                            </div>
+                          </td>
+                          <td>{d.admission_number || '—'}</td>
+                          <td><strong>{d.full_class_name}</strong></td>
+                          <td>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                              background: bandBg, color: bandColor
+                            }}>
+                              <Clock size={11} /> {d.days_overdue} days ({band})
+                            </span>
+                          </td>
+                          <td>
+                            <span className="pill purple" style={{ fontSize: 11 }}>
+                              {d.overdue_lines_count} fee head(s)
+                            </span>
+                          </td>
+                          <td>
+                            <strong style={{ color: '#dc2626', fontSize: 14 }}>
+                              {d.currency} {Number(d.total_outstanding).toLocaleString()}
+                            </strong>
+                          </td>
+                          <td style={{ fontSize: 12, color: '#64748b' }}>
+                            {d.last_payment_date ? d.last_payment_date : 'No payment recorded'}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                              <button
+                                className="sm-btn"
+                                style={{ background: '#f8fafc', borderColor: '#cbd5e1', color: '#1e293b' }}
+                                title="Send official payment reminder notification"
+                                onClick={() => setReminderModal(d)}
+                              >
+                                <Bell size={12} /> Remind
+                              </button>
+                              <button
+                                className="sm-btn"
+                                title="Open fee collection register"
+                                onClick={() => { setTab('collect'); setStudentSearch(d.admission_number); }}
+                              >
+                                Collect <ChevronRight size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Expandable Overdue Breakdown Sub-table */}
+                        {isExpanded && (
+                          <tr style={{ background: '#f8fafc' }}>
+                            <td colSpan={9} style={{ padding: '12px 24px 16px 48px' }}>
+                              <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#ffffff', overflow: 'hidden' }}>
+                                <div style={{ padding: '8px 14px', background: '#f1f5f9', fontSize: 12, fontWeight: 700, color: '#334155', display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>Overdue Fee Heads & Vouchers</span>
+                                  <span>Guardian Phone: {d.guardian_phone || 'Not recorded'}</span>
+                                </div>
+                                <table className="data-table" style={{ margin: 0 }}>
+                                  <thead>
+                                    <tr style={{ background: '#fafafa' }}>
+                                      <th style={{ fontSize: 11 }}>FEE HEAD</th>
+                                      <th style={{ fontSize: 11 }}>BILLING PERIOD</th>
+                                      <th style={{ fontSize: 11 }}>DUE DATE</th>
+                                      <th style={{ fontSize: 11 }}>DAYS OVERDUE</th>
+                                      <th style={{ fontSize: 11, textAlign: 'right' }}>OUTSTANDING</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(d.overdue_lines || []).map((line: R) => (
+                                      <tr key={line.fee_id}>
+                                        <td><strong>{line.head_name}</strong></td>
+                                        <td>{line.period}</td>
+                                        <td>{line.due_date}</td>
+                                        <td><span className="pill orange">{line.days_overdue} days</span></td>
+                                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>
+                                          {d.currency} {Number(line.net_due).toLocaleString()}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {!defaulters.length && (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b' }}>
+                        <CheckCircle2 size={36} color="#16a34a" style={{ margin: '0 auto 8px', opacity: 0.8 }} />
+                        <h4 style={{ margin: '0 0 4px', fontSize: 15, color: '#1e293b' }}>No Fee Defaulters Found</h4>
+                        <p style={{ margin: 0, fontSize: 13 }}>All student accounts are up to date within the selected criteria.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       )}
 
       {/* FEE STRUCTURES TAB */}
@@ -1239,6 +1420,56 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
               <button type="button" className="primary-btn" onClick={handlePrintReceipt}>
                 <Printer size={15} /> Print Receipt
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Fee Reminder Confirmation */}
+      {reminderModal && (
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setReminderModal(null); }}>
+          <div className="modal-card" style={{ maxWidth: 480 }}>
+            <div className="modal-head">
+              <div className="modal-icon" style={{ background: '#fef3c7', color: '#b45309' }}>
+                <Bell size={20} />
+              </div>
+              <div>
+                <h3>Send Fee Reminder Notification</h3>
+                <p>Polite notification to student portal and registered guardians</p>
+              </div>
+              <button onClick={() => setReminderModal(null)}><X size={18} /></button>
+            </div>
+
+            <div style={{ padding: '16px 0' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 14 }}>
+                <div style={{ fontSize: 13, color: '#334155' }}>
+                  Student: <strong>{reminderModal.student_name}</strong> ({reminderModal.full_class_name})
+                </div>
+                <div style={{ fontSize: 13, color: '#dc2626', fontWeight: 700, marginTop: 4 }}>
+                  Outstanding Amount: {reminderModal.currency} {Number(reminderModal.total_outstanding).toLocaleString()}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  Overdue since: {reminderModal.oldest_due_date} ({reminderModal.days_overdue} days overdue)
+                </div>
+              </div>
+
+              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px' }}>
+                <strong>Policy notice:</strong> In accordance with rule INT-031, reminder notices use neutral, polite language and never threaten or automatically restrict access to examinations, grade reports, or study materials. Reminders are rate-limited to 1 per student per day.
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button type="button" className="outline-btn" onClick={() => setReminderModal(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  disabled={reminderSending}
+                  onClick={() => handleSendReminder(reminderModal.student_id, reminderModal.student_name)}
+                >
+                  <Send size={14} /> {reminderSending ? 'Sending…' : 'Send Reminder'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

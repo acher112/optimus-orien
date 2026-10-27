@@ -9,7 +9,7 @@ import {
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound
 } from 'lucide-react';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
   request, login, register, logout, list, create, update, destroy,
   createAccount, registerCampus, schoolUsers, updateProfile,
@@ -33,6 +33,8 @@ import StudyMaterials from './StudyMaterials';
 import ExportMenu from './ExportMenu';
 import Settings from './Settings';
 import Permissions from './Permissions';
+import StudentsAtRisk from './StudentsAtRisk';
+import DashboardFinanceChart from './DashboardFinanceChart';
 import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import './style.css';
@@ -59,6 +61,10 @@ const WORKSPACE_NAV = [
   { name: 'Concessions', icon: Sparkles, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Receipts', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
+  { name: 'Students at Risk', icon: AlertCircle, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  { name: 'At-risk list', icon: AlertCircle, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  { name: 'Risk criteria', icon: SlidersHorizontal, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Review cases', icon: ShieldAlert, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Interventions', icon: HeartHandshake },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -95,7 +101,7 @@ const NAV_GROUPS = [
       'Timetable'
     ]
   },
-  { sublabel: 'STUDENT SUPPORT', items: ['Interventions'] },
+  { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
@@ -1218,6 +1224,92 @@ function App() {
                 </section>
               </div>
 
+              {/* Operating Income vs Expense Chart (Dashboard Requirement) */}
+              {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
+                <DashboardFinanceChart user={user} notify={notify} campuses={campuses} onNavigate={switchPage} />
+              )}
+
+              {/* Operational Action Cards: Defaulters & Students at Risk */}
+              <div className="dashboard-grid lower" style={{ marginBottom: 20 }}>
+                {/* Fee Defaulters Summary Card */}
+                {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
+                  <section className="panel attention-panel" style={{ borderLeft: '4px solid #f59e0b' }}>
+                    <div className="panel-head">
+                      <div>
+                        <h3>Fee Collection & Defaulters</h3>
+                        <p>Overdue student balances monitoring</p>
+                      </div>
+                      <span className="attention-count" style={{ background: '#fef3c7', color: '#b45309' }}>
+                        Overdue Ledger
+                      </span>
+                    </div>
+                    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                          width: 44, height: 44, borderRadius: 10, background: '#fee2e2',
+                          color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                          <Receipt size={22} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                            Students with Overdue Balances
+                          </div>
+                          <div style={{ fontSize: 12, color: '#64748b' }}>
+                            Ranked descending by total outstanding balance (1-30, 31-60, 61-90, 90+ days)
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
+                        Rule INT-031 compliant: Defaulter flag never blocks examinations, report cards, or learning materials.
+                      </div>
+                    </div>
+                    <button className="view-link" onClick={() => switchPage('Defaulters')}>
+                      Inspect Fee Defaulters <ArrowRight size={17} />
+                    </button>
+                  </section>
+                )}
+
+                {/* Students at Risk Summary Card */}
+                {['organisation_admin', 'school_admin', 'principal', 'teacher'].includes(user.role) && (
+                  <section className="panel attention-panel" style={{ borderLeft: '4px solid #ef4444' }}>
+                    <div className="panel-head">
+                      <div>
+                        <h3>Students at Risk</h3>
+                        <p>Objective academic & attendance indicators</p>
+                      </div>
+                      <span className="attention-count" style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                        Active Monitoring
+                      </span>
+                    </div>
+                    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                          width: 44, height: 44, borderRadius: 10, background: '#fee2e2',
+                          color: '#b91c1c', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                          <AlertCircle size={22} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                            Evidence-Based Early Support
+                          </div>
+                          <div style={{ fontSize: 12, color: '#64748b' }}>
+                            Identified via objective criteria (grades, attendance, consecutive absences, homework)
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
+                        Notice: Not a diagnosis. Requires minimum 3 assessments before evaluation (INT-003/004).
+                      </div>
+                    </div>
+                    <button className="view-link" onClick={() => switchPage('Students at Risk')}>
+                      Inspect At-Risk Students <ArrowRight size={17} />
+                    </button>
+                  </section>
+                )}
+              </div>
+
               <div className="dashboard-grid lower">
                 <section className="panel students-panel">
                   <div className="panel-head">
@@ -1401,6 +1493,9 @@ function App() {
           {page === 'Announcements' && <Announcements user={user} notify={notify} />}
           {page === 'Settings' && <Settings user={user} onUserUpdated={u => setUser(u)} notify={notify} />}
           {page === 'Permissions' && <Permissions user={user} notify={notify} />}
+          {['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'].includes(page) && (
+            <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} />
+          )}
 
         </main>
         <footer className="footer">
