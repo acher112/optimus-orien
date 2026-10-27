@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags, Trash2, Users } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import { getStoredTheme } from './theme';
@@ -83,6 +83,47 @@ function Overview({ sum }: { sum: R }) {
         <div className="fx-kpi"><span>Total expense</span><strong style={{ color: EXPENSE }}>{money(sum.total_expense)}</strong></div>
         <div className="fx-kpi"><span>Net</span><strong style={{ color: sum.net >= 0 ? INCOME : EXPENSE }}>{money(sum.net)}</strong><small>{sum.entries} entries</small></div>
       </div>
+
+      {sum.student_projection && (
+        <section className="panel hr-panel" style={{ padding: '16px 20px', marginBottom: 20, background: 'linear-gradient(135deg, #f8faff 0%, #f1f5f9 100%)', border: '1px solid #e2e8f0', borderRadius: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <h3 style={{ fontSize: 15, margin: 0, display: 'flex', alignItems: 'center', gap: 8, color: '#1e293b' }}>
+                <Users size={18} color="#6366f1" /> Student Fee Revenue Projection (Estimated via Student Cohorts)
+              </h3>
+              <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
+                Estimated revenue receivable from enrolled student body vs approved realized collections and pending dues
+              </p>
+            </div>
+            <span style={{ background: '#ede9fe', color: '#6366f1', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+              {sum.student_projection.total_students} Enrolled Students
+            </span>
+          </div>
+
+          <div className="fx-kpis" style={{ margin: 0, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <div className="fx-kpi" style={{ background: 'white', borderRadius: 10, padding: 12 }}>
+              <span style={{ fontSize: 11 }}>Estimated Total Income</span>
+              <strong style={{ fontSize: 17, color: '#2563eb' }}>{money(sum.student_projection.expected)}</strong>
+              <small>~{money(sum.student_projection.avg_per_student)} / student</small>
+            </div>
+            <div className="fx-kpi" style={{ background: 'white', borderRadius: 10, padding: 12 }}>
+              <span style={{ fontSize: 11 }}>Collected & Approved</span>
+              <strong style={{ fontSize: 17, color: '#16a34a' }}>{money(sum.student_projection.collected)}</strong>
+              <small>Realized in Income ledger</small>
+            </div>
+            <div className="fx-kpi" style={{ background: 'white', borderRadius: 10, padding: 12 }}>
+              <span style={{ fontSize: 11 }}>Remaining to Collect</span>
+              <strong style={{ fontSize: 17, color: '#dc2626' }}>{money(sum.student_projection.remaining)}</strong>
+              <small>Outstanding receivable</small>
+            </div>
+            <div className="fx-kpi" style={{ background: 'white', borderRadius: 10, padding: 12 }}>
+              <span style={{ fontSize: 11 }}>Challans Pending Approval</span>
+              <strong style={{ fontSize: 17, color: '#d97706' }}>{money(sum.student_projection.pending_approval || 0)}</strong>
+              <small>Awaiting admin verification</small>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="fx-grid">
         <section className="panel hr-panel fx-card">

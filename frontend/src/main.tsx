@@ -322,6 +322,7 @@ function App() {
 
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const campusDropdownRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   const [accentHex, setAccentHex] = useState(() => getStoredTheme().colorHex);
   useEffect(() => {
@@ -339,7 +340,7 @@ function App() {
     return () => window.removeEventListener('optimus_theme_change', handler);
   }, []);
 
-  // Close menus when clicking outside
+  // Close menus and sidebar when clicking outside
   useEffect(() => {
     const clickOutside = (e: MouseEvent) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
@@ -347,6 +348,10 @@ function App() {
       }
       if (campusDropdownRef.current && !campusDropdownRef.current.contains(e.target as Node)) {
         setCampusDropdownOpen(false);
+      }
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
+        setSidebar(false);
+        setOpenDropdowns({});
       }
     };
     document.addEventListener('mousedown', clickOutside);
@@ -461,6 +466,24 @@ function App() {
           data[f.key] = isNum ? Number(val) : val;
         }
       }
+      if (page === 'Students') {
+        if (!form.monthly_fee || Number(form.monthly_fee) <= 0) {
+          notify('Monthly tuition fee is mandatory and must be greater than zero.');
+          setSaving(false);
+          return;
+        }
+        if (!form.admission_fee || Number(form.admission_fee) <= 0) {
+          notify('New admission fee is mandatory and must be greater than zero.');
+          setSaving(false);
+          return;
+        }
+        if (form.extra_charges && Number(form.extra_charges) > 0 && !form.extra_charges_reason?.trim()) {
+          notify('Please provide a reason for the extra charges.');
+          setSaving(false);
+          return;
+        }
+      }
+
       const created = await create(config.api, data);
       if (page === 'Students' && created && created.id) {
         if (form.assign_class) {
@@ -472,18 +495,19 @@ function App() {
             });
           } catch {}
         }
-        if (form.admission_fee && Number(form.admission_fee) > 0) {
+        if (form.monthly_fee || form.admission_fee) {
           try {
             await request('fees/student-voucher/', {
               method: 'POST',
               body: JSON.stringify({
                 student: created.id,
-                amount: Number(form.admission_fee),
-                frequency: form.fee_frequency || 'monthly',
-                collect_now: form.fee_status !== 'pending_voucher',
-                payment_method: form.payment_method || 'cash',
+                monthly_fee: Number(form.monthly_fee || 0),
+                admission_fee: Number(form.admission_fee || 0),
+                annual_fee: form.annual_fee ? Number(form.annual_fee) : 0,
+                extra_charges: form.extra_charges ? Number(form.extra_charges) : 0,
+                extra_charges_reason: form.extra_charges_reason || '',
                 school_class: form.assign_class ? Number(form.assign_class) : undefined,
-                reference: `ADM-${created.admission_number || created.id}`
+                reference: `CHALLAN-${created.admission_number || created.id}`
               })
             });
           } catch (feeErr) {
@@ -493,7 +517,7 @@ function App() {
       }
       setModal(false);
       setForm({});
-      notify('Record created successfully');
+      notify(page === 'Students' ? 'Student created & billing challan generated (Awaiting payment & approval)' : 'Record created successfully');
       await load();
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not save record');
@@ -619,7 +643,12 @@ function App() {
         <Settings2 size={19} />
       </button>
 
-      <aside className={'sidebar ' + (sidebar ? 'open' : '')}>
+      <div
+        className={'sidebar-backdrop ' + (sidebar ? 'open' : '')}
+        onClick={() => setSidebar(false)}
+        aria-hidden="true"
+      />
+      <aside ref={sidebarRef} className={'sidebar ' + (sidebar ? 'open' : '')}>
         <div className="brand">
           <span className="brand-symbol">◈</span>
           <span className="brand-copy">
@@ -1366,57 +1395,55 @@ function App() {
 
                 {page === 'Students' && (
                   <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #edf0f8', paddingTop: 14, marginTop: 4 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
-                      Student Fees & Class Enrollment (Optional)
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                        Student Fees & Billing Challan (Registration)
+                      </div>
+                      <div style={{ fontSize: 10, color: '#8892a5', fontWeight: 600 }}>
+                        Monthly & Admission fees are mandatory · Annual is optional
+                      </div>
                     </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <label>
-                        Fee Frequency / Schedule
-                        <select
-                          value={form.fee_frequency || 'monthly'}
-                          onChange={e => setForm(s => ({ ...s, fee_frequency: e.target.value }))}
-                        >
-                          <option value="monthly">Monthly Fee</option>
-                          <option value="annual">Annual Fee</option>
-                          <option value="one_time">One-Time Admission Fee</option>
-                        </select>
-                      </label>
-                      <label>
-                        Fee Amount (Rs)
+                        Monthly Tuition Fee (Rs) <span className="required">*</span>
                         <input
                           type="number"
                           step="0.01"
-                          min="0"
-                          placeholder="e.g. 5000"
+                          min="1"
+                          required
+                          placeholder="e.g. 5000 (Mandatory)"
+                          value={form.monthly_fee || ''}
+                          onChange={e => setForm(s => ({ ...s, monthly_fee: e.target.value }))}
+                        />
+                      </label>
+
+                      <label>
+                        New Admission Fee (Rs) <span className="required">*</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="1"
+                          required
+                          placeholder="e.g. 10000 (Mandatory)"
                           value={form.admission_fee || ''}
                           onChange={e => setForm(s => ({ ...s, admission_fee: e.target.value }))}
                         />
                       </label>
+
                       <label>
-                        Fee Collection Action
-                        <select
-                          value={form.fee_status || 'collect_now'}
-                          onChange={e => setForm(s => ({ ...s, fee_status: e.target.value }))}
-                        >
-                          <option value="collect_now">Collect now (Link with Income)</option>
-                          <option value="pending_voucher">Generate pending voucher (Due later)</option>
-                        </select>
+                        Annual Fee (Rs) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="e.g. 2500 (Optional)"
+                          value={form.annual_fee || ''}
+                          onChange={e => setForm(s => ({ ...s, annual_fee: e.target.value }))}
+                        />
                       </label>
-                      {form.fee_status !== 'pending_voucher' && (
-                        <label>
-                          Payment Method
-                          <select
-                            value={form.payment_method || 'cash'}
-                            onChange={e => setForm(s => ({ ...s, payment_method: e.target.value }))}
-                          >
-                            <option value="cash">Cash</option>
-                            <option value="bank">Bank Transfer</option>
-                            <option value="online">Online</option>
-                            <option value="cheque">Cheque</option>
-                          </select>
-                        </label>
-                      )}
-                      <label style={{ gridColumn: form.fee_status === 'pending_voucher' ? '1 / -1' : 'auto' }}>
+
+                      <label>
                         Assign Class (Optional)
                         <select
                           value={form.assign_class || ''}
@@ -1428,6 +1455,39 @@ function App() {
                           ))}
                         </select>
                       </label>
+
+                      <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                          Extra Charges & Miscellaneous (Optional)
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 10 }}>
+                          <label style={{ margin: 0 }}>
+                            Extra Amount (Rs)
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="e.g. 1500"
+                              value={form.extra_charges || ''}
+                              onChange={e => setForm(s => ({ ...s, extra_charges: e.target.value }))}
+                            />
+                          </label>
+                          <label style={{ margin: 0 }}>
+                            Reason for Extra Charges {Number(form.extra_charges) > 0 && <span className="required">*</span>}
+                            <input
+                              type="text"
+                              placeholder="e.g. Uniform, Lab Security, Registration Books…"
+                              value={form.extra_charges_reason || ''}
+                              onChange={e => setForm(s => ({ ...s, extra_charges_reason: e.target.value }))}
+                              required={Number(form.extra_charges) > 0}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div style={{ gridColumn: '1 / -1', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 14px', borderRadius: 8, fontSize: 11, lineHeight: 1.5 }}>
+                        <strong>Challan Workflow:</strong> Saving this student will generate an unpaid student fee challan. The amount will <em>not</em> appear in Income until the student/parent submits payment and the School Admin verifies and approves it.
+                      </div>
                     </div>
                   </div>
                 )}

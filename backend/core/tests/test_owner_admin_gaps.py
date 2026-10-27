@@ -93,7 +93,8 @@ class OwnerAdminGapsTests(AccessFixture):
             'student': self.a.id,
             'amount': '10000.00',
             'method': 'bank',
-            'reference': 'TXN-998877'
+            'reference': 'TXN-998877',
+            'auto_approve': True
         })
         self.assertEqual(res.status_code, 201)
         payment_id = res.json()['id']
@@ -473,7 +474,8 @@ Maryam,Khan,ADM-9902,2,2013-07-15,female,Grade 8A"""
             'student': student_id,
             'amount': '15000.00',
             'method': 'cash',
-            'reference': 'ADM-INITIAL-FEES'
+            'reference': 'ADM-INITIAL-FEES',
+            'auto_approve': True
         })
         self.assertEqual(pay_res.status_code, 201)
         receipt_num = pay_res.json()['receipt_number']

@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, Receipt,
-  RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye
+  RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye,
+  Clock, CheckCheck
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User } from './api';
@@ -33,6 +34,9 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
   const [loading, setLoading] = useState(false);
   const [bump, setBump] = useState(0);
 
+  // Receipts approval filter
+  const [receiptFilter, setReceiptFilter] = useState<'all' | 'pending' | 'approved'>('all');
+
   // Collect tab state
   const [studentSearch, setStudentSearch] = useState('');
   const [searchedStudents, setSearchedStudents] = useState<R[]>([]);
@@ -41,6 +45,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('cash');
   const [payRef, setPayRef] = useState('');
+  const [payAutoApprove, setPayAutoApprove] = useState(true);
   const [recentReceipt, setRecentReceipt] = useState<R | null>(null);
   const [receiptModal, setReceiptModal] = useState<R | null>(null);
 
@@ -157,10 +162,11 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
           amount: payAmount,
           method: payMethod,
           reference: payRef,
+          auto_approve: payAutoApprove,
           paid_on: new Date().toISOString().slice(0, 10)
         })
       });
-      notify(`Fee collected! Receipt #${res.receipt_number}`);
+      notify(payAutoApprove ? `Fee collected & approved! Receipt #${res.receipt_number}` : `Payment recorded as pending verification! Receipt #${res.receipt_number}`);
       const receiptData = { ...res, student_name: selectedStudent.name || `${selectedStudent.first_name} ${selectedStudent.last_name}` };
       setRecentReceipt(receiptData);
       setReceiptModal(receiptData);
@@ -170,6 +176,34 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
       selectStudentForPay(selectedStudent);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Payment recording failed');
+    }
+  };
+
+  const handleApproveReceipt = async (id: number) => {
+    try {
+      await request(`fees/payments/${id}/approve/`, { method: 'POST' });
+      notify('Fee payment approved and posted to Income ledger');
+      setBump(b => b + 1);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not approve payment');
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    const pending = receiptsList.filter(p => p.status === 'pending');
+    if (!pending.length) {
+      notify('No pending payments to approve');
+      return;
+    }
+    try {
+      const res = await request<{ approved_count: number }>('fees/payments/bulk-approve/', {
+        method: 'POST',
+        body: JSON.stringify({ ids: pending.map(p => p.id), school: school || undefined })
+      });
+      notify(`Successfully approved ${res.approved_count} fee receipts into Income ledger`);
+      setBump(b => b + 1);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Bulk approval failed');
     }
   };
 
@@ -377,10 +411,32 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
       {/* OVERVIEW TAB */}
       {tab === 'overview' && summary && (
         <div className="fx-body">
-          <div className="fx-kpis">
-            <div className="fx-kpi"><span>Total Expected</span><strong style={{ color: '#2563eb' }}>Rs {Number(summary.expected).toLocaleString()}</strong></div>
-            <div className="fx-kpi"><span>Collected</span><strong style={{ color: '#16a34a' }}>Rs {Number(summary.collected).toLocaleString()}</strong></div>
-            <div className="fx-kpi"><span>Outstanding</span><strong style={{ color: '#dc2626' }}>Rs {Number(summary.outstanding).toLocaleString()}</strong><small>{summary.collection_rate}% collection rate</small></div>
+          <div className="fx-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+            <div className="fx-kpi">
+              <span>Active Students</span>
+              <strong style={{ color: '#7c3aed' }}>{summary.total_students ?? 0} Students</strong>
+              <small>Enrolled learners in campus</small>
+            </div>
+            <div className="fx-kpi">
+              <span>Estimated Total Income</span>
+              <strong style={{ color: '#2563eb' }}>Rs {Number(summary.expected).toLocaleString()}</strong>
+              <small>~Rs {Math.round(summary.avg_per_student || 0).toLocaleString()} / student</small>
+            </div>
+            <div className="fx-kpi">
+              <span>Collected (Approved)</span>
+              <strong style={{ color: '#16a34a' }}>Rs {Number(summary.collected).toLocaleString()}</strong>
+              <small>{summary.collection_rate}% realized in Income</small>
+            </div>
+            <div className="fx-kpi">
+              <span>Remaining to Collect</span>
+              <strong style={{ color: '#dc2626' }}>Rs {Number(summary.outstanding).toLocaleString()}</strong>
+              <small>Outstanding balance</small>
+            </div>
+            <div className="fx-kpi">
+              <span>Pending Admin Approval</span>
+              <strong style={{ color: '#d97706' }}>Rs {Number(summary.pending_approval || 0).toLocaleString()}</strong>
+              <small>Challans submitted</small>
+            </div>
           </div>
 
           <div className="fx-grid">
@@ -786,12 +842,50 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
       {/* RECEIPTS TAB */}
       {tab === 'receipts' && (
         <section className="panel hr-panel">
-          <div className="panel-head">
+          <div className="panel-head" style={{ flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <h3>Payment Receipts Log</h3>
-              <p>Official ledger receipts recorded for fee collections across campuses</p>
+              <h3>Payment Receipts & Approval Ledger</h3>
+              <p>Challans submitted by students remain Pending until verified and approved by School Admin into Income</p>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: 3, borderRadius: 8, gap: 4 }}>
+                <button
+                  type="button"
+                  className={`sm-btn ${receiptFilter === 'all' ? 'primary-btn' : ''}`}
+                  style={{ border: 'none', background: receiptFilter === 'all' ? '#4f46e5' : 'transparent', color: receiptFilter === 'all' ? 'white' : '#64748b', fontSize: 11, padding: '4px 10px' }}
+                  onClick={() => setReceiptFilter('all')}
+                >
+                  All ({receiptsList.length})
+                </button>
+                <button
+                  type="button"
+                  className={`sm-btn ${receiptFilter === 'pending' ? 'primary-btn' : ''}`}
+                  style={{ border: 'none', background: receiptFilter === 'pending' ? '#d97706' : 'transparent', color: receiptFilter === 'pending' ? 'white' : '#64748b', fontSize: 11, padding: '4px 10px' }}
+                  onClick={() => setReceiptFilter('pending')}
+                >
+                  Pending ({receiptsList.filter(p => p.status === 'pending').length})
+                </button>
+                <button
+                  type="button"
+                  className={`sm-btn ${receiptFilter === 'approved' ? 'primary-btn' : ''}`}
+                  style={{ border: 'none', background: receiptFilter === 'approved' ? '#16a34a' : 'transparent', color: receiptFilter === 'approved' ? 'white' : '#64748b', fontSize: 11, padding: '4px 10px' }}
+                  onClick={() => setReceiptFilter('approved')}
+                >
+                  Approved ({receiptsList.filter(p => p.status === 'approved').length})
+                </button>
+              </div>
+
+              {receiptsList.some(p => p.status === 'pending') && (
+                <button
+                  className="primary-btn"
+                  style={{ background: '#16a34a', borderColor: '#15803d', fontSize: 12 }}
+                  title="Approve all submitted pending challans into Income"
+                  onClick={handleBulkApprove}
+                >
+                  <CheckCheck size={14} /> Approve All Pending ({receiptsList.filter(p => p.status === 'pending').length})
+                </button>
+              )}
+
               <ExportMenu
                 title="Payment Receipts Log"
                 filename="payment-receipts"
@@ -810,35 +904,71 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                   <th>CAMPUS</th>
                   <th>AMOUNT</th>
                   <th>METHOD</th>
+                  <th>STATUS</th>
                   <th>PAID ON</th>
                   <th>REFERENCE</th>
                   <th style={{ textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                {receiptsList.map(p => (
-                  <tr key={p.id}>
-                    <td><strong style={{ color: '#2563eb' }}>{p.receipt_number}</strong></td>
-                    <td><strong>{p.student_name}</strong></td>
-                    <td>{p.admission_number || '—'}</td>
-                    <td>{p.school_name}</td>
-                    <td><strong style={{ color: '#16a34a' }}>Rs {p.amount}</strong></td>
-                    <td><span className="pill purple" style={{ textTransform: 'capitalize' }}>{p.method.replace('_', ' ')}</span></td>
-                    <td>{p.paid_on}</td>
-                    <td style={{ fontSize: 12, color: '#64748b' }}>{p.reference || '—'}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="sm-btn"
-                        title="View & Print Official Receipt"
-                        onClick={() => setReceiptModal(p)}
-                      >
-                        <Eye size={13} /> View Receipt
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!receiptsList.length && (
-                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: 30 }}>No payment receipts recorded yet. Collect fees to issue receipts.</td></tr>
+                {receiptsList
+                  .filter(p => {
+                    if (receiptFilter === 'pending') return p.status === 'pending';
+                    if (receiptFilter === 'approved') return p.status === 'approved';
+                    return true;
+                  })
+                  .map(p => {
+                    const isPending = p.status === 'pending';
+                    const isVoided = p.voided || p.status === 'rejected';
+                    return (
+                      <tr key={p.id}>
+                        <td><strong style={{ color: '#2563eb' }}>{p.receipt_number}</strong></td>
+                        <td><strong>{p.student_name}</strong></td>
+                        <td>{p.admission_number || '—'}</td>
+                        <td>{p.school_name}</td>
+                        <td><strong style={{ color: '#16a34a' }}>Rs {p.amount}</strong></td>
+                        <td><span className="pill purple" style={{ textTransform: 'capitalize' }}>{p.method.replace('_', ' ')}</span></td>
+                        <td>
+                          {isPending ? (
+                            <span style={{ background: '#fef3c7', color: '#b45309', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <Clock size={11} /> Pending Approval
+                            </span>
+                          ) : isVoided ? (
+                            <span style={{ background: '#fee2e2', color: '#b91c1c', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                              Voided
+                            </span>
+                          ) : (
+                            <span style={{ background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <CheckCircle2 size={11} /> Approved
+                            </span>
+                          )}
+                        </td>
+                        <td>{p.paid_on}</td>
+                        <td style={{ fontSize: 12, color: '#64748b' }}>{p.reference || '—'}</td>
+                        <td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                          {isPending && (
+                            <button
+                              className="sm-btn"
+                              style={{ background: '#16a34a', color: 'white', borderColor: '#15803d', fontWeight: 700 }}
+                              title="Approve payment and link to Income ledger"
+                              onClick={() => handleApproveReceipt(p.id)}
+                            >
+                              <CheckCircle2 size={12} /> Approve
+                            </button>
+                          )}
+                          <button
+                            className="sm-btn"
+                            title="View & Print Official Receipt"
+                            onClick={() => setReceiptModal(p)}
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                {!receiptsList.filter(p => receiptFilter === 'pending' ? p.status === 'pending' : receiptFilter === 'approved' ? p.status === 'approved' : true).length && (
+                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: 30 }}>No receipts found in this view.</td></tr>
                 )}
               </tbody>
             </table>

@@ -481,7 +481,8 @@ class StudentFee(models.Model):
 
 
 class FeePayment(models.Model):
-    """Fee collection receipt. Automatically creates a linked FinanceEntry (Income)."""
+    """Fee collection receipt. Creates a linked FinanceEntry (Income) when approved."""
+    STATUSES = [('pending', 'Pending Approval'), ('approved', 'Approved'), ('rejected', 'Rejected')]
     METHODS = [('cash', 'Cash'), ('bank', 'Bank Transfer'), ('online', 'Online / Card'), ('cheque', 'Cheque')]
     student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='fee_payments')
     school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='fee_payments')
@@ -490,6 +491,9 @@ class FeePayment(models.Model):
     method = models.CharField(max_length=16, choices=METHODS, default='cash')
     paid_on = models.DateField()
     reference = models.CharField(max_length=100, blank=True)
+    status = models.CharField(max_length=16, choices=STATUSES, default='approved')
+    approved_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='approved_fee_payments')
+    approved_at = models.DateTimeField(null=True, blank=True)
     received_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='received_fee_payments')
     voided = models.BooleanField(default=False)
     void_reason = models.CharField(max_length=255, blank=True)

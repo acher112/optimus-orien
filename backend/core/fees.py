@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.db.models import Sum, Q
+from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
@@ -48,6 +49,20 @@ def _money(value, field='amount'):
     if d < 0 or d >= Decimal('10000000000'):
         raise ValidationError({field: 'Amount must be positive and within reasonable limits.'})
     return d
+
+
+def _resolve_fee_head(school, head_name, cat_name):
+    head = FeeHead.objects.filter(school=school, name__iexact=head_name).first()
+    if not head:
+        cat = FinanceCategory.objects.filter(school=school, kind='income', name__iexact=cat_name).first()
+        if not cat:
+            cat = FinanceCategory.objects.filter(school=school, kind='income', name__icontains=cat_name[:4]).first()
+        if not cat:
+            cat = FinanceCategory.objects.filter(school=school, kind='income').first()
+        if not cat:
+            cat = FinanceCategory.objects.create(school=school, kind='income', name=cat_name)
+        head = FeeHead.objects.create(school=school, name=head_name, category=cat, active=True)
+    return head
 
 
 # ------------------------------------------------------------------ Fee Heads
@@ -340,8 +355,10 @@ def generate_vouchers(request):
 
 @api_view(['POST'])
 def student_voucher_create(request):
-    """Create or bill a voucher for an individual student (Annual, Monthly, or Admission fee).
-    Optionally collects payment immediately, linking directly to a FinanceEntry (Income).
+    """Create or bill vouchers for an individual student.
+    Supports multi-fee initial registration challan (monthly_fee, admission_fee, annual_fee, extra_charges + reason)
+    as well as single-item fee vouchers (legacy amount + frequency).
+    Generates unpaid challan voucher items without posting to Finance Income until paid and approved.
     """
     user = request.user
     _require_manager(user)
@@ -352,6 +369,107 @@ def student_voucher_create(request):
     if not student:
         raise ValidationError({'student': 'Valid student within your campus scope required.'})
 
+    today = date.today()
+    due_str = data.get('due_date')
+    due_date = date.fromisoformat(due_str) if due_str else today + timedelta(days=10)
+    class_id = data.get('school_class')
+    sc = None
+    if class_id:
+        sc = SchoolClass.objects.filter(pk=class_id, school=student.school).first()
+
+    # Check if this is a multi-fee initial registration challan
+    has_multi = 'monthly_fee' in data or 'admission_fee' in data
+    if has_multi:
+        monthly_val = data.get('monthly_fee')
+        admission_val = data.get('admission_fee')
+        if monthly_val is None or str(monthly_val).strip() == '':
+            raise ValidationError({'monthly_fee': 'Monthly tuition fee is mandatory.'})
+        if admission_val is None or str(admission_val).strip() == '':
+            raise ValidationError({'admission_fee': 'New admission fee is mandatory.'})
+
+        monthly_fee = _money(monthly_val, 'monthly_fee')
+        admission_fee = _money(admission_val, 'admission_fee')
+        annual_fee = _money(data.get('annual_fee', 0), 'annual_fee') if data.get('annual_fee') else Decimal('0.00')
+        extra_charges = _money(data.get('extra_charges', 0), 'extra_charges') if data.get('extra_charges') else Decimal('0.00')
+        extra_reason = (data.get('extra_charges_reason') or '').strip()[:100]
+        if extra_charges > Decimal('0.00') and not extra_reason:
+            raise ValidationError({'extra_charges_reason': 'Please specify the reason for extra charges.'})
+
+        created_vouchers = []
+        with transaction.atomic():
+            # 1. Monthly Tuition Fee (Mandatory)
+            head_m = _resolve_fee_head(student.school, "Monthly Tuition Fee", "Tuition fees")
+            v_m, _ = StudentFee.objects.get_or_create(
+                student=student, head=head_m, period=today.strftime('%Y-%m'),
+                defaults={'amount_due': monthly_fee, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
+            )
+            v_m.amount_due = monthly_fee
+            v_m.save(update_fields=['amount_due'])
+            created_vouchers.append(v_m)
+            if sc and sc.academic_year:
+                FeeStructure.objects.update_or_create(
+                    school=student.school, academic_year=sc.academic_year, school_class=sc, head=head_m,
+                    defaults={'amount': monthly_fee, 'frequency': 'monthly', 'due_day': 10}
+                )
+
+            # 2. New Admission Fee (Mandatory)
+            head_a = _resolve_fee_head(student.school, "Admission Fee", "Admission fees")
+            v_a, _ = StudentFee.objects.get_or_create(
+                student=student, head=head_a, period=f"{today.year}-Admission",
+                defaults={'amount_due': admission_fee, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
+            )
+            v_a.amount_due = admission_fee
+            v_a.save(update_fields=['amount_due'])
+            created_vouchers.append(v_a)
+
+            # 3. Annual Fee (Optional)
+            if annual_fee > Decimal('0.00'):
+                head_ann = _resolve_fee_head(student.school, "Annual Tuition Fee", "Annual fees")
+                v_ann, _ = StudentFee.objects.get_or_create(
+                    student=student, head=head_ann, period=f"{today.year}-Annual",
+                    defaults={'amount_due': annual_fee, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
+                )
+                v_ann.amount_due = annual_fee
+                v_ann.save(update_fields=['amount_due'])
+                created_vouchers.append(v_ann)
+                if sc and sc.academic_year:
+                    FeeStructure.objects.update_or_create(
+                        school=student.school, academic_year=sc.academic_year, school_class=sc, head=head_ann,
+                        defaults={'amount': annual_fee, 'frequency': 'annual', 'due_day': 10}
+                    )
+
+            # 4. Extra Charges (Optional with reason)
+            if extra_charges > Decimal('0.00'):
+                head_name = f"Extra Charges - {extra_reason}" if extra_reason else "Extra Charges"
+                head_ext = _resolve_fee_head(student.school, head_name, "Other income")
+                v_ext, _ = StudentFee.objects.get_or_create(
+                    student=student, head=head_ext, period=f"{today.strftime('%Y-%m')}-Extra",
+                    defaults={'amount_due': extra_charges, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
+                )
+                v_ext.amount_due = extra_charges
+                v_ext.save(update_fields=['amount_due'])
+                created_vouchers.append(v_ext)
+
+            total_due = sum((v.amount_due for v in created_vouchers), Decimal('0.00'))
+            for v in created_vouchers:
+                record_event(actor=user, action='create', obj=v)
+
+        return Response({
+            'success': True,
+            'student_id': student.id,
+            'total_challan_amount': str(total_due),
+            'vouchers_count': len(created_vouchers),
+            'vouchers': [{
+                'id': v.id,
+                'head': v.head.name,
+                'period': v.period,
+                'amount': str(v.amount_due),
+                'status': v.status,
+                'due_date': str(v.due_date)
+            } for v in created_vouchers]
+        }, status=201)
+
+    # Legacy single fee voucher path
     amount = _money(data.get('amount'))
     if amount <= Decimal('0.00'):
         raise ValidationError({'amount': 'Amount must be greater than zero.'})
@@ -364,7 +482,6 @@ def student_voucher_create(request):
     method = data.get('payment_method') or 'cash'
     ref = (data.get('reference') or '').strip()[:100] or f"FEE-{student.admission_number or student.id}"
 
-    today = date.today()
     if frequency == 'annual':
         period = data.get('period') or f"{today.year}-Annual"
         head_name = "Annual Tuition Fee"
@@ -375,19 +492,9 @@ def student_voucher_create(request):
         period = data.get('period') or today.strftime('%Y-%m')
         head_name = "Monthly Tuition Fee"
 
-    due_str = data.get('due_date')
-    due_date = date.fromisoformat(due_str) if due_str else today + timedelta(days=10)
-
     with transaction.atomic():
         # 1. Resolve or create FeeHead
-        head = FeeHead.objects.filter(school=student.school, name__iexact=head_name).first()
-        if not head:
-            cat = FinanceCategory.objects.filter(school=student.school, kind='income', name__icontains='fee').first()
-            if not cat:
-                cat = FinanceCategory.objects.filter(school=student.school, kind='income').first()
-            if not cat:
-                cat = FinanceCategory.objects.create(school=student.school, kind='income', name='Tuition fees')
-            head = FeeHead.objects.create(school=student.school, name=head_name, category=cat, active=True)
+        head = _resolve_fee_head(student.school, head_name, "Tuition fees")
 
         # 2. Get or create StudentFee voucher line
         voucher, created = StudentFee.objects.get_or_create(
@@ -406,14 +513,11 @@ def student_voucher_create(request):
             voucher.save(update_fields=['amount_due', 'status'])
 
         # 3. If class is assigned, also ensure FeeStructure exists for future automated runs
-        class_id = data.get('school_class')
-        if class_id:
-            sc = SchoolClass.objects.filter(pk=class_id, school=student.school).first()
-            if sc and sc.academic_year:
-                FeeStructure.objects.update_or_create(
-                    school=student.school, academic_year=sc.academic_year, school_class=sc, head=head,
-                    defaults={'amount': amount, 'frequency': frequency, 'due_day': 10}
-                )
+        if sc and sc.academic_year:
+            FeeStructure.objects.update_or_create(
+                school=student.school, academic_year=sc.academic_year, school_class=sc, head=head,
+                defaults={'amount': amount, 'frequency': frequency, 'due_day': 10}
+            )
 
         # 4. If collect_now is True, record payment and linked FinanceEntry (income)
         payment = None
@@ -438,6 +542,7 @@ def student_voucher_create(request):
             payment = FeePayment.objects.create(
                 student=student, school=student.school, receipt_number=receipt_num,
                 amount=amount, method=method, paid_on=today, reference=ref,
+                status='approved', approved_by=user, approved_at=timezone.now(),
                 received_by=user, finance_entry=f_entry
             )
 
@@ -507,19 +612,24 @@ def payments(request):
     user = request.user
     _require_manager(user)
     if request.method == 'GET':
-        qs = FeePayment.objects.filter(school__in=schools_scope(user)).select_related('student', 'school', 'received_by')
+        qs = FeePayment.objects.filter(school__in=schools_scope(user)).select_related('student', 'school', 'received_by', 'approved_by')
         if request.query_params.get('school'):
             qs = qs.filter(school_id=request.query_params['school'])
         if request.query_params.get('student'):
             qs = qs.filter(student_id=request.query_params['student'])
+        if request.query_params.get('status'):
+            qs = qs.filter(status=request.query_params['status'])
         if request.query_params.get('voided') != '1':
             qs = qs.filter(voided=False)
         rows = [{
             'id': p.id, 'receipt_number': p.receipt_number, 'student_id': p.student_id,
             'student_name': p.student.full_name, 'admission_number': p.student.admission_number,
             'school_name': p.school.name, 'amount': str(p.amount), 'method': p.method,
-            'paid_on': str(p.paid_on), 'reference': p.reference, 'voided': p.voided,
-            'received_by': (p.received_by.get_full_name() or p.received_by.username) if p.received_by else None
+            'status': p.status, 'paid_on': str(p.paid_on), 'reference': p.reference, 'voided': p.voided,
+            'received_by': (p.received_by.get_full_name() or p.received_by.username) if p.received_by else None,
+            'approved_by': (p.approved_by.get_full_name() or p.approved_by.username) if p.approved_by else None,
+            'approved_at': p.approved_at.isoformat() if p.approved_at else None,
+            'finance_entry_id': p.finance_entry_id
         } for p in (qs if request.query_params.get('format') else qs[:200])]
         from core.services.exports import handle_export
         export_res = handle_export(
@@ -531,9 +641,11 @@ def payments(request):
                 {'key': 'school_name', 'label': 'Campus'},
                 {'key': 'amount', 'label': 'Amount (Rs)'},
                 {'key': 'method', 'label': 'Method'},
+                {'key': 'status', 'label': 'Approval Status'},
                 {'key': 'paid_on', 'label': 'Payment Date'},
                 {'key': 'reference', 'label': 'Reference / Memo'},
-                {'key': 'received_by', 'label': 'Cashier / Received By'}
+                {'key': 'received_by', 'label': 'Cashier / Received By'},
+                {'key': 'approved_by', 'label': 'Approved By'}
             ]
         )
         if export_res:
@@ -550,6 +662,7 @@ def payments(request):
     method = data.get('method') or 'cash'
     paid_on = date.fromisoformat(data.get('paid_on') or date.today().isoformat())
     ref = (data.get('reference') or '').strip()[:100]
+    auto_approve = bool(data.get('auto_approve', False)) or data.get('status') == 'approved'
 
     with transaction.atomic():
         count = FeePayment.objects.filter(school=student.school).count() + 1
@@ -572,15 +685,20 @@ def payments(request):
             if not head_cat:
                 head_cat = FinanceCategory.objects.create(school=student.school, kind='income', name='Tuition fees')
 
-        f_entry = FinanceEntry.objects.create(
-            school=student.school, category=head_cat, amount=amount, date=paid_on,
-            description=f"Fee payment #{receipt_num} - {student.full_name} ({student.admission_number})",
-            created_by=user
-        )
+        f_entry = None
+        if auto_approve:
+            f_entry = FinanceEntry.objects.create(
+                school=student.school, category=head_cat, amount=amount, date=paid_on,
+                description=f"Fee payment #{receipt_num} - {student.full_name} ({student.admission_number})",
+                created_by=user
+            )
 
         payment = FeePayment.objects.create(
             student=student, school=student.school, receipt_number=receipt_num,
             amount=amount, method=method, paid_on=paid_on, reference=ref,
+            status='approved' if auto_approve else 'pending',
+            approved_by=user if auto_approve else None,
+            approved_at=timezone.now() if auto_approve else None,
             received_by=user, finance_entry=f_entry
         )
 
@@ -589,44 +707,156 @@ def payments(request):
             if remaining <= Decimal('0.00'):
                 break
             line_due = fee.net_due
-            already_alloc = fee.allocations.filter(payment__voided=False).aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+            already_alloc = fee.allocations.filter(payment__voided=False, payment__status='approved').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
             unpaid_balance = max(Decimal('0.00'), line_due - already_alloc)
             if unpaid_balance > Decimal('0.00'):
                 alloc_amt = min(remaining, unpaid_balance)
                 FeePaymentAllocation.objects.create(payment=payment, student_fee=fee, amount=alloc_amt)
                 remaining -= alloc_amt
-                if (already_alloc + alloc_amt) >= line_due:
-                    fee.status = 'paid'
-                else:
-                    fee.status = 'partial'
-                fee.save(update_fields=['status'])
+                if auto_approve:
+                    if (already_alloc + alloc_amt) >= line_due:
+                        fee.status = 'paid'
+                    else:
+                        fee.status = 'partial'
+                    fee.save(update_fields=['status'])
+
         if remaining > Decimal('0.00'):
             head = FeeHead.objects.filter(school=student.school, active=True).first()
             if not head:
-                cat = FinanceCategory.objects.filter(school=student.school, kind='income', name__icontains='fee').first()
-                if not cat:
-                    cat = FinanceCategory.objects.filter(school=student.school, kind='income').first()
-                if not cat:
-                    cat = FinanceCategory.objects.create(school=student.school, kind='income', name='Fee Collections')
-                head = FeeHead.objects.create(school=student.school, name='Admission Fee', category=cat, active=True)
+                head = _resolve_fee_head(student.school, "Tuition fees", "Tuition fees")
             cur_period = paid_on.strftime('%Y-%m')
             sf, _ = StudentFee.objects.get_or_create(
                 student=student, head=head, period=cur_period,
-                defaults={'amount_due': remaining, 'discount': Decimal('0.00'), 'status': 'paid', 'due_date': paid_on}
+                defaults={'amount_due': remaining, 'discount': Decimal('0.00'), 'status': 'paid' if auto_approve else 'unpaid', 'due_date': paid_on}
             )
             FeePaymentAllocation.objects.create(payment=payment, student_fee=sf, amount=remaining)
-            sf.status = 'paid'
-            sf.save(update_fields=['status'])
+            if auto_approve:
+                sf.status = 'paid'
+                sf.save(update_fields=['status'])
 
         record_event(actor=user, action='create', obj=payment)
-        record_event(actor=user, action='create', obj=f_entry)
+        if f_entry:
+            record_event(actor=user, action='create', obj=f_entry)
 
     return Response({
         'id': payment.id, 'receipt_number': payment.receipt_number,
         'student_id': payment.student_id, 'student_name': student.full_name,
         'amount': str(payment.amount), 'paid_on': str(payment.paid_on),
-        'method': payment.method, 'reference': payment.reference
+        'method': payment.method, 'reference': payment.reference,
+        'status': payment.status
     }, status=201)
+
+
+@api_view(['POST'])
+def payment_approve(request, pk):
+    """Admin approval of a pending fee payment challan receipt.
+    Upon approval, creates the linked FinanceEntry (Income) and marks allocated voucher lines paid.
+    """
+    user = request.user
+    _require_manager(user)
+    payment = FeePayment.objects.filter(pk=pk, school__in=schools_scope(user)).select_related('student', 'school', 'finance_entry').first()
+    if not payment:
+        raise NotFound()
+    if payment.voided:
+        raise ValidationError({'detail': 'Cannot approve a voided receipt.'})
+    if payment.status == 'approved':
+        return Response({'success': True, 'id': payment.id, 'status': 'approved', 'detail': 'Already approved.'})
+
+    with transaction.atomic():
+        head_cat = None
+        alloc = payment.allocations.select_related('student_fee__head__category').first()
+        if alloc and alloc.student_fee.head.category:
+            head_cat = alloc.student_fee.head.category
+        if not head_cat:
+            head_cat = FinanceCategory.objects.filter(school=payment.school, kind='income', name__icontains='fee').first()
+            if not head_cat:
+                head_cat = FinanceCategory.objects.create(school=payment.school, kind='income', name='Tuition fees')
+
+        f_entry = FinanceEntry.objects.create(
+            school=payment.school, category=head_cat, amount=payment.amount, date=payment.paid_on,
+            description=f"Fee payment #{payment.receipt_number} - {payment.student.full_name} ({payment.student.admission_number})",
+            created_by=user
+        )
+        payment.finance_entry = f_entry
+        payment.status = 'approved'
+        payment.approved_by = user
+        payment.approved_at = timezone.now()
+        payment.save(update_fields=['status', 'approved_by', 'approved_at', 'finance_entry'])
+
+        for alloc in payment.allocations.select_related('student_fee'):
+            sf = alloc.student_fee
+            total_alloc = sf.allocations.filter(payment__status='approved', payment__voided=False).aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+            if total_alloc >= sf.net_due:
+                sf.status = 'paid'
+            elif total_alloc > Decimal('0.00'):
+                sf.status = 'partial'
+            sf.save(update_fields=['status'])
+
+        record_event(actor=user, action='approve_payment', obj=payment)
+        record_event(actor=user, action='create', obj=f_entry)
+
+    return Response({
+        'success': True,
+        'id': payment.id,
+        'status': payment.status,
+        'receipt_number': payment.receipt_number,
+        'approved_by': user.get_full_name() or user.username,
+        'finance_entry_id': f_entry.id
+    })
+
+
+@api_view(['POST'])
+def payments_bulk_approve(request):
+    """Bulk approve multiple pending fee payment challans."""
+    user = request.user
+    _require_manager(user)
+    ids = request.data.get('ids')
+    school_id = request.data.get('school')
+
+    qs = FeePayment.objects.filter(school__in=schools_scope(user), status='pending', voided=False)
+    if school_id:
+        qs = qs.filter(school_id=school_id)
+    if ids and isinstance(ids, list):
+        qs = qs.filter(id__in=ids)
+
+    approved_count = 0
+    now = timezone.now()
+    with transaction.atomic():
+        for payment in qs.select_related('student', 'school'):
+            head_cat = None
+            alloc = payment.allocations.select_related('student_fee__head__category').first()
+            if alloc and alloc.student_fee.head.category:
+                head_cat = alloc.student_fee.head.category
+            if not head_cat:
+                head_cat = FinanceCategory.objects.filter(school=payment.school, kind='income', name__icontains='fee').first()
+                if not head_cat:
+                    head_cat = FinanceCategory.objects.create(school=payment.school, kind='income', name='Tuition fees')
+
+            f_entry = FinanceEntry.objects.create(
+                school=payment.school, category=head_cat, amount=payment.amount, date=payment.paid_on,
+                description=f"Fee payment #{payment.receipt_number} - {payment.student.full_name} ({payment.student.admission_number})",
+                created_by=user
+            )
+            payment.finance_entry = f_entry
+            payment.status = 'approved'
+            payment.approved_by = user
+            payment.approved_at = now
+            payment.save(update_fields=['status', 'approved_by', 'approved_at', 'finance_entry'])
+
+            for alloc in payment.allocations.select_related('student_fee'):
+                sf = alloc.student_fee
+                total_alloc = sf.allocations.filter(payment__status='approved', payment__voided=False).aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+                if total_alloc >= sf.net_due:
+                    sf.status = 'paid'
+                elif total_alloc > Decimal('0.00'):
+                    sf.status = 'partial'
+                sf.save(update_fields=['status'])
+
+            approved_count += 1
+            record_event(actor=user, action='approve_payment', obj=payment)
+            record_event(actor=user, action='create', obj=f_entry)
+
+    return Response({'success': True, 'approved_count': approved_count})
 
 
 @api_view(['POST'])
@@ -643,11 +873,12 @@ def payment_void(request, pk):
     with transaction.atomic():
         payment.voided = True
         payment.void_reason = reason
-        payment.save(update_fields=['voided', 'void_reason'])
+        payment.status = 'rejected'
+        payment.save(update_fields=['voided', 'void_reason', 'status'])
 
         for alloc in payment.allocations.select_related('student_fee'):
             sf = alloc.student_fee
-            active_allocs = sf.allocations.filter(payment__voided=False).exclude(id=alloc.id).aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+            active_allocs = sf.allocations.filter(payment__voided=False, payment__status='approved').exclude(id=alloc.id).aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
             if active_allocs <= Decimal('0.00'):
                 sf.status = 'unpaid'
             elif active_allocs < sf.net_due:
@@ -663,7 +894,7 @@ def payment_void(request, pk):
 
         record_event(actor=user, action='void', obj=payment)
 
-    return Response({'id': payment.id, 'receipt_number': payment.receipt_number, 'voided': True, 'void_reason': reason})
+    return Response({'id': payment.id, 'receipt_number': payment.receipt_number, 'voided': True, 'void_reason': reason, 'status': payment.status})
 
 
 # ------------------------------------------------------------------ Defaulters & Summary
@@ -694,7 +925,7 @@ def defaulters(request):
                 'class_name': en.school_class.name if en else 'Unassigned',
                 'overdue_count': 0, 'total_overdue': Decimal('0.00'), 'oldest_due_date': fee.due_date
             }
-        already_paid = fee.allocations.filter(payment__voided=False).aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+        already_paid = fee.allocations.filter(payment__voided=False, payment__status='approved').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
         unpaid = max(Decimal('0.00'), fee.net_due - already_paid)
         student_map[sid]['overdue_count'] += 1
         student_map[sid]['total_overdue'] += unpaid
@@ -736,21 +967,34 @@ def fees_summary(request):
     if request.query_params.get('school'):
         schools = schools.filter(pk=request.query_params['school'])
 
+    active_students = Student.objects.filter(school__in=schools, active=True)
+    total_students = active_students.count()
+
     fees = StudentFee.objects.filter(student__school__in=schools).exclude(status='void')
     payments = FeePayment.objects.filter(school__in=schools, voided=False)
 
+    approved_payments = payments.filter(status='approved')
+    pending_payments = payments.filter(status='pending')
+
     expected = sum((f.net_due for f in fees), Decimal('0.00'))
-    collected = sum((p.amount for p in payments), Decimal('0.00'))
+    collected = sum((p.amount for p in approved_payments), Decimal('0.00'))
+    pending_approval = sum((p.amount for p in pending_payments), Decimal('0.00'))
     outstanding = max(Decimal('0.00'), expected - collected)
     collection_rate = round(float((collected / expected * Decimal('100.00')) if expected > Decimal('0.00') else Decimal('0.00')), 1)
+    avg_per_student = round(float(expected / Decimal(str(total_students))), 2) if total_students > 0 else 0.0
 
     monthly = {}
-    for p in payments:
+    for p in approved_payments:
         m = p.paid_on.strftime('%Y-%m')
         monthly[m] = monthly.get(m, Decimal('0.00')) + p.amount
 
     return Response({
-        'expected': str(expected), 'collected': str(collected), 'outstanding': str(outstanding),
+        'total_students': total_students,
+        'expected': str(expected),
+        'collected': str(collected),
+        'outstanding': str(outstanding),
+        'pending_approval': str(pending_approval),
+        'avg_per_student': avg_per_student,
         'collection_rate': collection_rate,
         'monthly': [{'month': m, 'collected': float(a)} for m, a in sorted(monthly.items())]
     })

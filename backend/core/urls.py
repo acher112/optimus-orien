@@ -57,6 +57,8 @@ urlpatterns = [
     path('fees/vouchers/', fees.student_voucher_create),
     path('fees/ledger/<int:student_id>/', fees.student_ledger),
     path('fees/payments/', fees.payments),
+    path('fees/payments/<int:pk>/approve/', fees.payment_approve),
+    path('fees/payments/bulk-approve/', fees.payments_bulk_approve),
     path('fees/payments/<int:pk>/void/', fees.payment_void),
     path('fees/defaulters/', fees.defaulters),
     path('fees/summary/', fees.fees_summary),

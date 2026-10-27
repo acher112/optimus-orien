@@ -227,10 +227,33 @@ def summary(request):
         inc = sum((e.amount for e in qs if e.school_id == s.id and e.category.kind == 'income'), Decimal('0'))
         exp = sum((e.amount for e in qs if e.school_id == s.id and e.category.kind == 'expense'), Decimal('0'))
         campuses.append({'id': s.id, 'name': s.name, 'income': float(inc), 'expense': float(exp), 'net': float(inc - exp)})
+
+    # Calculate student fee revenue projection within scope
+    from core.models import Student, StudentFee, FeePayment
+    schools = schools_scope(user)
+    if request.query_params.get('school'):
+        schools = schools.filter(pk=request.query_params['school'])
+    active_students = Student.objects.filter(school__in=schools, active=True)
+    st_count = active_students.count()
+    st_fees = StudentFee.objects.filter(student__school__in=schools).exclude(status='void')
+    st_expected = sum((f.net_due for f in st_fees), Decimal('0.00'))
+    st_collected = sum((p.amount for p in FeePayment.objects.filter(school__in=schools, voided=False, status='approved')), Decimal('0.00'))
+    st_pending = sum((p.amount for p in FeePayment.objects.filter(school__in=schools, voided=False, status='pending')), Decimal('0.00'))
+    st_remaining = max(Decimal('0.00'), st_expected - st_collected)
+    st_avg = round(float(st_expected / Decimal(str(st_count))), 2) if st_count > 0 else 0.0
+
     return Response({
         'total_income': float(total['income']), 'total_expense': float(total['expense']),
         'net': float(total['income'] - total['expense']), 'entries': qs.count(),
         'expense_by_category': pie('expense'), 'income_by_category': pie('income'),
         'monthly': [{'month': m, 'income': float(v['income']), 'expense': float(v['expense'])} for m, v in sorted(monthly.items())],
         'campuses': campuses,
+        'student_projection': {
+            'total_students': st_count,
+            'expected': float(st_expected),
+            'collected': float(st_collected),
+            'remaining': float(st_remaining),
+            'pending_approval': float(st_pending),
+            'avg_per_student': st_avg
+        },
         'note': 'Simple income and expense ledger. Voided entries are excluded. This is not full accounting or payroll.'})
