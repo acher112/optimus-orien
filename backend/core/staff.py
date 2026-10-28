@@ -151,7 +151,7 @@ def staff_list(request):
     data = request.data
     school = schools_scope(user).filter(pk=data.get('school') or (user.school_id if user.role != 'organisation_admin' else None)).first()
     if not school:
-        raise ValidationError({'school': 'Choose a campus within your scope.'})
+        raise NotFound('Campus not found.')
     role = (data.get('role') or 'teacher').strip()
     _check_role(user, role)
     try:
@@ -174,6 +174,8 @@ def staff_list(request):
         _sync_login(s, role)
 
         salary_str = str(data.get('salary') or '').strip()
+        if salary_str and user.role == 'principal':
+            raise PermissionDenied('Principals are not authorized to configure staff salaries.')
         if salary_str:
             try:
                 salary_val = Decimal(salary_str)
@@ -292,6 +294,11 @@ def _require_active(s):
 def staff_promote(request, pk):
     user = request.user
     _require_manager(user)
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('staff.promote_terminate', False):
+            raise PermissionDenied('Principals are not authorized to promote or terminate staff.')
     s = _get(user, pk)
     _own_record(user, s)
     _require_active(s)
@@ -317,6 +324,11 @@ def staff_promote(request, pk):
 def staff_assign_role(request, pk):
     user = request.user
     _require_manager(user)
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('staff.promote_terminate', False):
+            raise PermissionDenied('Principals are not authorized to assign staff roles.')
     s = _get(user, pk)
     _own_record(user, s)
     _require_active(s)
@@ -339,6 +351,11 @@ def staff_assign_role(request, pk):
 def staff_terminate(request, pk):
     user = request.user
     _require_manager(user)
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('staff.promote_terminate', False):
+            raise PermissionDenied('Principals are not authorized to promote or terminate staff.')
     s = _get(user, pk)
     _own_record(user, s)
     _require_active(s)
@@ -359,6 +376,11 @@ def staff_terminate(request, pk):
 def staff_reinstate(request, pk):
     user = request.user
     _require_manager(user)
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('staff.promote_terminate', False):
+            raise PermissionDenied('Principals are not authorized to promote or terminate staff.')
     s = _get(user, pk)
     _own_record(user, s)
     if s.status != 'terminated':

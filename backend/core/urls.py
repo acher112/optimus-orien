@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
-    permission_views, views_risk, exam_engine_views
+    permission_views, views_risk, exam_engine_views, principal_views
 )
 
 r = DefaultRouter()
@@ -121,6 +121,7 @@ urlpatterns = [
     path('schools/<int:school_id>/setup/activate/', onboarding_views.activate_school_configuration),
     path('auth/csrf/', views.csrf),
     path('auth/login/', views.signin),
+    path('auth/signin/', views.signin),
     path('auth/register/', views.register_account),
     path('auth/logout/', views.signout),
     path('auth/me/', views.me),
@@ -130,6 +131,7 @@ urlpatterns = [
     path('reports/me/', reports.my_performance),
     path('reports/overview/', reports.overview),
     path('reports/campus/<int:school_id>/', reports.campus),
+    path('reports/campuses/<int:school_id>/', reports.campus),
     path('reports/class/<int:class_id>/', reports.class_report),
     path('reports/campus/<int:school_id>/subject/<str:code>/', reports.subject_report),
     path('exports/students.csv', views.export_students),
@@ -161,6 +163,9 @@ urlpatterns = [
     path('students/at-risk/criteria/activate/', views_risk.risk_criteria_activate),
     path('students/at-risk/<int:student_id>/case/', views_risk.risk_case_create),
     path('students/at-risk/<int:student_id>/dismiss/', views_risk.risk_dismiss),
+
+    # Principal Portal Dashboard
+    path('principal/dashboard/', principal_views.principal_dashboard),
 
     path('', include(r.urls))
 ]

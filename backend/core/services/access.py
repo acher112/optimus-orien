@@ -3,10 +3,12 @@
 A role grants an action; queryset + relationship guards grant its scope. Keep
 these checks server-side even when the UI hides an unavailable operation.
 """
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 from core.models import (AcademicYear, Assessment, Attendance, AuditEvent, Enrollment,
     Grade, Homework, HomeworkSubmission, Intervention, Notification, Observation,
-    Organisation, ReviewCase, School, SchoolClass, Student, Subject, User)
+    Organisation, RoleAssignment, ReviewCase, School, SchoolClass, Student, Subject, User)
 
 # Explicit MVP policy. Organisation admin individual student access is opt-in on
 # Organisation; principal and teacher case access is narrower than general data.
@@ -68,6 +70,15 @@ def ensure_action(user, model, action):
   raise PermissionDenied('Identifiable student writes require explicit organisation policy')
  if user.is_superuser:
   return
+ if user.role == 'principal' and action in ('create', 'update', 'delete'):
+  from core.models import OrganisationRolePolicy
+  policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+  if model is AcademicYear and not policy.get('structure.manage_academic_years', False):
+   raise PermissionDenied('Principals are not permitted to manage academic years')
+  if model in (SchoolClass, Subject) and not policy.get('structure.manage_classes_subjects', True):
+   raise PermissionDenied('Principals are not permitted to manage classes and subjects')
+  if model in (Student, Enrollment) and not policy.get('students.manage', True):
+   raise PermissionDenied('Principals are not permitted to manage students')
  policy = {'read':READ, 'create':CREATE, 'update':UPDATE, 'delete':DELETE}[action]
  if model.__name__ not in policy.get(user.role, set()):
   raise PermissionDenied('Action not permitted for this role')
@@ -79,6 +90,18 @@ def schools_scope(user):
  if user.role == 'parent':return School.objects.filter(student__guardians=user).distinct()
  if not user.organisation_id:return School.objects.none()
  if user.role == 'organisation_admin':return School.objects.filter(organisation_id=user.organisation_id)
+ if user.role == 'principal':
+  if not user.school_id:return School.objects.none()
+  assignments = RoleAssignment.objects.filter(user=user, role='principal')
+  if assignments.exists():
+   today = timezone.localdate()
+   active_assignments = assignments.filter(
+    school_id=user.school_id,
+    effective_from__lte=today
+   ).filter(Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+   if not active_assignments.exists():
+    return School.objects.none()
+  return School.objects.filter(pk=user.school_id, organisation_id=user.organisation_id)
  return School.objects.filter(pk=user.school_id, organisation_id=user.organisation_id)
 
 def students_scope(user):

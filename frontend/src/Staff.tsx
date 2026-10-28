@@ -111,12 +111,12 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
               <td className="hr-row-actions">
                 <button className="hr-mini" title="Edit staff member" onClick={() => setAction({ kind: 'edit', staff: s })}><Pencil size={13} /> Edit</button>
                 {s.status === 'active' ? <>
-                  <button className="hr-mini" onClick={() => setAction({ kind: 'promote', staff: s })}><ArrowUpRight size={13} /> Promote</button>
-                  <button className="hr-mini" onClick={() => setAction({ kind: 'role', staff: s })}><UserCog size={13} /> Role</button>
-                  <button className="hr-mini danger" onClick={() => setAction({ kind: 'terminate', staff: s })}><UserMinus size={13} /> Fire</button>
-                </> : <button className="hr-mini" onClick={() => reinstate(s)}><RotateCcw size={13} /> Reinstate</button>}
+                  {leader && <button className="hr-mini" onClick={() => setAction({ kind: 'promote', staff: s })}><ArrowUpRight size={13} /> Promote</button>}
+                  {leader && <button className="hr-mini" onClick={() => setAction({ kind: 'role', staff: s })}><UserCog size={13} /> Role</button>}
+                  {leader && <button className="hr-mini danger" onClick={() => setAction({ kind: 'terminate', staff: s })}><UserMinus size={13} /> Fire</button>}
+                </> : (leader ? <button className="hr-mini" onClick={() => reinstate(s)}><RotateCcw size={13} /> Reinstate</button> : null)}
                 <button className="hr-mini" onClick={() => setAction({ kind: 'history', staff: s })}><History size={13} /> History</button>
-                <button className="hr-mini danger" title="Permanently delete staff member" onClick={() => deleteStaff(s)}><Trash2 size={13} /> Delete</button>
+                {leader && <button className="hr-mini danger" title="Permanently delete staff member" onClick={() => deleteStaff(s)}><Trash2 size={13} /> Delete</button>}
               </td>
             </tr>
           ))}</tbody>

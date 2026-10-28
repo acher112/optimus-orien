@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator,MaxValueValidator
@@ -779,11 +780,14 @@ class SupportAccessGrant(models.Model):
 
 class UserInvitation(models.Model):
     """Admin-issued invitation token replacing open self-registration."""
-    token = models.CharField(max_length=64, unique=True)
+    token = models.CharField(max_length=64, blank=True, default='')
+    token_hash = models.CharField(max_length=64, unique=True, null=True, blank=True, db_index=True)
     email = models.EmailField()
     role = models.CharField(max_length=32)
     organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='invitations')
     school = models.ForeignKey(School, null=True, blank=True, on_delete=models.CASCADE, related_name='invitations')
+    staff_member = models.ForeignKey('StaffMember', null=True, blank=True, on_delete=models.SET_NULL, related_name='invitations')
+    invited_user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='invitations_received')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='issued_invitations')
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
@@ -1108,6 +1112,77 @@ class ResultPublicationHistory(models.Model):
 
     def __str__(self):
         return f"{self.configuration.name} published v{self.version} on {self.published_at}"
+
+
+class OrganisationRolePolicy(models.Model):
+    """Configurable permission overrides and policy switches per role for an organisation.
+    Spec Part 5 §4-§7, §11.1-11.2.
+    """
+    organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='role_policies')
+    role = models.CharField(max_length=32, choices=User.ROLE_CHOICES)
+    permissions = models.JSONField(default=dict, help_text="Mapping of permission keys to boolean overrides")
+    version = models.PositiveIntegerField(default=1)
+    updated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['organisation', 'role']
+        constraints = [
+            models.UniqueConstraint(fields=['organisation', 'role'], name='unique_org_role_policy')
+        ]
+
+    DEFAULT_PRINCIPAL_PERMISSIONS = {
+        'students.manage': True,
+        'structure.manage_classes_subjects': True,
+        'structure.manage_academic_years': False,
+        'results.approve': True,
+        'finance.view_campus': False,
+        'fees.view_campus': False,
+        'salaries.view_campus': False,
+        'staff.promote_terminate': False,
+    }
+
+    @classmethod
+    def get_effective_policy(cls, organisation, role):
+        base = cls.DEFAULT_PRINCIPAL_PERMISSIONS.copy() if role == 'principal' else {}
+        if not organisation:
+            return base
+        policy_obj = cls.objects.filter(organisation=organisation, role=role).first()
+        if policy_obj and isinstance(policy_obj.permissions, dict):
+            base.update(policy_obj.permissions)
+        return base
+
+    def __str__(self):
+        return f"{self.organisation.name} - {self.role} (v{self.version})"
+
+
+class RoleAssignment(models.Model):
+    """Institutional role assignments with explicit effective date intervals for campus staffing/transfers.
+    Spec Part 5 §17, SEC-018. Historical access terminates when effective_to has passed.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='role_assignments')
+    role = models.CharField(max_length=32, choices=User.ROLE_CHOICES)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='role_assignments')
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-effective_from', '-id']
+
+    @property
+    def is_currently_active(self):
+        today = date.today()
+        if self.effective_from > today:
+            return False
+        if self.effective_to and self.effective_to < today:
+            return False
+        return True
+
+    def __str__(self):
+        active_str = "Active" if self.is_currently_active else f"Ended ({self.effective_to})"
+        return f"{self.user.username} as {self.role} @ {self.school.name} ({active_str})"
+
 
 
 

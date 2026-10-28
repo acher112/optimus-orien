@@ -29,8 +29,16 @@ DEFAULTS = {
 def _require(user):
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Active account required')
-    if not user.is_superuser and user.role not in ROLES:
-        raise PermissionDenied('Finance is available to administrators and principals')
+    if user.is_superuser:
+        return
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('finance.view_campus', False):
+            raise PermissionDenied('Finance is not accessible to principals.')
+        return
+    if user.role not in ('organisation_admin', 'school_admin'):
+        raise PermissionDenied('Finance is available to administrators')
 
 
 def _school(user, value):
@@ -39,7 +47,7 @@ def _school(user, value):
         value = user.school_id
     school = schools_scope(user).filter(pk=value or 0).first()
     if not school:
-        raise ValidationError({'school': 'Choose a campus within your scope.'})
+        raise NotFound('Campus not found.')
     return school
 
 

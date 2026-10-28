@@ -35,6 +35,7 @@ import Settings from './Settings';
 import Permissions from './Permissions';
 import StudentsAtRisk from './StudentsAtRisk';
 import DashboardFinanceChart from './DashboardFinanceChart';
+import PrincipalHome from './PrincipalHome';
 import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import ErrorBoundary from './ErrorBoundary';
@@ -53,14 +54,14 @@ const WORKSPACE_NAV = [
   { name: 'Academics', icon: FileBarChart },
   { name: 'Examinations', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Study materials', icon: BookOpen, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
-  { name: 'Student fees', icon: Receipt, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Fee overview', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Fee structure', icon: FileSpreadsheet, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Collect fee', icon: UserCheck, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Vouchers', icon: ShieldAlert, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Defaulters', icon: AlertCircle, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Concessions', icon: Sparkles, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Receipts', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Student fees', icon: Receipt, roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Fee overview', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Fee structure', icon: FileSpreadsheet, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Collect fee', icon: UserCheck, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Vouchers', icon: ShieldAlert, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Defaulters', icon: AlertCircle, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Concessions', icon: Sparkles, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Receipts', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Students at Risk', icon: AlertCircle, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'At-risk list', icon: AlertCircle, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
@@ -69,8 +70,8 @@ const WORKSPACE_NAV = [
   { name: 'Interventions', icon: HeartHandshake },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
-  { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
+  { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin'] },
   { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
@@ -816,20 +817,30 @@ function App() {
 
         {/* Dynamic Campus Selector */}
         <div className="workspace-pill-wrap" ref={campusDropdownRef}>
-          <button
-            className="workspace-pill interactive"
-            title="Switch campus or branch"
-            onClick={() => setCampusDropdownOpen(v => !v)}
-          >
-            <span className="workspace-icon"><Building2 size={19} /></span>
-            <span className="workspace-name">
-              <b>{activeCampus ? activeCampus.name : 'All Campuses'}</b>
-              <small>{activeCampus ? (activeCampus.city ? `${activeCampus.city} · Branch` : 'Selected Campus') : `${campuses.length} Campuses · Multi-branch`}</small>
-            </span>
-            <ChevronDown size={15} style={{ transform: campusDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
-          </button>
+          {user.role === 'principal' ? (
+            <div className="workspace-pill" style={{ cursor: 'default' }} title="Your assigned campus">
+              <span className="workspace-icon"><Building2 size={19} /></span>
+              <span className="workspace-name">
+                <b>{activeCampus ? activeCampus.name : (campuses[0]?.name || 'Assigned Campus')}</b>
+                <small>{activeCampus?.city ? `${activeCampus.city} · Campus` : 'Assigned Campus'}</small>
+              </span>
+            </div>
+          ) : (
+            <button
+              className="workspace-pill interactive"
+              title="Switch campus or branch"
+              onClick={() => setCampusDropdownOpen(v => !v)}
+            >
+              <span className="workspace-icon"><Building2 size={19} /></span>
+              <span className="workspace-name">
+                <b>{activeCampus ? activeCampus.name : 'All Campuses'}</b>
+                <small>{activeCampus ? (activeCampus.city ? `${activeCampus.city} · Branch` : 'Selected Campus') : `${campuses.length} Campuses · Multi-branch`}</small>
+              </span>
+              <ChevronDown size={15} style={{ transform: campusDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+            </button>
+          )}
 
-          {campusDropdownOpen && (
+          {user.role !== 'principal' && campusDropdownOpen && (
             <div className="campus-dropdown-menu">
               <div className="campus-dropdown-title">Branch & Campus Selector</div>
               <button
@@ -1135,8 +1146,11 @@ function App() {
           {error && <div className="error-bar"><AlertCircle size={18} />{error}<button onClick={() => load()}><RefreshCw size={15} /> Retry</button></div>}
 
           {page === 'Overview' && (
-            <>
-              <div className="welcome-row">
+            user.role === 'principal' ? (
+              <PrincipalHome user={user} onNavigate={switchPage} notify={notify} />
+            ) : (
+              <>
+                <div className="welcome-row">
                 <div>
                   <div className="eyebrow"><span className="eyebrow-dot" /> YOUR COMMAND CENTER</div>
                   <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user.name.split(' ')[0]} <span className="wave">✳</span></h1>
@@ -1372,6 +1386,7 @@ function App() {
                 </section>
               </div>
             </>
+            )
           )}
 
           {config && (

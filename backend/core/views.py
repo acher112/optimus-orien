@@ -38,19 +38,26 @@ class LoginThrottle(AnonRateThrottle):
 @permission_classes([AllowAny])
 @throttle_classes([LoginThrottle])
 def _signin_api(request):
- username=(request.data.get('username') or '').strip()
+ identifier=(request.data.get('username') or request.data.get('email') or '').strip()
  password=request.data.get('password') or ''
  admin_env_user=(os.getenv('INITIAL_ADMIN_USERNAME') or '').strip()
  admin_env_pass=(os.getenv('INITIAL_ADMIN_PASSWORD') or '').strip()
- if admin_env_user and admin_env_pass and username.lower()==admin_env_user.lower() and password==admin_env_pass:
+ if admin_env_user and admin_env_pass and identifier.lower()==admin_env_user.lower() and password==admin_env_pass:
   try:
    from core.services.bootstrap import ensure_admin
    ensure_admin(username=admin_env_user,password=admin_env_pass)
   except Exception as exc:
    import logging
    logging.getLogger('core').error(f'Initial admin bootstrap during login failed: {exc}')
- user=authenticate(request,username=username,password=password)
- if not user or not user.is_active:return Response({'detail':'Invalid credentials'},status=400)
+
+ user=authenticate(request,username=identifier,password=password)
+ if not user and identifier:
+  target=User.objects.filter(Q(username__iexact=identifier) | Q(email__iexact=identifier)).first()
+  if target and target.check_password(password):
+   user=target
+
+ if not user or not user.is_active:
+  return Response({'detail':'Invalid credentials'},status=400)
  login(request,user)
  from django.middleware.csrf import get_token
  payload=user_payload(user)
@@ -69,105 +76,11 @@ def signin(request):
 @throttle_classes([LoginThrottle])
 def _register_api(request):
  """
- Public registration for educational institutions, campuses, and administrators.
- Aligned with OPTIMUS ORIEN Part 1, Part 2 (ORG-001/002), and Part 5 §18.
- Accepts:
- - first_name, last_name, email, username, password
- - organisation_name, school_name (optional), city (optional), country (optional)
- - role (defaults to 'organisation_admin', also allows 'school_admin' or 'teacher')
- Creates Organisation, Campus/School, draft SchoolConfiguration, User, and logs the user in.
- Returns user payload with rotated CSRF token.
+ Public registration is closed per spec 19 §3. Users are provisioned by administrative invitation only.
  """
- from django.utils.text import slugify
- from django.utils.crypto import get_random_string
- from django.contrib.auth.password_validation import validate_password
- from django.core.exceptions import ValidationError as DjangoValidationError
- from django.middleware.csrf import get_token
-
- data=request.data or {}
- first_name=(data.get('first_name') or '').strip()
- last_name=(data.get('last_name') or '').strip()
- email=(data.get('email') or '').strip().lower()
- username=(data.get('username') or '').strip()
- password=data.get('password') or ''
- org_name=(data.get('organisation_name') or '').strip()
- school_name=(data.get('school_name') or '').strip()
- city=(data.get('city') or '').strip()
- country=(data.get('country') or 'PK').strip().upper()
- role=(data.get('role') or 'organisation_admin').strip()
-
- if not first_name or not last_name or not email or not username or not password or not org_name:
-  return Response({'detail':'First name, last name, email, username, password, and organisation name are required.'},status=400)
-
- VALID_ROLES=['organisation_admin','school_admin','teacher']
- if role not in VALID_ROLES:
-  return Response({'detail':f'Role must be one of: {", ".join(VALID_ROLES)}'},status=400)
-
- if User.objects.filter(username__iexact=username).exists():
-  return Response({'detail':'This username is already taken. Please choose another.'},status=400)
-
- if email and User.objects.filter(email__iexact=email).exists():
-  return Response({'detail':'An account with this email address is already registered. Please sign in.'},status=400)
-
- try:
-  validate_password(password)
- except DjangoValidationError as err:
-  return Response({'detail':' '.join(err.messages)},status=400)
-
- with transaction.atomic():
-  base_slug=slugify(org_name)[:40] or 'edu-org'
-  slug=base_slug
-  counter=1
-  while Organisation.objects.filter(code=slug).exists():
-   slug=f"{base_slug}-{counter}"
-   counter+=1
-
-  org=Organisation.objects.create(
-   name=org_name,
-   code=slug,
-   allow_org_admin_student_access=True
-  )
-
-  campus_display=school_name or f"{org_name} - Main Campus"
-  campus_code=f"CAMPUS-{get_random_string(4).upper()}"
-  school=School.objects.create(
-   organisation=org,
-   name=campus_display,
-   code=campus_code,
-   city=city,
-   attendance_alert_threshold=80,
-   grade_alert_threshold=60,
-  )
-
-  from .models import SchoolConfiguration
-  config,_=SchoolConfiguration.objects.get_or_create(school=school)
-  if country and len(country)==2:
-   config.country=country
-  config.status='draft'
-  config.save()
-
-  new_user=User(
-   username=username,
-   email=email,
-   first_name=first_name,
-   last_name=last_name,
-   role=role,
-   organisation=org,
-   school=school,
-   is_active=True,
-  )
-  new_user.set_password(password)
-  new_user.full_clean()
-  new_user.save()
-
-  record_event(actor=new_user,action='create',obj=new_user,changed_fields=['username','role','organisation','school'])
-  record_event(actor=new_user,action='create',obj=org,changed_fields=['name','code'])
-  record_event(actor=new_user,action='create',obj=school,changed_fields=['name','code'])
-
- login(request,new_user)
- payload=user_payload(new_user)
- payload['csrfToken']=get_token(request)
- return Response(payload,status=201)
+ return Response({
+  'detail': 'Public self-registration is closed. Accounts are provisioned via administrative invitation only.'
+ }, status=410)
 
 @csrf_protect
 def register_account(request):

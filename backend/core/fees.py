@@ -30,8 +30,16 @@ MANAGERS = ('organisation_admin', 'school_admin', 'principal')
 def _require_manager(user):
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Active account required')
-    if not user.is_superuser and user.role not in MANAGERS:
-        raise PermissionDenied('Fee management requires administrator or principal role')
+    if user.is_superuser:
+        return
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('fees.view_campus', False):
+            raise PermissionDenied('Fee management is not accessible to principals.')
+        return
+    if user.role not in ('organisation_admin', 'school_admin'):
+        raise PermissionDenied('Fee management requires administrator role')
 
 
 def _school(user, value):
@@ -39,7 +47,7 @@ def _school(user, value):
         value = user.school_id
     school = schools_scope(user).filter(pk=value or 0).first()
     if not school:
-        raise ValidationError({'school': 'Choose a campus within your scope.'})
+        raise NotFound('Campus not found.')
     return school
 
 

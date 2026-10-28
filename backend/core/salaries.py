@@ -32,8 +32,16 @@ MANAGERS = ('organisation_admin', 'school_admin', 'principal')
 def _require_manager(user):
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Active account required')
-    if not user.is_superuser and user.role not in MANAGERS:
-        raise PermissionDenied('Salary management requires administrator or principal role')
+    if user.is_superuser:
+        return
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('salaries.view_campus', False):
+            raise PermissionDenied('Salary management is not accessible to principals.')
+        return
+    if user.role not in ('organisation_admin', 'school_admin'):
+        raise PermissionDenied('Salary management requires administrator role')
 
 
 def _school(user, value):
@@ -41,7 +49,7 @@ def _school(user, value):
         value = user.school_id
     school = schools_scope(user).filter(pk=value or 0).first()
     if not school:
-        raise ValidationError({'school': 'Choose a campus within your scope.'})
+        raise NotFound('Campus not found.')
     return school
 
 
@@ -663,7 +671,16 @@ def salary_payslip(request, pk):
         raise NotFound()
 
     # Permission check: manager within school scope, or the staff member themselves
-    is_mgr = user.is_superuser or (user.role in MANAGERS and record.school_id in schools_scope(user).values_list('id', flat=True))
+    is_mgr = False
+    if user.is_superuser:
+        is_mgr = True
+    elif user.role in ('organisation_admin', 'school_admin') and record.school_id in schools_scope(user).values_list('id', flat=True):
+        is_mgr = True
+    elif user.role == 'principal' and record.school_id in schools_scope(user).values_list('id', flat=True):
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        is_mgr = policy.get('salaries.view_campus', False)
+
     is_self = record.staff.user_id == user.id
 
     if not is_mgr and not is_self:

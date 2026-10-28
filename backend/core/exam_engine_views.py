@@ -324,6 +324,11 @@ def engine_configuration_publish(request, pk):
     """Publishes an examination configuration and automatically triggers recalculation."""
     user = request.user
     _require_manager(user)
+    if user.role == 'principal':
+        from core.models import OrganisationRolePolicy
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('results.approve', True):
+            raise PermissionDenied('Principals are not permitted to approve/publish examination results.')
 
     config = ExamConfiguration.objects.filter(pk=pk, school__in=schools_scope(user)).first()
     if not config:

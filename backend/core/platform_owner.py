@@ -1,11 +1,13 @@
 """Platform owner console, SaaS subscriptions, audited support-access grants,
 admin-issued invitations, holiday calendar, and timetables.
 """
+import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q
 from django.contrib.auth.hashers import make_password
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -15,7 +17,7 @@ from rest_framework.response import Response
 from core.models import (
     Organisation, School, SchoolClass, Subject, AcademicYear, Student, StaffMember, User,
     AuditEvent, PlatformPlan, OrganisationSubscription, SupportAccessGrant, UserInvitation,
-    HolidayCalendar, ClassTimetable
+    HolidayCalendar, ClassTimetable, RoleAssignment
 )
 from core.services.access import schools_scope
 from core.services.audit import record_event
@@ -209,7 +211,7 @@ def invitations(request):
     user = request.user
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Active account required.')
-    if not user.is_superuser and user.role not in ('organisation_admin', 'school_admin', 'principal'):
+    if not user.is_superuser and user.role not in ('organisation_admin', 'school_admin'):
         raise PermissionDenied('Administrator permission required to invite users.')
 
     if request.method == 'GET':
@@ -251,26 +253,95 @@ def invitations(request):
     elif user.school:
         school = user.school
 
-    token = secrets.token_urlsafe(32)
+    if user.role == 'school_admin' and school and school.id != user.school_id:
+        raise PermissionDenied('School administrators may only invite users to their assigned campus.')
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
     expires_at = timezone.now() + timedelta(days=7)
 
-    inv = UserInvitation.objects.create(
-        token=token,
-        email=email,
-        role=role,
-        organisation=org,
-        school=school,
-        created_by=user,
-        expires_at=expires_at
-    )
-    record_event(actor=user, action='issue_invitation', obj=inv)
+    first_name = (request.data.get('first_name') or '').strip()
+    last_name = (request.data.get('last_name') or '').strip()
+    username = (request.data.get('username') or '').strip()
+
+    invited_user = None
+    staff_member = None
+
+    with transaction.atomic():
+        if role == 'principal':
+            if not school:
+                raise ValidationError({'school': 'Principal must be assigned to a specific campus.'})
+            if not username:
+                username = f"principal_{school.code.lower()}_{secrets.token_hex(2)}"
+            while User.objects.filter(username=username).exists():
+                username = f"{username}_{secrets.token_hex(2)}"
+
+            invited_user = User.objects.create(
+                username=username,
+                email=email,
+                first_name=first_name or 'Campus',
+                last_name=last_name or 'Principal',
+                role='principal',
+                organisation=org,
+                school=school,
+                is_active=False
+            )
+            invited_user.set_unusable_password()
+            invited_user.save()
+
+            staff_member = StaffMember.objects.create(
+                school=school,
+                user=invited_user,
+                first_name=first_name or 'Campus',
+                last_name=last_name or 'Principal',
+                email=email,
+                position='Campus Principal',
+                role='principal',
+                hired_on=date.today()
+            )
+
+            RoleAssignment.objects.create(
+                user=invited_user,
+                role='principal',
+                school=school,
+                effective_from=date.today()
+            )
+
+        inv = UserInvitation.objects.create(
+            token='',
+            token_hash=token_hash,
+            email=email,
+            role=role,
+            organisation=org,
+            school=school,
+            staff_member=staff_member,
+            invited_user=invited_user,
+            created_by=user,
+            expires_at=expires_at
+        )
+        record_event(actor=user, action='issue_invitation', obj=inv)
+
+    invite_url = f"/accept-invite?token={raw_token}"
+    try:
+        from django.core.mail import send_mail
+        from django.conf import settings
+        send_mail(
+            subject="Invitation to Optimus Orien Portal",
+            message=f"You have been invited to join Optimus Orien as {role}. Please click the link to activate your account and set your password: {invite_url}",
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@optimus-orien.edu'),
+            recipient_list=[email],
+            fail_silently=True
+        )
+    except Exception:
+        pass
 
     return Response({
         'id': inv.id,
         'email': inv.email,
         'role': inv.role,
-        'token': inv.token,
-        'invite_url': f"/accept-invite?token={inv.token}",
+        'token': raw_token,
+        'raw_token': raw_token,
+        'invite_url': invite_url,
         'expires_at': inv.expires_at.isoformat()
     }, status=201)
 
@@ -283,7 +354,10 @@ def accept_invitation(request):
     if not token:
         raise ValidationError({'token': 'Invitation token is required.'})
 
-    inv = UserInvitation.objects.filter(token=token).select_related('organisation', 'school').first()
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    inv = UserInvitation.objects.filter(
+        Q(token_hash=token_hash) | Q(token=token)
+    ).select_related('organisation', 'school', 'invited_user', 'staff_member').first()
     if not inv:
         raise ValidationError({'token': 'Invalid or expired invitation token.'})
 
@@ -293,32 +367,51 @@ def accept_invitation(request):
     if timezone.now() > inv.expires_at:
         raise ValidationError({'token': 'This invitation has expired. Request a new invite from your administrator.'})
 
-    username = (request.data.get('username') or '').strip()
-    if not username:
-        username = inv.email.split('@')[0]
-
     password = request.data.get('password')
     if not password or len(password) < 8:
         raise ValidationError({'password': 'Password must be at least 8 characters.'})
 
+    username = (request.data.get('username') or '').strip()
     first_name = (request.data.get('first_name') or '').strip()
     last_name = (request.data.get('last_name') or '').strip()
 
-    if User.objects.filter(username=username).exists():
-        username = f"{username}_{secrets.token_hex(2)}"
-
     with transaction.atomic():
-        user = User.objects.create(
-            username=username,
-            email=inv.email,
-            first_name=first_name,
-            last_name=last_name,
-            role=inv.role,
-            organisation=inv.organisation,
-            school=inv.school,
-            is_active=True,
-            password=make_password(password)
-        )
+        if inv.invited_user:
+            user = inv.invited_user
+            if username and username != user.username:
+                if User.objects.filter(username=username).exclude(pk=user.pk).exists():
+                    username = f"{username}_{secrets.token_hex(2)}"
+                user.username = username
+            if first_name:
+                user.first_name = first_name
+            if last_name:
+                user.last_name = last_name
+            user.set_password(password)
+            user.is_active = True
+            user.save()
+            if inv.staff_member:
+                if first_name:
+                    inv.staff_member.first_name = first_name
+                if last_name:
+                    inv.staff_member.last_name = last_name
+                inv.staff_member.save(update_fields=['first_name', 'last_name'])
+        else:
+            if not username:
+                username = inv.email.split('@')[0]
+            if User.objects.filter(username=username).exists():
+                username = f"{username}_{secrets.token_hex(2)}"
+            user = User.objects.create(
+                username=username,
+                email=inv.email,
+                first_name=first_name,
+                last_name=last_name,
+                role=inv.role,
+                organisation=inv.organisation,
+                school=inv.school,
+                is_active=True,
+                password=make_password(password)
+            )
+
         inv.used_at = timezone.now()
         inv.save(update_fields=['used_at'])
         record_event(actor=user, action='accept_invitation', obj=user)
