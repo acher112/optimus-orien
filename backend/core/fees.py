@@ -700,6 +700,7 @@ def payments(request):
     amount = _money(data.get('amount'))
     method = data.get('method') or 'cash'
     paid_on = date.fromisoformat(data.get('paid_on') or date.today().isoformat())
+    ref = (data.get('reference') or '').strip()[:100]
     if 'auto_approve' in data:
         auto_approve = bool(data.get('auto_approve'))
     elif data.get('status') == 'approved':

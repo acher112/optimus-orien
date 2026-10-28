@@ -7,5 +7,6 @@ node_modules/
 dist/
 *.sqlite3
 staticfiles/
-.DS_Store
 *.tsbuildinfo
+private_storage/
+backend/private_storage/
