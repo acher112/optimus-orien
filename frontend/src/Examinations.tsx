@@ -402,6 +402,9 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 setBump(b => b + 1);
               }}
             >
+              {engineConfigs.length === 0 && (
+                <option value="">No structures configured</option>
+              )}
               {engineConfigs.map(c => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.status})
@@ -409,6 +412,11 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
               ))}
             </select>
           </label>
+          {isManager && (
+            <button className="primary-btn" onClick={() => setConfigModal(true)} title="Create new examination structure">
+              <Plus size={14} /> New Structure
+            </button>
+          )}
           <button className="outline-btn" onClick={() => setBump(b => b + 1)} title="Refresh data">
             <RefreshCw size={15} /> Refresh
           </button>
@@ -444,307 +452,343 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
       {/* ------------------------------------------------------------- */}
       {/* 1. PERFORMANCE ANALYTICS TAB                                  */}
       {/* ------------------------------------------------------------- */}
-      {tab === 'analytics' && analyticsData && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Filter Bar */}
-          <section className="panel" style={{ padding: '14px 18px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Filter size={15} /> FILTERS:
-                </span>
-                <label style={{ fontSize: 13 }}>Averaging Method
-                  <select
-                    className="fx-select"
-                    style={{ marginLeft: 6, fontSize: 13 }}
-                    value={analyticsAveragingMethod}
-                    onChange={e => setAnalyticsAveragingMethod(e.target.value as any)}
-                  >
-                    <option value="student_weighted">Student-weighted (Official Headline)</option>
-                    <option value="class_weighted">Class-weighted</option>
-                    <option value="branch_weighted">Branch-weighted</option>
-                  </select>
-                </label>
-                <label style={{ fontSize: 13 }}>Class
-                  <select
-                    className="fx-select"
-                    style={{ marginLeft: 6, fontSize: 13 }}
-                    value={analyticsClassFilter}
-                    onChange={e => setAnalyticsClassFilter(e.target.value)}
-                  >
-                    <option value="">All Classes</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </label>
-                <label style={{ fontSize: 13 }}>Gender Group
-                  <select
-                    className="fx-select"
-                    style={{ marginLeft: 6, fontSize: 13 }}
-                    value={analyticsGenderFilter}
-                    onChange={e => setAnalyticsGenderFilter(e.target.value)}
-                  >
-                    <option value="">All Students (Combined)</option>
-                    <option value="male">Boys Only</option>
-                    <option value="female">Girls Only</option>
-                  </select>
-                </label>
+      {tab === 'analytics' && (
+        <>
+          {loading ? (
+            <div className="panel" style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+              <RefreshCw className="spin" size={28} style={{ margin: '0 auto 12px', display: 'block', color: '#6366f1' }} />
+              <div style={{ fontSize: 16, fontWeight: 600 }}>Loading academic performance analytics…</div>
+              <div style={{ fontSize: 13, marginTop: 4 }}>Calculating normalized averages and group metrics…</div>
+            </div>
+          ) : !analyticsData?.configuration ? (
+            <div className="panel" style={{ padding: '60px 24px', textAlign: 'center' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#ede9fe', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <Award size={32} />
               </div>
-
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span className="pill purple" style={{ fontSize: 12 }}>
-                  Scale: {analyticsData.configuration.reporting_scale}
-                </span>
-                <span className="pill" style={{ fontSize: 12 }}>
-                  Pass Threshold: {analyticsData.summary.passing_threshold}%
-                </span>
+              <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px', color: '#1e293b' }}>No Examination Structures Configured</h3>
+              <p style={{ maxWidth: 520, margin: '0 auto 24px', color: '#64748b', fontSize: 14, lineHeight: 1.6 }}>
+                Create your school's examination structure to configure term weightages (summing to 100%), subject maximum marks, and start recording marks with automated analytics.
+              </p>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                {isManager && (
+                  <button className="primary-btn" onClick={() => setConfigModal(true)}>
+                    <Plus size={16} /> Create Examination Structure
+                  </button>
+                )}
+                <button className="outline-btn" onClick={() => setTab('configurations')}>
+                  View Examination Structures
+                </button>
               </div>
             </div>
-          </section>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Filter Bar */}
+              <section className="panel" style={{ padding: '14px 18px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Filter size={15} /> FILTERS:
+                    </span>
+                    <label style={{ fontSize: 13 }}>Averaging Method
+                      <select
+                        className="fx-select"
+                        style={{ marginLeft: 6, fontSize: 13 }}
+                        value={analyticsAveragingMethod}
+                        onChange={e => setAnalyticsAveragingMethod(e.target.value as any)}
+                      >
+                        <option value="student_weighted">Student-weighted (Official Headline)</option>
+                        <option value="class_weighted">Class-weighted</option>
+                        <option value="branch_weighted">Branch-weighted</option>
+                      </select>
+                    </label>
+                    <label style={{ fontSize: 13 }}>Class
+                      <select
+                        className="fx-select"
+                        style={{ marginLeft: 6, fontSize: 13 }}
+                        value={analyticsClassFilter}
+                        onChange={e => setAnalyticsClassFilter(e.target.value)}
+                      >
+                        <option value="">All Classes</option>
+                        {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ fontSize: 13 }}>Gender Group
+                      <select
+                        className="fx-select"
+                        style={{ marginLeft: 6, fontSize: 13 }}
+                        value={analyticsGenderFilter}
+                        onChange={e => setAnalyticsGenderFilter(e.target.value)}
+                      >
+                        <option value="">All Students (Combined)</option>
+                        <option value="male">Boys Only</option>
+                        <option value="female">Girls Only</option>
+                      </select>
+                    </label>
+                  </div>
 
-          {/* Metric KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
-            {/* Headline Average */}
-            <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${OVERALL_COLOR}` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                Overall Academic Average
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
-                {analyticsData.summary.headline_average !== null ? `${analyticsData.summary.headline_average}%` : 'N/A'}
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>
-                Method: <strong style={{ color: OVERALL_COLOR }}>{analyticsData.summary.averaging_method.replace('_', ' ')}</strong>
-              </div>
-            </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className="pill purple" style={{ fontSize: 12 }}>
+                      Scale: {analyticsData.configuration?.reporting_scale || '100.00'}
+                    </span>
+                    <span className="pill" style={{ fontSize: 12 }}>
+                      Pass Threshold: {analyticsData.summary?.passing_threshold || '40.00'}%
+                    </span>
+                  </div>
+                </div>
+              </section>
 
-            {/* Boys Average */}
-            <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${BOY_COLOR}` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                Boys' Average
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: BOY_COLOR, margin: '8px 0 4px' }}>
-                {analyticsData.summary.boys_average !== null ? `${analyticsData.summary.boys_average}%` : 'N/A'}
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>
-                {analyticsData.summary.eligible_boys_count} eligible boys assessed
-              </div>
-            </div>
+              {/* Metric KPI Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
+                {/* Headline Average */}
+                <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${OVERALL_COLOR}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Overall Academic Average
+                  </div>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.headline_average !== null && analyticsData.summary?.headline_average !== undefined ? `${analyticsData.summary.headline_average}%` : 'N/A'}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    Method: <strong style={{ color: OVERALL_COLOR }}>{(analyticsData.summary?.averaging_method || 'student_weighted').replace('_', ' ')}</strong>
+                  </div>
+                </div>
 
-            {/* Girls Average */}
-            <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${GIRL_COLOR}` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                Girls' Average
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: GIRL_COLOR, margin: '8px 0 4px' }}>
-                {analyticsData.summary.girls_average !== null ? `${analyticsData.summary.girls_average}%` : 'N/A'}
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>
-                {analyticsData.summary.eligible_girls_count} eligible girls assessed
-              </div>
-            </div>
+                {/* Boys Average */}
+                <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${BOY_COLOR}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Boys' Average
+                  </div>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: BOY_COLOR, margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.boys_average !== null && analyticsData.summary?.boys_average !== undefined ? `${analyticsData.summary.boys_average}%` : 'N/A'}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    {analyticsData.summary?.eligible_boys_count ?? 0} eligible boys assessed
+                  </div>
+                </div>
 
-            {/* Gender Performance Gap */}
-            <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #10b981' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                Gender Performance Gap
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#10b981', margin: '8px 0 4px' }}>
-                {analyticsData.summary.gender_gap !== null ? (
-                  `${analyticsData.summary.gender_gap > 0 ? '+' : ''}${analyticsData.summary.gender_gap} pp`
-                ) : 'N/A'}
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>
-                Difference in percentage points (Girls – Boys)
-              </div>
-            </div>
+                {/* Girls Average */}
+                <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${GIRL_COLOR}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Girls' Average
+                  </div>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: GIRL_COLOR, margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.girls_average !== null && analyticsData.summary?.girls_average !== undefined ? `${analyticsData.summary.girls_average}%` : 'N/A'}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    {analyticsData.summary?.eligible_girls_count ?? 0} eligible girls assessed
+                  </div>
+                </div>
 
-            {/* Assessment Completion Status */}
-            <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #f59e0b' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                Eligible vs Pending
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
-                {analyticsData.summary.eligible_students_count} <span style={{ fontSize: 14, fontWeight: 400, color: '#64748b' }}>Complete</span> / {analyticsData.summary.pending_students_count} <span style={{ fontSize: 14, fontWeight: 400, color: '#f59e0b' }}>Pending</span>
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>
-                Pass Rate: <strong>{analyticsData.summary.pass_rate !== null ? `${analyticsData.summary.pass_rate}%` : 'N/A'}</strong>
-              </div>
-            </div>
-          </div>
+                {/* Gender Performance Gap */}
+                <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #10b981' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Gender Performance Gap
+                  </div>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: '#10b981', margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.gender_gap !== null && analyticsData.summary?.gender_gap !== undefined ? (
+                      `${analyticsData.summary.gender_gap > 0 ? '+' : ''}${analyticsData.summary.gender_gap} pp`
+                    ) : 'N/A'}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    Difference in percentage points (Girls – Boys)
+                  </div>
+                </div>
 
-          {/* Charts Row: Score Distribution & Gender Split */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-            {/* Score Distribution Chart */}
-            <section className="panel" style={{ padding: '16px 20px' }}>
-              <div className="panel-head" style={{ marginBottom: 12 }}>
-                <div>
-                  <h3 style={{ fontSize: 16 }}>Score Range Distribution</h3>
-                  <p style={{ fontSize: 13, color: '#64748b' }}>Student performance grouped into standard deciles</p>
+                {/* Assessment Completion Status */}
+                <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #f59e0b' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Eligible vs Pending
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.eligible_students_count ?? 0} <span style={{ fontSize: 14, fontWeight: 400, color: '#64748b' }}>Complete</span> / {analyticsData.summary?.pending_students_count ?? 0} <span style={{ fontSize: 14, fontWeight: 400, color: '#f59e0b' }}>Pending</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    Pass Rate: <strong>{analyticsData.summary?.pass_rate !== null && analyticsData.summary?.pass_rate !== undefined ? `${analyticsData.summary.pass_rate}%` : 'N/A'}</strong>
+                  </div>
                 </div>
               </div>
-              <div style={{ height: 240, width: '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analyticsData.score_distribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(value: any) => [`${value} students`, 'Count']} />
-                    <Bar dataKey="count" fill="#818cf8" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
 
-            {/* Class Performance Comparison */}
-            <section className="panel" style={{ padding: '16px 20px' }}>
-              <div className="panel-head" style={{ marginBottom: 12 }}>
-                <div>
-                  <h3 style={{ fontSize: 16 }}>Class-Level Performance</h3>
-                  <p style={{ fontSize: 13, color: '#64748b' }}>Class averages with boys vs girls comparison</p>
-                </div>
+              {/* Charts Row: Score Distribution & Gender Split */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                {/* Score Distribution Chart */}
+                <section className="panel" style={{ padding: '16px 20px' }}>
+                  <div className="panel-head" style={{ marginBottom: 12 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16 }}>Score Range Distribution</h3>
+                      <p style={{ fontSize: 13, color: '#64748b' }}>Student performance grouped into standard deciles</p>
+                    </div>
+                  </div>
+                  <div style={{ height: 240, width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analyticsData.score_distribution || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="range" tick={{ fontSize: 11 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(value: any) => [`${value} students`, 'Count']} />
+                        <Bar dataKey="count" fill="#818cf8" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </section>
+
+                {/* Class Performance Comparison */}
+                <section className="panel" style={{ padding: '16px 20px' }}>
+                  <div className="panel-head" style={{ marginBottom: 12 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16 }}>Class-Level Performance</h3>
+                      <p style={{ fontSize: 13, color: '#64748b' }}>Class averages with boys vs girls comparison</p>
+                    </div>
+                  </div>
+                  <div className="table-scroll" style={{ maxHeight: 240 }}>
+                    <table className="data-table" style={{ fontSize: 13 }}>
+                      <thead>
+                        <tr>
+                          <th>CLASS</th>
+                          <th>OVERALL AVG</th>
+                          <th>BOYS</th>
+                          <th>GIRLS</th>
+                          <th>GAP</th>
+                          <th>ELIGIBLE</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(analyticsData.class_performance || []).map((c: R) => (
+                          <tr key={c.class_id}>
+                            <td><strong>{c.class_name}</strong></td>
+                            <td><span className="pill purple">{c.average !== null ? `${c.average}%` : 'N/A'}</span></td>
+                            <td style={{ color: BOY_COLOR }}>{c.boys_average !== null ? `${c.boys_average}%` : '–'}</td>
+                            <td style={{ color: GIRL_COLOR }}>{c.girls_average !== null ? `${c.girls_average}%` : '–'}</td>
+                            <td>
+                              {c.gender_gap !== null ? (
+                                <span style={{ color: c.gender_gap >= 0 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+                                  {c.gender_gap > 0 ? '+' : ''}{c.gender_gap} pp
+                                </span>
+                              ) : '–'}
+                            </td>
+                            <td>{c.eligible_count}</td>
+                          </tr>
+                        ))}
+                        {(!analyticsData.class_performance || analyticsData.class_performance.length === 0) && (
+                          <tr><td colSpan={6} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No class records available</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </div>
-              <div className="table-scroll" style={{ maxHeight: 240 }}>
-                <table className="data-table" style={{ fontSize: 13 }}>
-                  <thead>
-                    <tr>
-                      <th>CLASS</th>
-                      <th>OVERALL AVG</th>
-                      <th>BOYS</th>
-                      <th>GIRLS</th>
-                      <th>GAP</th>
-                      <th>ELIGIBLE</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analyticsData.class_performance.map((c: R) => (
-                      <tr key={c.class_id}>
-                        <td><strong>{c.class_name}</strong></td>
-                        <td><span className="pill purple">{c.average !== null ? `${c.average}%` : 'N/A'}</span></td>
-                        <td style={{ color: BOY_COLOR }}>{c.boys_average !== null ? `${c.boys_average}%` : '–'}</td>
-                        <td style={{ color: GIRL_COLOR }}>{c.girls_average !== null ? `${c.girls_average}%` : '–'}</td>
-                        <td>
-                          {c.gender_gap !== null ? (
-                            <span style={{ color: c.gender_gap >= 0 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
-                              {c.gender_gap > 0 ? '+' : ''}{c.gender_gap} pp
-                            </span>
-                          ) : '–'}
-                        </td>
-                        <td>{c.eligible_count}</td>
+
+              {/* Subject Performance Breakdown Table */}
+              <section className="panel" style={{ padding: '16px 20px' }}>
+                <div className="panel-head" style={{ marginBottom: 12 }}>
+                  <div>
+                    <h3 style={{ fontSize: 16 }}>Subject Performance & Gender Analytics</h3>
+                    <p style={{ fontSize: 13, color: '#64748b' }}>Normalized subject averages, gender group averages, and range bounds</p>
+                  </div>
+                </div>
+                <div className="table-scroll">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>SUBJECT</th>
+                        <th>CODE</th>
+                        <th>OVERALL AVERAGE</th>
+                        <th>BOYS AVERAGE</th>
+                        <th>GIRLS AVERAGE</th>
+                        <th>GENDER GAP</th>
+                        <th>HIGHEST</th>
+                        <th>LOWEST</th>
+                        <th>STUDENTS</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-
-          {/* Subject Performance Breakdown Table */}
-          <section className="panel" style={{ padding: '16px 20px' }}>
-            <div className="panel-head" style={{ marginBottom: 12 }}>
-              <div>
-                <h3 style={{ fontSize: 16 }}>Subject Performance & Gender Analytics</h3>
-                <p style={{ fontSize: 13, color: '#64748b' }}>Normalized subject averages, gender group averages, and range bounds</p>
-              </div>
-            </div>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>SUBJECT</th>
-                    <th>CODE</th>
-                    <th>OVERALL AVERAGE</th>
-                    <th>BOYS AVERAGE</th>
-                    <th>GIRLS AVERAGE</th>
-                    <th>GENDER GAP</th>
-                    <th>HIGHEST</th>
-                    <th>LOWEST</th>
-                    <th>STUDENTS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {analyticsData.subject_performance.map((s: R) => (
-                    <tr key={s.subject_id}>
-                      <td><strong>{s.subject_name}</strong></td>
-                      <td><code>{s.subject_code}</code></td>
-                      <td>
-                        <strong style={{ color: OVERALL_COLOR, fontSize: 14 }}>
-                          {s.overall_average !== null ? `${s.overall_average}%` : 'N/A'}
-                        </strong>
-                      </td>
-                      <td style={{ color: BOY_COLOR, fontWeight: 600 }}>
-                        {s.boys_average !== null ? `${s.boys_average}%` : '–'}
-                      </td>
-                      <td style={{ color: GIRL_COLOR, fontWeight: 600 }}>
-                        {s.girls_average !== null ? `${s.girls_average}%` : '–'}
-                      </td>
-                      <td>
-                        {s.gender_gap !== null ? (
-                          <span style={{ fontWeight: 700, color: s.gender_gap >= 0 ? '#10b981' : '#f59e0b' }}>
-                            {s.gender_gap > 0 ? '+' : ''}{s.gender_gap} pp
-                          </span>
-                        ) : '–'}
-                      </td>
-                      <td style={{ color: '#16a34a' }}>{s.highest !== null ? `${s.highest}%` : '–'}</td>
-                      <td style={{ color: '#dc2626' }}>{s.lowest !== null ? `${s.lowest}%` : '–'}</td>
-                      <td>{s.eligible_students}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          {/* Students Requiring Academic Support (INT / Policy check) */}
-          {analyticsData.support_needed && analyticsData.support_needed.length > 0 && (
-            <section className="panel" style={{ padding: '16px 20px', borderLeft: '4px solid #ef4444' }}>
-              <div className="panel-head" style={{ marginBottom: 12 }}>
-                <div>
-                  <h3 style={{ fontSize: 16, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <ShieldAlert size={18} /> Students Requiring Academic Support
-                  </h3>
-                  <p style={{ fontSize: 13, color: '#64748b' }}>
-                    Identified based on scoring below the configured passing threshold of {analyticsData.summary.passing_threshold}%.
-                  </p>
+                    </thead>
+                    <tbody>
+                      {(analyticsData.subject_performance || []).map((s: R) => (
+                        <tr key={s.subject_id}>
+                          <td><strong>{s.subject_name}</strong></td>
+                          <td><code>{s.subject_code}</code></td>
+                          <td>
+                            <strong style={{ color: OVERALL_COLOR, fontSize: 14 }}>
+                              {s.overall_average !== null ? `${s.overall_average}%` : 'N/A'}
+                            </strong>
+                          </td>
+                          <td style={{ color: BOY_COLOR, fontWeight: 600 }}>
+                            {s.boys_average !== null ? `${s.boys_average}%` : '–'}
+                          </td>
+                          <td style={{ color: GIRL_COLOR, fontWeight: 600 }}>
+                            {s.girls_average !== null ? `${s.girls_average}%` : '–'}
+                          </td>
+                          <td>
+                            {s.gender_gap !== null ? (
+                              <span style={{ fontWeight: 700, color: s.gender_gap >= 0 ? '#10b981' : '#f59e0b' }}>
+                                {s.gender_gap > 0 ? '+' : ''}{s.gender_gap} pp
+                              </span>
+                            ) : '–'}
+                          </td>
+                          <td style={{ color: '#16a34a' }}>{s.highest !== null ? `${s.highest}%` : '–'}</td>
+                          <td style={{ color: '#dc2626' }}>{s.lowest !== null ? `${s.lowest}%` : '–'}</td>
+                          <td>{s.eligible_students}</td>
+                        </tr>
+                      ))}
+                      {(!analyticsData.subject_performance || analyticsData.subject_performance.length === 0) && (
+                        <tr><td colSpan={9} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No subject records available</td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-              <div className="table-scroll">
-                <table className="data-table" style={{ fontSize: 13 }}>
-                  <thead>
-                    <tr>
-                      <th>STUDENT</th>
-                      <th>CLASS</th>
-                      <th>GENDER</th>
-                      <th>OVERALL SCORE</th>
-                      <th>LOWEST SUBJECT</th>
-                      <th>ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analyticsData.support_needed.map((st: R) => (
-                      <tr key={st.student_id}>
-                        <td><strong>{st.name}</strong></td>
-                        <td>{st.class_name}</td>
-                        <td style={{ textTransform: 'capitalize' }}>{st.gender || 'Unknown'}</td>
-                        <td><span className="pill" style={{ background: '#fee2e2', color: '#b91c1c' }}>{st.overall_percentage}%</span></td>
-                        <td>{st.lowest_subject || '–'}</td>
-                        <td>
-                          <button
-                            className="sm-btn"
-                            onClick={() => {
-                              setTab('transcripts');
-                              loadTranscript(st.student_id);
-                            }}
-                          >
-                            View Transcript <ChevronRight size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+              </section>
+
+              {/* Students Requiring Academic Support (INT / Policy check) */}
+              {analyticsData.support_needed && analyticsData.support_needed.length > 0 && (
+                <section className="panel" style={{ padding: '16px 20px', borderLeft: '4px solid #ef4444' }}>
+                  <div className="panel-head" style={{ marginBottom: 12 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ShieldAlert size={18} /> Students Requiring Academic Support
+                      </h3>
+                      <p style={{ fontSize: 13, color: '#64748b' }}>
+                        Identified based on scoring below the configured passing threshold of {analyticsData.summary?.passing_threshold || '40.00'}%.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="table-scroll">
+                    <table className="data-table" style={{ fontSize: 13 }}>
+                      <thead>
+                        <tr>
+                          <th>STUDENT</th>
+                          <th>CLASS</th>
+                          <th>GENDER</th>
+                          <th>OVERALL SCORE</th>
+                          <th>LOWEST SUBJECT</th>
+                          <th>ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analyticsData.support_needed.map((st: R) => (
+                          <tr key={st.student_id}>
+                            <td><strong>{st.name}</strong></td>
+                            <td>{st.class_name}</td>
+                            <td style={{ textTransform: 'capitalize' }}>{st.gender || 'Unknown'}</td>
+                            <td><span className="pill" style={{ background: '#fee2e2', color: '#b91c1c' }}>{st.overall_percentage}%</span></td>
+                            <td>{st.lowest_subject || '–'}</td>
+                            <td>
+                              <button
+                                className="sm-btn"
+                                onClick={() => {
+                                  setTab('transcripts');
+                                  loadTranscript(st.student_id);
+                                }}
+                              >
+                                View Transcript <ChevronRight size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* ------------------------------------------------------------- */}
@@ -840,6 +884,18 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                     </td>
                   </tr>
                 ))}
+                {engineConfigs.length === 0 && (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px 12px', color: '#64748b' }}>
+                      <div style={{ marginBottom: 12 }}>No examination structures created yet.</div>
+                      {isManager && (
+                        <button className="primary-btn" onClick={() => setConfigModal(true)} style={{ margin: '0 auto' }}>
+                          <Plus size={14} /> Create Examination Structure
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -860,7 +916,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
               <button
                 className="primary-btn"
                 onClick={handleSaveEngineMarks}
-                disabled={savingEngineMarks}
+                disabled={savingEngineMarks || !engineMarksData}
               >
                 {savingEngineMarks ? 'Saving & Recalculating…' : 'Save Marks & Recalculate'}
               </button>
@@ -891,14 +947,32 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
             </label>
           </div>
 
-          {engineMarksData && (
+          {loading ? (
+            <div style={{ padding: '50px 20px', textAlign: 'center', color: '#64748b' }}>
+              <RefreshCw className="spin" size={24} style={{ margin: '0 auto 12px', display: 'block', color: '#6366f1' }} />
+              <div>Loading marks entry grid…</div>
+            </div>
+          ) : !selectedConfigId || engineConfigs.length === 0 ? (
+            <div style={{ padding: '50px 20px', textAlign: 'center', color: '#64748b' }}>
+              <p style={{ margin: '0 0 12px' }}>No examination structure selected. Create or select an examination structure first.</p>
+              {isManager && (
+                <button className="primary-btn" onClick={() => setConfigModal(true)} style={{ margin: '0 auto' }}>
+                  <Plus size={14} /> Create Examination Structure
+                </button>
+              )}
+            </div>
+          ) : !engineMarksData ? (
+            <div style={{ padding: '50px 20px', textAlign: 'center', color: '#64748b' }}>
+              <p>Select a class and subject above to enter marks.</p>
+            </div>
+          ) : (
             <div className="table-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>STUDENT</th>
                     <th>ROLL #</th>
-                    {engineMarksData.columns.map((col: R) => (
+                    {(engineMarksData.columns || []).map((col: R) => (
                       <th key={col.id} style={{ minWidth: 140 }}>
                         <div>{col.name}</div>
                         <div style={{ fontSize: 11, fontWeight: 400, color: '#64748b' }}>
@@ -912,15 +986,15 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                   </tr>
                 </thead>
                 <tbody>
-                  {engineMarksData.students.map((st: R, sIdx: number) => (
+                  {(engineMarksData.students || []).map((st: R, sIdx: number) => (
                     <tr key={st.student_id}>
                       <td>
                         <strong>{st.name}</strong>
                         <div style={{ fontSize: 11, color: '#64748b' }}>{st.admission_number} ({st.gender})</div>
                       </td>
                       <td>{st.roll_number}</td>
-                      {engineMarksData.columns.map((col: R) => {
-                        const termEntry = st.terms[col.id] || { marks_obtained: '', result_status: 'recorded' };
+                      {(engineMarksData.columns || []).map((col: R) => {
+                        const termEntry = st.terms?.[col.id] || { marks_obtained: '', result_status: 'recorded' };
                         return (
                           <td key={col.id}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -977,7 +1051,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                       </td>
                       <td>
                         {st.scaled_marks !== null ? (
-                          <span>{st.scaled_marks} / {engineMarksData.configuration.reporting_scale}</span>
+                          <span>{st.scaled_marks} / {engineMarksData.configuration?.reporting_scale || '100.00'}</span>
                         ) : '–'}
                       </td>
                       <td>
@@ -1020,7 +1094,16 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
             </div>
           </div>
 
-          {transcriptData && (
+          {loading ? (
+            <div style={{ padding: '50px 20px', textAlign: 'center', color: '#64748b' }}>
+              <RefreshCw className="spin" size={24} style={{ margin: '0 auto 12px', display: 'block', color: '#6366f1' }} />
+              <div>Loading student transcript…</div>
+            </div>
+          ) : !transcriptData ? (
+            <div style={{ padding: '50px 20px', textAlign: 'center', color: '#64748b' }}>
+              <p>Select an enrolled student from the dropdown above to view their multi-term academic transcript.</p>
+            </div>
+          ) : (
             <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* Student Header Card */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '16px 20px', borderRadius: 8, border: '1px solid #e2e8f0' }}>

@@ -592,24 +592,6 @@ def engine_analytics(request):
         if not config:
             config = ExamConfiguration.objects.filter(school__in=schools).first()
 
-    if not config:
-        return Response({
-            'summary': {
-                'headline_average': None,
-                'averaging_method': 'student_weighted',
-                'eligible_students_count': 0,
-                'pending_students_count': 0,
-                'boys_average': None,
-                'girls_average': None,
-                'gender_gap': None,
-                'pass_rate': None,
-            },
-            'subject_performance': [],
-            'class_performance': [],
-            'score_distribution': [],
-            'configurations': []
-        })
-
     # Available configs for filter dropdown
     available_configs = [{
         'id': c.id,
@@ -618,6 +600,32 @@ def engine_analytics(request):
         'academic_year_name': c.academic_year.name,
         'status': c.status
     } for c in ExamConfiguration.objects.filter(school__in=schools)]
+
+    if not config:
+        return Response({
+            'configuration': None,
+            'available_configurations': available_configs,
+            'summary': {
+                'headline_average': None,
+                'averaging_method': 'student_weighted',
+                'student_weighted_average': None,
+                'class_weighted_average': None,
+                'branch_weighted_average': None,
+                'boys_average': None,
+                'girls_average': None,
+                'gender_gap': None,
+                'eligible_students_count': 0,
+                'eligible_boys_count': 0,
+                'eligible_girls_count': 0,
+                'pending_students_count': 0,
+                'pass_rate': None,
+                'passing_threshold': '40.00'
+            },
+            'subject_performance': [],
+            'class_performance': [],
+            'score_distribution': [],
+            'support_needed': []
+        })
 
     # Fetch calculated student results for this configuration
     student_results_qs = CalculatedStudentResult.objects.filter(

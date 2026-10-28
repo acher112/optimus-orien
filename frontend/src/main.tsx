@@ -37,6 +37,7 @@ import StudentsAtRisk from './StudentsAtRisk';
 import DashboardFinanceChart from './DashboardFinanceChart';
 import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
+import ErrorBoundary from './ErrorBoundary';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -529,7 +530,7 @@ function App() {
       if (page === 'Overview') {
         const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
         setDash(await request<Dashboard>(`dashboard/${campusQs}`));
-      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings'].includes(page)) {
+      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'].includes(page)) {
         // subcomponents handle own data
       } else if (resourceInfo[page]) {
         setRecords(await list<Resource>(`${resourceInfo[page].api}/${qs}`));
@@ -773,6 +774,12 @@ function App() {
   };
 
   if (loading) return <div className="loader-screen"><div className="brand-symbol">◈</div><div>Preparing your workspace…</div></div>;
+
+  const isPublicRoute = typeof window !== 'undefined' && (window.location.pathname === '/' || window.location.pathname === '');
+  if (isPublicRoute) {
+    return <PublicHome authenticated={Boolean(user)} />;
+  }
+
   if (!user) return (
     <Login
       onLogin={u => {
@@ -1484,7 +1491,11 @@ function App() {
           )}
           {page === 'Study materials' && <StudyMaterials user={user} notify={notify} />}
           {page === 'Staff Salaries' && <Salaries user={user} notify={notify} />}
-          {page === 'Examinations' && <Examinations user={user} notify={notify} />}
+          {page === 'Examinations' && (
+            <ErrorBoundary fallbackTitle="Examination & Academic Performance">
+              <Examinations user={user} notify={notify} />
+            </ErrorBoundary>
+          )}
           {page === 'Timetable' && <Timetable user={user} notify={notify} />}
           {page === 'Platform owner' && <PlatformOwner user={user} notify={notify} />}
           {page === 'Data import' && <DataImport user={user} notify={notify} />}
