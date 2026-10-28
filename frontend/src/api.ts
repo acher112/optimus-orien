@@ -201,3 +201,6 @@ export const schoolUsers = (schoolId: number) =>
 
 export const updateProfile = (data: Record<string, unknown>) =>
   request<User>('auth/me/', { method: 'PATCH', body: JSON.stringify(data) });
+
+export const changePassword = (data: { current_password?: string; password?: string; old_password?: string; new_password?: string }) =>
+  request<{ ok: boolean; detail: string }>('auth/password/', { method: 'POST', body: JSON.stringify(data) });

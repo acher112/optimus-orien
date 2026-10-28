@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   GraduationCap, ClipboardCheck, Users, Award, AlertTriangle,
-  Building2, CheckCircle2, ChevronRight, RefreshCw, AlertCircle,
+  Building2, CheckCircle2, ChevronRight, RefreshCw, AlertCircle, KeyRound,
   FileBarChart, ArrowUpRight, BookOpen, ShieldAlert, Clock, UserCheck
 } from 'lucide-react';
 import {
@@ -159,6 +159,9 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button className="outline-btn" onClick={() => onNavigate('Settings')} title="Security and password settings">
+            <KeyRound size={15} /> Security & Password
+          </button>
           <button className="outline-btn" onClick={loadDashboard} title="Refresh dashboard data">
             <RefreshCw size={15} /> Refresh
           </button>

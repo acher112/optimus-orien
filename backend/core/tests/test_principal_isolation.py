@@ -424,3 +424,162 @@ class PrincipalIsolationTests(TestCase):
         # Gender performance guidance note
         self.assertIn('gender_performance', data)
         self.assertIn('note', data['gender_performance'])
+
+    # ------------------------------------------------------------------ 9. Direct Creation, Immediate Login & Password Reset
+    def test_direct_principal_creation_and_immediate_login(self):
+        """Org Admin provisions a principal with email and initial password; principal logs in immediately and accesses dashboard."""
+        self.client.force_authenticate(user=self.org_admin)
+        payload = {
+            'first_name': 'Hamza',
+            'last_name': 'Ali',
+            'email': 'hamza.principal@school.edu',
+            'username': 'hamza_prin',
+            'password': 'FirstTimePass2026!',
+            'role': 'principal',
+            'school': self.school_a.id
+        }
+        res = self.client.post('/api/v1/accounts/', payload, format='json')
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['role'], 'principal')
+        self.assertEqual(res.data['email'], 'hamza.principal@school.edu')
+
+        # Verify linked StaffMember and RoleAssignment exist
+        u = User.objects.get(username='hamza_prin')
+        self.assertEqual(u.role, 'principal')
+        self.assertEqual(u.school, self.school_a)
+        self.assertTrue(StaffMember.objects.filter(user=u, school=self.school_a, role='principal').exists())
+        self.assertTrue(RoleAssignment.objects.filter(user=u, school=self.school_a, role='principal').exists())
+
+        # Unauthenticate and log in using email and first-time password
+        self.client.logout()
+        login_res = self.client.post('/api/v1/auth/login/', {
+            'username': 'hamza.principal@school.edu',
+            'password': 'FirstTimePass2026!'
+        }, format='json')
+        self.assertEqual(login_res.status_code, 200, "Principal must be able to log in with email and first-time password")
+        self.assertEqual(login_res.data['role'], 'principal')
+
+        # Principal can view their campus dashboard
+        dash_res = self.client.get('/api/v1/principal/dashboard/')
+        self.assertEqual(dash_res.status_code, 200)
+        self.assertEqual(dash_res.data['campus']['id'], self.school_a.id)
+
+    def test_school_admin_can_provision_principal_for_own_campus(self):
+        """School Admin can provision a principal for their assigned campus, but is rejected for foreign campuses."""
+        # Create school admin for school_a
+        sch_admin = User.objects.create_user(
+            username='sch_admin_a',
+            email='sch_admin_a@school.edu',
+            password='AdminPassword2026!',
+            role='school_admin',
+            organisation=self.org,
+            school=self.school_a
+        )
+        self.client.force_authenticate(user=sch_admin)
+
+        # Provision principal for own campus
+        payload = {
+            'first_name': 'Nadia',
+            'last_name': 'Hussain',
+            'email': 'nadia.h@school.edu',
+            'password': 'InitialPassword123!',
+            'role': 'principal',
+            'school': self.school_a.id
+        }
+        res = self.client.post('/api/v1/accounts/', payload, format='json')
+        self.assertEqual(res.status_code, 201)
+
+        # Nadia can log in immediately
+        self.client.logout()
+        login_res = self.client.post('/api/v1/auth/login/', {
+            'username': 'nadia.h@school.edu',
+            'password': 'InitialPassword123!'
+        }, format='json')
+        self.assertEqual(login_res.status_code, 200)
+
+    def test_principal_password_reset_flow(self):
+        """Principal can reset their password using their first-time password, and subsequent sign-in requires the new password."""
+        # Create a principal
+        prin = User.objects.create_user(
+            username='reset_prin',
+            email='reset_prin@school.edu',
+            password='InitialPassword123!',
+            role='principal',
+            organisation=self.org,
+            school=self.school_a
+        )
+        RoleAssignment.objects.create(
+            user=prin, role='principal', school=self.school_a, effective_from=self.today
+        )
+
+        # Principal logs in with first-time password
+        self.client.force_authenticate(user=prin)
+
+        # Attempt password change with incorrect current password -> rejected
+        bad_change = self.client.post('/api/v1/auth/password/', {
+            'current_password': 'WrongPassword!',
+            'password': 'NewSecurePassword2026!'
+        }, format='json')
+        self.assertEqual(bad_change.status_code, 400)
+        self.assertIn('Current password does not match', bad_change.data['detail'])
+
+        # Attempt password change with too short new password -> rejected
+        short_change = self.client.post('/api/v1/auth/password/', {
+            'current_password': 'InitialPassword123!',
+            'password': 'short'
+        }, format='json')
+        self.assertEqual(short_change.status_code, 400)
+
+        # Successful password reset
+        good_change = self.client.post('/api/v1/auth/password/', {
+            'current_password': 'InitialPassword123!',
+            'password': 'NewSecurePassword2026!'
+        }, format='json')
+        self.assertEqual(good_change.status_code, 200)
+
+        # Log out and verify old password fails
+        self.client.logout()
+        old_login = self.client.post('/api/v1/auth/login/', {
+            'username': 'reset_prin@school.edu',
+            'password': 'InitialPassword123!'
+        }, format='json')
+        self.assertEqual(old_login.status_code, 400)
+
+        # Verify new password succeeds
+        new_login = self.client.post('/api/v1/auth/login/', {
+            'username': 'reset_prin@school.edu',
+            'password': 'NewSecurePassword2026!'
+        }, format='json')
+        self.assertEqual(new_login.status_code, 200)
+
+    def test_staff_creation_with_direct_login(self):
+        """Creating a staff member with password provisions both the StaffMember and active User login."""
+        self.client.force_authenticate(user=self.org_admin)
+        payload = {
+            'school': self.school_a.id,
+            'first_name': 'Kamran',
+            'last_name': 'Akmal',
+            'role': 'principal',
+            'position': 'Campus Principal',
+            'email': 'kamran.prin@school.edu',
+            'password': 'DirectPassword2026!',
+            'hired_on': self.today.isoformat()
+        }
+        res = self.client.post('/api/v1/staff/', payload, format='json')
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['role'], 'principal')
+
+        # Verify User and RoleAssignment were created
+        u = User.objects.get(email='kamran.prin@school.edu')
+        self.assertEqual(u.role, 'principal')
+        self.assertTrue(RoleAssignment.objects.filter(user=u, school=self.school_a, role='principal').exists())
+
+        # Kamran logs in immediately
+        self.client.logout()
+        res = self.client.post('/api/v1/auth/login/', {
+            'username': 'kamran.prin@school.edu',
+            'password': 'DirectPassword2026!'
+        }, format='json')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['role'], 'principal')
+

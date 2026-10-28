@@ -16,7 +16,7 @@ import {
   Upload,
   UserRound,
 } from 'lucide-react';
-import { updateProfile, type User } from './api';
+import { updateProfile, changePassword, type User } from './api';
 import { applyTheme, getStoredTheme, resolveHex, THEME_PRESETS, type ThemeMode } from './theme';
 import './style.css';
 
@@ -148,7 +148,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
 
     setSavingPassword(true);
     try {
-      await updateProfile({
+      await changePassword({
         current_password: currentPassword,
         password: newPassword,
       });

@@ -2372,7 +2372,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
       if (f.student_id) payload.student_id = Number(f.student_id);
 
       await createAccount(payload);
-      notify(`Account for ${f.first_name} ${f.last_name} created successfully as ${f.role.replace('_', ' ')}`);
+      notify(`Account created for ${f.first_name} ${f.last_name} (${f.role.replace('_', ' ')}). You can now sign in using email "${f.email}" and the chosen password.`);
       setAccountForm(m => ({ ...m, [schoolId]: {} }));
       const r = await schoolUsers(schoolId);
       setSchoolUserMap(m => ({ ...m, [schoolId]: r.results }));
@@ -2495,7 +2495,21 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                             <label>Last name <span className="required">*</span><input required value={af.last_name || ''} onChange={e => setAccountField(sid, 'last_name', e.target.value)} placeholder="Legal last name" /></label>
                           </div>
                           <div className="acf-row">
-                            <label>Email address <span className="required">*</span><input required type="email" value={af.email || ''} onChange={e => setAccountField(sid, 'email', e.target.value)} placeholder="name@institution.edu" /></label>
+                            <label>Email address <span className="required">*</span>
+                              <input
+                                required
+                                type="email"
+                                value={af.email || ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setAccountField(sid, 'email', val);
+                                  if (!af.username || af.username === (af.email || '').split('@')[0]) {
+                                    setAccountField(sid, 'username', val.split('@')[0]);
+                                  }
+                                }}
+                                placeholder="name@institution.edu"
+                              />
+                            </label>
                             <label>Username <span className="required">*</span><input required value={af.username || ''} onChange={e => setAccountField(sid, 'username', e.target.value)} placeholder="Unique username" /></label>
                           </div>
                           <div className="acf-row">
@@ -2504,7 +2518,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                               <select required value={af.role || ''} onChange={e => setAccountField(sid, 'role', e.target.value)}>
                                 <option value="">Select role…</option>
                                 {isOrgAdmin && <option value="school_admin">Campus Administrator</option>}
-                                {isOrgAdmin && <option value="principal">Campus Principal / Head</option>}
+                                {(isOrgAdmin || user.role === 'school_admin') && <option value="principal">Campus Principal / Head</option>}
                                 <option value="teacher">Educator / Teacher</option>
                                 <option value="student">Student / Learner</option>
                                 <option value="parent">Parent / Guardian</option>
@@ -2512,6 +2526,12 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                               </select>
                             </label>
                           </div>
+
+                          {af.role === 'principal' && (
+                            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#5b21b6', marginBottom: 12 }}>
+                              <strong>Campus Principal Account:</strong> Provisions the official campus principal, links staff HR records, and unlocks the dedicated Principal Portal. The principal can immediately sign in with their email and chosen password, and can reset it at any time in Settings.
+                            </div>
+                          )}
 
                           {af.role === 'student' && (
                             <div className="acf-row">

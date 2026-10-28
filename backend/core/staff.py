@@ -14,7 +14,7 @@ from rest_framework.response import Response
 
 from core.models import (
     StaffEvent, StaffMember, User,
-    SalaryStructure, SalaryRecord, FinanceCategory, FinanceEntry
+    SalaryStructure, SalaryRecord, FinanceCategory, FinanceEntry, RoleAssignment
 )
 from core.services.access import schools_scope
 from core.services.audit import record_event
@@ -165,6 +165,54 @@ def staff_list(request):
             raise ValidationError({'user': 'Login account not found on this campus.'})
         if StaffMember.objects.filter(user=link).exists():
             raise ValidationError({'user': 'That login is already linked to a staff record.'})
+    elif data.get('password') and (data.get('email') or data.get('username')):
+        raw_pwd = str(data.get('password'))
+        if len(raw_pwd) < 8:
+            raise ValidationError({'password': 'Password must be at least 8 characters.'})
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            validate_password(raw_pwd)
+        except DjangoValidationError as e:
+            raise ValidationError({'password': ' '.join(e.messages)})
+        
+        email_val = (data.get('email') or '').strip().lower()
+        uname = (data.get('username') or '').strip()
+        if not uname and email_val:
+            base_uname = email_val.split('@')[0]
+            uname = base_uname
+            idx = 1
+            while User.objects.filter(username=uname).exists():
+                uname = f"{base_uname}{idx}"
+                idx += 1
+        if not uname:
+            raise ValidationError({'username': 'Username or email required to create sign-in account.'})
+        if User.objects.filter(username=uname).exists():
+            raise ValidationError({'username': 'Username is already taken.'})
+        if email_val and User.objects.filter(email=email_val).exists():
+            raise ValidationError({'email': 'Email is already registered.'})
+        
+        u_role = role if role in LOGIN_ROLES else 'teacher'
+        link = User(
+            username=uname,
+            email=email_val,
+            first_name=_text(data, 'first_name', True, 100),
+            last_name=_text(data, 'last_name', True, 100),
+            role=u_role,
+            school=school,
+            organisation=school.organisation,
+            is_active=True
+        )
+        link.set_password(raw_pwd)
+        link.full_clean()
+        link.save()
+        if u_role == 'principal':
+            RoleAssignment.objects.get_or_create(
+                user=link,
+                role='principal',
+                school=school,
+                defaults={'effective_from': hired}
+            )
     with transaction.atomic():
         s = StaffMember.objects.create(
             school=school, user=link, first_name=_text(data, 'first_name', True, 100),

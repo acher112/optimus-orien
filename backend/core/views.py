@@ -130,13 +130,50 @@ def me(request):
   if data.get('password') and data.get('current_password'):
    if not u.check_password(str(data['current_password'])):
     raise APIValidationError({'current_password': 'Current password does not match.'})
-   if len(str(data['password'])) < 8:
+   new_pwd = str(data['password'])
+   if len(new_pwd) < 8:
     raise APIValidationError({'password': 'New password must be at least 8 characters.'})
-   u.set_password(str(data['password']))
+   from django.contrib.auth.password_validation import validate_password
+   from django.core.exceptions import ValidationError as DjangoValidationError
+   try:
+    validate_password(new_pwd, user=u)
+   except DjangoValidationError as e:
+    raise APIValidationError({'password': ' '.join(e.messages)})
+   u.set_password(new_pwd)
+   from django.contrib.auth import update_session_auth_hash
+   update_session_auth_hash(request, u)
+   record_event(actor=u, action='update', obj=u, changed_fields=['password'])
   u.save()
  payload=user_payload(u)
  payload['csrfToken']=get_token(request)
  return Response(payload)
+
+@api_view(['POST'])
+def change_password(request):
+ u = request.user
+ if not u.is_authenticated:
+  raise PermissionDenied('Authentication required')
+ data = request.data
+ current_password = str(data.get('current_password') or data.get('old_password') or '')
+ new_password = str(data.get('password') or data.get('new_password') or '')
+ if not current_password or not new_password:
+  return Response({'detail': 'Current password and new password are required.'}, status=400)
+ if not u.check_password(current_password):
+  return Response({'detail': 'Current password does not match.'}, status=400)
+ if len(new_password) < 8:
+  return Response({'detail': 'New password must be at least 8 characters.'}, status=400)
+ from django.contrib.auth.password_validation import validate_password
+ from django.core.exceptions import ValidationError as DjangoValidationError
+ try:
+  validate_password(new_password, user=u)
+ except DjangoValidationError as e:
+  return Response({'detail': ' '.join(e.messages)}, status=400)
+ u.set_password(new_password)
+ u.save()
+ from django.contrib.auth import update_session_auth_hash
+ update_session_auth_hash(request, u)
+ record_event(actor=u, action='update', obj=u, changed_fields=['password'])
+ return Response({'ok': True, 'detail': 'Password changed successfully.'})
 
 class DynamicSerializer(serializers.ModelSerializer):
  """Model-level validation is performed after explicit API permission checks."""
@@ -906,14 +943,27 @@ def create_account(request):
  class_id=data.get('class_id')
  
  VALID_ROLES=['organisation_admin','school_admin','principal','teacher','student','parent']
+ if not username and email:
+  base_user = email.split('@')[0]
+  username = base_user
+  idx = 1
+  while User.objects.filter(username=username).exists():
+   username = f"{base_user}{idx}"
+   idx += 1
  if not all([first_name,last_name,username,password,role]):
   return Response({'detail':'first_name, last_name, username, password and role are required'},status=400)
  if role not in VALID_ROLES:
   return Response({'detail':f'Role must be one of: {", ".join(VALID_ROLES)}'},status=400)
  
- if user.role in ('school_admin','principal'):
+ if user.role == 'principal':
   if role not in ('teacher','student','parent'):
-   raise PermissionDenied('Campus leaders may only provision teachers, students, and parents')
+   raise PermissionDenied('Principals may only provision teachers, students, and parents')
+  school=user.school
+  if not school:
+   raise PermissionDenied('Your account has no assigned school campus')
+ elif user.role == 'school_admin':
+  if role not in ('principal','teacher','student','parent'):
+   raise PermissionDenied('Campus administrators may only provision principals, teachers, students, and parents')
   school=user.school
   if not school:
    raise PermissionDenied('Your account has no assigned school campus')
@@ -952,7 +1002,7 @@ def create_account(request):
    last_name=last_name,
    role=role,
    school=school,
-   organisation=user.organisation,
+   organisation=user.organisation or (school.organisation if school else None),
    is_active=True
   )
   new_user.set_password(password)
@@ -960,6 +1010,30 @@ def create_account(request):
   new_user.save()
   
   linked_info={}
+  if role=='principal' and school:
+   from django.utils import timezone
+   today = timezone.localdate()
+   ra, _ = RoleAssignment.objects.get_or_create(
+    user=new_user,
+    role='principal',
+    school=school,
+    defaults={'effective_from': today}
+   )
+   staff = StaffMember.objects.filter(user=new_user).first()
+   if not staff:
+    staff = StaffMember.objects.create(
+     school=school,
+     user=new_user,
+     first_name=first_name,
+     last_name=last_name,
+     email=email,
+     position='Campus Principal',
+     role='principal',
+     hired_on=today,
+     status='active'
+    )
+   linked_info['staff_id']=staff.id
+   linked_info['role_assignment']='principal'
   if role=='student' and school:
    from django.utils import timezone
    adm=admission_number or f"ADM-{timezone.now().year}-{new_user.id:04d}"
