@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
-    permission_views, views_risk
+    permission_views, views_risk, exam_engine_views
 )
 
 r = DefaultRouter()
@@ -88,6 +88,15 @@ urlpatterns = [
     path('exams/results-sheet/', exams.exam_results_sheet),
     path('exams/report-card/', exams.student_report_card),
     path('exams/grading-scales/', exams.grading_scales),
+
+    # Configurable Examination Engine & Academic Performance
+    path('exams/engine/configurations/', exam_engine_views.engine_configurations),
+    path('exams/engine/configurations/<int:pk>/', exam_engine_views.engine_configuration_detail),
+    path('exams/engine/configurations/<int:pk>/publish/', exam_engine_views.engine_configuration_publish),
+    path('exams/engine/configurations/<int:pk>/recalculate/', exam_engine_views.engine_configuration_recalculate),
+    path('exams/engine/configurations/<int:config_id>/marks-grid/', exam_engine_views.engine_marks_grid),
+    path('exams/engine/analytics/', exam_engine_views.engine_analytics),
+    path('exams/engine/student-transcript/', exam_engine_views.engine_student_transcript),
 
     # Platform Owner & Governance
     path('platform/overview/', platform_owner.platform_overview),

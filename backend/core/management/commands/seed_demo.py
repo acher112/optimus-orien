@@ -122,4 +122,36 @@ class Command(BaseCommand):
    if not SubjectMessage.objects.filter(school_class=klass,subject=math_subj).exists():
     q1=SubjectMessage.objects.create(school_class=klass,subject=math_subj,sender=pupil,message='Hello Mr. Cole! For question 4 on page 52, should we use the quadratic formula or factorisation?')
     SubjectMessage.objects.create(school_class=klass,subject=math_subj,sender=teacher,message='Hi Sophia, either method is completely valid. Factorisation is quicker for this problem, but the quadratic formula will yield the exact same answer.',is_teacher_answer=True,reply_to=q1)
+  # ---- Configurable Examination Engine Demo Setup ----
+  from core.services.exam_engine import recalculate_configuration
+  exam_cfg,_=ExamConfiguration.objects.get_or_create(school=school,academic_year=year,name='Class 8 Annual Examination Structure',defaults={
+   'reporting_scale':Decimal('100.00'),'passing_threshold':Decimal('40.00'),'subject_weighting_mode':'equal','status':'published','version':1,'created_by':admin
+  })
+  t1,_=ExamComponent.objects.get_or_create(configuration=exam_cfg,name='First Term',defaults={'sequence':1,'weight_percentage':Decimal('20.00'),'default_max_marks':Decimal('50.00')})
+  t2,_=ExamComponent.objects.get_or_create(configuration=exam_cfg,name='Second Term',defaults={'sequence':2,'weight_percentage':Decimal('30.00'),'default_max_marks':Decimal('75.00')})
+  t3,_=ExamComponent.objects.get_or_create(configuration=exam_cfg,name='Third Term',defaults={'sequence':3,'weight_percentage':Decimal('50.00'),'default_max_marks':Decimal('100.00')})
+  # Subject specific max mark overrides as per owner spec: Math has 50, 75, 100; English has 100, 100, 100
+  eng_subj=Subject.objects.filter(school=school,code='ENG').first()
+  if eng_subj:
+   ExamComponentSubjectConfig.objects.get_or_create(component=t1,subject=eng_subj,defaults={'maximum_marks':Decimal('100.00')})
+   ExamComponentSubjectConfig.objects.get_or_create(component=t2,subject=eng_subj,defaults={'maximum_marks':Decimal('100.00')})
+  # Populate demo marks for class students
+  c8_students=Student.objects.filter(enrollments__school_class=klass)
+  target_subjs=list(Subject.objects.filter(school=school))
+  for s_idx,st in enumerate(c8_students):
+   for s_obj in target_subjs:
+    base_score=60+(s_idx*7+len(s_obj.code)*4)%35
+    # T1 (max 50, or 100 for English)
+    t1_max=Decimal('100.00') if s_obj==eng_subj else Decimal('50.00')
+    m1=min(t1_max,Decimal(round(float(t1_max)*(base_score+5)/100,1)))
+    ExamStudentMark.objects.get_or_create(student=st,component=t1,subject=s_obj,school_class=klass,academic_year=year,defaults={'marks_obtained':m1})
+    # T2 (max 75, or 100 for English)
+    t2_max=Decimal('100.00') if s_obj==eng_subj else Decimal('75.00')
+    m2=min(t2_max,Decimal(round(float(t2_max)*(base_score-2)/100,1)))
+    ExamStudentMark.objects.get_or_create(student=st,component=t2,subject=s_obj,school_class=klass,academic_year=year,defaults={'marks_obtained':m2})
+    # T3 (max 100) - leave one student pending to demonstrate pending logic
+    if s_idx!=11 or s_obj.code!='GEO':
+     m3=min(Decimal('100.00'),Decimal(round(base_score+8,1)))
+     ExamStudentMark.objects.get_or_create(student=st,component=t3,subject=s_obj,school_class=klass,academic_year=year,defaults={'marks_obtained':m3})
+  recalculate_configuration(exam_cfg.id)
   self.stdout.write(self.style.SUCCESS('Demo ready: admin / teacher / principal / teacher_west / principal_west / student_demo / parent_demo — password DemoPass123!'))

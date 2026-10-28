@@ -913,4 +913,202 @@ class RolePermission(models.Model):
         return f"[{campus}] {self.role} -> {self.permission_key}: {state}"
 
 
+# ------------------------------------------------------------------ Configurable Examination Engine
+class ExamConfiguration(models.Model):
+    """Configurable examination structure and weighting policy for a school, year, and optional class/subject."""
+    STATUS_CHOICES = [('draft', 'Draft'), ('published', 'Published'), ('locked', 'Locked')]
+    WEIGHTING_MODES = [('equal', 'Equal weighting'), ('custom', 'Custom weighting')]
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='exam_configurations')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='exam_configurations')
+    school_class = models.ForeignKey(SchoolClass, null=True, blank=True, on_delete=models.SET_NULL, related_name='exam_configurations')
+    subject = models.ForeignKey(Subject, null=True, blank=True, on_delete=models.SET_NULL, related_name='exam_configurations')
+    name = models.CharField(max_length=120)
+    reporting_scale = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('100.00'), validators=[MinValueValidator(Decimal('1.00'))])
+    rounding_precision = models.PositiveSmallIntegerField(default=2, validators=[MaxValueValidator(4)])
+    passing_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('40.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+    subject_weighting_mode = models.CharField(max_length=16, choices=WEIGHTING_MODES, default='equal')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='draft')
+    version = models.PositiveIntegerField(default=1)
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-academic_year__start_date', 'name']
+
+    def __str__(self):
+        scope = self.school_class.name if self.school_class else self.school.name
+        return f"{self.name} ({scope} v{self.version}) [{self.status}]"
+
+
+class ExamComponent(models.Model):
+    """An examination term or component (First Term, Second Term, Final) with configured weightage."""
+    configuration = models.ForeignKey(ExamConfiguration, on_delete=models.CASCADE, related_name='components')
+    name = models.CharField(max_length=80)
+    sequence = models.PositiveSmallIntegerField(default=1)
+    weight_percentage = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+    default_max_marks = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('100.00'), validators=[MinValueValidator(Decimal('0.01'))])
+    exam_session = models.ForeignKey(ExamSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='configurable_components')
+
+    class Meta:
+        ordering = ['sequence', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['configuration', 'name'], name='unique_component_name_per_config')
+        ]
+
+    def __str__(self):
+        return f"{self.configuration.name} - {self.name} ({self.weight_percentage}%)"
+
+
+class ExamComponentSubjectConfig(models.Model):
+    """Subject-specific maximum marks and optional/exempt overrides for an examination component."""
+    component = models.ForeignKey(ExamComponent, on_delete=models.CASCADE, related_name='subject_configs')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='component_configs')
+    maximum_marks = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    is_optional = models.BooleanField(default=False)
+    is_exempt = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['component', 'subject'], name='unique_subject_per_exam_component')
+        ]
+
+    def __str__(self):
+        return f"{self.component.name} - {self.subject.name}: Max {self.maximum_marks}"
+
+
+class ExamSubjectWeight(models.Model):
+    """Configured importance weight for a subject in overall student performance calculation."""
+    configuration = models.ForeignKey(ExamConfiguration, on_delete=models.CASCADE, related_name='subject_weights')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='configured_weights')
+    weight = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('1.00'), validators=[MinValueValidator(Decimal('0.01'))])
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['configuration', 'subject'], name='unique_subject_weight_per_config')
+        ]
+
+    def __str__(self):
+        return f"{self.configuration.name} - {self.subject.name} (weight {self.weight})"
+
+
+class ExamStudentMark(models.Model):
+    """Marks obtained by a student for a subject in an examination component."""
+    RESULT_STATUS = [
+        ('recorded', 'Recorded'),
+        ('absent', 'Absent'),
+        ('exempt', 'Exempt'),
+        ('incomplete', 'Incomplete'),
+        ('withdrawn', 'Withdrawn')
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='configurable_exam_marks')
+    component = models.ForeignKey(ExamComponent, on_delete=models.CASCADE, related_name='student_marks')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='student_exam_marks')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='student_exam_marks')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='student_exam_marks')
+    marks_obtained = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(Decimal('0.00'))])
+    result_status = models.CharField(max_length=16, choices=RESULT_STATUS, default='recorded')
+    is_exempt = models.BooleanField(default=False)
+    feedback = models.CharField(max_length=255, blank=True, default='')
+    entered_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['student__last_name', 'student__first_name']
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'component', 'subject'], name='unique_student_mark_per_component_subject')
+        ]
+
+    def clean(self):
+        if self.marks_obtained is not None and self.marks_obtained < Decimal('0.00'):
+            raise ValidationError('Marks obtained cannot be negative.')
+        # Get maximum marks
+        subj_cfg = ExamComponentSubjectConfig.objects.filter(component=self.component, subject=self.subject).first()
+        max_marks = subj_cfg.maximum_marks if subj_cfg else self.component.default_max_marks
+        if self.marks_obtained is not None and self.marks_obtained > max_marks:
+            raise ValidationError(f'Marks obtained ({self.marks_obtained}) cannot exceed maximum ({max_marks}).')
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.subject.name} - {self.component.name}: {self.marks_obtained}"
+
+
+class CalculatedSubjectResult(models.Model):
+    """Persisted full-precision normalized subject result across examination components."""
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='calculated_subject_results')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='calculated_results')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='calculated_subject_results')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='calculated_subject_results')
+    configuration = models.ForeignKey(ExamConfiguration, on_delete=models.CASCADE, related_name='calculated_subject_results')
+    configuration_version = models.PositiveIntegerField(default=1)
+    calculation_version = models.PositiveIntegerField(default=1)
+    completed = models.BooleanField(default=False)
+    final_percentage = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    scaled_marks = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    current_percentage = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    accumulated_contribution = models.DecimalField(max_digits=8, decimal_places=4, default=Decimal('0.0000'))
+    assessed_weight = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
+    term_results = models.JSONField(default=list, blank=True)
+    calculated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['student', 'subject']
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'subject', 'configuration'], name='unique_calculated_subject_result')
+        ]
+
+    def __str__(self):
+        status = f"{self.final_percentage}%" if self.completed else f"Incomplete ({self.current_percentage}%)"
+        return f"{self.student.full_name} - {self.subject.name}: {status}"
+
+
+class CalculatedStudentResult(models.Model):
+    """Persisted overall student academic performance across configured subjects."""
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='calculated_student_results')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='calculated_student_results')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='calculated_student_results')
+    configuration = models.ForeignKey(ExamConfiguration, on_delete=models.CASCADE, related_name='calculated_student_results')
+    configuration_version = models.PositiveIntegerField(default=1)
+    calculation_version = models.PositiveIntegerField(default=1)
+    weighting_method = models.CharField(max_length=16, default='equal')
+    completed = models.BooleanField(default=False)
+    overall_percentage = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    current_overall_percentage = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    highest_subject = models.ForeignKey(Subject, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    lowest_subject = models.ForeignKey(Subject, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    missing_subjects_count = models.PositiveIntegerField(default=0)
+    passed = models.BooleanField(null=True, blank=True)
+    calculated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['student']
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'configuration'], name='unique_calculated_student_result')
+        ]
+
+    def __str__(self):
+        status = f"{self.overall_percentage}%" if self.completed else f"Pending ({self.current_overall_percentage}%)"
+        return f"{self.student.full_name} overall: {status}"
+
+
+class ResultPublicationHistory(models.Model):
+    """Audit snapshot of configuration publications and recalculation events."""
+    configuration = models.ForeignKey(ExamConfiguration, on_delete=models.CASCADE, related_name='publication_history')
+    version = models.PositiveIntegerField()
+    published_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+    published_at = models.DateTimeField(auto_now_add=True)
+    weights_snapshot = models.JSONField(default=dict)
+    summary = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ['-published_at']
+
+    def __str__(self):
+        return f"{self.configuration.name} published v{self.version} on {self.published_at}"
+
+
+
 

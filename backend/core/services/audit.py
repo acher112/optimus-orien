@@ -17,7 +17,7 @@ def scope_for(instance):
  if isinstance(instance,(SchoolClass,AcademicYear,Subject)):return instance.school.organisation,instance.school
  if isinstance(instance,Enrollment):return scope_for(instance.school_class)
  if isinstance(instance,Assessment):return scope_for(instance.school_class)
- for path in ('assessment','school_class','homework','student','case','user'):
+ for path in ('configuration','assessment','school_class','homework','student','case','user'):
   next_obj=getattr(instance,path,None)
   if next_obj is not None:
    if path=='user':
