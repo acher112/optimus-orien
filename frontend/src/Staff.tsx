@@ -160,51 +160,25 @@ const roleOptions = (roles: string[], leader: boolean) => roles.filter(r => lead
 
 function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: R[]; roles: string[]; leader: boolean; user: User; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState<R>({ school: user.school || schools[0]?.id || '', role: 'teacher', hired_on: new Date().toISOString().slice(0, 10) });
-  const [logins, setLogins] = useState<R[]>([]);
-  const [createLogin, setCreateLogin] = useState(false);
   const { err, busy, submit } = useSubmit('staff/', onDone);
   const set = (k: string, v: string) => setF(s => ({ ...s, [k]: v }));
-  useEffect(() => {
-    if (!f.school) return;
-    request<R>(`schools/${f.school}/users/`).then(d => setLogins((d.results || []).filter((u: R) => ['teacher', 'principal', 'school_admin'].includes(u.role)))).catch(() => setLogins([]));
-  }, [f.school]);
   return (
-    <Modal title="Add staff member" sub="Creates an employment record. A login can be linked now or created directly." onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); submit({ ...f, user: createLogin ? null : (f.user || null) }); }}>
+    <Modal title="Add staff member" sub="Creates an employment record and portal login credentials." onClose={onClose}>
+      <form onSubmit={e => { e.preventDefault(); submit(f); }}>
         <div className="modal-fields hr-fields">
-          <label>First name *<input required value={f.first_name || ''} onChange={e => set('first_name', e.target.value)} /></label>
-          <label>Last name *<input required value={f.last_name || ''} onChange={e => set('last_name', e.target.value)} /></label>
-          <label>Position *<input required placeholder="e.g. Maths Teacher" value={f.position || ''} onChange={e => set('position', e.target.value)} /></label>
+          <label>First name *<input required value={f.first_name || ''} onChange={e => set('first_name', e.target.value)} placeholder="e.g. Ayesha" /></label>
+          <label>Last name *<input required value={f.last_name || ''} onChange={e => set('last_name', e.target.value)} placeholder="e.g. Khan" /></label>
+          <label>Position *<input required placeholder="e.g. Maths Teacher or Campus Principal" value={f.position || ''} onChange={e => set('position', e.target.value)} /></label>
           <label>Role<select value={f.role} onChange={e => set('role', e.target.value)}>{roleOptions(roles, leader).map(r => <option key={r} value={r}>{nice(r)}</option>)}</select></label>
           <label>Campus<select required value={f.school} onChange={e => set('school', e.target.value)}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
           <label>Hired on<input type="date" value={f.hired_on} onChange={e => set('hired_on', e.target.value)} /></label>
-          <label>Email{createLogin ? ' *' : ''}<input type="email" required={createLogin} value={f.email || ''} onChange={e => set('email', e.target.value)} /></label>
-          <label>Phone<input value={f.phone || ''} onChange={e => set('phone', e.target.value)} /></label>
+          <label>Email (portal login) *<input required type="email" value={f.email || ''} onChange={e => set('email', e.target.value)} placeholder="name@school.edu" /></label>
+          <label>Portal password *<input required type="password" minLength={8} value={f.password || ''} onChange={e => set('password', e.target.value)} placeholder="Min 8 characters" /></label>
+          <label>Phone<input value={f.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="e.g. +92 300 1234567" /></label>
           <label>Monthly base salary<input type="number" step="0.01" min="0" placeholder="e.g. 75000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>
-          <label className="wide">Link existing login (optional)<select disabled={createLogin} value={f.user || ''} onChange={e => set('user', e.target.value)}><option value="">No existing login</option>{logins.map(u => <option key={u.id} value={u.id}>{u.name} ({u.username})</option>)}</select></label>
-          {!f.user && (
-            <div className="wide" style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0', marginTop: 4 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontWeight: 600, cursor: 'pointer' }}>
-                <input type="checkbox" checked={createLogin} onChange={e => { setCreateLogin(e.target.checked); if (!e.target.checked) set('password', ''); }} />
-                <span>Create sign-in login account immediately</span>
-              </label>
-              {createLogin && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
-                  <label style={{ margin: 0 }}>
-                    Initial Password *
-                    <input required type="password" minLength={8} placeholder="Min 8 characters" value={f.password || ''} onChange={e => set('password', e.target.value)} />
-                  </label>
-                  <label style={{ margin: 0 }}>
-                    Username (optional)
-                    <input placeholder="Defaults to email prefix" value={f.username || ''} onChange={e => set('username', e.target.value)} />
-                  </label>
-                  <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#6366f1' }}>
-                    An active login account will be created. The staff member can sign in immediately with this email and password, and reset it via Settings anytime.
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="wide" style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, color: '#475569' }}>
+            The staff member will use this email address and password to log in to their Optimus Orien portal.
+          </div>
           {Boolean(f.salary && Number(f.salary) > 0) && (
             <div className="wide" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, background: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0', marginTop: 4 }}>
               <label style={{ margin: 0 }}>

@@ -175,6 +175,85 @@ def change_password(request):
  record_event(actor=u, action='update', obj=u, changed_fields=['password'])
  return Response({'ok': True, 'detail': 'Password changed successfully.'})
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
+def forgot_password(request):
+ identifier = str(request.data.get('email') or request.data.get('username') or request.data.get('identifier') or '').strip()
+ if not identifier:
+  return Response({'detail': 'Email address or username is required.'}, status=400)
+ target = User.objects.filter(Q(email__iexact=identifier) | Q(username__iexact=identifier), is_active=True).first()
+ if not target:
+  return Response({'detail': 'No active account found with that email or username.'}, status=404)
+ 
+ from django.contrib.auth.tokens import default_token_generator
+ from django.utils.http import urlsafe_base64_encode
+ from django.utils.encoding import force_bytes
+ from django.core.mail import send_mail
+ from django.conf import settings
+ 
+ uid = urlsafe_base64_encode(force_bytes(target.pk))
+ token = default_token_generator.make_token(target)
+ 
+ try:
+  send_mail(
+   subject="Optimus Orien - Password Reset Request",
+   message=f"Hello {target.get_full_name() or target.username},\n\nA password reset request was received for your portal account.\nYour Reset Token: {token}\nUser ID: {uid}\n\nEnter this token in the portal to set a new password.",
+   from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@optimus-orien.edu'),
+   recipient_list=[target.email] if target.email else [],
+   fail_silently=True
+  )
+ except Exception:
+  pass
+
+ record_event(actor=target, action='request_password_reset', obj=target)
+ return Response({
+  'ok': True,
+  'detail': f'Password reset token generated for {target.email or target.username}.',
+  'uid': uid,
+  'token': token,
+  'email': target.email
+ })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
+def reset_password_with_token(request):
+ data = request.data
+ uid_raw = str(data.get('uid') or '').strip()
+ token = str(data.get('token') or '').strip()
+ new_password = str(data.get('password') or data.get('new_password') or '')
+ if not uid_raw or not token or not new_password:
+  return Response({'detail': 'User ID (uid), reset token, and new password are required.'}, status=400)
+ 
+ from django.utils.http import urlsafe_base64_decode
+ from django.utils.encoding import force_str
+ from django.contrib.auth.tokens import default_token_generator
+ from django.contrib.auth.password_validation import validate_password
+ from django.core.exceptions import ValidationError as DjangoValidationError
+ 
+ try:
+  pk = force_str(urlsafe_base64_decode(uid_raw))
+  user = User.objects.get(pk=pk, is_active=True)
+ except Exception:
+  return Response({'detail': 'Invalid or expired password reset link/token.'}, status=400)
+ 
+ if not default_token_generator.check_token(user, token):
+  return Response({'detail': 'The password reset token is invalid or has expired.'}, status=400)
+ 
+ if len(new_password) < 8:
+  return Response({'detail': 'New password must be at least 8 characters long.'}, status=400)
+ 
+ try:
+  validate_password(new_password, user=user)
+ except DjangoValidationError as e:
+  return Response({'detail': ' '.join(e.messages)}, status=400)
+ 
+ user.set_password(new_password)
+ user.save()
+ record_event(actor=user, action='reset_password', obj=user, changed_fields=['password'])
+ return Response({'ok': True, 'detail': 'Password has been successfully reset. You can now sign in.'})
+
 class DynamicSerializer(serializers.ModelSerializer):
  """Model-level validation is performed after explicit API permission checks."""
  pass

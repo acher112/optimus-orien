@@ -126,6 +126,8 @@ urlpatterns = [
     path('auth/logout/', views.signout),
     path('auth/me/', views.me),
     path('auth/password/', views.change_password),
+    path('auth/forgot-password/', views.forgot_password),
+    path('auth/reset-password/', views.reset_password_with_token),
     path('dashboard/', views.dashboard),
     path('students/<int:pk>/transfer/', views.transfer_student),
     path('reports/', reports.overview),

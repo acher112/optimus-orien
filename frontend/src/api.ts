@@ -204,3 +204,15 @@ export const updateProfile = (data: Record<string, unknown>) =>
 
 export const changePassword = (data: { current_password?: string; password?: string; old_password?: string; new_password?: string }) =>
   request<{ ok: boolean; detail: string }>('auth/password/', { method: 'POST', body: JSON.stringify(data) });
+
+export const forgotPassword = (identifier: string) =>
+  request<{ ok: boolean; detail: string; uid: string; token: string; email?: string }>('auth/forgot-password/', {
+    method: 'POST',
+    body: JSON.stringify({ identifier })
+  });
+
+export const resetPassword = (data: { uid: string; token: string; password: string }) =>
+  request<{ ok: boolean; detail: string }>('auth/reset-password/', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });

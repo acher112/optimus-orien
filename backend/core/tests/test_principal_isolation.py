@@ -574,7 +574,7 @@ class PrincipalIsolationTests(TestCase):
         self.assertEqual(u.role, 'principal')
         self.assertTrue(RoleAssignment.objects.filter(user=u, school=self.school_a, role='principal').exists())
 
-        # Kamran logs in immediately
+        # Kamran logs in
         self.client.logout()
         res = self.client.post('/api/v1/auth/login/', {
             'username': 'kamran.prin@school.edu',
@@ -582,4 +582,53 @@ class PrincipalIsolationTests(TestCase):
         }, format='json')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data['role'], 'principal')
+
+    def test_forgot_password_and_token_reset_flow(self):
+        """User can request a password reset token via forgot-password and reset their password on the login screen."""
+        self.client.logout()
+        # Request with non-existent user returns 404
+        bad_req = self.client.post('/api/v1/auth/forgot-password/', {'identifier': 'nonexistent@school.edu'}, format='json')
+        self.assertEqual(bad_req.status_code, 404)
+
+        # Request with principal's email
+        good_req = self.client.post('/api/v1/auth/forgot-password/', {'identifier': 'principal.a@test.org'}, format='json')
+        self.assertEqual(good_req.status_code, 200)
+        self.assertTrue(good_req.data['ok'])
+        uid = good_req.data['uid']
+        token = good_req.data['token']
+        self.assertTrue(bool(uid))
+        self.assertTrue(bool(token))
+
+        # Attempt reset with invalid token
+        bad_reset = self.client.post('/api/v1/auth/reset-password/', {
+            'uid': uid,
+            'token': 'invalid-token-12345',
+            'password': 'BrandNewPassword2026!'
+        }, format='json')
+        self.assertEqual(bad_reset.status_code, 400)
+
+        # Successful reset with valid token
+        good_reset = self.client.post('/api/v1/auth/reset-password/', {
+            'uid': uid,
+            'token': token,
+            'password': 'BrandNewPassword2026!'
+        }, format='json')
+        self.assertEqual(good_reset.status_code, 200)
+        self.assertTrue(good_reset.data['ok'])
+
+        # Verify old password no longer works
+        old_login = self.client.post('/api/v1/auth/login/', {
+            'username': 'principal.a@test.org',
+            'password': 'password123'
+        }, format='json')
+        self.assertEqual(old_login.status_code, 400)
+
+        # Verify new password signs in successfully
+        new_login = self.client.post('/api/v1/auth/login/', {
+            'username': 'principal.a@test.org',
+            'password': 'BrandNewPassword2026!'
+        }, format='json')
+        self.assertEqual(new_login.status_code, 200)
+        self.assertEqual(new_login.data['role'], 'principal')
+
 

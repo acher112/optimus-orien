@@ -12,7 +12,7 @@ import {
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
   request, login, register, logout, list, create, update, destroy,
-  createAccount, registerCampus, schoolUsers, updateProfile,
+  createAccount, registerCampus, schoolUsers, updateProfile, forgotPassword, resetPassword,
   type User, type Dashboard, type Resource
 } from './api';
 import PublicHome from './PublicHome';
@@ -1986,10 +1986,17 @@ function Empty({ text, small = false }: { text: string; small?: boolean }) {
 }
 
 function Login({ onLogin }: { onLogin: (user: User) => void }) {
-  const [tab, setTab] = useState<'signin' | 'register'>(() =>
+  const [tab, setTab] = useState<'signin' | 'register' | 'forgot'>(() =>
     window.location.search.includes('tab=register') || window.location.pathname === '/register' ? 'register' : 'signin'
   );
   const [name, setName] = useState(''), [pass, setPass] = useState('');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotUid, setForgotUid] = useState('');
+  const [forgotToken, setForgotToken] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  const [forgotMsg, setForgotMsg] = useState('');
   const [regForm, setRegForm] = useState({
     first_name: '',
     last_name: '',
@@ -2029,6 +2036,57 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     }
   }
 
+  async function handleRequestForgot(e: React.FormEvent) {
+    e.preventDefault();
+    setPending(true);
+    setError('');
+    setForgotMsg('');
+    try {
+      const res = await forgotPassword(forgotIdentifier.trim());
+      setForgotUid(res.uid);
+      setForgotToken(res.token);
+      setForgotStep(2);
+      setForgotMsg(`Reset token generated for ${res.email || forgotIdentifier}. Set your new password below.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not request password reset');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPass.length < 8) {
+      setError('New password must be at least 8 characters long');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setError('New password and confirmation do not match');
+      return;
+    }
+    setPending(true);
+    setError('');
+    setForgotMsg('');
+    try {
+      const res = await resetPassword({
+        uid: forgotUid,
+        token: forgotToken.trim(),
+        password: newPass
+      });
+      setForgotMsg(res.detail || 'Password reset successfully! You can now sign in.');
+      setTimeout(() => {
+        setTab('signin');
+        setName(forgotIdentifier);
+        setPass('');
+        setError('');
+      }, 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not reset password');
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <div className="login-page">
       <div className="login-left">
@@ -2062,20 +2120,95 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
             <button
               type="button"
               className={`login-tab ${tab === 'signin' ? 'active' : ''}`}
-              onClick={() => { setTab('signin'); setError(''); }}
+              onClick={() => { setTab('signin'); setError(''); setForgotMsg(''); }}
             >
               Sign In
             </button>
             <button
               type="button"
               className={`login-tab ${tab === 'register' ? 'active' : ''}`}
-              onClick={() => { setTab('register'); setError(''); }}
+              onClick={() => { setTab('register'); setError(''); setForgotMsg(''); }}
             >
               Create Account
             </button>
           </div>
 
-          {tab === 'signin' ? (
+          {tab === 'forgot' ? (
+            <>
+              <span className="eyebrow">ACCOUNT RECOVERY</span>
+              <h2>Reset password</h2>
+              <p className="login-subtitle">Recover access to your Optimus Orien workspace</p>
+
+              {forgotMsg && (
+                <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#166534', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckCircle2 size={16} /> {forgotMsg}
+                </div>
+              )}
+              {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
+
+              {forgotStep === 1 ? (
+                <form onSubmit={handleRequestForgot}>
+                  <label>
+                    Username or Email
+                    <input
+                      required
+                      autoComplete="username"
+                      value={forgotIdentifier}
+                      onChange={e => setForgotIdentifier(e.target.value)}
+                      placeholder="Enter your registered email or username"
+                    />
+                  </label>
+                  <button type="submit" className="login-submit" disabled={pending} style={{ marginTop: 8 }}>
+                    {pending ? 'Verifying…' : 'Generate reset token'} <ArrowRight size={18} />
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleResetPassword}>
+                  <label>
+                    Reset Token
+                    <input
+                      required
+                      value={forgotToken}
+                      onChange={e => setForgotToken(e.target.value)}
+                      placeholder="Paste reset token"
+                    />
+                  </label>
+                  <label>
+                    New Password
+                    <input
+                      required
+                      type="password"
+                      minLength={8}
+                      value={newPass}
+                      onChange={e => setNewPass(e.target.value)}
+                      placeholder="Min 8 characters"
+                    />
+                  </label>
+                  <label>
+                    Confirm New Password
+                    <input
+                      required
+                      type="password"
+                      minLength={8}
+                      value={confirmPass}
+                      onChange={e => setConfirmPass(e.target.value)}
+                      placeholder="Confirm new password"
+                    />
+                  </label>
+                  <button type="submit" className="login-submit" disabled={pending} style={{ marginTop: 8 }}>
+                    {pending ? 'Resetting password…' : 'Save new password'} <ArrowRight size={18} />
+                  </button>
+                </form>
+              )}
+
+              <div className="login-switch-row" style={{ marginTop: 20 }}>
+                <span>Remembered your password?</span>
+                <button type="button" className="text-link-btn" onClick={() => { setTab('signin'); setError(''); setForgotMsg(''); }}>
+                  ← Back to Sign In
+                </button>
+              </div>
+            </>
+          ) : tab === 'signin' ? (
             <>
               <span className="eyebrow">WELCOME BACK</span>
               <h2>Your workspace awaits.</h2>
@@ -2102,6 +2235,16 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
                     placeholder="Enter your password"
                   />
                 </label>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -6, marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className="text-link-btn"
+                    style={{ fontSize: 12, color: 'var(--brand-primary, #6366f1)', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                    onClick={() => { setTab('forgot'); setError(''); setForgotMsg(''); setForgotStep(1); }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
                 <button type="submit" className="login-submit" disabled={pending}>
                   {pending ? 'Signing in…' : 'Sign in to workspace'} <ArrowRight size={18} />
@@ -2529,7 +2672,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
 
                           {af.role === 'principal' && (
                             <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#5b21b6', marginBottom: 12 }}>
-                              <strong>Campus Principal Account:</strong> Provisions the official campus principal, links staff HR records, and unlocks the dedicated Principal Portal. The principal can immediately sign in with their email and chosen password, and can reset it at any time in Settings.
+                              <strong>Campus Principal Account:</strong> Provisions the official campus principal, links staff HR records, and unlocks the dedicated Principal Portal. The principal can log in using their email and chosen password, and can change or reset it anytime.
                             </div>
                           )}
 
