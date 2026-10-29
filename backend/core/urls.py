@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
-    permission_views, views_risk, exam_engine_views, principal_views
+    permission_views, views_risk, exam_engine_views, principal_views, attendance_views
 )
 
 r = DefaultRouter()
@@ -29,6 +29,9 @@ for name, view in [
     r.register(name, view, basename=name)
 
 urlpatterns = [
+    # Attendance Registers (Class/Student & Staff)
+    path('attendance/class-register/', attendance_views.class_attendance_register),
+
     # Staff HR & Lifecycle
     path('staff/', staff.staff_list),
     path('staff/attendance/', staff.staff_attendance),

@@ -40,6 +40,7 @@ import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import ErrorBoundary from './ErrorBoundary';
 import PasswordField from './PasswordField';
+import AttendanceModule from './AttendanceModule';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -216,24 +217,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'weight', label: 'Weight', type: 'number' }
     ]
   },
-  Attendance: {
-    api: 'attendance',
-    title: 'Attendance register',
-    desc: 'Understand attendance without confusing missing data with absences.',
-    columns: [
-      { key: 'student_name', label: 'Student' },
-      { key: 'date', label: 'Date' },
-      { key: 'status', label: 'Status' },
-      { key: 'note', label: 'Notes' }
-    ],
-    fields: [
-      { key: 'student', label: 'Student ID', type: 'number', required: true },
-      { key: 'school_class', label: 'Class', required: true },
-      { key: 'date', label: 'Date', type: 'date', required: true },
-      { key: 'status', label: 'Status', required: true },
-      { key: 'note', label: 'Notes' }
-    ]
-  },
+
   Homework: {
     api: 'homework',
     title: 'Homework & tasks',
@@ -1502,6 +1486,7 @@ function App() {
           {page === 'Reports' && <Reports user={user} />}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
           {page === 'Finance' && <Finance user={user} notify={notify} />}
+          {page === 'Attendance' && <AttendanceModule user={user} notify={notify} campuses={campuses} />}
           {['Student fees', 'Student Fees', 'Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page) && (
             <Fees user={user} notify={notify} initialTab={page} />
           )}

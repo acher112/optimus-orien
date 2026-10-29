@@ -145,6 +145,9 @@ class Attendance(models.Model):
  date=models.DateField()
  status=models.CharField(max_length=16,choices=STATUS)
  note=models.CharField(max_length=255,blank=True)
+ recorded_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='+')
+ created_at=models.DateTimeField(auto_now_add=True,null=True,blank=True)
+ updated_at=models.DateTimeField(auto_now=True,null=True,blank=True)
  class Meta:constraints=[models.UniqueConstraint(fields=['student','school_class','date'],name='unique_attendance_session')]
  def clean(self):
   if self.student_id and self.school_class_id:

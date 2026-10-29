@@ -479,8 +479,18 @@ def staff_attendance(request):
     if request.method == 'GET':
         staff_qs = list(StaffMember.objects.filter(school=school, status='active').order_by('last_name', 'first_name'))
         existing_recs = {
-            a.staff_id: a for a in StaffAttendance.objects.filter(school=school, date=att_date)
+            a.staff_id: a for a in StaffAttendance.objects.filter(school=school, date=att_date).select_related('marked_by')
         }
+
+        conducted_by_user = None
+        conducted_at = None
+        for a in existing_recs.values():
+            if a.marked_by:
+                conducted_by_user = (a.marked_by.get_full_name() or a.marked_by.username).strip()
+            if a.updated_at:
+                conducted_at = a.updated_at.isoformat()
+            if conducted_by_user:
+                break
 
         records = []
         for s in staff_qs:
@@ -491,22 +501,33 @@ def staff_attendance(request):
                 'position': s.position,
                 'role': s.role,
                 'email': s.email,
-                'status': rec.status if rec else 'present',
+                'status': rec.status if rec else 'not_taken',
                 'is_recorded': bool(rec),
                 'note': rec.note if rec else '',
             })
+
+        total = len(records)
+        present = sum(1 for r in records if r['status'] == 'present')
+        absent = sum(1 for r in records if r['status'] == 'absent')
+        late = sum(1 for r in records if r['status'] == 'late')
+        excused = sum(1 for r in records if r['status'] == 'excused')
+        not_taken = sum(1 for r in records if r['status'] == 'not_taken')
 
         return Response({
             'date': att_date.isoformat(),
             'school': school.id,
             'school_name': school.name,
+            'is_conducted': bool(existing_recs),
+            'conducted_by': conducted_by_user,
+            'conducted_at': conducted_at,
             'records': records,
             'summary': {
-                'total': len(records),
-                'present': sum(1 for r in records if r['status'] == 'present'),
-                'absent': sum(1 for r in records if r['status'] == 'absent'),
-                'late': sum(1 for r in records if r['status'] == 'late'),
-                'excused': sum(1 for r in records if r['status'] == 'excused'),
+                'total': total,
+                'present': present,
+                'absent': absent,
+                'late': late,
+                'excused': excused,
+                'not_taken': not_taken,
                 'recorded_count': len(existing_recs),
             }
         })
@@ -527,7 +548,7 @@ def staff_attendance(request):
                 continue
             status = str(item.get('status') or 'present').lower()
             if status not in valid_statuses:
-                status = 'present'
+                continue
             note = str(item.get('note') or '').strip()[:255]
 
             StaffAttendance.objects.update_or_create(
@@ -548,10 +569,13 @@ def staff_attendance(request):
             obj=school
         )
 
+    actor_name = (user.get_full_name() or user.username).strip()
     return Response({
         'success': True,
         'message': f'Attendance saved for {updated_count} staff member(s).',
         'date': att_date.isoformat(),
-        'updated_count': updated_count
+        'updated_count': updated_count,
+        'conducted_by': actor_name,
+        'is_conducted': True,
     })
 

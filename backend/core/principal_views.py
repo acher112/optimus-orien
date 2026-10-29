@@ -14,7 +14,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 
 from core.models import (
-    School, Student, Enrollment, SchoolClass, StaffMember,
+    School, Student, Enrollment, SchoolClass, StaffMember, StaffAttendance,
     Attendance, Grade, Assessment, Subject, ReviewCase,
     ExamConfiguration, CalculatedStudentResult
 )
@@ -75,13 +75,48 @@ def principal_dashboard(request):
     total_staff = staff_qs.count()
 
     # 2. Attendance Metrics
-    # Today's attendance
+    # Today's student attendance
     today_att = Attendance.objects.filter(school_class__in=class_ids, date=today)
     submitted_class_ids = set(today_att.values_list('school_class_id', flat=True))
 
     today_recorded = today_att.count()
     today_present = today_att.filter(status__in=['present', 'late']).count()
+    today_absent = today_att.filter(status='absent').count()
+    today_late = today_att.filter(status='late').count()
     today_attendance_rate = round((today_present / today_recorded) * 100, 1) if today_recorded > 0 else None
+
+    # Today's staff attendance
+    today_staff_att = StaffAttendance.objects.filter(school=school, date=today)
+    today_staff_rec = today_staff_att.count()
+    today_staff_pres = today_staff_att.filter(status__in=['present', 'late']).count()
+    today_staff_abs = today_staff_att.filter(status='absent').count()
+    today_staff_late = today_staff_att.filter(status='late').count()
+    today_staff_attendance_rate = round((today_staff_pres / today_staff_rec) * 100, 1) if today_staff_rec > 0 else None
+
+    # 7-day attendance trends for students & staff
+    attendance_trends = []
+    for days_ago in range(6, -1, -1):
+        target_day = today - timezone.timedelta(days=days_ago)
+        day_att = Attendance.objects.filter(school_class__in=class_ids, date=target_day)
+        day_rec = day_att.count()
+        day_pres = day_att.filter(status__in=['present', 'late']).count()
+        s_rate = round((day_pres / day_rec) * 100, 1) if day_rec > 0 else None
+
+        staff_day_att = StaffAttendance.objects.filter(school=school, date=target_day)
+        st_rec = staff_day_att.count()
+        st_pres = staff_day_att.filter(status__in=['present', 'late']).count()
+        st_rate = round((st_pres / st_rec) * 100, 1) if st_rec > 0 else None
+
+        attendance_trends.append({
+            'date': target_day.isoformat(),
+            'day': target_day.strftime('%a'),
+            'student_rate': s_rate,
+            'staff_rate': st_rate,
+            'student_present': day_pres,
+            'student_total': day_rec,
+            'staff_present': st_pres,
+            'staff_total': st_rec,
+        })
 
     # Unsubmitted registers today
     unsubmitted_registers = []
@@ -262,10 +297,30 @@ def principal_dashboard(request):
         'kpi': {
             'total_students': total_students,
             'today_attendance_rate': today_attendance_rate,
+            'today_staff_attendance_rate': today_staff_attendance_rate,
             'total_teachers': total_teachers,
             'total_staff': total_staff,
             'total_classes': len(classes),
             'academic_average': academic_average
+        },
+        'attendance_trends': attendance_trends,
+        'today_attendance_summary': {
+            'students': {
+                'total': total_students,
+                'recorded': today_recorded,
+                'present': today_present,
+                'absent': today_absent,
+                'late': today_late,
+                'rate': today_attendance_rate,
+            },
+            'staff': {
+                'total': total_staff,
+                'recorded': today_staff_rec,
+                'present': today_staff_pres,
+                'absent': today_staff_abs,
+                'late': today_staff_late,
+                'rate': today_staff_attendance_rate,
+            }
         },
         'needs_attention': {
             'unsubmitted_registers_count': len(unsubmitted_registers),

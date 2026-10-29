@@ -8,7 +8,6 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 import { request, type User } from './api';
-import StaffAttendanceRegister from './StaffAttendanceRegister';
 
 interface PrincipalHomeProps {
   user: User;
@@ -27,11 +26,22 @@ interface DashboardPayload {
   kpi: {
     total_students: number;
     today_attendance_rate: number | null;
+    today_staff_attendance_rate?: number | null;
     total_teachers: number;
     total_staff: number;
     total_classes: number;
     academic_average: number | null;
   };
+  attendance_trends?: Array<{
+    date: string;
+    day: string;
+    student_rate: number | null;
+    staff_rate: number | null;
+    student_present: number;
+    student_total: number;
+    staff_present: number;
+    staff_total: number;
+  }>;
   needs_attention: {
     unsubmitted_registers_count: number;
     unsubmitted_registers: Array<{
@@ -379,8 +389,135 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
         </div>
       </div>
 
-      {/* Staff Attendance Register (Daily Staff Register) */}
-      <StaffAttendanceRegister user={user} notify={notify} />
+      {/* Campus Attendance Overview & Percentage Charts (Replaces raw register in overview) */}
+      <div className="panel" style={{ background: 'var(--card-bg, #fff)', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)', padding: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0ea5e9', fontWeight: 600, fontSize: '0.8rem' }}>
+              <ClipboardCheck size={16} /> CAMPUS ATTENDANCE OVERVIEW
+            </div>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: '0.2rem 0 0' }}>Daily Attendance Rates &amp; Percentage Analytics</h2>
+            <p style={{ color: 'var(--text-secondary, #64748b)', margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+              Real-time participation rates comparing student cohorts and campus staff.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              className="primary-btn"
+              onClick={() => onNavigate('Attendance')}
+              style={{ fontSize: '0.85rem', padding: '8px 14px' }}
+            >
+              <ClipboardCheck size={15} /> Open Attendance Register <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* 2 Big Percentage Metric Cards: Student % and Staff % */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+          {/* Student Attendance Rate Card */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%)',
+            border: '1px solid #bae6fd',
+            borderRadius: '10px',
+            padding: '1.25rem',
+            position: 'relative'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', letterSpacing: '0.5px' }}>STUDENT ATTENDANCE</span>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: (kpi?.today_attendance_rate ?? 0) >= 85 ? '#0284c7' : '#ea580c', margin: '0.3rem 0' }}>
+                  {kpi?.today_attendance_rate !== null ? `${kpi?.today_attendance_rate}%` : 'Pending'}
+                </div>
+              </div>
+              <div style={{ width: 40, height: 40, borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <GraduationCap size={22} />
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div style={{ width: '100%', height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', margin: '0.5rem 0' }}>
+              <div style={{
+                width: `${Math.min(100, Math.max(0, kpi?.today_attendance_rate ?? 0))}%`,
+                height: '100%',
+                background: (kpi?.today_attendance_rate ?? 0) >= 85 ? '#0ea5e9' : '#f59e0b',
+                borderRadius: 3,
+                transition: 'width 0.4s ease'
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}>
+              <span>Target: 85% benchmark</span>
+              <span>{attention?.unsubmitted_registers_count ? `${attention.unsubmitted_registers_count} registers pending` : 'All registers recorded'}</span>
+            </div>
+          </div>
+
+          {/* Staff Attendance Rate Card */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(13, 148, 136, 0.05) 100%)',
+            border: '1px solid #a7f3d0',
+            borderRadius: '10px',
+            padding: '1.25rem',
+            position: 'relative'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#047857', letterSpacing: '0.5px' }}>STAFF ATTENDANCE</span>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: (data?.kpi?.today_staff_attendance_rate ?? 0) >= 85 ? '#059669' : '#ea580c', margin: '0.3rem 0' }}>
+                  {data?.kpi?.today_staff_attendance_rate !== null && data?.kpi?.today_staff_attendance_rate !== undefined ? `${data?.kpi?.today_staff_attendance_rate}%` : 'Pending'}
+                </div>
+              </div>
+              <div style={{ width: 40, height: 40, borderRadius: '8px', background: '#d1fae5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={22} />
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div style={{ width: '100%', height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', margin: '0.5rem 0' }}>
+              <div style={{
+                width: `${Math.min(100, Math.max(0, data?.kpi?.today_staff_attendance_rate ?? 0))}%`,
+                height: '100%',
+                background: '#10b981',
+                borderRadius: 3,
+                transition: 'width 0.4s ease'
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}>
+              <span>Faculty &amp; Campus staff</span>
+              <span>{kpi?.total_staff ?? 0} total active staff</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 7-Day Attendance Rate Trend Comparison Chart */}
+        {data?.attendance_trends && data.attendance_trends.length > 0 && (
+          <div style={{ height: 230, width: '100%', marginTop: '0.5rem' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
+              7-Day Attendance Percentage Rates (Students vs Faculty)
+            </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.attendance_trends} margin={{ top: 10, right: 15, left: -15, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color, #e2e8f0)" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 11 }} />
+                <Tooltip
+                  formatter={(val: any, name: string) => [`${val !== null && val !== undefined ? val + '%' : 'Unrecorded'}`, name === 'student_rate' ? 'Student Attendance' : 'Staff Attendance']}
+                  labelFormatter={(_, items) => {
+                    const row = items && items[0] && (items[0] as any).payload;
+                    return row ? `${row.day} (${row.date})` : '';
+                  }}
+                />
+                <Bar dataKey="student_rate" name="student_rate" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="staff_rate" name="staff_rate" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', fontSize: '0.8rem', color: '#64748b', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#0ea5e9' }} /> Student Attendance %
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#10b981' }} /> Staff Attendance %
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Academic Performance & Analytics Section */}
       <div className="panel" style={{ background: 'var(--card-bg, #fff)', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)', padding: '1.5rem' }}>
