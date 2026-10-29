@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  AlertCircle, Award, BarChart3, Calculator, Calendar, Check, CheckCircle2, ChevronRight,
+  AlertCircle, Award, BarChart3, Building2, Calculator, Calendar, Check, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Layers, Plus, Printer, RefreshCw,
   Search, Settings2, ShieldAlert, ShieldCheck, Sparkles, Trash2, TrendingUp, User, Users, X
 } from 'lucide-react';
@@ -16,9 +16,27 @@ const BOY_COLOR = '#3b82f6';
 const GIRL_COLOR = '#ec4899';
 const OVERALL_COLOR = '#6366f1';
 
-export default function Examinations({ user, notify }: { user: ApiUser; notify: (m: string) => void }) {
+export default function Examinations({
+  user,
+  notify,
+  activeCampusId: propActiveCampusId,
+  onSelectCampus,
+  campuses: propCampuses = []
+}: {
+  user: ApiUser;
+  notify: (m: string) => void;
+  activeCampusId?: number | null;
+  onSelectCampus?: (id: number | null) => void;
+  campuses?: Array<{ id: number; name: string; code?: string; city?: string }>;
+}) {
   const isTeacher = user.role === 'teacher';
   const isManager = ['organisation_admin', 'school_admin', 'principal'].includes(user.role) || user.is_superuser;
+  const isSingleCampusRole = ['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(user.role);
+
+  // Active campus resolution: single campus user is strictly locked to their assigned school
+  const activeCampusId = isSingleCampusRole
+    ? (user.school || null)
+    : (propActiveCampusId !== undefined ? propActiveCampusId : null);
 
   const [tab, setTab] = useState<Tab>('analytics');
   const [error, setError] = useState('');
@@ -32,6 +50,20 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
   const [years, setYears] = useState<R[]>([]);
   const [schools, setSchools] = useState<R[]>([]);
 
+  const effectiveCampuses = propCampuses.length > 0 ? propCampuses : schools;
+
+  // Reset downstream selections when campus changes
+  useEffect(() => {
+    setAnalyticsClassFilter('');
+    setGridClassId(null);
+    setGridSubjectId(null);
+    setSelectedConfigId(null);
+    setActiveSessionId(null);
+    setEngineMarksData(null);
+    setTranscriptStudentId(null);
+    setTranscriptData(null);
+  }, [activeCampusId]);
+
   // ----------------------------------------------------
   // Configurable Engine State
   // ----------------------------------------------------
@@ -41,7 +73,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
   // Create Configuration Modal
   const [configModal, setConfigModal] = useState(false);
   const [newCfgName, setNewCfgName] = useState('');
-  const [newCfgSchool, setNewCfgSchool] = useState<string>(() => (user.school ? String(user.school) : ''));
+  const [newCfgSchool, setNewCfgSchool] = useState<string>(() => (activeCampusId ? String(activeCampusId) : (user.school ? String(user.school) : '')));
   const [newCfgYear, setNewCfgYear] = useState('');
   const [newCfgClass, setNewCfgClass] = useState('');
   const [newCfgScale, setNewCfgScale] = useState('100.00');
@@ -96,64 +128,85 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
   const [paperInvigilator, setPaperInvigilator] = useState('');
   const [clashError, setClashError] = useState('');
 
-  // Initial Load
+  // Initial Load (scoped to campus)
   useEffect(() => {
-    list<R>('classes').then(cls => {
+    const campusParam = activeCampusId ? `?school=${activeCampusId}` : '';
+    list<R>(`classes${campusParam}`).then(cls => {
       setClasses(cls);
       if (cls.length > 0) {
         setGridClassId(cls[0].id);
+      } else {
+        setGridClassId(null);
       }
     }).catch(() => {});
-    list<R>('subjects').then(sub => {
+
+    list<R>(`subjects${campusParam}`).then(sub => {
       setSubjects(sub);
       if (sub.length > 0) {
         setGridSubjectId(sub[0].id);
+      } else {
+        setGridSubjectId(null);
       }
     }).catch(() => {});
-    list<R>('years').then(setYears).catch(() => {});
+
+    list<R>(`years${campusParam}`).then(setYears).catch(() => {});
+
     list<R>('schools').then(sch => {
       setSchools(sch);
       if (sch.length > 0 && !newCfgSchool) {
-        setNewCfgSchool(String(user.school || sch[0].id));
+        setNewCfgSchool(String(activeCampusId || user.school || sch[0].id));
       }
     }).catch(() => {});
-    request<R>('staff/').then(r => setStaffList(r.results || [])).catch(() => {});
-    list<R>('students').then(setEnrolledStudents).catch(() => {});
-  }, [newCfgSchool, user.school]);
+
+    request<R>(`staff/${campusParam}`).then(r => setStaffList(r.results || [])).catch(() => {});
+    list<R>(`students${campusParam}`).then(setEnrolledStudents).catch(() => {});
+  }, [activeCampusId, newCfgSchool, user.school]);
 
   // Load Configurable Engine Configurations
   const loadEngineConfigs = useCallback(async () => {
     try {
-      const res = await request<R>('exams/engine/configurations/');
+      const qs = activeCampusId ? `?school=${activeCampusId}` : '';
+      const res = await request<R>(`exams/engine/configurations/${qs}`);
       const list = res.results || [];
       setEngineConfigs(list);
-      if (list.length > 0 && !selectedConfigId) {
-        setSelectedConfigId(list[0].id);
+      if (list.length > 0) {
+        setSelectedConfigId(prev => (prev && list.some((c: R) => c.id === prev)) ? prev : list[0].id);
+      } else {
+        setSelectedConfigId(null);
       }
     } catch (err) {
       console.error('Failed to load exam configurations', err);
     }
-  }, [selectedConfigId]);
+  }, [activeCampusId]);
 
   // Load Legacy Sessions & Scales
   const loadSessionsAndPapers = useCallback(async () => {
     try {
+      const qs = activeCampusId ? `?school=${activeCampusId}` : '';
       const [sessRes, scaleRes] = await Promise.all([
-        request<R>('exams/sessions/'),
-        request<R>('exams/grading-scales/')
+        request<R>(`exams/sessions/${qs}`),
+        request<R>(`exams/grading-scales/${qs}`)
       ]);
       const sessList = sessRes.results || [];
       setSessions(sessList);
       setScales(scaleRes.results || []);
-      if (sessList.length && !activeSessionId) {
-        setActiveSessionId(sessList[0].id);
-      }
-      if (activeSessionId) {
-        const pRes = await request<R>(`exams/papers/?session=${activeSessionId}`);
-        setPapers(pRes.results || []);
+      if (sessList.length) {
+        setActiveSessionId(prev => (prev && sessList.some((s: R) => s.id === prev)) ? prev : sessList[0].id);
+      } else {
+        setActiveSessionId(null);
       }
     } catch (err) {
       console.error('Failed to load exam sessions', err);
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      request<R>(`exams/papers/?session=${activeSessionId}`).then(pRes => {
+        setPapers(pRes.results || []);
+      }).catch(() => {});
+    } else {
+      setPapers([]);
     }
   }, [activeSessionId]);
 
@@ -163,6 +216,11 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
     setError('');
     try {
       let url = `exams/engine/analytics/?averaging_method=${analyticsAveragingMethod}`;
+      if (activeCampusId) {
+        url += `&school=${activeCampusId}`;
+      } else if (!isSingleCampusRole) {
+        url += `&school=all`;
+      }
       if (selectedConfigId) url += `&configuration=${selectedConfigId}`;
       if (analyticsGenderFilter) url += `&gender=${analyticsGenderFilter}`;
       if (analyticsClassFilter) url += `&class=${analyticsClassFilter}`;
@@ -174,7 +232,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
     } finally {
       setLoading(false);
     }
-  }, [selectedConfigId, analyticsAveragingMethod, analyticsGenderFilter, analyticsClassFilter]);
+  }, [activeCampusId, isSingleCampusRole, selectedConfigId, analyticsAveragingMethod, analyticsGenderFilter, analyticsClassFilter]);
 
   // Load Marks Grid Data
   const loadMarksGridData = useCallback(async () => {
@@ -405,6 +463,29 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
           <p>Configurable term weightages, independent subject maximum marks, and normalized performance analytics.</p>
         </div>
         <div className="fx-filters">
+          {!isSingleCampusRole ? (
+            <label>Campus
+              <select
+                className="fx-select"
+                value={activeCampusId || ''}
+                onChange={e => {
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  if (onSelectCampus) onSelectCampus(val);
+                }}
+              >
+                <option value="">All Campuses (Overall)</option>
+                {effectiveCampuses.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#f1f5f9', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#334155' }}>
+              <Building2 size={15} color="#6366f1" />
+              <span>{effectiveCampuses.find(c => c.id === activeCampusId)?.name || 'Assigned Campus'}</span>
+            </div>
+          )}
+
           <label>Configuration
             <select
               className="fx-select"
@@ -419,7 +500,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
               )}
               {engineConfigs.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.status})
+                  {c.name} ({c.status}){activeCampusId === null && c.school_name ? ` – ${c.school_name}` : ''}
                 </option>
               ))}
             </select>
@@ -521,7 +602,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                         onChange={e => setAnalyticsClassFilter(e.target.value)}
                       >
                         <option value="">All Classes</option>
-                        {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {classes.map(c => <option key={c.id} value={c.id}>{c.full_display_name || (c.school_name ? `${c.name} (${c.school_name})` : c.name)}</option>)}
                       </select>
                     </label>
                     <label style={{ fontSize: 13 }}>Gender Group
@@ -639,6 +720,56 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 </div>
               </div>
 
+              {/* Per-Campus Performance Breakdown (Admin All-Campus Mode, Spec §1.2 & §8) */}
+              {activeCampusId === null && analyticsData.campus_performance && analyticsData.campus_performance.length > 0 && (
+                <section className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #6366f1' }}>
+                  <div className="panel-head" style={{ marginBottom: 12 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16 }}>Campus Performance Breakdown</h3>
+                      <p style={{ fontSize: 13, color: '#64748b' }}>Network-wide comparison across campuses, sorted descending by headline average</p>
+                    </div>
+                  </div>
+                  <div className="table-scroll">
+                    <table className="data-table" style={{ fontSize: 13 }}>
+                      <thead>
+                        <tr>
+                          <th>CAMPUS</th>
+                          <th>AVERAGE</th>
+                          <th>BOYS</th>
+                          <th>GIRLS</th>
+                          <th>GENDER GAP</th>
+                          <th>PASS RATE</th>
+                          <th>ELIGIBLE / ENROLLED</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analyticsData.campus_performance.map((cp: R) => (
+                          <tr key={cp.campus_id}>
+                            <td><strong>{cp.campus_name}</strong></td>
+                            <td><span className="pill purple" style={{ fontWeight: 700 }}>{cp.average !== null ? `${cp.average}%` : 'N/A'}</span></td>
+                            <td style={{ color: BOY_COLOR, fontWeight: 600 }}>{cp.boys_average !== null ? `${cp.boys_average}%` : '–'}</td>
+                            <td style={{ color: GIRL_COLOR, fontWeight: 600 }}>{cp.girls_average !== null ? `${cp.girls_average}%` : '–'}</td>
+                            <td>
+                              {cp.gender_gap !== null ? (
+                                <span style={{ color: cp.gender_gap >= 0 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+                                  {cp.gender_gap > 0 ? '+' : ''}{cp.gender_gap} pp
+                                </span>
+                              ) : '–'}
+                            </td>
+                            <td><strong style={{ color: '#0f172a' }}>{cp.pass_rate !== null ? `${cp.pass_rate}%` : 'N/A'}</strong></td>
+                            <td>
+                              <span style={{ fontSize: 12, color: '#64748b' }}>
+                                {cp.eligible_count} / {cp.enrolled_count} {cp.pending_count > 0 && <span style={{ color: '#f59e0b' }}>({cp.pending_count} pending)</span>}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
               {/* Charts Row: Score Distribution & Gender Split */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 {/* Score Distribution Chart */}
@@ -674,6 +805,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                     <table className="data-table" style={{ fontSize: 13 }}>
                       <thead>
                         <tr>
+                          {activeCampusId === null && <th>CAMPUS</th>}
                           <th>CLASS</th>
                           <th title="Official Equal-Subject Class Metric (Spec §7)">CLASS AVG (EQUAL)</th>
                           <th title="Student-weighted mean across class members">STUDENT-WEIGHTED</th>
@@ -685,7 +817,10 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                       </thead>
                       <tbody>
                         {(analyticsData.class_performance || []).map((c: R) => (
-                          <tr key={c.class_id}>
+                          <tr key={`${c.school_id || ''}_${c.class_id}`}>
+                            {activeCampusId === null && (
+                              <td><span className="pill blue" style={{ fontSize: 11 }}>{c.school_name || 'Campus'}</span></td>
+                            )}
                             <td><strong>{c.class_name}</strong></td>
                             <td><span className="pill purple" style={{ fontWeight: 700 }}>{c.average !== null ? `${c.average}%` : 'N/A'}</span></td>
                             <td style={{ color: '#475569' }}>{c.student_weighted_average !== null ? `${c.student_weighted_average}%` : '–'}</td>
@@ -706,7 +841,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                           </tr>
                         ))}
                         {(!analyticsData.class_performance || analyticsData.class_performance.length === 0) && (
-                          <tr><td colSpan={7} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No class records available</td></tr>
+                          <tr><td colSpan={activeCampusId === null ? 8 : 7} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No class records available</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -726,6 +861,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                   <table className="data-table">
                     <thead>
                       <tr>
+                        {activeCampusId === null && <th>CAMPUS</th>}
                         <th>SUBJECT</th>
                         <th>CODE</th>
                         <th>SUBJECT AVERAGE</th>
@@ -739,7 +875,10 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                     </thead>
                     <tbody>
                       {(analyticsData.subject_performance || []).map((s: R) => (
-                        <tr key={s.subject_id}>
+                        <tr key={`${s.school_id || ''}_${s.subject_id}`}>
+                          {activeCampusId === null && (
+                            <td><span className="pill blue" style={{ fontSize: 11 }}>{s.school_name || 'Campus'}</span></td>
+                          )}
                           <td><strong>{s.subject_name}</strong></td>
                           <td><code>{s.subject_code}</code></td>
                           <td>
@@ -776,7 +915,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                         </tr>
                       ))}
                       {(!analyticsData.subject_performance || analyticsData.subject_performance.length === 0) && (
-                        <tr><td colSpan={9} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No subject records available</td></tr>
+                        <tr><td colSpan={activeCampusId === null ? 10 : 9} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No subject records available</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -800,6 +939,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                     <table className="data-table" style={{ fontSize: 13 }}>
                       <thead>
                         <tr>
+                          {activeCampusId === null && <th>CAMPUS</th>}
                           <th>STUDENT</th>
                           <th>CLASS</th>
                           <th>GENDER</th>
@@ -810,7 +950,10 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                       </thead>
                       <tbody>
                         {analyticsData.support_needed.map((st: R) => (
-                          <tr key={st.student_id}>
+                          <tr key={`${st.school_id || ''}_${st.student_id}`}>
+                            {activeCampusId === null && (
+                              <td><span className="pill blue" style={{ fontSize: 11 }}>{st.school_name || 'Campus'}</span></td>
+                            )}
                             <td><strong>{st.name}</strong></td>
                             <td>{st.class_name}</td>
                             <td style={{ textTransform: 'capitalize' }}>{st.gender || 'Unknown'}</td>
@@ -860,6 +1003,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
             <table className="data-table">
               <thead>
                 <tr>
+                  {activeCampusId === null && <th>CAMPUS</th>}
                   <th>STRUCTURE NAME</th>
                   <th>ACADEMIC YEAR</th>
                   <th>APPLIES TO</th>
@@ -873,6 +1017,9 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
               <tbody>
                 {engineConfigs.map(c => (
                   <tr key={c.id}>
+                    {activeCampusId === null && (
+                      <td><span className="pill blue" style={{ fontSize: 11 }}>{c.school_name || 'Campus'}</span></td>
+                    )}
                     <td>
                       <strong>{c.name}</strong>
                       <div style={{ fontSize: 12, color: '#64748b' }}>Weighting: {c.subject_weighting_mode}</div>
@@ -934,7 +1081,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 ))}
                 {engineConfigs.length === 0 && (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px 12px', color: '#64748b' }}>
+                    <td colSpan={activeCampusId === null ? 9 : 8} style={{ textAlign: 'center', padding: '36px 12px', color: '#64748b' }}>
                       <div style={{ marginBottom: 12 }}>No examination structures created yet.</div>
                       {isManager && (
                         <button className="primary-btn" onClick={() => setConfigModal(true)} style={{ margin: '0 auto' }}>
@@ -980,7 +1127,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 value={gridClassId || ''}
                 onChange={e => setGridClassId(Number(e.target.value))}
               >
-                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {classes.map(c => <option key={c.id} value={c.id}>{c.full_display_name || (c.school_name ? `${c.name} (${c.school_name})` : c.name)}</option>)}
               </select>
             </label>
             <label style={{ fontSize: 13, fontWeight: 600 }}>Subject:
@@ -990,7 +1137,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 value={gridSubjectId || ''}
                 onChange={e => setGridSubjectId(Number(e.target.value))}
               >
-                {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code || ''}){s.school_name ? ` - ${s.school_name}` : ''}</option>)}
               </select>
             </label>
           </div>
@@ -1136,7 +1283,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
               >
                 <option value="">Select student…</option>
                 {enrolledStudents.map(st => (
-                  <option key={st.id} value={st.id}>{st.first_name} {st.last_name} ({st.admission_number})</option>
+                  <option key={st.id} value={st.id}>{st.first_name} {st.last_name} ({st.admission_number}){st.school_name ? ` – ${st.school_name}` : ''}</option>
                 ))}
               </select>
             </div>
@@ -1402,15 +1549,21 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
             </div>
             <form onSubmit={handleCreateConfig} style={{ overflowY: 'auto', flex: 1 }}>
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-                {schools.length > 1 && user.role === 'organisation_admin' && (
+                {!isSingleCampusRole && (
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                     Campus *
                     <select
+                      required
                       value={newCfgSchool}
-                      onChange={e => setNewCfgSchool(e.target.value)}
+                      onChange={e => {
+                        const sc = e.target.value;
+                        setNewCfgSchool(sc);
+                        setNewCfgClass('');
+                      }}
                       style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
                     >
-                      {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      <option value="">Select campus…</option>
+                      {effectiveCampuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </label>
                 )}
@@ -1446,7 +1599,9 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                       style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
                     >
                       <option value="">All Classes (School Default)</option>
-                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {classes
+                        .filter(c => !newCfgSchool || !c.school || String(c.school) === newCfgSchool)
+                        .map(c => <option key={c.id} value={c.id}>{c.full_display_name || (c.school_name ? `${c.name} (${c.school_name})` : c.name)}</option>)}
                     </select>
                   </label>
                 </div>

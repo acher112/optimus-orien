@@ -131,15 +131,17 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'active', label: 'Status' }
     ],
     fields: [
+      { key: 'school', label: 'Campus', required: true },
+      { key: 'school_class', label: 'Class', required: true },
       { key: 'first_name', label: 'First name', required: true },
       { key: 'last_name', label: 'Last name', required: true },
-      { key: 'father_name', label: 'Father name', required: true },
-      { key: 'mother_name', label: 'Mother name' },
-      { key: 'guardian_phone', label: 'Guardian phone' },
       { key: 'admission_number', label: 'Admission number', required: true },
       { key: 'gender', label: 'Gender', required: true },
-      { key: 'school', label: 'Campus', required: true },
-      { key: 'enrolled_on', label: 'Enrolment date', type: 'date', required: true }
+      { key: 'father_name', label: 'Father name', required: true },
+      { key: 'mother_name', label: 'Mother name' },
+      { key: 'dob', label: 'Date of birth', type: 'date' },
+      { key: 'enrolled_on', label: 'Enrolment date', type: 'date', required: true },
+      { key: 'guardian_phone', label: 'Guardian phone' }
     ]
   },
   'Academic years': {
@@ -422,11 +424,21 @@ function App() {
       [name]: !prev[name]
     }));
   };
+  const isSingleCampusRole = !!user && ['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(user.role);
   const [campuses, setCampuses] = useState<Array<{ id: number; name: string; code?: string; city?: string }>>([]);
   const [activeCampusId, setActiveCampusId] = useState<number | null>(() => {
+    if (user && ['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(user.role)) {
+      return user.school || null;
+    }
     const saved = localStorage.getItem('optimus_active_campus_id');
     return saved ? Number(saved) : null;
   });
+
+  useEffect(() => {
+    if (user && isSingleCampusRole && user.school && activeCampusId !== user.school) {
+      setActiveCampusId(user.school);
+    }
+  }, [isSingleCampusRole, user, activeCampusId]);
 
   const [form, setForm] = useState<Record<string, string>>({});
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -567,6 +579,9 @@ function App() {
     setDueDateMode('standard');
     setCustomDueDate(new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10));
     setDynamicCharges([]);
+    if (page === 'Students') {
+      initialForm.admission_fee = '0';
+    }
     setForm(initialForm);
     setModal(true);
     try {
@@ -599,16 +614,40 @@ function App() {
         }
       }
       if (page === 'Students') {
+        const selectedCampus = form.school || (user?.school ? String(user.school) : (activeCampusId ? String(activeCampusId) : ''));
+        if (!selectedCampus) {
+          notify('Please select a campus.');
+          setSaving(false);
+          return;
+        }
+        data.school = Number(selectedCampus);
+
+        if (!form.school_class) {
+          notify('Class is mandatory. Please select a class.');
+          setSaving(false);
+          return;
+        }
+        data.school_class = Number(form.school_class);
+
         if (!form.monthly_fee || Number(form.monthly_fee) <= 0) {
           notify('Monthly tuition fee is mandatory and must be greater than zero.');
           setSaving(false);
           return;
         }
-        if (!form.admission_fee || Number(form.admission_fee) <= 0) {
-          notify('New admission fee is mandatory and must be greater than zero.');
+
+        const admFeeStr = form.admission_fee !== undefined ? String(form.admission_fee).trim() : '';
+        if (admFeeStr === '') {
+          notify('Enter the admission fee (0 if there is none)');
           setSaving(false);
           return;
         }
+        const admFeeNum = Number(admFeeStr);
+        if (isNaN(admFeeNum) || admFeeNum < 0) {
+          notify('Fee cannot be negative');
+          setSaving(false);
+          return;
+        }
+
         if (form.extra_charges && Number(form.extra_charges) > 0 && !form.extra_charges_reason?.trim()) {
           notify('Please provide a reason for the extra charges.');
           setSaving(false);
@@ -618,23 +657,14 @@ function App() {
 
       const created = await create(config.api, data);
       if (page === 'Students' && created && created.id) {
-        if (form.assign_class) {
-          try {
-            await create('enrollments', {
-              student: created.id,
-              school_class: Number(form.assign_class),
-              start_date: data.enrolled_on || new Date().toISOString().slice(0, 10)
-            });
-          } catch {}
-        }
-        if (form.monthly_fee || form.admission_fee) {
+        if (form.monthly_fee || form.admission_fee !== undefined) {
           try {
             await request('fees/student-voucher/', {
               method: 'POST',
               body: JSON.stringify({
                 student: created.id,
                 monthly_fee: Number(form.monthly_fee || 0),
-                admission_fee: Number(form.admission_fee || 0),
+                admission_fee: Number(form.admission_fee !== undefined ? form.admission_fee : 0),
                 annual_fee: form.annual_fee ? Number(form.annual_fee) : 0,
                 extra_charges: form.extra_charges ? Number(form.extra_charges) : 0,
                 extra_charges_reason: form.extra_charges_reason || '',
@@ -642,7 +672,7 @@ function App() {
                   .filter(c => c.name.trim() && Number(c.amount) > 0)
                   .map(c => ({ name: c.name.trim(), amount: Number(c.amount) })),
                 due_date: dueDateMode === 'custom' && customDueDate ? customDueDate : undefined,
-                school_class: form.assign_class ? Number(form.assign_class) : undefined,
+                school_class: Number(form.school_class),
                 reference: `CHALLAN-${created.admission_number || created.id}`
               })
             });
@@ -653,7 +683,7 @@ function App() {
       }
       setModal(false);
       setForm({});
-      notify(page === 'Students' ? 'Student created & billing challan generated (Awaiting payment & approval)' : 'Record created successfully');
+      notify(page === 'Students' ? 'Student registered & fee record created successfully' : 'Record created successfully');
       await load();
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not save record');
@@ -667,7 +697,13 @@ function App() {
     setEditingRecord(r);
     const initial: Record<string, string> = {};
     for (const f of config.fields) {
-      const val = r[f.key];
+      let val = r[f.key];
+      if (f.key === 'school_class' && !val && (r as any).school_class_id) {
+        val = (r as any).school_class_id;
+      }
+      if (f.key === 'dob' && !val && (r as any).date_of_birth) {
+        val = (r as any).date_of_birth;
+      }
       initial[f.key] = val !== undefined && val !== null ? String(val) : '';
     }
     setEditForm(initial);
@@ -802,7 +838,7 @@ function App() {
 
         {/* Dynamic Campus Selector */}
         <div className="workspace-pill-wrap" ref={campusDropdownRef}>
-          {user.role === 'principal' ? (
+          {isSingleCampusRole ? (
             <div className="workspace-pill" style={{ cursor: 'default' }} title="Your assigned campus">
               <span className="workspace-icon"><Building2 size={19} /></span>
               <span className="workspace-name">
@@ -825,7 +861,7 @@ function App() {
             </button>
           )}
 
-          {user.role !== 'principal' && campusDropdownOpen && (
+          {!isSingleCampusRole && campusDropdownOpen && (
             <div className="campus-dropdown-menu">
               <div className="campus-dropdown-title">Branch & Campus Selector</div>
               <button
@@ -1494,7 +1530,20 @@ function App() {
           {page === 'Staff Salaries' && <Salaries user={user} notify={notify} />}
           {page === 'Examinations' && (
             <ErrorBoundary fallbackTitle="Examination & Academic Performance">
-              <Examinations user={user} notify={notify} />
+              <Examinations
+                user={user}
+                notify={notify}
+                activeCampusId={activeCampusId}
+                onSelectCampus={(newId) => {
+                  setActiveCampusId(newId);
+                  if (newId) {
+                    localStorage.setItem('optimus_active_campus_id', String(newId));
+                  } else {
+                    localStorage.removeItem('optimus_active_campus_id');
+                  }
+                }}
+                campuses={campuses}
+              />
             </ErrorBoundary>
           )}
           {page === 'Timetable' && <Timetable user={user} notify={notify} />}
@@ -1530,316 +1579,450 @@ function App() {
             </div>
             <form onSubmit={handleCreate}>
               <div className="modal-fields">
-                {config.fields.map(f => {
-                  if (f.key === 'school') return (
-                    <label key={f.key}>
-                      {f.label}{f.required && <span className="required"> *</span>}
-                      <select
-                        required={f.required}
-                        value={form.school || String(activeCampusId || refData.schools[0]?.id || '')}
-                        onChange={e => setForm(s => ({ ...s, school: e.target.value }))}
-                      >
-                        <option value="">Select campus…</option>
-                        {refData.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    </label>
-                  );
-                  if (f.key === 'academic_year') {
-                    const currentCampus = form.school || String(activeCampusId || '');
-                    const yrs = currentCampus ? refData.years.filter(y => !y.school || String(y.school) === currentCampus) : refData.years;
-                    return (
-                      <label key={f.key}>
-                        {f.label}{f.required && <span className="required"> *</span>}
-                        <select required={f.required} value={form.academic_year || ''} onChange={e => setForm(s => ({ ...s, academic_year: e.target.value }))}>
-                          <option value="">Select academic year…</option>
-                          {yrs.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
+                {page === 'Students' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16, gridColumn: '1 / -1' }}>
+                    {/* 1. Campus Selection */}
+                    {!isSingleCampusRole ? (
+                      <label>
+                        Campus <span className="required">*</span>
+                        <select
+                          required
+                          value={form.school || ''}
+                          onChange={e => {
+                            const sc = e.target.value;
+                            setForm(s => ({ ...s, school: sc, school_class: '' }));
+                          }}
+                        >
+                          <option value="">Select campus…</option>
+                          {refData.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                       </label>
-                    );
-                  }
-                  if (f.key === 'teacher') {
-                    const currentCampus = form.school || String(activeCampusId || '');
-                    const tchs = currentCampus ? refData.teachers.filter(t => !t.school_id || String(t.school_id) === currentCampus) : refData.teachers;
-                    return (
-                      <label key={f.key}>
-                        {f.label}{f.required && <span className="required"> *</span>}
-                        <select value={form.teacher || ''} onChange={e => setForm(s => ({ ...s, teacher: e.target.value }))}>
-                          <option value="">Unassigned (optional)</option>
-                          {tchs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                      </label>
-                    );
-                  }
-                  if (f.key === 'school_class') {
-                    const currentCampus = form.school || String(activeCampusId || '');
-                    const cls = currentCampus ? refData.classes.filter(c => !c.school || String(c.school) === currentCampus) : refData.classes;
-                    return (
-                      <label key={f.key}>
-                        {f.label}{f.required && <span className="required"> *</span>}
-                        <select required={f.required} value={form.school_class || ''} onChange={e => setForm(s => ({ ...s, school_class: e.target.value }))}>
-                          <option value="">Select class…</option>
-                          {cls.map(c => <option key={c.id} value={c.id}>{(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}</option>)}
-                        </select>
-                      </label>
-                    );
-                  }
-                  if (f.key === 'subject') {
-                    const currentCampus = form.school || String(activeCampusId || '');
-                    const subs = currentCampus ? refData.subjects.filter(s => !s.school || String(s.school) === currentCampus) : refData.subjects;
-                    return (
-                      <label key={f.key}>
-                        {f.label}{f.required && <span className="required"> *</span>}
-                        <select required={f.required} value={form.subject || ''} onChange={e => setForm(s => ({ ...s, subject: e.target.value }))}>
-                          <option value="">Select subject…</option>
-                          {subs.map(sub => <option key={sub.id} value={sub.id}>{sub.name} {sub.code ? `(${sub.code})` : ''}</option>)}
-                        </select>
-                      </label>
-                    );
-                  }
-                  if (f.key === 'gender') return (
-                    <label key={f.key}>
-                      {f.label}<span className="required"> *</span>
-                      <select required value={form.gender || ''} onChange={e => setForm(s => ({ ...s, gender: e.target.value }))}>
-                        <option value="">Select gender *</option>
-                        <option value="male">Boy (Male)</option>
-                        <option value="female">Girl (Female)</option>
-                      </select>
-                    </label>
-                  );
-                  if (f.key === 'status' && page === 'Attendance') return (
-                    <label key={f.key}>
-                      {f.label}{f.required && <span className="required"> *</span>}
-                      <select required={f.required} value={form.status || 'present'} onChange={e => setForm(s => ({ ...s, status: e.target.value }))}>
-                        <option value="present">Present</option>
-                        <option value="absent">Absent</option>
-                        <option value="late">Late</option>
-                        <option value="excused">Excused</option>
-                      </select>
-                    </label>
-                  );
-                  if (f.key === 'priority' && page === 'Interventions') return (
-                    <label key={f.key}>
-                      {f.label}{f.required && <span className="required"> *</span>}
-                      <select value={form.priority || 'medium'} onChange={e => setForm(s => ({ ...s, priority: e.target.value }))}>
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    </label>
-                  );
-                  if (f.key === 'status' && page === 'Interventions') return (
-                    <label key={f.key}>
-                      {f.label}{f.required && <span className="required"> *</span>}
-                      <select value={form.status || 'open'} onChange={e => setForm(s => ({ ...s, status: e.target.value }))}>
-                        <option value="open">Open</option>
-                        <option value="in_progress">In progress</option>
-                        <option value="monitoring">Monitoring</option>
-                        <option value="resolved">Resolved</option>
-                      </select>
-                    </label>
-                  );
-                  return (
-                    <label key={f.key}>
-                      {f.label}{f.required && <span className="required"> *</span>}
-                      <input required={f.required} type={f.type || 'text'} value={form[f.key] || ''} onChange={e => setForm(s => ({ ...s, [f.key]: e.target.value }))} placeholder={f.label} />
-                    </label>
-                  );
-                })}
+                    ) : (
+                      <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e2e8f0' }}>
+                        <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                        <span>Assigned Campus: <strong>{activeCampus ? activeCampus.name : (campuses[0]?.name || 'Assigned Campus')}</strong></span>
+                      </div>
+                    )}
 
-                {page === 'Students' && (
-                  <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #edf0f8', paddingTop: 14, marginTop: 4 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                        Student Fees & Billing Challan (Registration)
-                      </div>
-                      <div style={{ fontSize: 10, color: '#8892a5', fontWeight: 600 }}>
-                        Monthly & Admission fees are mandatory · Annual is optional
-                      </div>
+                    {/* 2. Class Selection (MANDATORY & AT TOP) */}
+                    <label>
+                      Class <span className="required">*</span>
+                      <select
+                        required
+                        disabled={!form.school && !isSingleCampusRole}
+                        value={form.school_class || ''}
+                        onChange={e => setForm(s => ({ ...s, school_class: e.target.value }))}
+                      >
+                        <option value="">{form.school || isSingleCampusRole ? 'Select class…' : 'Select campus first'}</option>
+                        {refData.classes
+                          .filter(c => !form.school || !c.school || String(c.school) === form.school)
+                          .map(c => (
+                            <option key={c.id} value={c.id}>
+                              {(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+
+                    {/* 3. Student Personal Details */}
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                      Student Details
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                      <label>
+                        First Name <span className="required">*</span>
+                        <input
+                          required
+                          type="text"
+                          placeholder="First name"
+                          value={form.first_name || ''}
+                          onChange={e => setForm(s => ({ ...s, first_name: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Last Name <span className="required">*</span>
+                        <input
+                          required
+                          type="text"
+                          placeholder="Last name"
+                          value={form.last_name || ''}
+                          onChange={e => setForm(s => ({ ...s, last_name: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Admission Number <span className="required">*</span>
+                        <input
+                          required
+                          type="text"
+                          placeholder="e.g. ADM-2026-001"
+                          value={form.admission_number || ''}
+                          onChange={e => setForm(s => ({ ...s, admission_number: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Gender <span className="required">*</span>
+                        <select
+                          required
+                          value={form.gender || ''}
+                          onChange={e => setForm(s => ({ ...s, gender: e.target.value }))}
+                        >
+                          <option value="">Select gender *</option>
+                          <option value="male">Boy (Male)</option>
+                          <option value="female">Girl (Female)</option>
+                        </select>
+                      </label>
+                      <label>
+                        Father Name <span className="required">*</span>
+                        <input
+                          required
+                          type="text"
+                          placeholder="Father name"
+                          value={form.father_name || ''}
+                          onChange={e => setForm(s => ({ ...s, father_name: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Mother Name
+                        <input
+                          type="text"
+                          placeholder="Mother name (optional)"
+                          value={form.mother_name || ''}
+                          onChange={e => setForm(s => ({ ...s, mother_name: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Date of Birth
+                        <input
+                          type="date"
+                          value={form.dob || ''}
+                          onChange={e => setForm(s => ({ ...s, dob: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Enrolment Date <span className="required">*</span>
+                        <input
+                          required
+                          type="date"
+                          value={form.enrolled_on || ''}
+                          onChange={e => setForm(s => ({ ...s, enrolled_on: e.target.value }))}
+                        />
+                      </label>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {/* 4. Guardian Details */}
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                      Guardian Contact
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                       <label>
-                        Monthly Tuition Fee (Rs) <span className="required">*</span>
+                        Guardian Phone
                         <input
-                          type="number"
-                          step="0.01"
-                          min="1"
-                          required
-                          placeholder="e.g. 5000 (Mandatory)"
-                          value={form.monthly_fee || ''}
-                          onChange={e => setForm(s => ({ ...s, monthly_fee: e.target.value }))}
+                          type="tel"
+                          placeholder="e.g. +92 300 1234567"
+                          value={form.guardian_phone || ''}
+                          onChange={e => setForm(s => ({ ...s, guardian_phone: e.target.value }))}
                         />
                       </label>
+                    </div>
 
-                      <label>
-                        New Admission Fee (Rs) <span className="required">*</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="1"
-                          required
-                          placeholder="e.g. 10000 (Mandatory)"
-                          value={form.admission_fee || ''}
-                          onChange={e => setForm(s => ({ ...s, admission_fee: e.target.value }))}
-                        />
-                      </label>
-
-                      <label>
-                        Annual Fee (Rs) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="e.g. 2500 (Optional)"
-                          value={form.annual_fee || ''}
-                          onChange={e => setForm(s => ({ ...s, annual_fee: e.target.value }))}
-                        />
-                      </label>
-
-                      <label>
-                        Assign Class (Optional)
-                        <select
-                          value={form.assign_class || ''}
-                          onChange={e => setForm(s => ({ ...s, assign_class: e.target.value }))}
-                        >
-                          <option value="">Select class…</option>
-                          {(form.school ? refData.classes.filter(c => String(c.school) === form.school) : refData.classes).map(c => (
-                            <option key={c.id} value={c.id}>{(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
-                          Extra Charges & Miscellaneous (Optional)
+                    {/* 5. Fees Section */}
+                    <div style={{ borderTop: '1px solid #edf0f8', paddingTop: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                          Student Fees & Billing Challan (Registration)
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 10 }}>
-                          <label style={{ margin: 0 }}>
-                            Extra Amount (Rs)
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="e.g. 1500"
-                              value={form.extra_charges || ''}
-                              onChange={e => setForm(s => ({ ...s, extra_charges: e.target.value }))}
-                            />
-                          </label>
-                          <label style={{ margin: 0 }}>
-                            Reason for Extra Charges {Number(form.extra_charges) > 0 && <span className="required">*</span>}
-                            <input
-                              type="text"
-                              placeholder="e.g. Uniform, Lab Security, Registration Books…"
-                              value={form.extra_charges_reason || ''}
-                              onChange={e => setForm(s => ({ ...s, extra_charges_reason: e.target.value }))}
-                              required={Number(form.extra_charges) > 0}
-                            />
-                          </label>
+                        <div style={{ fontSize: 10, color: '#8892a5', fontWeight: 600 }}>
+                          Monthly fee is required (&gt; 0) · Admission fee accepts 0 (for free admission)
                         </div>
                       </div>
 
-                      {/* Due Date Options */}
-                      <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
-                          Fee Due Date Option
-                        </div>
-                        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: dueDateMode === 'custom' ? 10 : 0 }}>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-                            <input
-                              type="radio"
-                              name="due_date_mode"
-                              value="standard"
-                              checked={dueDateMode === 'standard'}
-                              onChange={() => setDueDateMode('standard')}
-                            />
-                            Standard / Same date for all (Default 10 days)
-                          </label>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-                            <input
-                              type="radio"
-                              name="due_date_mode"
-                              value="custom"
-                              checked={dueDateMode === 'custom'}
-                              onChange={() => setDueDateMode('custom')}
-                            />
-                            Custom due date for this student
-                          </label>
-                        </div>
-                        {dueDateMode === 'custom' && (
-                          <div style={{ marginTop: 8 }}>
-                            <label style={{ margin: 0, maxWidth: 220 }}>
-                              Custom Due Date <span className="required">*</span>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <label>
+                          Monthly Tuition Fee (Rs) <span className="required">*</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="1"
+                            required
+                            placeholder="e.g. 5000 (Mandatory > 0)"
+                            value={form.monthly_fee || ''}
+                            onChange={e => setForm(s => ({ ...s, monthly_fee: e.target.value }))}
+                          />
+                        </label>
+
+                        <label>
+                          New Admission Fee (Rs) <span className="required">*</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            required
+                            placeholder="e.g. 5000 (0 if free / waived)"
+                            value={form.admission_fee !== undefined ? form.admission_fee : ''}
+                            onChange={e => setForm(s => ({ ...s, admission_fee: e.target.value }))}
+                          />
+                        </label>
+
+                        <label>
+                          Annual Fee (Rs) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="e.g. 2500 (Optional)"
+                            value={form.annual_fee || ''}
+                            onChange={e => setForm(s => ({ ...s, annual_fee: e.target.value }))}
+                          />
+                        </label>
+
+                        <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                            Extra Charges & Miscellaneous (Optional)
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 10 }}>
+                            <label style={{ margin: 0 }}>
+                              Extra Amount (Rs)
                               <input
-                                type="date"
-                                required={dueDateMode === 'custom'}
-                                value={customDueDate}
-                                onChange={e => setCustomDueDate(e.target.value)}
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="e.g. 1500"
+                                value={form.extra_charges || ''}
+                                onChange={e => setForm(s => ({ ...s, extra_charges: e.target.value }))}
+                              />
+                            </label>
+                            <label style={{ margin: 0 }}>
+                              Reason for Extra Charges {Number(form.extra_charges) > 0 && <span className="required">*</span>}
+                              <input
+                                type="text"
+                                placeholder="e.g. Uniform, Lab Security, Registration Books…"
+                                value={form.extra_charges_reason || ''}
+                                onChange={e => setForm(s => ({ ...s, extra_charges_reason: e.target.value }))}
+                                required={Number(form.extra_charges) > 0}
                               />
                             </label>
                           </div>
-                        )}
-                      </div>
-
-                      {/* Dynamic Custom Charges ("To make a new category of Charges") */}
-                      <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
-                            New Categories of Charges
-                          </div>
-                          <button
-                            type="button"
-                            className="outline-btn"
-                            style={{ fontSize: 12, padding: '4px 10px', height: 'auto', gap: 4 }}
-                            onClick={() => setDynamicCharges(prev => [...prev, { id: Math.random().toString(36).slice(2), name: '', amount: '' }])}
-                          >
-                            <Plus size={13} /> To make a new category of Charges
-                          </button>
                         </div>
 
-                        {dynamicCharges.length > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {dynamicCharges.map((dc, idx) => (
-                              <div key={dc.id} className="custom-charge-row">
-                                <input
-                                  type="text"
-                                  placeholder="Charges Name (e.g. Science Lab, Sports Kit, ID Card)"
-                                  value={dc.name}
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    setDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, name: val } : item));
-                                  }}
-                                />
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="Amount (Rs)"
-                                  value={dc.amount}
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    setDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, amount: val } : item));
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className="icon-btn"
-                                  style={{ color: '#ef4444', padding: 6 }}
-                                  title="Remove charge"
-                                  onClick={() => setDynamicCharges(prev => prev.filter((_, i) => i !== idx))}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            ))}
+                        {/* Due Date Options */}
+                        <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                            Fee Due Date Option
                           </div>
-                        )}
-                      </div>
+                          <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: dueDateMode === 'custom' ? 10 : 0 }}>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                              <input
+                                type="radio"
+                                name="due_date_mode"
+                                value="standard"
+                                checked={dueDateMode === 'standard'}
+                                onChange={() => setDueDateMode('standard')}
+                              />
+                              Standard / Same date for all (Default 10 days)
+                            </label>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                              <input
+                                type="radio"
+                                name="due_date_mode"
+                                value="custom"
+                                checked={dueDateMode === 'custom'}
+                                onChange={() => setDueDateMode('custom')}
+                              />
+                              Custom due date for this student
+                            </label>
+                          </div>
+                          {dueDateMode === 'custom' && (
+                            <div style={{ marginTop: 8 }}>
+                              <label style={{ margin: 0, maxWidth: 220 }}>
+                                Custom Due Date <span className="required">*</span>
+                                <input
+                                  type="date"
+                                  required={dueDateMode === 'custom'}
+                                  value={customDueDate}
+                                  onChange={e => setCustomDueDate(e.target.value)}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
 
-                      <div style={{ gridColumn: '1 / -1', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 14px', borderRadius: 8, fontSize: 11, lineHeight: 1.5 }}>
-                        <strong>Challan Workflow:</strong> Saving this student will generate an unpaid student fee challan. The amount will <em>not</em> appear in Income until the student/parent submits payment and the School Admin verifies and approves it.
+                        {/* Dynamic Custom Charges */}
+                        <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                              New Categories of Charges
+                            </div>
+                            <button
+                              type="button"
+                              className="outline-btn"
+                              style={{ fontSize: 12, padding: '4px 10px', height: 'auto', gap: 4 }}
+                              onClick={() => setDynamicCharges(prev => [...prev, { id: Math.random().toString(36).slice(2), name: '', amount: '' }])}
+                            >
+                              <Plus size={13} /> To make a new category of Charges
+                            </button>
+                          </div>
+
+                          {dynamicCharges.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {dynamicCharges.map((dc, idx) => (
+                                <div key={dc.id} className="custom-charge-row">
+                                  <input
+                                    type="text"
+                                    placeholder="Charges Name (e.g. Science Lab, Sports Kit, ID Card)"
+                                    value={dc.name}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, name: val } : item));
+                                    }}
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="Amount (Rs)"
+                                    value={dc.amount}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, amount: val } : item));
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    style={{ color: '#ef4444', padding: 6 }}
+                                    title="Remove charge"
+                                    onClick={() => setDynamicCharges(prev => prev.filter((_, i) => i !== idx))}
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ gridColumn: '1 / -1', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 14px', borderRadius: 8, fontSize: 11, lineHeight: 1.5 }}>
+                          <strong>Challan Workflow:</strong> Saving this student registers them in the chosen class and generates their fee voucher. When admission fee is Rs 0, a waived voucher (Rs 0.00) is recorded without marking them as a defaulter.
+                        </div>
                       </div>
                     </div>
                   </div>
+                ) : (
+                  config.fields.map(f => {
+                    if (f.key === 'school') return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select
+                          required={f.required}
+                          value={form.school || String(activeCampusId || refData.schools[0]?.id || '')}
+                          onChange={e => setForm(s => ({ ...s, school: e.target.value }))}
+                        >
+                          <option value="">Select campus…</option>
+                          {refData.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </label>
+                    );
+                    if (f.key === 'academic_year') {
+                      const currentCampus = form.school || String(activeCampusId || '');
+                      const yrs = currentCampus ? refData.years.filter(y => !y.school || String(y.school) === currentCampus) : refData.years;
+                      return (
+                        <label key={f.key}>
+                          {f.label}{f.required && <span className="required"> *</span>}
+                          <select required={f.required} value={form.academic_year || ''} onChange={e => setForm(s => ({ ...s, academic_year: e.target.value }))}>
+                            <option value="">Select academic year…</option>
+                            {yrs.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
+                          </select>
+                        </label>
+                      );
+                    }
+                    if (f.key === 'teacher') {
+                      const currentCampus = form.school || String(activeCampusId || '');
+                      const tchs = currentCampus ? refData.teachers.filter(t => !t.school_id || String(t.school_id) === currentCampus) : refData.teachers;
+                      return (
+                        <label key={f.key}>
+                          {f.label}{f.required && <span className="required"> *</span>}
+                          <select value={form.teacher || ''} onChange={e => setForm(s => ({ ...s, teacher: e.target.value }))}>
+                            <option value="">Unassigned (optional)</option>
+                            {tchs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                        </label>
+                      );
+                    }
+                    if (f.key === 'school_class') {
+                      const currentCampus = form.school || String(activeCampusId || '');
+                      const cls = currentCampus ? refData.classes.filter(c => !c.school || String(c.school) === currentCampus) : refData.classes;
+                      return (
+                        <label key={f.key}>
+                          {f.label}{f.required && <span className="required"> *</span>}
+                          <select required={f.required} value={form.school_class || ''} onChange={e => setForm(s => ({ ...s, school_class: e.target.value }))}>
+                            <option value="">Select class…</option>
+                            {cls.map(c => <option key={c.id} value={c.id}>{(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}</option>)}
+                          </select>
+                        </label>
+                      );
+                    }
+                    if (f.key === 'subject') {
+                      const currentCampus = form.school || String(activeCampusId || '');
+                      const subs = currentCampus ? refData.subjects.filter(s => !s.school || String(s.school) === currentCampus) : refData.subjects;
+                      return (
+                        <label key={f.key}>
+                          {f.label}{f.required && <span className="required"> *</span>}
+                          <select required={f.required} value={form.subject || ''} onChange={e => setForm(s => ({ ...s, subject: e.target.value }))}>
+                            <option value="">Select subject…</option>
+                            {subs.map(sub => <option key={sub.id} value={sub.id}>{sub.name} {sub.code ? `(${sub.code})` : ''}</option>)}
+                          </select>
+                        </label>
+                      );
+                    }
+                    if (f.key === 'gender') return (
+                      <label key={f.key}>
+                        {f.label}<span className="required"> *</span>
+                        <select required value={form.gender || ''} onChange={e => setForm(s => ({ ...s, gender: e.target.value }))}>
+                          <option value="">Select gender *</option>
+                          <option value="male">Boy (Male)</option>
+                          <option value="female">Girl (Female)</option>
+                        </select>
+                      </label>
+                    );
+                    if (f.key === 'status' && page === 'Attendance') return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select required={f.required} value={form.status || 'present'} onChange={e => setForm(s => ({ ...s, status: e.target.value }))}>
+                          <option value="present">Present</option>
+                          <option value="absent">Absent</option>
+                          <option value="late">Late</option>
+                          <option value="excused">Excused</option>
+                        </select>
+                      </label>
+                    );
+                    if (f.key === 'priority' && page === 'Interventions') return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select value={form.priority || 'medium'} onChange={e => setForm(s => ({ ...s, priority: e.target.value }))}>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </label>
+                    );
+                    if (f.key === 'status' && page === 'Interventions') return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select value={form.status || 'open'} onChange={e => setForm(s => ({ ...s, status: e.target.value }))}>
+                          <option value="open">Open</option>
+                          <option value="in_progress">In progress</option>
+                          <option value="monitoring">Monitoring</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
+                      </label>
+                    );
+                    return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <input required={f.required} type={f.type || 'text'} value={form[f.key] || ''} onChange={e => setForm(s => ({ ...s, [f.key]: e.target.value }))} placeholder={f.label} />
+                      </label>
+                    );
+                  })
                 )}
               </div>
               <div className="modal-footer">

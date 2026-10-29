@@ -22,6 +22,7 @@ from core.models import (
 )
 from core.services.access import schools_scope, students_scope
 from core.services.audit import record_event
+from core.services.campus_filter import resolve_campus, apply_campus, get_campus_for_write
 from core.services.filters import sort_comparison_rows, apply_query_filters
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
@@ -45,19 +46,31 @@ def _require_manager(user):
 def _school(user, value):
     if not value and user.role != 'organisation_admin' and not user.is_superuser:
         value = user.school_id
-    school = schools_scope(user).filter(pk=value or 0).first()
+    if not value:
+        raise ValidationError({'school': 'Campus is required.'})
+    try:
+        sid = int(str(value).strip())
+    except (ValueError, TypeError):
+        raise NotFound('Invalid campus ID.')
+    school = schools_scope(user).filter(pk=sid).first()
     if not school:
-        raise NotFound('Campus not found.')
+        raise NotFound('Campus not found or outside authorized scope.')
     return school
 
 
-def _money(value, field='amount'):
+def _money(value, field='amount', allow_zero=True):
+    if value is None or str(value).strip() == '':
+        raise ValidationError({field: 'This field is required.'})
     try:
         d = Decimal(str(value)).quantize(Decimal('0.01'))
     except (InvalidOperation, ValueError):
         raise ValidationError({field: 'Enter a valid decimal amount.'})
-    if d < 0 or d >= Decimal('10000000000'):
-        raise ValidationError({field: 'Amount must be positive and within reasonable limits.'})
+    if d < Decimal('0.00'):
+        raise ValidationError({field: 'Fee cannot be negative.'})
+    if not allow_zero and d <= Decimal('0.00'):
+        raise ValidationError({field: 'Amount must be greater than zero.'})
+    if d >= Decimal('10000000000'):
+        raise ValidationError({field: 'Amount is beyond permitted limit.'})
     return d
 
 
@@ -81,9 +94,8 @@ def heads(request):
     user = request.user
     _require_manager(user)
     if request.method == 'GET':
-        qs = FeeHead.objects.filter(school__in=schools_scope(user)).select_related('school', 'category')
-        if request.query_params.get('school'):
-            qs = qs.filter(school_id=request.query_params['school'])
+        school_ids = resolve_campus(request)
+        qs = FeeHead.objects.filter(school_id__in=school_ids).select_related('school', 'category')
         rows = [{
             'id': h.id, 'school': h.school_id, 'school_name': h.school.name,
             'name': h.name, 'category': h.category_id, 'category_name': h.category.name,
@@ -136,9 +148,8 @@ def structures(request):
     user = request.user
     _require_manager(user)
     if request.method == 'GET':
-        qs = FeeStructure.objects.filter(school__in=schools_scope(user)).select_related('school', 'academic_year', 'school_class', 'head')
-        if request.query_params.get('school'):
-            qs = qs.filter(school_id=request.query_params['school'])
+        school_ids = resolve_campus(request)
+        qs = FeeStructure.objects.filter(school_id__in=school_ids).select_related('school', 'academic_year', 'school_class', 'head')
         if request.query_params.get('class'):
             qs = qs.filter(Q(school_class_id=request.query_params['class']) | Q(school_class__isnull=True))
         rows = [{
@@ -239,8 +250,9 @@ def concessions(request):
     user = request.user
     _require_manager(user)
 
+    school_ids = resolve_campus(request)
     if request.method == 'GET':
-        qs = Concession.objects.filter(student__school__in=schools_scope(user)).select_related('student', 'head', 'approved_by')
+        qs = Concession.objects.filter(student__school_id__in=school_ids).select_related('student', 'head', 'approved_by')
         if request.query_params.get('student'):
             qs = qs.filter(student_id=request.query_params['student'])
         results = [{
@@ -375,9 +387,10 @@ def student_voucher_create(request):
 
     data = request.data
     student_id = data.get('student')
-    student = Student.objects.filter(pk=student_id, school__in=schools_scope(user)).select_related('school').first()
+    school_ids = resolve_campus(request)
+    student = Student.objects.filter(pk=student_id, school_id__in=school_ids).select_related('school').first()
     if not student:
-        raise ValidationError({'student': 'Valid student within your campus scope required.'})
+        raise NotFound('Student not found or outside authorized scope.')
 
     today = date.today()
     due_str = data.get('due_date')
@@ -395,10 +408,10 @@ def student_voucher_create(request):
         if monthly_val is None or str(monthly_val).strip() == '':
             raise ValidationError({'monthly_fee': 'Monthly tuition fee is mandatory.'})
         if admission_val is None or str(admission_val).strip() == '':
-            raise ValidationError({'admission_fee': 'New admission fee is mandatory.'})
+            raise ValidationError({'admission_fee': 'Enter the admission fee (0 if there is none)'})
 
-        monthly_fee = _money(monthly_val, 'monthly_fee')
-        admission_fee = _money(admission_val, 'admission_fee')
+        monthly_fee = _money(monthly_val, 'monthly_fee', allow_zero=False)
+        admission_fee = _money(admission_val, 'admission_fee', allow_zero=True)
         annual_fee = _money(data.get('annual_fee', 0), 'annual_fee') if data.get('annual_fee') else Decimal('0.00')
         extra_charges = _money(data.get('extra_charges', 0), 'extra_charges') if data.get('extra_charges') else Decimal('0.00')
         extra_reason = (data.get('extra_charges_reason') or '').strip()[:100]
@@ -422,14 +435,17 @@ def student_voucher_create(request):
                     defaults={'amount': monthly_fee, 'frequency': 'monthly', 'due_day': 10}
                 )
 
-            # 2. New Admission Fee (Mandatory)
+            # 2. New Admission Fee (Mandatory or 0 Waived)
             head_a = _resolve_fee_head(student.school, "Admission Fee", "Admission fees")
+            is_waived = (admission_fee == Decimal('0.00'))
             v_a, _ = StudentFee.objects.get_or_create(
                 student=student, head=head_a, period=f"{today.year}-Admission",
-                defaults={'amount_due': admission_fee, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
+                defaults={'amount_due': admission_fee, 'discount': Decimal('0.00'), 'status': 'waived' if is_waived else 'unpaid', 'due_date': due_date}
             )
             v_a.amount_due = admission_fee
-            v_a.save(update_fields=['amount_due'])
+            if is_waived:
+                v_a.status = 'waived'
+            v_a.save(update_fields=['amount_due', 'status'])
             created_vouchers.append(v_a)
 
             # 3. Annual Fee (Optional)
@@ -976,13 +992,10 @@ def defaulters(request):
 
     cutoff_date = today - timedelta(days=grace_days)
 
-    schools = schools_scope(user)
-    school_id = request.query_params.get('school') or request.query_params.get('campus')
-    if school_id and str(school_id).lower() not in ('all', '', 'overall', 'none'):
-        schools = schools.filter(pk=school_id)
+    school_ids = resolve_campus(request)
 
     qs = StudentFee.objects.filter(
-        student__school__in=schools,
+        student__school_id__in=school_ids,
         status__in=['unpaid', 'partial'],
         due_date__lt=cutoff_date
     ).exclude(status__in=['waived', 'void']).select_related('student', 'student__school', 'head')

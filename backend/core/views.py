@@ -265,10 +265,17 @@ class ClassSerializer(DynamicSerializer):
  academic_year_name=serializers.CharField(source='academic_year.name',read_only=True)
  teacher_name=serializers.SerializerMethodField()
  display_name=serializers.CharField(read_only=True)
+ full_display_name=serializers.SerializerMethodField()
  def get_teacher_name(self,o):return o.teacher.get_full_name() if o.teacher else 'Unassigned'
+ def get_full_display_name(self,o):
+  base=o.display_name
+  if o.school_id and getattr(o,'school',None):
+   return f"{base} ({o.school.name})"
+  return base
  class Meta:model=SchoolClass;fields='__all__'
 class StudentSerializer(DynamicSerializer):
  full_name=serializers.CharField(read_only=True)
+ school_name=serializers.CharField(source='school.name',read_only=True)
  class_name=serializers.SerializerMethodField()
  school_class_id=serializers.SerializerMethodField()
  section=serializers.SerializerMethodField()
@@ -287,11 +294,14 @@ class StudentSerializer(DynamicSerializer):
    raise serializers.ValidationError({'gender':'Gender is mandatory. Please select Boy or Girl.'})
   return super().validate(attrs)
  def get_class_name(self,o):
-  e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
+  e=o.enrollments.select_related('school_class__school').filter(end_date__isnull=True).first()
   if not e or not e.school_class:
    return 'Unassigned'
   sc = e.school_class
-  return f"{sc.name} – {sc.section}" if sc.section else sc.name
+  base = f"{sc.name} – {sc.section}" if sc.section else sc.name
+  if sc.school:
+   return f"{base} ({sc.school.name})"
+  return base
  def get_school_class_id(self,o):
   e=o.enrollments.filter(end_date__isnull=True).first()
   return e.school_class_id if e else None
@@ -301,7 +311,7 @@ class StudentSerializer(DynamicSerializer):
  class Meta:
   model=Student
   fields=[
-   'id','school','admission_number','first_name','last_name','full_name',
+   'id','school','school_name','admission_number','first_name','last_name','full_name',
    'father_name','mother_name','guardian_phone',
    'date_of_birth','gender','enrolled_on','active','user','guardians',
    'class_name','school_class_id','section'
@@ -557,18 +567,15 @@ class ScopedViewSet(viewsets.ModelViewSet):
   model=self.queryset.model
   ensure_action(self.request.user,model,'read')
   qs=queryset_for(self.request.user,model)
-  school_param=self.request.query_params.get('school') or self.request.query_params.get('campus')
-  if school_param:
-   try:
-    sid=int(school_param)
-    if model is School:qs=qs.filter(pk=sid)
-    elif hasattr(model,'school'):qs=qs.filter(school_id=sid)
-    elif hasattr(model,'school_class'):qs=qs.filter(school_class__school_id=sid)
-    elif model is Enrollment:qs=qs.filter(student__school_id=sid)
-    elif model is Grade:qs=qs.filter(student__school_id=sid)
-    elif model is ReviewCase:qs=qs.filter(school_id=sid)
-    elif model is Intervention:qs=qs.filter(case__school_id=sid)
-   except (ValueError,TypeError):pass
+  from core.services.campus_filter import resolve_campus
+  school_ids=resolve_campus(self.request)
+  if model is School:qs=qs.filter(pk__in=school_ids)
+  elif hasattr(model,'school'):qs=qs.filter(school_id__in=school_ids)
+  elif hasattr(model,'school_class'):qs=qs.filter(school_class__school_id__in=school_ids)
+  elif model is Enrollment:qs=qs.filter(student__school_id__in=school_ids)
+  elif model is Grade:qs=qs.filter(student__school_id__in=school_ids)
+  elif model is ReviewCase:qs=qs.filter(school_id__in=school_ids)
+  elif model is Intervention:qs=qs.filter(case__school_id__in=school_ids)
   return qs
  def get_serializer(self,*args,**kwargs):
   if 'data' in kwargs and hasattr(self.queryset.model,'school'):
@@ -644,16 +651,10 @@ class ScopedViewSet(viewsets.ModelViewSet):
   user=self.request.user;model=self.queryset.model;data=serializer.validated_data
   extras={}
   if hasattr(model, 'school') and 'school' not in data:
-   school_override = self.request.data.get('school') or self.request.query_params.get('school')
-   target_sch = None
-   if school_override:
-    try:target_sch = School.objects.filter(pk=int(school_override)).first()
-    except (ValueError, TypeError):pass
-   if not target_sch:
-    target_sch = user.school or (user.organisation.schools.first() if user.organisation else None)
-   if target_sch:
-    extras['school'] = target_sch
-    data['school'] = target_sch
+   from core.services.campus_filter import get_campus_for_write
+   target_sch = get_campus_for_write(self.request, self.request.data)
+   extras['school'] = target_sch
+   data['school'] = target_sch
   validate_related(user,model,data)
   if model is School:
    if not user.organisation_id:raise PermissionDenied('Organisation membership required')
@@ -774,7 +775,43 @@ class ScopedViewSet(viewsets.ModelViewSet):
 
 class Schools(ScopedViewSet):queryset=School.objects.all();serializer_class=SchoolSerializer
 class Classes(ScopedViewSet):queryset=SchoolClass.objects.all();serializer_class=ClassSerializer
-class Students(ScopedViewSet):queryset=Student.objects.all();serializer_class=StudentSerializer
+class Students(ScopedViewSet):
+ queryset=Student.objects.all();serializer_class=StudentSerializer
+ @transaction.atomic
+ def create(self, request, *args, **kwargs):
+  ensure_action(request.user, Student, 'create')
+  class_id = request.data.get('school_class') or request.data.get('class_id') or request.data.get('class')
+  if not class_id:
+   raise serializers.ValidationError({'school_class': 'Class is required for student admission.'})
+
+  from core.services.campus_filter import get_campus_for_write
+  school = get_campus_for_write(request, request.data)
+
+  try:
+   cid = int(str(class_id).strip())
+  except (ValueError, TypeError):
+   raise serializers.ValidationError({'school_class': 'Invalid class ID.'})
+
+  school_class = SchoolClass.objects.filter(pk=cid, school=school).first()
+  if not school_class:
+   raise serializers.ValidationError({'school_class': 'Selected class does not exist or does not belong to the selected campus.'})
+
+  serializer = self.get_serializer(data=request.data)
+  serializer.is_valid(raise_exception=True)
+  student = serializer.save(school=school)
+
+  enrolled_on = student.enrolled_on or timezone.localdate()
+  Enrollment.objects.create(
+   student=student,
+   school_class=school_class,
+   start_date=enrolled_on
+  )
+
+  record_event(actor=request.user, action='create', obj=student)
+
+  out_serializer = self.get_serializer(student)
+  headers = self.get_success_headers(out_serializer.data)
+  return Response(out_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 class Subjects(ScopedViewSet):queryset=Subject.objects.all();serializer_class=SubjectSerializer
 class Years(ScopedViewSet):queryset=AcademicYear.objects.all();serializer_class=YearSerializer
 class Enrollments(ScopedViewSet):queryset=Enrollment.objects.all();serializer_class=EnrollmentSerializer

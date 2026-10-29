@@ -17,6 +17,7 @@ from core.models import (
 )
 from core.services.access import schools_scope
 from core.services.audit import record_event
+from core.services.campus_filter import resolve_campus, apply_campus, get_campus_for_write
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
 
@@ -75,9 +76,8 @@ def exam_sessions(request):
     _require_manager(user)
 
     if request.method == 'GET':
-        qs = ExamSession.objects.filter(school__in=schools_scope(user)).select_related('school', 'academic_year')
-        if request.query_params.get('school'):
-            qs = qs.filter(school_id=request.query_params['school'])
+        school_ids = resolve_campus(request)
+        qs = ExamSession.objects.filter(school_id__in=school_ids).select_related('school', 'academic_year')
         if request.query_params.get('status'):
             qs = qs.filter(status=request.query_params['status'])
 
@@ -98,10 +98,7 @@ def exam_sessions(request):
         return Response({'results': results})
 
     # POST: create new session
-    school_id = request.data.get('school') or (user.school_id if user.role != 'organisation_admin' and not user.is_superuser else None)
-    school = schools_scope(user).filter(pk=school_id or 0).first()
-    if not school:
-        raise ValidationError({'school': 'Select a valid school campus.'})
+    school = get_campus_for_write(request, request.data)
 
     name = (request.data.get('name') or '').strip()[:100]
     if not name:
@@ -153,9 +150,10 @@ def exam_session_detail(request, pk):
     user = request.user
     _require_manager(user)
 
-    session = ExamSession.objects.filter(pk=pk, school__in=schools_scope(user)).select_related('school', 'academic_year').first()
+    school_ids = resolve_campus(request)
+    session = ExamSession.objects.filter(pk=pk, school_id__in=school_ids).select_related('school', 'academic_year').first()
     if not session:
-        raise NotFound()
+        raise NotFound('Exam session not found or outside authorized scope.')
 
     if request.method == 'GET':
         return Response({
@@ -196,11 +194,10 @@ def exam_session_detail(request, pk):
 def exam_paper_detail(request, pk):
     user = request.user
     _require_manager(user)
-    paper = ExamPaper.objects.filter(pk=pk).select_related('session__school', 'assessment').first()
+    school_ids = resolve_campus(request)
+    paper = ExamPaper.objects.filter(pk=pk, session__school_id__in=school_ids).select_related('session__school', 'assessment').first()
     if not paper:
-        raise NotFound()
-    if paper.session.school not in schools_scope(user):
-        raise PermissionDenied('Outside your authorised campus scope.')
+        raise NotFound('Exam paper not found or outside authorized scope.')
 
     if request.method == 'DELETE':
         with transaction.atomic():
@@ -239,9 +236,10 @@ def exam_session_publish(request, pk):
     user = request.user
     _require_manager(user)
 
-    session = ExamSession.objects.filter(pk=pk, school__in=schools_scope(user)).first()
+    school_ids = resolve_campus(request)
+    session = ExamSession.objects.filter(pk=pk, school_id__in=school_ids).first()
     if not session:
-        raise NotFound()
+        raise NotFound('Exam session not found or outside authorized scope.')
 
     with transaction.atomic():
         session.status = 'published'
@@ -264,8 +262,10 @@ def exam_papers(request):
     user = request.user
     _require_manager(user)
 
+    school_ids = resolve_campus(request)
+
     if request.method == 'GET':
-        qs = ExamPaper.objects.filter(session__school__in=schools_scope(user)).select_related(
+        qs = ExamPaper.objects.filter(session__school_id__in=school_ids).select_related(
             'session', 'school_class', 'subject', 'invigilator', 'assessment'
         )
         if request.query_params.get('session'):
@@ -426,9 +426,10 @@ def exam_marks_grid(request, paper_id):
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Active account required')
 
-    paper = ExamPaper.objects.filter(pk=paper_id).select_related('session', 'school_class', 'subject', 'assessment').first()
+    school_ids = resolve_campus(request)
+    paper = ExamPaper.objects.filter(pk=paper_id, session__school_id__in=school_ids).select_related('session', 'school_class', 'subject', 'assessment').first()
     if not paper:
-        raise NotFound()
+        raise NotFound('Exam paper not found or outside authorized scope.')
 
     # Permission: teachers can mark their subjects/classes; managers can mark anything in their scope
     is_mgr = user.is_superuser or (user.role in MANAGERS and paper.session.school_id in schools_scope(user).values_list('id', flat=True))
@@ -543,10 +544,11 @@ def exam_corrections(request):
     user = request.user
     _require_manager(user)
 
+    school_ids = resolve_campus(request)
     grade_id = request.data.get('grade')
-    grade = Grade.objects.filter(pk=grade_id).select_related('assessment', 'student', 'assessment__exam_paper').first()
+    grade = Grade.objects.filter(pk=grade_id, assessment__school_class__school_id__in=school_ids).select_related('assessment', 'student', 'assessment__exam_paper').first()
     if not grade:
-        raise NotFound()
+        raise NotFound('Grade record not found or outside authorized scope.')
 
     reason = (request.data.get('reason') or '').strip()[:255]
     if not reason:
@@ -594,10 +596,11 @@ def exam_results_sheet(request):
     if not session_id or not class_id:
         raise ValidationError({'detail': 'session and class query parameters required.'})
 
-    session = ExamSession.objects.filter(pk=session_id).select_related('school').first()
+    school_ids = resolve_campus(request)
+    session = ExamSession.objects.filter(pk=session_id, school_id__in=school_ids).select_related('school').first()
     school_class = SchoolClass.objects.filter(pk=class_id, school=session.school if session else None).first()
     if not session or not school_class:
-        raise NotFound()
+        raise NotFound('Exam session or class not found or outside authorized scope.')
 
     papers = ExamPaper.objects.filter(session=session, school_class=school_class).select_related('subject', 'assessment')
     subjects_header = [{
@@ -689,10 +692,11 @@ def student_report_card(request):
     if not student_id or not session_id:
         raise ValidationError({'detail': 'student and session query parameters required.'})
 
-    student = Student.objects.filter(pk=student_id).select_related('school').first()
-    session = ExamSession.objects.filter(pk=session_id).select_related('school', 'academic_year').first()
+    school_ids = resolve_campus(request)
+    student = Student.objects.filter(pk=student_id, school_id__in=school_ids).select_related('school').first()
+    session = ExamSession.objects.filter(pk=session_id, school_id__in=school_ids).select_related('school', 'academic_year').first()
     if not student or not session:
-        raise NotFound()
+        raise NotFound('Student or exam session not found or outside authorized scope.')
 
     # Permission check: student/parent can only view own; teachers can view student in their school; managers in scope
     if user.role == 'student' and user.id != student.user_id:
@@ -793,8 +797,10 @@ def grading_scales(request):
     user = request.user
     _require_manager(user)
 
+    school_ids = resolve_campus(request)
+
     if request.method == 'GET':
-        qs = GradingScale.objects.filter(school__in=schools_scope(user)).prefetch_related('bands')
+        qs = GradingScale.objects.filter(school_id__in=school_ids).prefetch_related('bands')
         results = [{
             'id': s.id,
             'name': s.name,
@@ -813,10 +819,7 @@ def grading_scales(request):
         return Response({'results': results})
 
     # POST create scale
-    school_id = request.data.get('school') or user.school_id
-    school = schools_scope(user).filter(pk=school_id or 0).first()
-    if not school:
-        raise ValidationError({'school': 'Valid school campus required.'})
+    school = get_campus_for_write(request, request.data)
 
     name = (request.data.get('name') or '').strip()[:80]
     if not name:

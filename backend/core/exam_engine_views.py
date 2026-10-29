@@ -15,6 +15,7 @@ from core.models import (
 )
 from core.services.access import schools_scope, classes_scope
 from core.services.audit import record_event
+from core.services.campus_filter import resolve_campus, apply_campus, get_campus_for_write, is_overall_mode
 from core.services.exam_engine import (
     calculate_subject_result, calculate_student_average,
     calculate_group_average, calculate_gender_performance,
@@ -49,9 +50,8 @@ def engine_configurations(request):
     _require_staff(user)
 
     if request.method == 'GET':
-        qs = ExamConfiguration.objects.filter(school__in=schools_scope(user)).select_related('school', 'academic_year', 'school_class', 'subject')
-        if request.query_params.get('school'):
-            qs = qs.filter(school_id=request.query_params['school'])
+        school_ids = resolve_campus(request)
+        qs = ExamConfiguration.objects.filter(school_id__in=school_ids).select_related('school', 'academic_year', 'school_class', 'subject')
         if request.query_params.get('academic_year'):
             qs = qs.filter(academic_year_id=request.query_params['academic_year'])
         if request.query_params.get('class'):
@@ -95,11 +95,7 @@ def engine_configurations(request):
 
     # POST: create configuration
     _require_manager(user)
-    school_id = request.data.get('school') or getattr(user, 'school_id', None)
-    if school_id:
-        school = schools_scope(user).filter(pk=school_id).first()
-    else:
-        school = schools_scope(user).first()
+    school = get_campus_for_write(request, request.data)
     if not school:
         raise ValidationError({'school': 'Select a valid school campus.'})
 
@@ -195,11 +191,12 @@ def engine_configuration_detail(request, pk):
     user = request.user
     _require_staff(user)
 
-    config = ExamConfiguration.objects.filter(pk=pk, school__in=schools_scope(user)).select_related(
+    school_ids = resolve_campus(request)
+    config = ExamConfiguration.objects.filter(pk=pk, school_id__in=school_ids).select_related(
         'school', 'academic_year', 'school_class', 'subject'
     ).first()
     if not config:
-        raise NotFound('Examination configuration not found.')
+        raise NotFound('Examination configuration not found or outside authorized scope.')
 
     if request.method == 'GET':
         components = []
@@ -336,9 +333,10 @@ def engine_configuration_publish(request, pk):
         if not policy.get('results.approve', True):
             raise PermissionDenied('Principals are not permitted to approve/publish examination results.')
 
-    config = ExamConfiguration.objects.filter(pk=pk, school__in=schools_scope(user)).first()
+    school_ids = resolve_campus(request)
+    config = ExamConfiguration.objects.filter(pk=pk, school_id__in=school_ids).first()
     if not config:
-        raise NotFound('Configuration not found.')
+        raise NotFound('Configuration not found or outside authorized scope.')
 
     # Validate strictly before publication (Spec §3)
     try:
@@ -393,9 +391,10 @@ def engine_configuration_recalculate(request, pk):
     user = request.user
     _require_manager(user)
 
-    config = ExamConfiguration.objects.filter(pk=pk, school__in=schools_scope(user)).first()
+    school_ids = resolve_campus(request)
+    config = ExamConfiguration.objects.filter(pk=pk, school_id__in=school_ids).first()
     if not config:
-        raise NotFound('Configuration not found.')
+        raise NotFound('Configuration not found or outside authorized scope.')
 
     summary = recalculate_configuration(config.id)
     return Response({'id': config.id, 'summary': summary})
@@ -408,9 +407,10 @@ def engine_marks_grid(request, config_id):
     user = request.user
     _require_staff(user)
 
-    config = ExamConfiguration.objects.filter(pk=config_id, school__in=schools_scope(user)).select_related('school', 'academic_year').first()
+    school_ids = resolve_campus(request)
+    config = ExamConfiguration.objects.filter(pk=config_id, school_id__in=school_ids).select_related('school', 'academic_year').first()
     if not config:
-        raise NotFound('Configuration not found.')
+        raise NotFound('Configuration not found or outside authorized scope.')
 
     class_id = request.query_params.get('class') or request.data.get('class')
     subject_id = request.query_params.get('subject') or request.data.get('subject')
@@ -585,27 +585,29 @@ def engine_analytics(request):
     user = request.user
     _require_staff(user)
 
-    schools = schools_scope(user)
-    school_id = request.query_params.get('school')
-    if school_id:
-        schools = schools.filter(pk=school_id)
+    school_ids = resolve_campus(request)
+    schools = School.objects.filter(id__in=school_ids)
+    is_multi_campus = len(school_ids) > 1 or is_overall_mode(request)
 
     config_id = request.query_params.get('configuration')
     if config_id:
-        config = ExamConfiguration.objects.filter(pk=config_id, school__in=schools).first()
-    else:
-        config = ExamConfiguration.objects.filter(school__in=schools, status='published').first()
+        config = ExamConfiguration.objects.filter(pk=config_id, school_id__in=school_ids).first()
         if not config:
-            config = ExamConfiguration.objects.filter(school__in=schools).first()
+            raise NotFound('Examination configuration not found or outside authorized scope.')
+    else:
+        config = ExamConfiguration.objects.filter(school_id__in=school_ids, status='published').first()
+        if not config:
+            config = ExamConfiguration.objects.filter(school_id__in=school_ids).first()
 
-    # Available configs for filter dropdown
+    # Available configs for filter dropdown (strictly within resolved campus scope)
     available_configs = [{
         'id': c.id,
         'name': c.name,
+        'school_id': c.school_id,
         'school_name': c.school.name,
         'academic_year_name': c.academic_year.name,
         'status': c.status
-    } for c in ExamConfiguration.objects.filter(school__in=schools)]
+    } for c in ExamConfiguration.objects.filter(school_id__in=school_ids)]
 
     if not config:
         return Response({
@@ -627,6 +629,7 @@ def engine_analytics(request):
                 'pass_rate': None,
                 'passing_threshold': '40.00'
             },
+            'campus_performance': [],
             'subject_performance': [],
             'class_performance': [],
             'score_distribution': [],
@@ -634,38 +637,59 @@ def engine_analytics(request):
         })
 
     # Identify target classes in scope
-    target_classes_qs = SchoolClass.objects.filter(school=config.school)
+    if is_multi_campus:
+        target_classes_qs = SchoolClass.objects.filter(school_id__in=school_ids)
+    else:
+        target_classes_qs = SchoolClass.objects.filter(school=config.school)
+
     if request.query_params.get('class'):
         target_classes_qs = target_classes_qs.filter(pk=request.query_params['class'])
     elif config.school_class:
         target_classes_qs = target_classes_qs.filter(pk=config.school_class_id)
     else:
-        target_classes_qs = target_classes_qs.filter(academic_year=config.academic_year)
+        target_classes_qs = target_classes_qs.filter(academic_year__name=config.academic_year.name)
     if request.query_params.get('section'):
         target_classes_qs = target_classes_qs.filter(section=request.query_params['section'])
-    target_classes = list(target_classes_qs.order_by('name', 'section'))
+    target_classes = list(target_classes_qs.select_related('school', 'academic_year').order_by('school__name', 'name', 'section'))
 
     # Identify target subjects in scope
     if config.subject:
         target_subjects = [config.subject]
+    elif is_multi_campus:
+        target_subjects = list(Subject.objects.filter(school_id__in=school_ids).select_related('school').order_by('school__name', 'name'))
     else:
-        target_subjects = list(Subject.objects.filter(school=config.school).order_by('name'))
+        target_subjects = list(Subject.objects.filter(school=config.school).select_related('school').order_by('name'))
 
     # Fetch calculated student results for this configuration and class scope
-    student_results_qs = CalculatedStudentResult.objects.filter(
-        configuration=config,
-        school_class__in=target_classes
-    ).select_related('student', 'school_class', 'highest_subject', 'lowest_subject')
+    if config_id:
+        student_results_qs = CalculatedStudentResult.objects.filter(
+            configuration_id=config_id,
+            school_class__in=target_classes
+        ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
+    else:
+        student_results_qs = CalculatedStudentResult.objects.filter(
+            configuration__school_id__in=school_ids,
+            configuration__status='published',
+            school_class__in=target_classes
+        ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
+        if not student_results_qs.exists() and config:
+            student_results_qs = CalculatedStudentResult.objects.filter(
+                configuration=config,
+                school_class__in=target_classes
+            ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
 
     # Build student list
     student_records = []
     for r in student_results_qs:
+        cl_name = f"{r.school_class.name} – {r.school_class.section}" if r.school_class.section else r.school_class.name
+        if is_multi_campus:
+            cl_name = f"{cl_name} ({r.school_class.school.name})"
         student_records.append({
             'student_id': r.student_id,
             'name': r.student.full_name,
             'gender': r.student.gender,
             'class_id': r.school_class_id,
-            'class_name': r.school_class.name,
+            'class_name': cl_name,
             'branch_id': r.school_class.school_id,
             'branch_name': r.school_class.school.name,
             'overall_percentage': r.overall_percentage,
@@ -693,10 +717,14 @@ def engine_analytics(request):
         klass_student_ids = set(en.student_id for en in klass_enrollments)
         klass_enrolled_count = len(klass_student_ids)
 
-        klass_sub_results = list(CalculatedSubjectResult.objects.filter(
-            configuration=config,
-            school_class=klass
-        ).select_related('subject', 'student'))
+        klass_sub_results_qs = CalculatedSubjectResult.objects.filter(school_class=klass)
+        if config_id:
+            klass_sub_results_qs = klass_sub_results_qs.filter(configuration_id=config_id)
+        else:
+            klass_sub_results_qs = klass_sub_results_qs.filter(configuration__status='published')
+            if not klass_sub_results_qs.exists() and config:
+                klass_sub_results_qs = CalculatedSubjectResult.objects.filter(configuration=config, school_class=klass)
+        klass_sub_results = list(klass_sub_results_qs.select_related('subject', 'student'))
 
         included_subject_averages = []
         included_boys_subject_averages = []
@@ -742,9 +770,15 @@ def engine_analytics(request):
         klass_eligible_count = len(klass_students_records)
         klass_pending_count = max(0, klass_enrolled_count - klass_eligible_count)
 
+        class_name_str = f"{klass.name} – {klass.section}" if klass.section else klass.name
+        if is_multi_campus:
+            class_name_str = f"{class_name_str} ({klass.school.name})"
+
         class_performance.append({
             'class_id': klass.id,
-            'class_name': klass.name,
+            'class_name': class_name_str,
+            'school_id': klass.school_id,
+            'school_name': klass.school.name,
             'average': round(float(official_class_avg), 2) if official_class_avg is not None else None,
             'student_weighted_average': round(float(klass_st_weighted_avg), 2) if klass_st_weighted_avg is not None else None,
             'boys_average': round(float(class_boys_avg), 2) if class_boys_avg is not None else None,
@@ -873,10 +907,22 @@ def engine_analytics(request):
         )
     ))
 
-    all_subject_results = list(CalculatedSubjectResult.objects.filter(
-        configuration=config,
-        school_class__in=target_classes
-    ).select_related('subject', 'student'))
+    if config_id:
+        all_subject_results = list(CalculatedSubjectResult.objects.filter(
+            configuration_id=config_id,
+            school_class__in=target_classes
+        ).select_related('subject', 'subject__school', 'student'))
+    else:
+        all_subject_results = list(CalculatedSubjectResult.objects.filter(
+            configuration__school_id__in=school_ids,
+            configuration__status='published',
+            school_class__in=target_classes
+        ).select_related('subject', 'subject__school', 'student'))
+        if not all_subject_results and config:
+            all_subject_results = list(CalculatedSubjectResult.objects.filter(
+                configuration=config,
+                school_class__in=target_classes
+            ).select_related('subject', 'subject__school', 'student'))
 
     subject_performance = []
     for subj in target_subjects:
@@ -892,9 +938,12 @@ def engine_analytics(request):
         s_girls_avg = calculate_group_average(girls_scores)
         s_gap = (s_girls_avg - s_boys_avg) if (s_girls_avg is not None and s_boys_avg is not None) else None
 
+        subj_name_str = f"{subj.name} ({subj.school.name})" if is_multi_campus else subj.name
         subject_performance.append({
             'subject_id': subj.id,
-            'subject_name': subj.name,
+            'subject_name': subj_name_str,
+            'school_id': subj.school_id,
+            'school_name': subj.school.name,
             'subject_code': subj.code,
             'average_percentage': round(float(sub_stats['average_percentage']), 2) if sub_stats['average_percentage'] is not None else None,
             'overall_average': round(float(sub_stats['average_percentage']), 2) if sub_stats['average_percentage'] is not None else None,
@@ -917,12 +966,48 @@ def engine_analytics(request):
             'name': s['name'],
             'gender': s['gender'],
             'class_name': s['class_name'],
+            'school_id': s['branch_id'],
+            'school_name': s['branch_name'],
             'overall_percentage': round(float(s['overall_percentage']), 2) if s['overall_percentage'] is not None else None,
             'lowest_subject': s['lowest_subject']
         }
         for s in eligible_students
         if s['passed'] is False
     ]
+
+    # Per-Campus breakdown (Spec §1.2 & §8)
+    campus_performance = []
+    if is_multi_campus:
+        for sch in schools:
+            sch_students = [s for s in eligible_students if s['branch_id'] == sch.id]
+            sch_scores = [to_decimal(s['overall_percentage']) for s in sch_students]
+            sch_avg = calculate_student_weighted_average(sch_scores)
+            sch_boys = [to_decimal(s['overall_percentage']) for s in sch_students if s['gender'] == 'male']
+            sch_girls = [to_decimal(s['overall_percentage']) for s in sch_students if s['gender'] == 'female']
+            sch_b_avg = calculate_student_weighted_average(sch_boys)
+            sch_g_avg = calculate_student_weighted_average(sch_girls)
+            sch_gap = (sch_g_avg - sch_b_avg) if (sch_g_avg is not None and sch_b_avg is not None) else None
+            sch_passed = sum(1 for s in sch_students if s['passed'] is True)
+            sch_pass_rate = round(float(sch_passed / len(sch_students) * 100), 1) if sch_students else None
+
+            sch_enrolled = len(set(
+                en.student_id for en in Enrollment.objects.filter(school_class__school=sch).filter(
+                    Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
+                )
+            ))
+            campus_performance.append({
+                'campus_id': sch.id,
+                'campus_name': sch.name,
+                'average': round(float(sch_avg), 2) if sch_avg is not None else None,
+                'boys_average': round(float(sch_b_avg), 2) if sch_b_avg is not None else None,
+                'girls_average': round(float(sch_g_avg), 2) if sch_g_avg is not None else None,
+                'gender_gap': round(float(sch_gap), 2) if sch_gap is not None else None,
+                'pass_rate': sch_pass_rate,
+                'eligible_count': len(sch_students),
+                'enrolled_count': sch_enrolled,
+                'pending_count': max(0, sch_enrolled - len(sch_students))
+            })
+        campus_performance.sort(key=lambda x: -(x['average'] or 0))
 
     return Response({
         'configuration': {
@@ -932,7 +1017,10 @@ def engine_analytics(request):
             'version': config.version,
             'reporting_scale': str(config.reporting_scale),
             'passing_threshold': str(config.passing_threshold),
-            'subject_weighting_mode': config.subject_weighting_mode
+            'subject_weighting_mode': config.subject_weighting_mode,
+            'school_id': config.school_id,
+            'school_name': config.school.name,
+            'academic_year_name': config.academic_year.name
         },
         'available_configurations': available_configs,
         'summary': {
@@ -957,6 +1045,7 @@ def engine_analytics(request):
             'pass_rate': pass_rate,
             'passing_threshold': str(config.passing_threshold)
         },
+        'campus_performance': campus_performance,
         'subject_performance': subject_performance,
         'class_performance': class_performance,
         'score_distribution': bins,
@@ -977,9 +1066,10 @@ def engine_student_transcript(request):
     if not student_id:
         raise ValidationError({'detail': 'student parameter is required.'})
 
-    student = Student.objects.filter(pk=student_id).select_related('school').first()
+    school_ids = resolve_campus(request)
+    student = Student.objects.filter(pk=student_id, school_id__in=school_ids).select_related('school').first()
     if not student:
-        raise NotFound('Student not found.')
+        raise NotFound('Student not found or outside authorized scope.')
 
     if user.role == 'student' and user.id != student.user_id:
         raise PermissionDenied('Access denied to other student transcripts.')
