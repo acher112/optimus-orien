@@ -30,6 +30,7 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
   const [subjects, setSubjects] = useState<R[]>([]);
   const [staffList, setStaffList] = useState<R[]>([]);
   const [years, setYears] = useState<R[]>([]);
+  const [schools, setSchools] = useState<R[]>([]);
 
   // ----------------------------------------------------
   // Configurable Engine State
@@ -40,12 +41,14 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
   // Create Configuration Modal
   const [configModal, setConfigModal] = useState(false);
   const [newCfgName, setNewCfgName] = useState('');
+  const [newCfgSchool, setNewCfgSchool] = useState<string>(() => (user.school ? String(user.school) : ''));
   const [newCfgYear, setNewCfgYear] = useState('');
   const [newCfgClass, setNewCfgClass] = useState('');
   const [newCfgScale, setNewCfgScale] = useState('100.00');
   const [newCfgPrecision, setNewCfgPrecision] = useState(2);
   const [newCfgPassThreshold, setNewCfgPassThreshold] = useState('40.00');
   const [newCfgWeightMode, setNewCfgWeightMode] = useState<'equal' | 'custom'>('equal');
+  const [newCfgSubjectWeights, setNewCfgSubjectWeights] = useState<Record<number, string>>({});
   const [newCfgTerms, setNewCfgTerms] = useState<Array<{ name: string; weight: string; max_marks: string }>>([
     { name: 'First Term', weight: '20.00', max_marks: '50.00' },
     { name: 'Second Term', weight: '30.00', max_marks: '75.00' },
@@ -112,9 +115,15 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
       }
     }).catch(() => {});
     list<R>('years').then(setYears).catch(() => {});
+    list<R>('schools').then(sch => {
+      setSchools(sch);
+      if (sch.length > 0 && !newCfgSchool) {
+        setNewCfgSchool(String(user.school || sch[0].id));
+      }
+    }).catch(() => {});
     request<R>('staff/').then(r => setStaffList(r.results || [])).catch(() => {});
     list<R>('students').then(setEnrolledStudents).catch(() => {});
-  }, []);
+  }, [newCfgSchool, user.school]);
 
   // Load Configurable Engine Configurations
   const loadEngineConfigs = useCallback(async () => {
@@ -242,15 +251,24 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
         };
       });
 
+      const subject_weights = newCfgWeightMode === 'custom'
+        ? subjects.map(s => ({
+            subject_id: s.id,
+            weight: newCfgSubjectWeights[s.id] || '1.00'
+          }))
+        : [];
+
       const payload = {
         name: newCfgName,
+        school: newCfgSchool ? Number(newCfgSchool) : (user.school || (schools[0]?.id ?? undefined)),
         academic_year: newCfgYear || (years[0]?.id ?? undefined),
         school_class: newCfgClass || undefined,
         reporting_scale: newCfgScale,
         rounding_precision: newCfgPrecision,
         passing_threshold: newCfgPassThreshold,
         subject_weighting_mode: newCfgWeightMode,
-        components
+        components,
+        subject_weights
       };
 
       const res = await request<R>('exams/engine/configurations/', {
@@ -1349,6 +1367,14 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
             </div>
             <form onSubmit={handleCreateConfig}>
               <div className="modal-fields">
+                {schools.length > 1 && user.role === 'organisation_admin' && (
+                  <label>Campus *
+                    <select value={newCfgSchool} onChange={e => setNewCfgSchool(e.target.value)}>
+                      {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </label>
+                )}
+
                 <label>Structure Name *
                   <input
                     type="text"
@@ -1397,6 +1423,43 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                     </select>
                   </label>
                 </div>
+
+                {/* Custom Subject Weights List Builder */}
+                {newCfgWeightMode === 'custom' && (
+                  <div style={{ marginTop: 14, background: '#f8fafc', padding: '14px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
+                        Custom Subject Weights (Multiplier for Overall Average)
+                      </span>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>
+                        {subjects.length} subjects available
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 10px' }}>
+                      Configure relative weighting factor for each subject (e.g. 1.0 for standard, 1.5 or 2.0 for major subject).
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
+                      {subjects.map(sub => (
+                        <div key={sub.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>
+                            {sub.name} {sub.code ? `(${sub.code})` : ''}
+                          </span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            style={{ width: 70, padding: '3px 6px', fontSize: 12, textAlign: 'right' }}
+                            value={newCfgSubjectWeights[sub.id] || '1.00'}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setNewCfgSubjectWeights(prev => ({ ...prev, [sub.id]: val }));
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Terms / Examination Components Builder */}
                 <div style={{ marginTop: 14 }}>

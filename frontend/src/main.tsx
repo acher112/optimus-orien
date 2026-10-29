@@ -39,6 +39,7 @@ import PrincipalHome from './PrincipalHome';
 import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import ErrorBoundary from './ErrorBoundary';
+import PasswordField from './PasswordField';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -71,7 +72,7 @@ const WORKSPACE_NAV = [
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
-  { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
@@ -84,7 +85,7 @@ const SYSTEM_NAV = [
   { name: 'Reports', icon: BarChart3, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'My performance', icon: TrendingUp, roles: ['student', 'parent'] },
   { name: 'Platform owner', icon: ShieldCheck, superuserOnly: true },
-  { name: 'Permissions', icon: KeyRound, roles: ['organisation_admin', 'school_admin'] },
+  { name: 'Permissions', icon: KeyRound, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Audit log', icon: ShieldCheck, adminOnly: true },
   { name: 'Notifications', icon: Bell },
   { name: 'Settings', icon: Settings2 },
@@ -2175,9 +2176,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
                   </label>
                   <label>
                     New Password
-                    <input
+                    <PasswordField
                       required
-                      type="password"
                       minLength={8}
                       value={newPass}
                       onChange={e => setNewPass(e.target.value)}
@@ -2186,9 +2186,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
                   </label>
                   <label>
                     Confirm New Password
-                    <input
+                    <PasswordField
                       required
-                      type="password"
                       minLength={8}
                       value={confirmPass}
                       onChange={e => setConfirmPass(e.target.value)}
@@ -2226,10 +2225,9 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
                 </label>
                 <label>
                   Password
-                  <input
+                  <PasswordField
                     autoComplete="current-password"
                     required
-                    type="password"
                     value={pass}
                     onChange={e => setPass(e.target.value)}
                     placeholder="Enter your password"
@@ -2311,9 +2309,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
                   </label>
                   <label>
                     Password (min 8 chars)
-                    <input
+                    <PasswordField
                       required
-                      type="password"
                       autoComplete="new-password"
                       value={regForm.password}
                       onChange={e => setRegForm({ ...regForm, password: e.target.value })}
@@ -2656,7 +2653,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                             <label>Username <span className="required">*</span><input required value={af.username || ''} onChange={e => setAccountField(sid, 'username', e.target.value)} placeholder="Unique username" /></label>
                           </div>
                           <div className="acf-row">
-                            <label>Password <span className="required">*</span><input required type="password" value={af.password || ''} onChange={e => setAccountField(sid, 'password', e.target.value)} placeholder="Min 8 characters" /></label>
+                            <label>Password <span className="required">*</span><PasswordField required value={af.password || ''} onChange={e => setAccountField(sid, 'password', e.target.value)} placeholder="Min 8 characters" /></label>
                             <label>Institutional role <span className="required">*</span>
                               <select required value={af.role || ''} onChange={e => setAccountField(sid, 'role', e.target.value)}>
                                 <option value="">Select role…</option>

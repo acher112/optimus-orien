@@ -92,8 +92,11 @@ def engine_configurations(request):
 
     # POST: create configuration
     _require_manager(user)
-    school_id = request.data.get('school') or (user.school_id if user.role != 'organisation_admin' and not user.is_superuser else None)
-    school = schools_scope(user).filter(pk=school_id or 0).first()
+    school_id = request.data.get('school') or getattr(user, 'school_id', None)
+    if school_id:
+        school = schools_scope(user).filter(pk=school_id).first()
+    else:
+        school = schools_scope(user).first()
     if not school:
         raise ValidationError({'school': 'Select a valid school campus.'})
 

@@ -130,24 +130,30 @@ function Link({ onClick, children }: { onClick: () => void; children: React.Reac
 }
 
 export default function Reports({ user }: { user: User }) {
+  const isPrincipal = user.role === 'principal';
   const [domain, setDomain] = useState<Domain>('academic');
   const [view, setView] = useState<View>({ level: 'org' });
   const [period, setPeriod] = useState('');
   const [data, setData] = useState<R | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [singleCampus, setSingleCampus] = useState(false);
+  const [singleCampus, setSingleCampus] = useState(isPrincipal);
 
   // Financial Analytics State
   const [schools, setSchools] = useState<R[]>([]);
-  const [financeSchool, setFinanceSchool] = useState('');
+  const [financeSchool, setFinanceSchool] = useState(isPrincipal && user.school ? String(user.school) : '');
   const [financeSum, setFinanceSum] = useState<R | null>(null);
   const [financeLoading, setFinanceLoading] = useState(false);
   const [financeError, setFinanceError] = useState('');
 
   useEffect(() => {
-    list<R>('schools').then(setSchools).catch(() => {});
-  }, []);
+    list<R>('schools').then(res => {
+      setSchools(res);
+      if (isPrincipal && user.school) {
+        setFinanceSchool(String(user.school));
+      }
+    }).catch(() => {});
+  }, [isPrincipal, user.school]);
 
   const path = useCallback((v: View) => {
     const q = period && !['this_month', 'last_30_days', 'last_3_months', 'last_6_months', 'this_year'].includes(period)
@@ -166,9 +172,11 @@ export default function Reports({ user }: { user: User }) {
     try {
       const body = await request<R>(path(view));
       setData(body);
-      if (view.level === 'org' && body.campuses?.length === 1 && user.role !== 'organisation_admin') {
-        setSingleCampus(true);
-        setView({ level: 'campus', id: body.campuses[0].id, name: body.campuses[0].name });
+      if (view.level === 'org' && (isPrincipal || (body.campuses?.length === 1 && user.role !== 'organisation_admin'))) {
+        if (body.campuses && body.campuses.length > 0) {
+          setSingleCampus(true);
+          setView({ level: 'campus', id: body.campuses[0].id, name: body.campuses[0].name });
+        }
       }
     } catch (e) {
       setData(null);
@@ -176,7 +184,7 @@ export default function Reports({ user }: { user: User }) {
     } finally {
       setLoading(false);
     }
-  }, [view, path, user.role]);
+  }, [view, path, user.role, isPrincipal]);
 
   const loadFinance = useCallback(async () => {
     setFinanceLoading(true);
@@ -186,7 +194,8 @@ export default function Reports({ user }: { user: User }) {
       const p = new URLSearchParams();
       if (from) p.set('from', from);
       if (to) p.set('to', to);
-      if (financeSchool) p.set('school', financeSchool);
+      const effSchool = isPrincipal && user.school ? String(user.school) : financeSchool;
+      if (effSchool) p.set('school', effSchool);
       const res = await request<R>(`finance/summary/?${p.toString()}`);
       setFinanceSum(res);
     } catch (e) {
@@ -195,7 +204,7 @@ export default function Reports({ user }: { user: User }) {
     } finally {
       setFinanceLoading(false);
     }
-  }, [period, financeSchool]);
+  }, [period, financeSchool, isPrincipal, user.school]);
 
   useEffect(() => {
     if (domain === 'academic') {
@@ -205,9 +214,13 @@ export default function Reports({ user }: { user: User }) {
     }
   }, [domain, loadAcademic, loadFinance]);
 
-  const goOrg = () => { setSingleCampus(false); setView({ level: 'org' }); };
+  const goOrg = () => {
+    if (isPrincipal) return;
+    setSingleCampus(false);
+    setView({ level: 'org' });
+  };
   const crumbs: { label: string; go?: () => void }[] = [];
-  if (!singleCampus) crumbs.push({ label: 'All campuses', go: view.level === 'org' ? undefined : goOrg });
+  if (!singleCampus && !isPrincipal) crumbs.push({ label: 'All campuses', go: view.level === 'org' ? undefined : goOrg });
   if (view.level !== 'org') {
     const cid = view.level === 'campus' ? view.id : view.campusId;
     const cname = view.level === 'campus' ? view.name : view.campusName;
@@ -328,7 +341,7 @@ export default function Reports({ user }: { user: User }) {
       </div>
 
       {/* Financial Domain Campus Switcher */}
-      {domain !== 'academic' && schools.length > 1 && (
+      {domain !== 'academic' && !isPrincipal && schools.length > 1 && (
         <div className="campus-switcher-bar">
           <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginRight: 4 }}>Campus:</span>
           <button

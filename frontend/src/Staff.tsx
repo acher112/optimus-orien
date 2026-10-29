@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowUpRight, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, CalendarDays, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import { FilterBar } from './FilterBar';
+import PasswordField from './PasswordField';
+import StaffAttendanceRegister from './StaffAttendanceRegister';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -19,6 +21,7 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
   const [error, setError] = useState('');
   const [action, setAction] = useState<Action | null>(null);
   const [feed, setFeed] = useState(false);
+  const [viewTab, setViewTab] = useState<'directory' | 'attendance'>('directory');
 
   const load = useCallback(async () => {
     setError('');
@@ -59,21 +62,28 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
           <p>Add staff, promote them, assign roles or end employment. Every change is kept in the history.</p>
         </div>
         <div className="hr-actions">
+          <button className={`outline-btn ${viewTab === 'attendance' ? 'active' : ''}`} onClick={() => setViewTab(t => t === 'attendance' ? 'directory' : 'attendance')}>
+            <CalendarDays size={16} /> {viewTab === 'attendance' ? 'Directory list' : 'Staff attendance'}
+          </button>
           <button className="outline-btn" onClick={() => setFeed(f => !f)}><History size={16} /> {feed ? 'Hide' : 'Recent'} history</button>
           <button className="primary-btn" onClick={() => setAction({ kind: 'add' })}><UserPlus size={16} /> Add staff</button>
         </div>
       </div>
 
-      <div className="hr-kpis">
-        <div className="hr-kpi"><Users size={20} /><strong>{summary.total}</strong><span>Shown</span></div>
-        <div className="hr-kpi"><ShieldCheck size={20} /><strong>{summary.active}</strong><span>Active</span></div>
-        <div className="hr-kpi"><UserMinus size={20} /><strong>{summary.terminated}</strong><span>Terminated</span></div>
-      </div>
+      {viewTab === 'attendance' ? (
+        <StaffAttendanceRegister user={user} notify={notify} />
+      ) : (
+        <>
+          <div className="hr-kpis">
+            <div className="hr-kpi"><Users size={20} /><strong>{summary.total}</strong><span>Shown</span></div>
+            <div className="hr-kpi"><ShieldCheck size={20} /><strong>{summary.active}</strong><span>Active</span></div>
+            <div className="hr-kpi"><UserMinus size={20} /><strong>{summary.terminated}</strong><span>Terminated</span></div>
+          </div>
 
-      {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
-      {feed && <HistoryFeed />}
+          {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
+          {feed && <HistoryFeed />}
 
-      <section className="panel hr-panel">
+          <section className="panel hr-panel">
         <FilterBar
           searchPlaceholder="Search staff name or position..."
           filters={[
@@ -123,6 +133,8 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
         </table></div>
         {!rows.length && <div className="rp-empty">No staff match. Use “Add staff” to create the first record.</div>}
       </section>
+      </>
+      )}
 
       {action?.kind === 'add' && <AddStaff schools={schools} roles={roles} leader={leader} user={user} onClose={() => setAction(null)} onDone={() => done('Staff member added')} />}
       {action?.kind === 'promote' && <Promote s={action.staff} roles={roles} leader={leader} onClose={() => setAction(null)} onDone={() => done('Promotion saved')} />}
@@ -156,7 +168,11 @@ function useSubmit(path: string, onDone: () => void) {
   return { err, busy, submit };
 }
 
-const roleOptions = (roles: string[], leader: boolean) => roles.filter(r => leader || (r !== 'principal' && r !== 'school_admin'));
+const roleOptions = (roles: string[], leader: boolean) => {
+  const filtered = roles.filter(r => leader || (r !== 'principal' && r !== 'school_admin'));
+  if (!filtered.includes('additional')) filtered.push('additional');
+  return filtered;
+};
 
 function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: R[]; roles: string[]; leader: boolean; user: User; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState<R>({ school: user.school || schools[0]?.id || '', role: 'teacher', hired_on: new Date().toISOString().slice(0, 10) });
@@ -169,13 +185,19 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
           <label>First name *<input required value={f.first_name || ''} onChange={e => set('first_name', e.target.value)} placeholder="e.g. Ayesha" /></label>
           <label>Last name *<input required value={f.last_name || ''} onChange={e => set('last_name', e.target.value)} placeholder="e.g. Khan" /></label>
           <label>Position *<input required placeholder="e.g. Maths Teacher or Campus Principal" value={f.position || ''} onChange={e => set('position', e.target.value)} /></label>
-          <label>Role<select value={f.role} onChange={e => set('role', e.target.value)}>{roleOptions(roles, leader).map(r => <option key={r} value={r}>{nice(r)}</option>)}</select></label>
-          <label>Campus<select required value={f.school} onChange={e => set('school', e.target.value)}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+          <label>Role *<select value={f.role} onChange={e => { const val = e.target.value; set('role', val); if (val !== 'additional') set('custom_role', ''); }}>{roleOptions(roles, leader).map(r => <option key={r} value={r}>{r === 'additional' ? 'Additional (Custom Role)' : nice(r)}</option>)}</select></label>
+          {f.role === 'additional' && (
+            <label className="wide" style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              Custom Position / Role Title *
+              <input required value={f.custom_role || ''} onChange={e => { set('custom_role', e.target.value); set('position', e.target.value); }} placeholder="e.g. Lab Assistant, IT Incharge, Transport Supervisor" />
+            </label>
+          )}
+          <label>Campus *<select required value={f.school} onChange={e => set('school', e.target.value)}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
           <label>Hired on<input type="date" value={f.hired_on} onChange={e => set('hired_on', e.target.value)} /></label>
           <label>Email (portal login) *<input required type="email" value={f.email || ''} onChange={e => set('email', e.target.value)} placeholder="name@school.edu" /></label>
-          <label>Portal password *<input required type="password" minLength={8} value={f.password || ''} onChange={e => set('password', e.target.value)} placeholder="Min 8 characters" /></label>
+          <label>Portal password *<PasswordField required minLength={8} value={f.password || ''} onChange={e => set('password', e.target.value)} placeholder="Min 8 characters" /></label>
           <label>Phone<input value={f.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="e.g. +92 300 1234567" /></label>
-          <label>Monthly base salary<input type="number" step="0.01" min="0" placeholder="e.g. 75000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>
+          <label>Monthly base salary *<input required type="number" step="0.01" min="1" placeholder="e.g. 75000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>
           <div className="wide" style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, color: '#475569' }}>
             The staff member will use this email address and password to log in to their Optimus Orien portal.
           </div>

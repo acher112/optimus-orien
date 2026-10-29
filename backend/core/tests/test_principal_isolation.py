@@ -161,17 +161,18 @@ class PrincipalIsolationTests(TestCase):
         res = self.client.get(f'/api/v1/principal/dashboard/?school={self.school_b.id}')
         self.assertEqual(res.status_code, 404, "Principal dashboard for other campus must return 404")
 
-    # ------------------------------------------------------------------ 2. Finance, Fees & Salaries Lockout
-    def test_principal_locked_out_of_finance_and_fees(self):
-        """Principal is denied access to campus finance, fee structures, vouchers, and defaulters (403)."""
+    # ------------------------------------------------------------------ 2. Finance Scoped to Campus, Fees Locked Out
+    def test_principal_finance_allowed_for_own_campus_fees_denied(self):
+        """Principal can access campus finance for their assigned school, but is denied fee management (403)."""
         self.client.force_authenticate(user=self.principal_user)
 
-        res = self.client.get('/api/v1/finance/categories/')
-        self.assertEqual(res.status_code, 403, "Finance categories must return 403 for principal")
+        res = self.client.get(f'/api/v1/finance/categories/?school={self.school_a.id}')
+        self.assertEqual(res.status_code, 200, "Finance categories must return 200 for principal's campus")
 
-        res = self.client.get('/api/v1/finance/entries/')
-        self.assertEqual(res.status_code, 403, "Finance entries must return 403 for principal")
+        res = self.client.get(f'/api/v1/finance/entries/?school={self.school_a.id}')
+        self.assertEqual(res.status_code, 200, "Finance entries must return 200 for principal's campus")
 
+        # Fee endpoints strictly return 403
         res = self.client.get('/api/v1/fees/heads/')
         self.assertEqual(res.status_code, 403, "Fee heads must return 403 for principal")
 
@@ -233,15 +234,16 @@ class PrincipalIsolationTests(TestCase):
         )
         self.assertEqual(res.status_code, 403)
 
-        # Configuring salary on staff creation denied
+        # Staff creation for out-of-scope campus is strictly 404
         res = self.client.post(
             '/api/v1/staff/',
             {
+                'school': self.school_b.id,
                 'first_name': 'New', 'last_name': 'Teacher', 'position': 'Physics Teacher',
                 'role': 'teacher', 'salary': '50000.00'
             }, format='json'
         )
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 404, "Cannot create staff in out-of-scope campus")
 
     # ------------------------------------------------------------------ 4. Structure & Reports Restrictions
     def test_principal_cannot_manage_academic_years(self):
@@ -260,12 +262,17 @@ class PrincipalIsolationTests(TestCase):
         res = self.client.delete(f'/api/v1/years/{self.year_a.id}/')
         self.assertEqual(res.status_code, 403)
 
-    def test_multi_campus_overview_denied_for_principal(self):
-        """Principals cannot view multi-campus organisation overview reports."""
+    def test_principal_reports_overview_scoped_to_own_campus(self):
+        """Principals can view overview reports strictly scoped to their own campus."""
         self.client.force_authenticate(user=self.principal_user)
 
         res = self.client.get('/api/v1/reports/overview/')
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 200)
+        campuses = res.data.get('campuses', [])
+        self.assertEqual(len(campuses), 1)
+        self.assertEqual(campuses[0]['id'], self.school_a.id)
+        # Campus B is never disclosed
+        self.assertNotIn(self.school_b.name, [c['name'] for c in campuses])
 
     # ------------------------------------------------------------------ 5. Secure Principal Invitation & Hashing
     def test_principal_invitation_token_hash_and_single_use(self):
@@ -563,6 +570,7 @@ class PrincipalIsolationTests(TestCase):
             'position': 'Campus Principal',
             'email': 'kamran.prin@school.edu',
             'password': 'DirectPassword2026!',
+            'salary': '85000.00',
             'hired_on': self.today.isoformat()
         }
         res = self.client.post('/api/v1/staff/', payload, format='json')

@@ -19,23 +19,32 @@ const money = (n: number) => `${CUR} ${Math.round(n).toLocaleString()}`;
 const tick = { fontSize: 12, fill: '#8c96a7' };
 
 export default function Finance({ user, notify }: { user: User; notify: (m: string) => void }) {
+  const isPrincipal = user.role === 'principal';
   const [tab, setTab] = useState<Tab>('overview');
   const [schools, setSchools] = useState<R[]>([]);
-  const [school, setSchool] = useState('');
+  const [school, setSchool] = useState(isPrincipal && user.school ? String(user.school) : '');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [sum, setSum] = useState<R | null>(null);
   const [error, setError] = useState('');
   const [bump, setBump] = useState(0);
 
-  useEffect(() => { list<R>('schools').then(setSchools).catch(() => {}); }, []);
+  useEffect(() => {
+    list<R>('schools').then(res => {
+      setSchools(res);
+      if (isPrincipal && user.school) {
+        setSchool(String(user.school));
+      }
+    }).catch(() => {});
+  }, [isPrincipal, user.school]);
   const qs = useMemo(() => {
     const p = new URLSearchParams();
-    if (school) p.set('school', school);
+    const effectiveSchool = isPrincipal && user.school ? String(user.school) : school;
+    if (effectiveSchool) p.set('school', effectiveSchool);
     if (from) p.set('from', from);
     if (to) p.set('to', to);
     return p.toString();
-  }, [school, from, to]);
+  }, [isPrincipal, user.school, school, from, to]);
 
   const loadSummary = useCallback(async () => {
     setError('');
@@ -56,13 +65,13 @@ export default function Finance({ user, notify }: { user: User; notify: (m: stri
           <p>Track income and expenses by category. Charts and totals update as you add entries.</p>
         </div>
         <div className="fx-filters">
-          {schools.length > 1 && <label>Campus<select className="fx-select" value={school} onChange={e => setSchool(e.target.value)}><option value="">All campuses</option>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
+          {!isPrincipal && schools.length > 1 && <label>Campus<select className="fx-select" value={school} onChange={e => setSchool(e.target.value)}><option value="">All campuses</option>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
           <label>From<input type="date" className="fx-select" value={from} onChange={e => setFrom(e.target.value)} /></label>
           <label>To<input type="date" className="fx-select" value={to} onChange={e => setTo(e.target.value)} /></label>
         </div>
       </div>
 
-      {schools.length > 1 && (
+      {!isPrincipal && schools.length > 1 && (
         <div className="campus-switcher-bar">
           <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginRight: 4 }}>Campus:</span>
           <button
@@ -91,14 +100,14 @@ export default function Finance({ user, notify }: { user: User; notify: (m: stri
 
       {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
 
-      {tab === 'overview' && sum && <Overview sum={sum} />}
+      {tab === 'overview' && sum && <Overview sum={sum} isPrincipal={isPrincipal} />}
       {(tab === 'income' || tab === 'expense') && <Entries kind={tab} school={school} schools={schools} user={user} qs={qs} bump={bump} onChanged={changed} />}
       {tab === 'categories' && <Categories school={school} schools={schools} user={user} onChanged={changed} />}
     </>
   );
 }
 
-function Overview({ sum }: { sum: R }) {
+function Overview({ sum, isPrincipal }: { sum: R; isPrincipal?: boolean }) {
   const exp: R[] = sum.expense_by_category, inc: R[] = sum.income_by_category, months: R[] = sum.monthly;
   const [campusSortCol, setCampusSortCol] = useState<'income' | 'expense' | 'net' | 'name'>('income');
   const [campusSortDir, setCampusSortDir] = useState<'asc' | 'desc'>('desc');
@@ -239,7 +248,7 @@ function Overview({ sum }: { sum: R }) {
             </BarChart>
           </ResponsiveContainer></div>
         ) : <div className="rp-empty">No entries yet.</div>}
-        {sum.campuses.length > 1 && (
+        {!isPrincipal && sum.campuses.length > 1 && (
           <div className="table-scroll"><table className="data-table">
             <thead>
               <tr>

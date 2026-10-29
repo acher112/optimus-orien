@@ -49,11 +49,12 @@ interface PermissionsProps {
 }
 
 export default function Permissions({ user, notify }: PermissionsProps) {
+  const isPrincipal = user.role === 'principal';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [schools, setSchools] = useState<any[]>([]);
-  const [selectedSchool, setSelectedSchool] = useState<number | string>('');
+  const [selectedSchool, setSelectedSchool] = useState<number | string>(user.school || '');
 
   const [roles, setRoles] = useState<RoleMeta[]>([]);
   const [modules, setModules] = useState<PermissionModule[]>([]);
@@ -67,25 +68,35 @@ export default function Permissions({ user, notify }: PermissionsProps) {
   const [activeModuleFilter, setActiveModuleFilter] = useState<string>('all');
   const [resetModalOpen, setResetModalOpen] = useState(false);
 
+  const visibleRoles = useMemo(() => {
+    if (isPrincipal) {
+      return roles.filter(r => !['organisation_admin', 'school_admin', 'principal'].includes(r.key));
+    }
+    return roles;
+  }, [roles, isPrincipal]);
+
   // Load campuses
   useEffect(() => {
     list<any>('schools')
       .then(res => {
         setSchools(res);
-        if (res.length > 0 && !selectedSchool) {
+        if (isPrincipal && user.school) {
+          setSelectedSchool(user.school);
+        } else if (res.length > 0 && !selectedSchool) {
           const defaultSch = user.school || res[0].id;
           setSelectedSchool(defaultSch);
         }
       })
       .catch(() => {});
-  }, [user.school]);
+  }, [user.school, isPrincipal]);
 
   // Load permissions matrix
   const fetchPermissions = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const qs = selectedSchool ? `?school=${selectedSchool}` : '';
+      const effectiveSchool = isPrincipal && user.school ? user.school : selectedSchool;
+      const qs = effectiveSchool ? `?school=${effectiveSchool}` : '';
       const data = await request<PermissionsResponse>(`permissions/${qs}`);
       if (data && data.success) {
         setRoles(data.roles || []);
@@ -94,8 +105,11 @@ export default function Permissions({ user, notify }: PermissionsProps) {
         setSavedPermissionsState(JSON.parse(JSON.stringify(data.effective_by_role || {})));
         setDefaultsState(data.defaults_by_role || {});
         setOverrideCounts(data.override_counts || {});
-        if (!roles.some(r => r.key === selectedRole) && data.roles.length > 0) {
-          setSelectedRole(data.roles[0].key);
+        const allowedRoles = isPrincipal
+          ? (data.roles || []).filter(r => !['organisation_admin', 'school_admin', 'principal'].includes(r.key))
+          : (data.roles || []);
+        if (!allowedRoles.some(r => r.key === selectedRole) && allowedRoles.length > 0) {
+          setSelectedRole(allowedRoles[0].key);
         }
       }
     } catch (e: any) {
@@ -306,7 +320,7 @@ export default function Permissions({ user, notify }: PermissionsProps) {
         </div>
 
         <div className="permissions-header-actions">
-          {schools.length > 1 && (
+          {!isPrincipal && schools.length > 1 && (
             <div className="campus-select-wrap">
               <Building2 size={15} />
               <select
@@ -341,7 +355,7 @@ export default function Permissions({ user, notify }: PermissionsProps) {
       {/* Role Selector Tabs (Segmented Navigation) */}
       <div className="role-selector-bar">
         <div className="role-tabs-scroll">
-          {roles.map(r => {
+          {visibleRoles.map(r => {
             const isSelected = r.key === selectedRole;
             const grantedForThisRole = Object.values(permissionsState[r.key] || {}).filter(Boolean).length;
             const hasOverrides = (overrideCounts[r.key] || 0) > 0;

@@ -15,11 +15,11 @@ from core.services.permissions import (
     reset_role_permissions,
 )
 
-MANAGERS = ('organisation_admin', 'school_admin')
+MANAGERS = ('organisation_admin', 'school_admin', 'principal')
 
 
 def _require_admin(user):
-    """Permissions management requires organisation_admin, school_admin, or superuser."""
+    """Permissions management requires organisation_admin, school_admin, principal, or superuser."""
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Active authenticated account required.')
     if not user.is_superuser and user.role not in MANAGERS:
@@ -69,6 +69,8 @@ def permissions_list(request):
     valid_roles = {r['key'] for r in ROLES_METADATA}
     if role not in valid_roles:
         raise ValidationError({'role': f"Invalid role. Expected one of: {', '.join(sorted(valid_roles))}"})
+    if user.role == 'principal' and role in ('organisation_admin', 'school_admin', 'principal'):
+        raise PermissionDenied('Principals can only manage permissions for subordinate campus staff roles.')
 
     permissions_map = data.get('permissions')
     if not isinstance(permissions_map, dict):
@@ -103,6 +105,9 @@ def permissions_reset(request):
         valid_roles = {r['key'] for r in ROLES_METADATA}
         if role not in valid_roles:
             raise ValidationError({'role': f"Invalid role. Expected one of: {', '.join(sorted(valid_roles))} or 'all'"})
+
+    if user.role == 'principal' and (not role or role == 'all' or role in ('organisation_admin', 'school_admin', 'principal')):
+        raise PermissionDenied('Principals can only manage permissions for subordinate campus staff roles.')
 
     reset_count = reset_role_permissions(school, role if role != 'all' else None, user)
 

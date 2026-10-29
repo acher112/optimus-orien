@@ -13,7 +13,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 
 from core.models import (
-    StaffEvent, StaffMember, User,
+    StaffEvent, StaffMember, StaffAttendance, User,
     SalaryStructure, SalaryRecord, FinanceCategory, FinanceEntry, RoleAssignment
 )
 from core.services.access import schools_scope
@@ -22,7 +22,7 @@ from core.services.audit import record_event
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
 LOGIN_ROLES = ('school_admin', 'principal', 'teacher')       # roles that map to a sign-in role
 LEADERSHIP = ('school_admin', 'principal')                    # only senior managers may grant these
-STAFF_ROLES = ['teacher', 'principal', 'school_admin', 'accountant', 'librarian', 'counsellor', 'support', 'other']
+STAFF_ROLES = ['teacher', 'principal', 'school_admin', 'accountant', 'librarian', 'counsellor', 'support', 'additional', 'other']
 
 
 def _require_manager(user):
@@ -222,16 +222,15 @@ def staff_list(request):
         _sync_login(s, role)
 
         salary_str = str(data.get('salary') or '').strip()
-        if salary_str and user.role == 'principal':
-            raise PermissionDenied('Principals are not authorized to configure staff salaries.')
-        if salary_str:
-            try:
-                salary_val = Decimal(salary_str)
-                if salary_val < 0:
-                    raise ValidationError({'salary': 'Salary cannot be negative.'})
-            except InvalidOperation:
-                raise ValidationError({'salary': 'Invalid salary amount.'})
-            if salary_val > 0:
+        if not salary_str:
+            raise ValidationError({'salary': 'Base salary is required.'})
+        try:
+            salary_val = Decimal(salary_str)
+            if salary_val <= 0:
+                raise ValidationError({'salary': 'Base salary must be greater than zero.'})
+        except InvalidOperation:
+            raise ValidationError({'salary': 'Enter a valid base salary amount.'})
+        if salary_val > 0:
                 currency = getattr(school, 'currency', None) or 'PKR'
                 SalaryStructure.objects.create(
                     staff=s,
@@ -455,3 +454,104 @@ def staff_history(request):
         events = events.filter(kind=kind)
     return Response({'results': [{**_event_row(e), 'staff_id': e.staff_id, 'staff_name': e.staff.full_name,
                                    'school_name': e.staff.school.name} for e in events[:300]]})
+
+
+@api_view(['GET', 'POST'])
+def staff_attendance(request):
+    """Staff attendance register: view or record daily attendance for campus staff."""
+    user = request.user
+    _require_manager(user)
+
+    school_val = request.query_params.get('school') or request.data.get('school')
+    if not school_val and user.role != 'organisation_admin' and not user.is_superuser:
+        school_val = user.school_id
+
+    school = schools_scope(user).filter(pk=school_val or 0).first()
+    if not school:
+        raise NotFound('Campus not found.')
+
+    date_raw = request.query_params.get('date') or request.data.get('date') or date.today().isoformat()
+    try:
+        att_date = date.fromisoformat(str(date_raw)[:10])
+    except ValueError:
+        raise ValidationError({'date': 'Use YYYY-MM-DD.'})
+
+    if request.method == 'GET':
+        staff_qs = list(StaffMember.objects.filter(school=school, status='active').order_by('last_name', 'first_name'))
+        existing_recs = {
+            a.staff_id: a for a in StaffAttendance.objects.filter(school=school, date=att_date)
+        }
+
+        records = []
+        for s in staff_qs:
+            rec = existing_recs.get(s.id)
+            records.append({
+                'staff_id': s.id,
+                'staff_name': s.full_name,
+                'position': s.position,
+                'role': s.role,
+                'email': s.email,
+                'status': rec.status if rec else 'present',
+                'is_recorded': bool(rec),
+                'note': rec.note if rec else '',
+            })
+
+        return Response({
+            'date': att_date.isoformat(),
+            'school': school.id,
+            'school_name': school.name,
+            'records': records,
+            'summary': {
+                'total': len(records),
+                'present': sum(1 for r in records if r['status'] == 'present'),
+                'absent': sum(1 for r in records if r['status'] == 'absent'),
+                'late': sum(1 for r in records if r['status'] == 'late'),
+                'excused': sum(1 for r in records if r['status'] == 'excused'),
+                'recorded_count': len(existing_recs),
+            }
+        })
+
+    # POST: Save bulk attendance records
+    records_data = request.data.get('records')
+    if not isinstance(records_data, list):
+        raise ValidationError({'records': 'List of staff attendance records required.'})
+
+    valid_statuses = {'present', 'absent', 'late', 'excused'}
+    campus_staff_ids = set(StaffMember.objects.filter(school=school, status='active').values_list('id', flat=True))
+
+    updated_count = 0
+    with transaction.atomic():
+        for item in records_data:
+            s_id = item.get('staff_id')
+            if not s_id or s_id not in campus_staff_ids:
+                continue
+            status = str(item.get('status') or 'present').lower()
+            if status not in valid_statuses:
+                status = 'present'
+            note = str(item.get('note') or '').strip()[:255]
+
+            StaffAttendance.objects.update_or_create(
+                staff_id=s_id,
+                date=att_date,
+                defaults={
+                    'school': school,
+                    'status': status,
+                    'note': note,
+                    'marked_by': user,
+                }
+            )
+            updated_count += 1
+
+        record_event(
+            actor=user,
+            action='mark_staff_attendance',
+            obj=school
+        )
+
+    return Response({
+        'success': True,
+        'message': f'Attendance saved for {updated_count} staff member(s).',
+        'date': att_date.isoformat(),
+        'updated_count': updated_count
+    })
+

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { updateProfile, changePassword, type User } from './api';
 import { applyTheme, getStoredTheme, resolveHex, THEME_PRESETS, type ThemeMode } from './theme';
+import PasswordField from './PasswordField';
 import './style.css';
 
 interface SettingsProps {
@@ -369,8 +370,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
           <form onSubmit={handleSavePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
             <label className="settings-field-label">
               Current password
-              <input
-                type="password"
+              <PasswordField
                 required
                 className="fx-select"
                 value={currentPassword}
@@ -380,8 +380,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
 
             <label className="settings-field-label">
               New password (min 8 chars)
-              <input
-                type="password"
+              <PasswordField
                 required
                 minLength={8}
                 className="fx-select"
@@ -392,8 +391,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
 
             <label className="settings-field-label">
               Confirm new password
-              <input
-                type="password"
+              <PasswordField
                 required
                 minLength={8}
                 className="fx-select"

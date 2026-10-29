@@ -31,6 +31,7 @@ for name, view in [
 urlpatterns = [
     # Staff HR & Lifecycle
     path('staff/', staff.staff_list),
+    path('staff/attendance/', staff.staff_attendance),
     path('staff/history/', staff.staff_history),
     path('staff/<int:pk>/', staff.staff_detail),
     path('staff/<int:pk>/promote/', staff.staff_promote),

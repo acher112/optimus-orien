@@ -330,8 +330,6 @@ def _envelope(user, **extra):
 def overview(request):
     user = request.user
     _check_role(user)
-    if user.role == 'principal':
-        raise PermissionDenied('Principals cannot access multi-campus organisation overview.')
     period = request.query_params.get('period', '')
     schools = list(schools_scope(user).order_by('name'))
     windows = _windows(schools, period)

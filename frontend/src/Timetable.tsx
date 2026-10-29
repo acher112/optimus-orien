@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { request, type User } from './api';
 import ExportMenu from './ExportMenu';
+import './hr.css';
 
 type School = { id: number; name: string };
 type SchoolClass = { id: number; name: string; school: number };
@@ -687,19 +688,38 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
 
       {/* Add / Edit Period Modal */}
       {isModalOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-content" style={{ maxWidth: 520 }}>
-            <div className="modal-header">
-              <h2>{editingEntry ? 'Edit Timetable Period' : 'Schedule Timetable Period'}</h2>
-              <button type="button" className="close-btn" onClick={() => setIsModalOpen(false)}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
+          <div className="modal-card" style={{ maxWidth: 560, width: '95%' }}>
+            <div className="modal-head">
+              <div className="modal-icon">
+                <CalendarDays size={20} />
+              </div>
+              <div>
+                <h3>{editingEntry ? 'Edit Timetable Period' : 'Schedule Timetable Period'}</h3>
+                <p>Assign class, subject, day, time and room location</p>
+              </div>
+              <button type="button" onClick={() => setIsModalOpen(false)} aria-label="Close">
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleSave}>
-              <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <label style={{ gridColumn: '1 / -1' }}>
-                  School Class <span className="required">*</span>
+              <div className="modal-fields hr-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', padding: '18px 24px' }}>
+                {schools.length > 1 && user.role === 'organisation_admin' && (
+                  <label className="wide">
+                    School Campus *
+                    <select
+                      required
+                      value={selectedSchool || ''}
+                      onChange={e => setSelectedSchool(Number(e.target.value) || null)}
+                    >
+                      {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </label>
+                )}
+
+                <label className="wide">
+                  School Class *
                   <select
                     required
                     value={form.school_class}
@@ -711,7 +731,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                 </label>
 
                 <label>
-                  Day of Week <span className="required">*</span>
+                  Day of Week *
                   <select
                     required
                     value={form.day_of_week}
@@ -722,7 +742,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                 </label>
 
                 <label>
-                  Period Number <span className="required">*</span>
+                  Period Number *
                   <select
                     required
                     value={form.period_number}
@@ -744,7 +764,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                 </label>
 
                 <label>
-                  Start Time
+                  Start Time *
                   <input
                     type="time"
                     required
@@ -754,7 +774,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                 </label>
 
                 <label>
-                  End Time
+                  End Time *
                   <input
                     type="time"
                     required
@@ -763,8 +783,8 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                   />
                 </label>
 
-                <label style={{ gridColumn: '1 / -1' }}>
-                  Subject <span className="required">*</span>
+                <label className="wide">
+                  Subject *
                   <select
                     required
                     value={form.subject}
@@ -777,7 +797,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                   </select>
                 </label>
 
-                <label style={{ gridColumn: '1 / -1' }}>
+                <label className="wide">
                   Assigned Teacher (Optional)
                   <select
                     value={form.teacher}
@@ -792,7 +812,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                   </select>
                 </label>
 
-                <label style={{ gridColumn: '1 / -1' }}>
+                <label className="wide">
                   Room / Location (Optional)
                   <input
                     type="text"
@@ -803,7 +823,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
                 </label>
               </div>
 
-              <div className="modal-footer">
+              <div className="modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setIsModalOpen(false)}>
                   Cancel
                 </button>

@@ -388,6 +388,33 @@ class StaffEvent(models.Model):
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta:ordering=['-created_at','-id']
 
+
+class StaffAttendance(models.Model):
+    """Daily attendance register for campus staff members."""
+    STATUS = [
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('late', 'Late'),
+        ('excused', 'Excused'),
+    ]
+    staff = models.ForeignKey(StaffMember, on_delete=models.CASCADE, related_name='attendance_records')
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='staff_attendance_records')
+    date = models.DateField()
+    status = models.CharField(max_length=16, choices=STATUS, default='present')
+    note = models.CharField(max_length=255, blank=True)
+    marked_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['date', 'staff__last_name', 'staff__first_name']
+        constraints = [
+            models.UniqueConstraint(fields=['staff', 'date'], name='unique_staff_attendance_day')
+        ]
+
+    def __str__(self):
+        return f"{self.staff.full_name} - {self.date}: {self.status}"
+
 # ------------------------------------------------------------------ Finance (simple ledger)
 class FinanceCategory(models.Model):
     KINDS=[('income','Income'),('expense','Expense')]
@@ -1136,7 +1163,7 @@ class OrganisationRolePolicy(models.Model):
         'structure.manage_classes_subjects': True,
         'structure.manage_academic_years': False,
         'results.approve': True,
-        'finance.view_campus': False,
+        'finance.view_campus': True,
         'fees.view_campus': False,
         'salaries.view_campus': False,
         'staff.promote_terminate': False,
