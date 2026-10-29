@@ -1267,7 +1267,7 @@ function App() {
                         </div>
                       </div>
                       <div style={{ fontSize: 12, color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
-                        Rule INT-031 compliant: Defaulter flag never blocks examinations, report cards, or learning materials.
+                        Automated balance reminders with non-restrictive policy for student examinations and materials.
                       </div>
                     </div>
                     <button className="view-link" onClick={() => switchPage('Defaulters')}>
@@ -1306,7 +1306,7 @@ function App() {
                         </div>
                       </div>
                       <div style={{ fontSize: 12, color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
-                        Notice: Not a diagnosis. Requires minimum 3 assessments before evaluation (INT-003/004).
+                        Minimum 3 recorded assessments required for active risk evaluation.
                       </div>
                     </div>
                     <button className="view-link" onClick={() => switchPage('Students at Risk')}>
@@ -2810,6 +2810,204 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
   );
 }
 
+
+function formatFieldName(name: string): string {
+  if (!name) return '';
+  const special: Record<string, string> = {
+    end_date: 'End Date',
+    start_date: 'Start Date',
+    school: 'Campus',
+    school_class: 'Class',
+    academic_year: 'Academic Year',
+    attendance_alert_threshold: 'Attendance Threshold',
+    grade_alert_threshold: 'Grade Threshold',
+    first_name: 'First Name',
+    last_name: 'Last Name',
+    admission_number: 'Admission #',
+    enrolled_on: 'Enrolled On',
+    role: 'User Role',
+    status: 'Status',
+    priority: 'Priority',
+    active: 'Active Status',
+  };
+  if (special[name]) return special[name];
+  return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function parseAuditChanges(raw: any): { fieldsChanged: string[]; diffs: Record<string, { from: any; to: any }>; extra: Record<string, any> } {
+  if (!raw) return { fieldsChanged: [], diffs: {}, extra: {} };
+  let obj = raw;
+  if (typeof raw === 'string') {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return { fieldsChanged: [], diffs: {}, extra: { info: raw } };
+    }
+  }
+  if (typeof obj !== 'object' || obj === null) {
+    return { fieldsChanged: [], diffs: {}, extra: { value: String(obj) } };
+  }
+
+  const fieldsChanged: string[] = Array.isArray(obj.fields_changed) ? obj.fields_changed : [];
+  const diffs: Record<string, { from: any; to: any }> = {};
+  const extra: Record<string, any> = {};
+
+  Object.entries(obj).forEach(([key, val]) => {
+    if (key === 'fields_changed') return;
+    if (val && typeof val === 'object' && ('from' in val || 'to' in val)) {
+      diffs[key] = { from: (val as any).from, to: (val as any).to };
+    } else {
+      extra[key] = val;
+    }
+  });
+
+  return { fieldsChanged, diffs, extra };
+}
+
+function formatChangesSummary(raw: any, action?: any): string {
+  const { fieldsChanged, diffs, extra } = parseAuditChanges(raw);
+  const act = String(action || '').toLowerCase();
+
+  const diffParts: string[] = [];
+  Object.entries(diffs).forEach(([k, d]) => {
+    const fromStr = d.from === null || d.from === undefined ? 'none' : String(d.from);
+    const toStr = d.to === null || d.to === undefined ? 'none' : String(d.to);
+    diffParts.push(`${formatFieldName(k)}: ${fromStr} → ${toStr}`);
+  });
+
+  const otherFields = fieldsChanged.filter(f => !(f in diffs));
+  const otherParts = otherFields.length > 0 ? [`Modified: ${otherFields.map(formatFieldName).join(', ')}`] : [];
+  const extraParts = Object.entries(extra).map(([k, v]) => `${formatFieldName(k)}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`);
+
+  const all = [...diffParts, ...otherParts, ...extraParts];
+  if (all.length > 0) return all.join('; ');
+
+  if (act.includes('create')) return 'Initial record created';
+  if (act.includes('delete')) return 'Record deleted';
+  if (act.includes('terminate')) return 'Staff status set to terminated';
+  if (act.includes('promote')) return 'Staff promotion recorded';
+  if (act.includes('import')) return 'Batch record import';
+  if (act.includes('setup')) return 'Initial configuration saved';
+  return 'No field modifications';
+}
+
+function AuditChangesCell({ changes, action }: { changes: any; action?: any }) {
+  const [showRaw, setShowRaw] = useState(false);
+  const { fieldsChanged, diffs, extra } = parseAuditChanges(changes);
+  const act = String(action || '').toLowerCase();
+
+  const diffEntries = Object.entries(diffs);
+  const otherFields = fieldsChanged.filter(f => !(f in diffs));
+  const extraEntries = Object.entries(extra);
+
+  const hasContent = diffEntries.length > 0 || otherFields.length > 0 || extraEntries.length > 0;
+
+  return (
+    <div style={{ fontSize: 12, lineHeight: 1.4 }}>
+      {diffEntries.map(([k, d]) => (
+        <div
+          key={k}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            margin: '2px 6px 2px 0',
+            background: 'var(--bg-subtle, #f1f5f9)',
+            padding: '3px 8px',
+            borderRadius: 6,
+            border: '1px solid var(--border-color, #e2e8f0)',
+            fontSize: 11
+          }}
+        >
+          <span style={{ fontWeight: 600, color: 'var(--text-primary, #334155)' }}>{formatFieldName(k)}:</span>
+          <span style={{ color: '#94a3b8', textDecoration: d.from ? 'line-through' : 'none' }}>
+            {d.from === null || d.from === undefined ? '—' : String(d.from)}
+          </span>
+          <span style={{ color: '#cbd5e1' }}>→</span>
+          <span style={{ fontWeight: 600, color: 'var(--brand-primary, #715ee8)' }}>
+            {d.to === null || d.to === undefined ? '—' : String(d.to)}
+          </span>
+        </div>
+      ))}
+
+      {otherFields.length > 0 && (
+        <div style={{ marginTop: diffEntries.length > 0 ? 4 : 0, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+          <span style={{ color: '#64748b', fontSize: 11 }}>Updated:</span>
+          {otherFields.map(f => (
+            <span
+              key={f}
+              style={{
+                background: '#e0e7ff',
+                color: '#3730a3',
+                padding: '1px 7px',
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: 600
+              }}
+            >
+              {formatFieldName(f)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {extraEntries.map(([k, v]) => (
+        <div key={k} style={{ margin: '2px 0', fontSize: 11, color: '#475569' }}>
+          <span style={{ fontWeight: 600 }}>{formatFieldName(k)}: </span>
+          <span>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+        </div>
+      ))}
+
+      {!hasContent && (
+        <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 11 }}>
+          {act.includes('create') ? 'Initial record created' :
+           act.includes('delete') ? 'Record deleted' :
+           act.includes('terminate') ? 'Staff terminated' :
+           act.includes('promote') ? 'Staff promoted' :
+           act.includes('import') ? 'Import processed' :
+           act.includes('setup') ? 'Configuration saved' : 'No field modifications'}
+        </span>
+      )}
+
+      {changes && typeof changes === 'object' && Object.keys(changes).length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={() => setShowRaw(!showRaw)}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              fontSize: 10,
+              color: 'var(--brand-primary, #715ee8)',
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            {showRaw ? 'Hide JSON payload' : 'View JSON payload'}
+          </button>
+          {showRaw && (
+            <pre style={{
+              margin: '4px 0 0',
+              padding: 8,
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              fontSize: 10,
+              fontFamily: 'monospace',
+              overflowX: 'auto',
+              whiteSpace: 'pre-wrap',
+              maxHeight: 140
+            }}>
+              {JSON.stringify(changes, null, 2)}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AuditLogView({ notify }: { notify: (m: string) => void }) {
   const [logs, setLogs] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2848,7 +3046,7 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
       <div className="resource-summary">
         <div className="resource-icon"><ShieldCheck size={23} /></div>
         <div><strong>{logs.length}</strong><span>Total recorded security events</span></div>
-        <div className="resource-side"><CheckCircle2 size={17} /> Tamper-evident ledger</div>
+        <div className="resource-side"><CheckCircle2 size={17} /> Verified Activity Trail</div>
       </div>
       <section className="panel audit-panel">
         <FilterBar
@@ -2889,7 +3087,7 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
                   action: String(l.action || '—'),
                   resource: String(l.resource || '—'),
                   resource_id: String(l.resource_id || '—'),
-                  changes: l.changes_json ? JSON.stringify(l.changes_json) : '—',
+                  changes: formatChangesSummary(l.changes, l.action),
                 }))}
                 notify={notify}
               />
@@ -2911,14 +3109,14 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
               {filtered.map(l => {
                 const act = String(l.action || '');
                 const aClass = act.includes('create') ? 'act-create' : act.includes('update') ? 'act-update' : act.includes('transfer') ? 'act-transfer' : 'act-setup';
-                const ch = l.changes ? JSON.stringify(l.changes) : '—';
+
                 return (
                   <tr key={l.id}>
                     <td><Clock size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />{l.created_at ? new Date(String(l.created_at)).toLocaleString() : '—'}</td>
                     <td><span className={'action-pill ' + aClass}>{act.replace('_', ' ')}</span></td>
                     <td><strong>{String(l.resource || '—')}</strong></td>
                     <td>#{String(l.resource_id || '—')}</td>
-                    <td style={{ maxWidth: 350, wordBreak: 'break-word', fontFamily: 'monospace', fontSize: 11, color: '#636b83' }}>{ch}</td>
+                    <td style={{ minWidth: 260, maxWidth: 450 }}><AuditChangesCell changes={l.changes} action={l.action} /></td>
                   </tr>
                 );
               })}

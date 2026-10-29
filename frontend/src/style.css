@@ -2317,3 +2317,25 @@ input:checked + .toggle-slider:before {
 }
 
 
+
+
+/* ==========================================================================
+   AUDIT TRAIL & RESPONSIVE MODAL ENHANCEMENTS
+   ========================================================================== */
+.audit-table td {
+  vertical-align: top;
+}
+
+.modal-fields textarea,
+.modal-fields label:has(textarea) {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .modal-card {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    margin: 10px auto !important;
+  }
+}

@@ -753,7 +753,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
             <div className="panel-head">
               <div>
                 <h3>Fee Defaulters & Overdue Ledger</h3>
-                <p>Sorted by total outstanding descending (INT-031 compliant: fee status never blocks academic learning)</p>
+                <p>Sorted by total outstanding balance descending</p>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <ExportMenu
@@ -1454,7 +1454,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
               </div>
 
               <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px' }}>
-                <strong>Policy notice:</strong> In accordance with rule INT-031, reminder notices use neutral, polite language and never threaten or automatically restrict access to examinations, grade reports, or study materials. Reminders are rate-limited to 1 per student per day.
+                <strong>Notice:</strong> Reminder notices use polite communication without restricting student access to classes, examinations, or reports, and are limited to one per student daily.
               </p>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

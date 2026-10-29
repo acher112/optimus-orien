@@ -18,6 +18,9 @@ from core.services.audit import record_event
 from core.services.exam_engine import (
     calculate_subject_result, calculate_student_average,
     calculate_group_average, calculate_gender_performance,
+    calculate_subject_average, calculate_class_average,
+    calculate_class_weighted_average, calculate_student_weighted_average,
+    validate_configuration_for_publication,
     recalculate_configuration, recalculate_student, to_decimal, EPSILON
 )
 
@@ -337,21 +340,16 @@ def engine_configuration_publish(request, pk):
     if not config:
         raise NotFound('Configuration not found.')
 
+    # Validate strictly before publication (Spec §3)
+    try:
+        validate_configuration_for_publication(config)
+    except ValidationError as err:
+        err_msg = err.detail if hasattr(err, 'detail') else (err.message if hasattr(err, 'message') else str(err))
+        raise ValidationError({'detail': err_msg})
+    except Exception as err:
+        raise ValidationError({'detail': str(err)})
+
     components = list(config.components.all())
-    if not components:
-        raise ValidationError({'detail': 'Configuration must have at least one examination component.'})
-
-    total_weight = sum(c.weight_percentage for c in components)
-    if abs(total_weight - Decimal('100.00')) > EPSILON:
-        raise ValidationError({
-            'detail': f'Examination weights must total 100.00% to publish. Current total: {total_weight}%.'
-        })
-
-    for c in components:
-        if c.default_max_marks <= Decimal('0.00'):
-            raise ValidationError({'detail': f'Component {c.name} maximum marks must be positive.'})
-        if c.weight_percentage < Decimal('0.00'):
-            raise ValidationError({'detail': f'Component {c.name} weight must be non-negative.'})
 
     with transaction.atomic():
         config.status = 'published'
@@ -635,15 +633,29 @@ def engine_analytics(request):
             'support_needed': []
         })
 
-    # Fetch calculated student results for this configuration
-    student_results_qs = CalculatedStudentResult.objects.filter(
-        configuration=config
-    ).select_related('student', 'school_class', 'highest_subject', 'lowest_subject')
-
+    # Identify target classes in scope
+    target_classes_qs = SchoolClass.objects.filter(school=config.school)
     if request.query_params.get('class'):
-        student_results_qs = student_results_qs.filter(school_class_id=request.query_params['class'])
+        target_classes_qs = target_classes_qs.filter(pk=request.query_params['class'])
+    elif config.school_class:
+        target_classes_qs = target_classes_qs.filter(pk=config.school_class_id)
+    else:
+        target_classes_qs = target_classes_qs.filter(academic_year=config.academic_year)
     if request.query_params.get('section'):
-        student_results_qs = student_results_qs.filter(school_class__section=request.query_params['section'])
+        target_classes_qs = target_classes_qs.filter(section=request.query_params['section'])
+    target_classes = list(target_classes_qs.order_by('name', 'section'))
+
+    # Identify target subjects in scope
+    if config.subject:
+        target_subjects = [config.subject]
+    else:
+        target_subjects = list(Subject.objects.filter(school=config.school).order_by('name'))
+
+    # Fetch calculated student results for this configuration and class scope
+    student_results_qs = CalculatedStudentResult.objects.filter(
+        configuration=config,
+        school_class__in=target_classes
+    ).select_related('student', 'school_class', 'highest_subject', 'lowest_subject')
 
     # Build student list
     student_records = []
@@ -668,59 +680,157 @@ def engine_analytics(request):
     eligible_students = [s for s in student_records if s['overall_percentage'] is not None]
     pending_count = sum(1 for s in student_records if s['overall_percentage'] is None)
 
-    # Gender filter (if user explicitly filters the analytics)
-    requested_gender = request.query_params.get('gender')
-    analysis_pool = eligible_students
-    if requested_gender in ('male', 'female'):
-        analysis_pool = [s for s in eligible_students if s['gender'] == requested_gender]
+    # Class performance table (Spec §7: Official Class Average = Equal-Subject Model)
+    # SUM(Included Subject Averages) / Number of Included Subjects
+    class_performance = []
+    for klass in target_classes:
+        # Active enrollments for this class
+        klass_enrollments = Enrollment.objects.filter(
+            school_class=klass
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
+        ).select_related('student')
+        klass_student_ids = set(en.student_id for en in klass_enrollments)
+        klass_enrolled_count = len(klass_student_ids)
 
-    # Calculate headline average
-    averaging_method = request.query_params.get('averaging_method', 'student_weighted')
+        klass_sub_results = list(CalculatedSubjectResult.objects.filter(
+            configuration=config,
+            school_class=klass
+        ).select_related('subject', 'student'))
 
-    headline_avg = None
-    student_weighted_avg = None
-    class_weighted_avg = None
-    branch_weighted_avg = None
+        included_subject_averages = []
+        included_boys_subject_averages = []
+        included_girls_subject_averages = []
 
-    if eligible_students:
-        # Student-weighted average: sum(A_i) / N
-        all_percentages = [to_decimal(s['overall_percentage']) for s in analysis_pool]
-        student_weighted_avg = calculate_group_average(all_percentages)
+        for subj in target_subjects:
+            subj_scores = [
+                to_decimal(sr.final_percentage)
+                for sr in klass_sub_results
+                if sr.subject_id == subj.id and sr.final_percentage is not None
+            ]
+            subj_avg = calculate_group_average(subj_scores)
+            if subj_avg is not None:
+                included_subject_averages.append(subj_avg)
 
-        # Class-weighted average: average of each class's student-weighted average
-        class_groups = {}
-        for s in analysis_pool:
-            class_groups.setdefault(s['class_id'], []).append(to_decimal(s['overall_percentage']))
-        class_avgs = [calculate_group_average(scores) for scores in class_groups.values() if scores]
-        class_avgs_valid = [ca for ca in class_avgs if ca is not None]
-        class_weighted_avg = calculate_group_average(class_avgs_valid) if class_avgs_valid else None
+            # Gender-specific subject averages in this class (Spec §9)
+            boys_scores = [
+                to_decimal(sr.final_percentage)
+                for sr in klass_sub_results
+                if sr.subject_id == subj.id and sr.final_percentage is not None and sr.student.gender == 'male'
+            ]
+            boys_subj_avg = calculate_group_average(boys_scores)
+            if boys_subj_avg is not None:
+                included_boys_subject_averages.append(boys_subj_avg)
 
-        # Branch-weighted average: average of each branch's average
-        branch_groups = {}
-        for s in analysis_pool:
-            branch_groups.setdefault(s['branch_id'], []).append(to_decimal(s['overall_percentage']))
-        branch_avgs = [calculate_group_average(scores) for scores in branch_groups.values() if scores]
-        branch_avgs_valid = [ba for ba in branch_avgs if ba is not None]
-        branch_weighted_avg = calculate_group_average(branch_avgs_valid) if branch_avgs_valid else None
+            girls_scores = [
+                to_decimal(sr.final_percentage)
+                for sr in klass_sub_results
+                if sr.subject_id == subj.id and sr.final_percentage is not None and sr.student.gender == 'female'
+            ]
+            girls_subj_avg = calculate_group_average(girls_scores)
+            if girls_subj_avg is not None:
+                included_girls_subject_averages.append(girls_subj_avg)
 
-        if averaging_method == 'class_weighted' and class_weighted_avg is not None:
-            headline_avg = class_weighted_avg
-        elif averaging_method == 'branch_weighted' and branch_weighted_avg is not None:
-            headline_avg = branch_weighted_avg
-        else:
-            averaging_method = 'student_weighted'
-            headline_avg = student_weighted_avg
+        official_class_avg = calculate_class_average(included_subject_averages)
+        class_boys_avg = calculate_class_average(included_boys_subject_averages)
+        class_girls_avg = calculate_class_average(included_girls_subject_averages)
+        class_gap = (class_girls_avg - class_boys_avg) if (class_girls_avg is not None and class_boys_avg is not None) else None
 
-    # Gender performance breakdown
+        # Student-weighted class average for comparison
+        klass_students_records = [s for s in student_records if s['class_id'] == klass.id and s['overall_percentage'] is not None]
+        klass_st_weighted_avg = calculate_student_weighted_average([to_decimal(s['overall_percentage']) for s in klass_students_records])
+        klass_eligible_count = len(klass_students_records)
+        klass_pending_count = max(0, klass_enrolled_count - klass_eligible_count)
+
+        class_performance.append({
+            'class_id': klass.id,
+            'class_name': klass.name,
+            'average': round(float(official_class_avg), 2) if official_class_avg is not None else None,
+            'student_weighted_average': round(float(klass_st_weighted_avg), 2) if klass_st_weighted_avg is not None else None,
+            'boys_average': round(float(class_boys_avg), 2) if class_boys_avg is not None else None,
+            'girls_average': round(float(class_girls_avg), 2) if class_girls_avg is not None else None,
+            'gender_gap': round(float(class_gap), 2) if class_gap is not None else None,
+            'eligible_count': klass_eligible_count,
+            'enrolled_count': klass_enrolled_count,
+            'pending_count': klass_pending_count,
+            'included_subjects_count': len(included_subject_averages)
+        })
+    class_performance.sort(key=lambda x: -(x['average'] or 0))
+
+    # School & Branch Level Aggregations (Spec §8)
+    # A. Class-weighted average: SUM(Eligible Class Averages) / Number of Eligible Classes
+    eligible_class_averages = [
+        to_decimal(c['average'])
+        for c in class_performance
+        if c['average'] is not None
+    ]
+    class_weighted_avg = calculate_class_weighted_average(eligible_class_averages)
+
+    # B. Student-weighted average: SUM(Eligible Students' Overall Percentages) / Eligible Student Count
+    student_weighted_avg = calculate_student_weighted_average([
+        to_decimal(s['overall_percentage']) for s in eligible_students
+    ])
+
+    # Gender-specific class-weighted averages (Spec §9)
+    eligible_boys_class_avgs = [to_decimal(c['boys_average']) for c in class_performance if c['boys_average'] is not None]
+    boys_class_weighted_avg = calculate_class_weighted_average(eligible_boys_class_avgs)
+
+    eligible_girls_class_avgs = [to_decimal(c['girls_average']) for c in class_performance if c['girls_average'] is not None]
+    girls_class_weighted_avg = calculate_class_weighted_average(eligible_girls_class_avgs)
+
+    gender_gap_class_weighted = None
+    if girls_class_weighted_avg is not None and boys_class_weighted_avg is not None:
+        gender_gap_class_weighted = girls_class_weighted_avg - boys_class_weighted_avg
+
+    # Gender-specific student-weighted averages (Spec §9)
     boys_eligible = [to_decimal(s['overall_percentage']) for s in eligible_students if s['gender'] == 'male']
     girls_eligible = [to_decimal(s['overall_percentage']) for s in eligible_students if s['gender'] == 'female']
 
-    boys_avg = calculate_group_average(boys_eligible)
-    girls_avg = calculate_group_average(girls_eligible)
+    boys_student_weighted_avg = calculate_student_weighted_average(boys_eligible)
+    girls_student_weighted_avg = calculate_student_weighted_average(girls_eligible)
 
-    gender_gap = None
-    if girls_avg is not None and boys_avg is not None:
-        gender_gap = girls_avg - boys_avg  # In percentage points: positive means girls higher
+    gender_gap_student_weighted = None
+    if girls_student_weighted_avg is not None and boys_student_weighted_avg is not None:
+        gender_gap_student_weighted = girls_student_weighted_avg - boys_student_weighted_avg
+
+    # Branch-weighted average
+    branch_groups = {}
+    for s in eligible_students:
+        branch_groups.setdefault(s['branch_id'], []).append(to_decimal(s['overall_percentage']))
+    branch_avgs = [calculate_group_average(scores) for scores in branch_groups.values() if scores]
+    branch_avgs_valid = [ba for ba in branch_avgs if ba is not None]
+    branch_weighted_avg = calculate_group_average(branch_avgs_valid) if branch_avgs_valid else None
+
+    # Headline average based on user preference or requested filter
+    averaging_method = request.query_params.get('averaging_method', 'student_weighted')
+    requested_gender = request.query_params.get('gender')
+
+    if averaging_method == 'class_weighted':
+        if requested_gender == 'male':
+            headline_avg = boys_class_weighted_avg
+        elif requested_gender == 'female':
+            headline_avg = girls_class_weighted_avg
+        else:
+            headline_avg = class_weighted_avg
+        boys_avg = boys_class_weighted_avg
+        girls_avg = girls_class_weighted_avg
+        gender_gap = gender_gap_class_weighted
+    elif averaging_method == 'branch_weighted':
+        headline_avg = branch_weighted_avg
+        boys_avg = boys_student_weighted_avg
+        girls_avg = girls_student_weighted_avg
+        gender_gap = gender_gap_student_weighted
+    else:
+        averaging_method = 'student_weighted'
+        if requested_gender == 'male':
+            headline_avg = boys_student_weighted_avg
+        elif requested_gender == 'female':
+            headline_avg = girls_student_weighted_avg
+        else:
+            headline_avg = student_weighted_avg
+        boys_avg = boys_student_weighted_avg
+        girls_avg = girls_student_weighted_avg
+        gender_gap = gender_gap_student_weighted
 
     # Pass rate
     passed_count = sum(1 for s in eligible_students if s['passed'] is True)
@@ -753,85 +863,52 @@ def engine_analytics(request):
         else:
             bins[6]['count'] += 1
 
-    # Subject performance table with boys and girls breakdown
-    subject_results_qs = CalculatedSubjectResult.objects.filter(
-        configuration=config
-    ).select_related('subject', 'student')
-    if request.query_params.get('class'):
-        subject_results_qs = subject_results_qs.filter(school_class_id=request.query_params['class'])
+    # Subject performance with coverage metrics (Spec §6)
+    total_enrolled_students = len(set(
+        en.student_id
+        for en in Enrollment.objects.filter(
+            school_class__in=target_classes
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
+        )
+    ))
 
-    subj_groups = {}
-    for sr in subject_results_qs:
-        if sr.final_percentage is not None:
-            s_id = sr.subject_id
-            if s_id not in subj_groups:
-                subj_groups[s_id] = {
-                    'subject_name': sr.subject.name,
-                    'subject_code': sr.subject.code,
-                    'all': [],
-                    'boys': [],
-                    'girls': []
-                }
-            pct = to_decimal(sr.final_percentage)
-            subj_groups[s_id]['all'].append(pct)
-            if sr.student.gender == 'male':
-                subj_groups[s_id]['boys'].append(pct)
-            elif sr.student.gender == 'female':
-                subj_groups[s_id]['girls'].append(pct)
+    all_subject_results = list(CalculatedSubjectResult.objects.filter(
+        configuration=config,
+        school_class__in=target_classes
+    ).select_related('subject', 'student'))
 
     subject_performance = []
-    for s_id, data in subj_groups.items():
-        s_overall = calculate_group_average(data['all'])
-        s_boys = calculate_group_average(data['boys'])
-        s_girls = calculate_group_average(data['girls'])
-        s_gap = (s_girls - s_boys) if (s_girls is not None and s_boys is not None) else None
+    for subj in target_subjects:
+        subj_results = [sr for sr in all_subject_results if sr.subject_id == subj.id and sr.final_percentage is not None]
+        eligible_scores = [to_decimal(sr.final_percentage) for sr in subj_results]
+
+        sub_stats = calculate_subject_average(eligible_scores, enrolled_count=total_enrolled_students)
+
+        boys_scores = [to_decimal(sr.final_percentage) for sr in subj_results if sr.student.gender == 'male']
+        girls_scores = [to_decimal(sr.final_percentage) for sr in subj_results if sr.student.gender == 'female']
+
+        s_boys_avg = calculate_group_average(boys_scores)
+        s_girls_avg = calculate_group_average(girls_scores)
+        s_gap = (s_girls_avg - s_boys_avg) if (s_girls_avg is not None and s_boys_avg is not None) else None
+
         subject_performance.append({
-            'subject_id': s_id,
-            'subject_name': data['subject_name'],
-            'subject_code': data['subject_code'],
-            'overall_average': round(float(s_overall), 2) if s_overall is not None else None,
-            'boys_average': round(float(s_boys), 2) if s_boys is not None else None,
-            'girls_average': round(float(s_girls), 2) if s_girls is not None else None,
+            'subject_id': subj.id,
+            'subject_name': subj.name,
+            'subject_code': subj.code,
+            'average_percentage': round(float(sub_stats['average_percentage']), 2) if sub_stats['average_percentage'] is not None else None,
+            'overall_average': round(float(sub_stats['average_percentage']), 2) if sub_stats['average_percentage'] is not None else None,
+            'boys_average': round(float(s_boys_avg), 2) if s_boys_avg is not None else None,
+            'girls_average': round(float(s_girls_avg), 2) if s_girls_avg is not None else None,
             'gender_gap': round(float(s_gap), 2) if s_gap is not None else None,
-            'eligible_students': len(data['all']),
-            'highest': round(float(max(data['all'])), 2) if data['all'] else None,
-            'lowest': round(float(min(data['all'])), 2) if data['all'] else None,
+            'eligible_students': sub_stats['eligible_count'],
+            'enrolled_students': sub_stats['enrolled_count'],
+            'pending_students': sub_stats['pending_count'],
+            'coverage_percentage': round(float(sub_stats['coverage_percentage']), 1) if sub_stats['coverage_percentage'] is not None else None,
+            'highest': round(float(max(eligible_scores)), 2) if eligible_scores else None,
+            'lowest': round(float(min(eligible_scores)), 2) if eligible_scores else None,
         })
     subject_performance.sort(key=lambda x: -(x['overall_average'] or 0))
-
-    # Class performance table
-    class_groups = {}
-    for s in student_records:
-        cid = s['class_id']
-        if cid not in class_groups:
-            class_groups[cid] = {'name': s['class_name'], 'scores': [], 'boys': [], 'girls': [], 'pending': 0}
-        if s['overall_percentage'] is not None:
-            pct = to_decimal(s['overall_percentage'])
-            class_groups[cid]['scores'].append(pct)
-            if s['gender'] == 'male':
-                class_groups[cid]['boys'].append(pct)
-            elif s['gender'] == 'female':
-                class_groups[cid]['girls'].append(pct)
-        else:
-            class_groups[cid]['pending'] += 1
-
-    class_performance = []
-    for cid, c_data in class_groups.items():
-        c_overall = calculate_group_average(c_data['scores'])
-        c_boys = calculate_group_average(c_data['boys'])
-        c_girls = calculate_group_average(c_data['girls'])
-        c_gap = (c_girls - c_boys) if (c_girls is not None and c_boys is not None) else None
-        class_performance.append({
-            'class_id': cid,
-            'class_name': c_data['name'],
-            'average': round(float(c_overall), 2) if c_overall is not None else None,
-            'boys_average': round(float(c_boys), 2) if c_boys is not None else None,
-            'girls_average': round(float(c_girls), 2) if c_girls is not None else None,
-            'gender_gap': round(float(c_gap), 2) if c_gap is not None else None,
-            'eligible_count': len(c_data['scores']),
-            'pending_count': c_data['pending']
-        })
-    class_performance.sort(key=lambda x: -(x['average'] or 0))
 
     # Academic support needed list
     support_needed = [
@@ -866,7 +943,13 @@ def engine_analytics(request):
             'branch_weighted_average': round(float(branch_weighted_avg), 2) if branch_weighted_avg is not None else None,
             'boys_average': round(float(boys_avg), 2) if boys_avg is not None else None,
             'girls_average': round(float(girls_avg), 2) if girls_avg is not None else None,
+            'boys_student_weighted_average': round(float(boys_student_weighted_avg), 2) if boys_student_weighted_avg is not None else None,
+            'girls_student_weighted_average': round(float(girls_student_weighted_avg), 2) if girls_student_weighted_avg is not None else None,
+            'boys_class_weighted_average': round(float(boys_class_weighted_avg), 2) if boys_class_weighted_avg is not None else None,
+            'girls_class_weighted_average': round(float(girls_class_weighted_avg), 2) if girls_class_weighted_avg is not None else None,
             'gender_gap': round(float(gender_gap), 2) if gender_gap is not None else None,
+            'gender_gap_student_weighted': round(float(gender_gap_student_weighted), 2) if gender_gap_student_weighted is not None else None,
+            'gender_gap_class_weighted': round(float(gender_gap_class_weighted), 2) if gender_gap_class_weighted is not None else None,
             'eligible_students_count': len(eligible_students),
             'eligible_boys_count': len(boys_eligible),
             'eligible_girls_count': len(girls_eligible),

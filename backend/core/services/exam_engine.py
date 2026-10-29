@@ -156,6 +156,8 @@ def calculate_subject_result(
     if assessed_weight > Decimal('0.00'):
         current_percentage = (accumulated_contribution / (assessed_weight / Decimal('100.0000')))
 
+    remaining_weight = Decimal('100.0000') - assessed_weight
+
     if not all_completed:
         return {
             'student_id': student_id,
@@ -166,6 +168,8 @@ def calculate_subject_result(
             'current_percentage': current_percentage,
             'accumulated_contribution': accumulated_contribution,
             'assessed_weight': assessed_weight,
+            'remaining_weight': remaining_weight,
+            'final_result_status': 'pending',
             'term_results': term_details
         }
 
@@ -182,6 +186,8 @@ def calculate_subject_result(
         'current_percentage': final_percentage,
         'accumulated_contribution': accumulated_contribution,
         'assessed_weight': assessed_weight,
+        'remaining_weight': Decimal('0.0000'),
+        'final_result_status': 'completed',
         'term_results': term_details
     }
 
@@ -304,17 +310,171 @@ def calculate_group_average(percentages: List[Decimal]) -> Optional[Decimal]:
     return total / Decimal(len(percentages))
 
 
+def calculate_subject_average(
+    eligible_percentages: List[Decimal],
+    enrolled_count: int = 0
+) -> Dict[str, Any]:
+    """Calculates subject average percentage and assessment coverage metrics (Spec §6).
+
+    Formula:
+      Subject Average = SUM(Eligible Students' Final Subject Percentages) / Eligible Student Count
+
+    Returns:
+      average_percentage: Decimal or None (empty population returns None / N/A, never 0)
+      eligible_count: number of students with completed valid subject results
+      enrolled_count: total enrolled students for the subject in scope
+      pending_count: number of pending / unentered results
+      coverage_percentage: (eligible_count / enrolled_count) * 100
+    """
+    eligible_count = len(eligible_percentages)
+    pending_count = max(0, enrolled_count - eligible_count)
+    if eligible_count == 0:
+        return {
+            'average_percentage': None,
+            'eligible_count': 0,
+            'enrolled_count': enrolled_count,
+            'pending_count': pending_count,
+            'coverage_percentage': None
+        }
+
+    for p in eligible_percentages:
+        if p < Decimal('0.00') or p > Decimal('100.0001'):
+            raise ValidationError(f"Invalid subject percentage: {p}")
+
+    avg = sum(eligible_percentages) / Decimal(eligible_count)
+    coverage = (Decimal(eligible_count) / Decimal(enrolled_count) * Decimal('100.0000')) if enrolled_count > 0 else Decimal('100.0000')
+
+    return {
+        'average_percentage': avg,
+        'eligible_count': eligible_count,
+        'enrolled_count': enrolled_count,
+        'pending_count': pending_count,
+        'coverage_percentage': coverage
+    }
+
+
+def calculate_class_average(included_subject_averages: List[Decimal]) -> Optional[Decimal]:
+    """Calculates official class performance average using the equal-subject model (Spec §7).
+
+    Formula:
+      Class Average = SUM(Included Subject Averages) / Number of Included Subjects
+
+    Each included subject contributes equally to the class metric.
+    Returns None if no included subject averages exist (never returns zero for empty).
+    """
+    if not included_subject_averages:
+        return None
+    for s_avg in included_subject_averages:
+        if s_avg < Decimal('0.00') or s_avg > Decimal('100.0001'):
+            raise ValidationError(f"Invalid subject average percentage: {s_avg}")
+    return sum(included_subject_averages) / Decimal(len(included_subject_averages))
+
+
+def calculate_class_weighted_average(class_averages: List[Decimal]) -> Optional[Decimal]:
+    """Calculates class-weighted school or branch average (Spec §8A).
+
+    Formula:
+      School/Branch Average = SUM(Eligible Class Averages) / Number of Eligible Classes
+      Each eligible class contributes equally regardless of class size.
+    """
+    if not class_averages:
+        return None
+    for ca in class_averages:
+        if ca < Decimal('0.00') or ca > Decimal('100.0001'):
+            raise ValidationError(f"Invalid class average percentage: {ca}")
+    return sum(class_averages) / Decimal(len(class_averages))
+
+
+def calculate_student_weighted_average(student_percentages: List[Decimal]) -> Optional[Decimal]:
+    """Calculates student-weighted school or branch average (Spec §8B).
+
+    Formula:
+      School/Branch Average = SUM(Eligible Students' Overall Percentages) / Eligible Student Count
+      Each eligible student contributes equally.
+    """
+    if not student_percentages:
+        return None
+    for sp in student_percentages:
+        if sp < Decimal('0.00') or sp > Decimal('100.0001'):
+            raise ValidationError(f"Invalid student overall percentage: {sp}")
+    return sum(student_percentages) / Decimal(len(student_percentages))
+
+
 def calculate_gender_performance(
     students: List[Dict[str, Any]],
     requested_gender: str
 ) -> Optional[Decimal]:
-    """Calculates group average for a specified authorized gender category."""
+    """Calculates group average for a specified authorized gender category (Spec §9)."""
     eligible = [
         to_decimal(s['overall_percentage'])
         for s in students
         if s.get('gender') == requested_gender and s.get('overall_percentage') is not None
     ]
     return calculate_group_average(eligible)
+
+
+def validate_configuration_for_publication(config: Any) -> None:
+    """Strict configuration validation before publication (Spec §3).
+
+    Rules:
+    - Defined academic scope (school and academic year).
+    - Reporting scale must be positive (> 0).
+    - Passing percentage must be within 0.00% and 100.00%.
+    - At least one valid examination term must exist.
+    - Each required term must have a valid non-empty name.
+    - Term contributions must be non-negative and sum to exactly 100.00%.
+    - Maximum marks must be greater than zero for every applicable subject.
+    - Applicable subjects must exist for the configuration scope.
+    - Reject invalid configurations explicitly. Never silently normalize weights.
+    """
+    from core.models import ExamComponentSubjectConfig, Subject
+
+    if not getattr(config, 'school_id', None):
+        raise ValidationError("Configuration must have a defined school / campus scope.")
+    if not getattr(config, 'academic_year_id', None):
+        raise ValidationError("Configuration must have a defined academic year.")
+
+    if config.reporting_scale <= Decimal('0.00'):
+        raise ValidationError("Final reporting scale must be positive (> 0).")
+
+    if config.passing_threshold < Decimal('0.00') or config.passing_threshold > Decimal('100.00'):
+        raise ValidationError("Passing percentage must be within permitted range (0.00% to 100.00%).")
+
+    components = list(config.components.all().order_by('sequence', 'id'))
+    if not components:
+        raise ValidationError("At least one valid examination term/component must exist.")
+
+    total_weight = sum(c.weight_percentage for c in components)
+    if abs(total_weight - Decimal('100.00')) > EPSILON:
+        raise ValidationError(f"Term contributions must total 100.00% to publish. Current total: {total_weight}%.")
+
+    # Scope subjects
+    if config.subject_id:
+        target_subjects = [config.subject]
+    else:
+        target_subjects = list(Subject.objects.filter(school_id=config.school_id))
+
+    if not target_subjects:
+        raise ValidationError("No applicable subjects found for configuration scope.")
+
+    subject_configs = {
+        (sc.component_id, sc.subject_id): sc.maximum_marks
+        for sc in ExamComponentSubjectConfig.objects.filter(component__in=components)
+    }
+
+    for comp in components:
+        if not comp.name or not comp.name.strip():
+            raise ValidationError(f"Examination component #{comp.id} must have a valid name.")
+        if comp.weight_percentage < Decimal('0.00'):
+            raise ValidationError(f"Term '{comp.name}' contribution must be non-negative (>= 0).")
+        if comp.default_max_marks <= Decimal('0.00'):
+            raise ValidationError(f"Term '{comp.name}' maximum marks must be greater than zero.")
+
+        # Validate maximum marks for each applicable subject
+        for subj in target_subjects:
+            max_m = subject_configs.get((comp.id, subj.id), comp.default_max_marks)
+            if max_m <= Decimal('0.00'):
+                raise ValidationError(f"Maximum marks for subject '{subj.name}' in term '{comp.name}' must be greater than zero.")
 
 
 # ------------------------------------------------------------------ Recalculation Service Pipeline
@@ -382,16 +542,21 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
 
         subject_results_updated = 0
         student_results_updated = 0
+        seen_student_ids = set()
 
         for klass in target_classes:
-            # Active enrolled students
+            # Active enrolled students deduplicated by student ID (Spec §8, §14 #19)
             enrollments = Enrollment.objects.filter(
                 school_class=klass
             ).filter(
                 Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
-            ).select_related('student')
+            ).select_related('student').order_by('student_id', '-start_date')
 
-            students = [en.student for en in enrollments]
+            students = []
+            for en in enrollments:
+                if en.student_id not in seen_student_ids:
+                    seen_student_ids.add(en.student_id)
+                    students.append(en.student)
 
             # Fetch all existing marks for this scope
             marks_qs = ExamStudentMark.objects.filter(

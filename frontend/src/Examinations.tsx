@@ -47,16 +47,12 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
   const [newCfgScale, setNewCfgScale] = useState('100.00');
   const [newCfgPrecision, setNewCfgPrecision] = useState(2);
   const [newCfgPassThreshold, setNewCfgPassThreshold] = useState('40.00');
-  const [newCfgWeightMode, setNewCfgWeightMode] = useState<'equal' | 'custom'>('equal');
-  const [newCfgSubjectWeights, setNewCfgSubjectWeights] = useState<Record<number, string>>({});
-  const [newCfgTerms, setNewCfgTerms] = useState<Array<{ name: string; weight: string; max_marks: string }>>([
-    { name: 'First Term', weight: '20.00', max_marks: '50.00' },
-    { name: 'Second Term', weight: '30.00', max_marks: '75.00' },
-    { name: 'Third Term', weight: '50.00', max_marks: '100.00' },
+  const [newCfgTerms, setNewCfgTerms] = useState<Array<{ name: string; weight: string; default_max: string }>>([
+    { name: 'First Term', weight: '20.00', default_max: '50.00' },
+    { name: 'Second Term', weight: '30.00', default_max: '75.00' },
+    { name: 'Third Term', weight: '50.00', default_max: '100.00' },
   ]);
-
-  // Subject Max Marks Overrides in Modal (e.g. English 100 across all terms)
-  const [subjectOverrides, setSubjectOverrides] = useState<Array<{ subject_id: string; term_index: number; max_marks: string }>>([]);
+  const [termSubjectMaxMarks, setTermSubjectMaxMarks] = useState<Record<string, string>>({});
 
   // Configurable Marks Grid State
   const [gridClassId, setGridClassId] = useState<number | null>(null);
@@ -226,37 +222,35 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
   // ----------------------------------------------------
   const handleCreateConfig = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newCfgName.trim()) {
+      alert('Structure name is required.');
+      return;
+    }
     const totalW = newCfgTerms.reduce((sum, t) => sum + (parseFloat(t.weight) || 0), 0);
     if (Math.abs(totalW - 100) > 0.001) {
-      alert(`Term weights must sum to exactly 100.00%. Current sum: ${totalW.toFixed(2)}%`);
+      alert(`Term contributions must sum to exactly 100.00%. Current sum: ${totalW.toFixed(2)}%`);
       return;
     }
 
     try {
       const components = newCfgTerms.map((t, idx) => {
-        // Collect subject max marks overrides for this term
-        const termOverrides = subjectOverrides
-          .filter(o => o.term_index === idx)
-          .map(o => ({
-            subject_id: Number(o.subject_id),
-            maximum_marks: o.max_marks
-          }));
+        const subject_configs = subjects.map(s => {
+          const key = `${idx}_${s.id}`;
+          const val = termSubjectMaxMarks[key] !== undefined ? termSubjectMaxMarks[key] : (t.default_max || '100.00');
+          return {
+            subject_id: s.id,
+            maximum_marks: val && parseFloat(val) > 0 ? val : (t.default_max || '100.00')
+          };
+        });
 
         return {
           name: t.name,
           sequence: idx + 1,
           weight_percentage: t.weight,
-          default_max_marks: t.max_marks,
-          subject_configs: termOverrides
+          default_max_marks: t.default_max || '100.00',
+          subject_configs
         };
       });
-
-      const subject_weights = newCfgWeightMode === 'custom'
-        ? subjects.map(s => ({
-            subject_id: s.id,
-            weight: newCfgSubjectWeights[s.id] || '1.00'
-          }))
-        : [];
 
       const payload = {
         name: newCfgName,
@@ -266,9 +260,9 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
         reporting_scale: newCfgScale,
         rounding_precision: newCfgPrecision,
         passing_threshold: newCfgPassThreshold,
-        subject_weighting_mode: newCfgWeightMode,
+        subject_weighting_mode: 'equal',
         components,
-        subject_weights
+        subject_weights: []
       };
 
       const res = await request<R>('exams/engine/configurations/', {
@@ -555,72 +549,92 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 </div>
               </section>
 
-              {/* Metric KPI Cards */}
+              {/* Metric KPI Cards (Spec §8 & §9: Distinct Class-Weighted and Student-Weighted Averages) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
                 {/* Headline Average */}
                 <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${OVERALL_COLOR}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                    Overall Academic Average
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Headline Average ({analyticsAveragingMethod === 'class_weighted' ? 'Class-Weighted' : 'Student-Weighted'})
                   </div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
                     {analyticsData.summary?.headline_average !== null && analyticsData.summary?.headline_average !== undefined ? `${analyticsData.summary.headline_average}%` : 'N/A'}
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>
-                    Method: <strong style={{ color: OVERALL_COLOR }}>{(analyticsData.summary?.averaging_method || 'student_weighted').replace('_', ' ')}</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Pass Rate: <strong style={{ color: '#0f172a' }}>{analyticsData.summary?.pass_rate !== null && analyticsData.summary?.pass_rate !== undefined ? `${analyticsData.summary.pass_rate}%` : 'N/A'}</strong>
                   </div>
                 </div>
 
-                {/* Boys Average */}
+                {/* Class-Weighted School Average (Spec §8A) */}
+                <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #8b5cf6' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Class-Weighted Average
+                  </div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#6d28d9', margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.class_weighted_average !== null && analyticsData.summary?.class_weighted_average !== undefined ? `${analyticsData.summary.class_weighted_average}%` : 'N/A'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Each class contributes equally regardless of size
+                  </div>
+                </div>
+
+                {/* Student-Weighted School Average (Spec §8B) */}
+                <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #06b6d4' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Student-Weighted Average
+                  </div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#0e7490', margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.student_weighted_average !== null && analyticsData.summary?.student_weighted_average !== undefined ? `${analyticsData.summary.student_weighted_average}%` : 'N/A'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Each eligible student contributes equally
+                  </div>
+                </div>
+
+                {/* Boys vs Girls Group Averages (Spec §9) */}
                 <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${BOY_COLOR}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                    Boys' Average
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Boys vs Girls Averages
                   </div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: BOY_COLOR, margin: '8px 0 4px' }}>
-                    {analyticsData.summary?.boys_average !== null && analyticsData.summary?.boys_average !== undefined ? `${analyticsData.summary.boys_average}%` : 'N/A'}
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'baseline', margin: '8px 0 4px' }}>
+                    <span style={{ fontSize: 24, fontWeight: 800, color: BOY_COLOR }} title="Boys average">
+                      {analyticsData.summary?.boys_average !== null && analyticsData.summary?.boys_average !== undefined ? `${analyticsData.summary.boys_average}%` : 'N/A'}
+                      <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b', marginLeft: 3 }}>B</span>
+                    </span>
+                    <span style={{ fontSize: 24, fontWeight: 800, color: GIRL_COLOR }} title="Girls average">
+                      {analyticsData.summary?.girls_average !== null && analyticsData.summary?.girls_average !== undefined ? `${analyticsData.summary.girls_average}%` : 'N/A'}
+                      <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b', marginLeft: 3 }}>G</span>
+                    </span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>
-                    {analyticsData.summary?.eligible_boys_count ?? 0} eligible boys assessed
-                  </div>
-                </div>
-
-                {/* Girls Average */}
-                <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${GIRL_COLOR}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                    Girls' Average
-                  </div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: GIRL_COLOR, margin: '8px 0 4px' }}>
-                    {analyticsData.summary?.girls_average !== null && analyticsData.summary?.girls_average !== undefined ? `${analyticsData.summary.girls_average}%` : 'N/A'}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>
-                    {analyticsData.summary?.eligible_girls_count ?? 0} eligible girls assessed
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    {analyticsData.summary?.eligible_boys_count ?? 0} boys / {analyticsData.summary?.eligible_girls_count ?? 0} girls assessed
                   </div>
                 </div>
 
-                {/* Gender Performance Gap */}
+                {/* Gender Performance Gap (Spec §9: Girls - Boys) */}
                 <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #10b981' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                    Gender Performance Gap
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Gender Gap (Girls – Boys)
                   </div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: '#10b981', margin: '8px 0 4px' }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#10b981', margin: '8px 0 4px' }}>
                     {analyticsData.summary?.gender_gap !== null && analyticsData.summary?.gender_gap !== undefined ? (
                       `${analyticsData.summary.gender_gap > 0 ? '+' : ''}${analyticsData.summary.gender_gap} pp`
                     ) : 'N/A'}
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>
-                    Difference in percentage points (Girls – Boys)
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Difference in percentage points
                   </div>
                 </div>
 
-                {/* Assessment Completion Status */}
+                {/* Assessment Completion Status (Spec §10) */}
                 <div className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #f59e0b' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                    Eligible vs Pending
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                    Completion & Coverage
                   </div>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
-                    {analyticsData.summary?.eligible_students_count ?? 0} <span style={{ fontSize: 14, fontWeight: 400, color: '#64748b' }}>Complete</span> / {analyticsData.summary?.pending_students_count ?? 0} <span style={{ fontSize: 14, fontWeight: 400, color: '#f59e0b' }}>Pending</span>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
+                    {analyticsData.summary?.eligible_students_count ?? 0} <span style={{ fontSize: 13, fontWeight: 400, color: '#64748b' }}>Complete</span> / {analyticsData.summary?.pending_students_count ?? 0} <span style={{ fontSize: 13, fontWeight: 400, color: '#f59e0b' }}>Pending</span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>
-                    Pass Rate: <strong>{analyticsData.summary?.pass_rate !== null && analyticsData.summary?.pass_rate !== undefined ? `${analyticsData.summary.pass_rate}%` : 'N/A'}</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Missing marks are null (never treated as 0)
                   </div>
                 </div>
               </div>
@@ -648,33 +662,35 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                   </div>
                 </section>
 
-                {/* Class Performance Comparison */}
+                {/* Class Performance Comparison (Spec §7: Official Equal-Subject Class Metric) */}
                 <section className="panel" style={{ padding: '16px 20px' }}>
                   <div className="panel-head" style={{ marginBottom: 12 }}>
                     <div>
-                      <h3 style={{ fontSize: 16 }}>Class-Level Performance</h3>
-                      <p style={{ fontSize: 13, color: '#64748b' }}>Class averages with boys vs girls comparison</p>
+                      <h3 style={{ fontSize: 16 }}>Class-Level Performance (Equal-Subject Model)</h3>
+                      <p style={{ fontSize: 13, color: '#64748b' }}>Equal contribution across subjects; compared with student-weighted average</p>
                     </div>
                   </div>
-                  <div className="table-scroll" style={{ maxHeight: 240 }}>
+                  <div className="table-scroll" style={{ maxHeight: 260 }}>
                     <table className="data-table" style={{ fontSize: 13 }}>
                       <thead>
                         <tr>
                           <th>CLASS</th>
-                          <th>OVERALL AVG</th>
+                          <th title="Official Equal-Subject Class Metric (Spec §7)">CLASS AVG (EQUAL)</th>
+                          <th title="Student-weighted mean across class members">STUDENT-WEIGHTED</th>
                           <th>BOYS</th>
                           <th>GIRLS</th>
                           <th>GAP</th>
-                          <th>ELIGIBLE</th>
+                          <th>COVERAGE</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(analyticsData.class_performance || []).map((c: R) => (
                           <tr key={c.class_id}>
                             <td><strong>{c.class_name}</strong></td>
-                            <td><span className="pill purple">{c.average !== null ? `${c.average}%` : 'N/A'}</span></td>
-                            <td style={{ color: BOY_COLOR }}>{c.boys_average !== null ? `${c.boys_average}%` : '–'}</td>
-                            <td style={{ color: GIRL_COLOR }}>{c.girls_average !== null ? `${c.girls_average}%` : '–'}</td>
+                            <td><span className="pill purple" style={{ fontWeight: 700 }}>{c.average !== null ? `${c.average}%` : 'N/A'}</span></td>
+                            <td style={{ color: '#475569' }}>{c.student_weighted_average !== null ? `${c.student_weighted_average}%` : '–'}</td>
+                            <td style={{ color: BOY_COLOR, fontWeight: 600 }}>{c.boys_average !== null ? `${c.boys_average}%` : '–'}</td>
+                            <td style={{ color: GIRL_COLOR, fontWeight: 600 }}>{c.girls_average !== null ? `${c.girls_average}%` : '–'}</td>
                             <td>
                               {c.gender_gap !== null ? (
                                 <span style={{ color: c.gender_gap >= 0 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
@@ -682,11 +698,15 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                                 </span>
                               ) : '–'}
                             </td>
-                            <td>{c.eligible_count}</td>
+                            <td>
+                              <span style={{ fontSize: 12, color: '#64748b' }}>
+                                {c.eligible_count} / {c.enrolled_count} {c.pending_count > 0 && <span style={{ color: '#f59e0b' }}>({c.pending_count} pending)</span>}
+                              </span>
+                            </td>
                           </tr>
                         ))}
                         {(!analyticsData.class_performance || analyticsData.class_performance.length === 0) && (
-                          <tr><td colSpan={6} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No class records available</td></tr>
+                          <tr><td colSpan={7} style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>No class records available</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -694,12 +714,12 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                 </section>
               </div>
 
-              {/* Subject Performance Breakdown Table */}
+              {/* Subject Performance Breakdown Table (Spec §6) */}
               <section className="panel" style={{ padding: '16px 20px' }}>
                 <div className="panel-head" style={{ marginBottom: 12 }}>
                   <div>
-                    <h3 style={{ fontSize: 16 }}>Subject Performance & Gender Analytics</h3>
-                    <p style={{ fontSize: 13, color: '#64748b' }}>Normalized subject averages, gender group averages, and range bounds</p>
+                    <h3 style={{ fontSize: 16 }}>Subject Performance & Assessment Coverage</h3>
+                    <p style={{ fontSize: 13, color: '#64748b' }}>Normalized subject percentages, gender analytics, and assessment coverage</p>
                   </div>
                 </div>
                 <div className="table-scroll">
@@ -708,13 +728,13 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                       <tr>
                         <th>SUBJECT</th>
                         <th>CODE</th>
-                        <th>OVERALL AVERAGE</th>
+                        <th>SUBJECT AVERAGE</th>
                         <th>BOYS AVERAGE</th>
                         <th>GIRLS AVERAGE</th>
                         <th>GENDER GAP</th>
-                        <th>HIGHEST</th>
-                        <th>LOWEST</th>
-                        <th>STUDENTS</th>
+                        <th>COVERAGE</th>
+                        <th>ELIGIBLE / ENROLLED</th>
+                        <th>RANGE (HIGH / LOW)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -740,9 +760,19 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
                               </span>
                             ) : '–'}
                           </td>
-                          <td style={{ color: '#16a34a' }}>{s.highest !== null ? `${s.highest}%` : '–'}</td>
-                          <td style={{ color: '#dc2626' }}>{s.lowest !== null ? `${s.lowest}%` : '–'}</td>
-                          <td>{s.eligible_students}</td>
+                          <td>
+                            <span className="pill" style={{ fontSize: 11, fontWeight: 600 }}>
+                              {s.coverage_percentage !== null ? `${s.coverage_percentage}%` : 'N/A'}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: 12, color: '#475569' }}>
+                            {s.eligible_students} / {s.enrolled_students} {s.pending_students > 0 && <span style={{ color: '#f59e0b' }}>({s.pending_students} pending)</span>}
+                          </td>
+                          <td style={{ fontSize: 12 }}>
+                            <span style={{ color: '#16a34a', fontWeight: 600 }}>{s.highest !== null ? `${s.highest}%` : '–'}</span>
+                            <span style={{ color: '#94a3b8', margin: '0 4px' }}>/</span>
+                            <span style={{ color: '#dc2626', fontWeight: 600 }}>{s.lowest !== null ? `${s.lowest}%` : '–'}</span>
+                          </td>
                         </tr>
                       ))}
                       {(!analyticsData.subject_performance || analyticsData.subject_performance.length === 0) && (
@@ -1360,177 +1390,257 @@ export default function Examinations({ user, notify }: { user: ApiUser; notify: 
       {/* ------------------------------------------------------------- */}
       {configModal && (
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setConfigModal(false); }}>
-          <div className="modal-card" style={{ maxWidth: 650 }}>
+          <div className="modal-card" style={{ maxWidth: 760, width: 'min(760px, 95vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-head">
-              <h3>Create Configurable Examination Structure</h3>
-              <button onClick={() => setConfigModal(false)}><X size={18} /></button>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16 }}>Create Examination Structure</h3>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>
+                  Configure assessment terms, weight distribution, and grade calculation policies
+                </p>
+              </div>
+              <button type="button" onClick={() => setConfigModal(false)}><X size={18} /></button>
             </div>
-            <form onSubmit={handleCreateConfig}>
-              <div className="modal-fields">
+            <form onSubmit={handleCreateConfig} style={{ overflowY: 'auto', flex: 1 }}>
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
                 {schools.length > 1 && user.role === 'organisation_admin' && (
-                  <label>Campus *
-                    <select value={newCfgSchool} onChange={e => setNewCfgSchool(e.target.value)}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                    Campus *
+                    <select
+                      value={newCfgSchool}
+                      onChange={e => setNewCfgSchool(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                    >
                       {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </label>
                 )}
 
-                <label>Structure Name *
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                  Structure Name *
                   <input
                     type="text"
                     required
                     placeholder="e.g. Class 6 Annual Examination Structure"
                     value={newCfgName}
                     onChange={e => setNewCfgName(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </label>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <label>Academic Year *
-                    <select value={newCfgYear} onChange={e => setNewCfgYear(e.target.value)}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                    Academic Year *
+                    <select
+                      value={newCfgYear}
+                      onChange={e => setNewCfgYear(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                    >
                       {years.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
                     </select>
                   </label>
-                  <label>Class Scope (Optional Override)
-                    <select value={newCfgClass} onChange={e => setNewCfgClass(e.target.value)}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                    Class Scope (Optional Override)
+                    <select
+                      value={newCfgClass}
+                      onChange={e => setNewCfgClass(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                    >
                       <option value="">All Classes (School Default)</option>
                       {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </label>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                  <label>Reporting Scale
-                    <input
-                      type="number"
-                      step="1"
-                      value={newCfgScale}
-                      onChange={e => setNewCfgScale(e.target.value)}
-                    />
-                  </label>
-                  <label>Passing Threshold (%)
-                    <input
-                      type="number"
-                      step="1"
-                      value={newCfgPassThreshold}
-                      onChange={e => setNewCfgPassThreshold(e.target.value)}
-                    />
-                  </label>
-                  <label>Subject Weighting
-                    <select value={newCfgWeightMode} onChange={e => setNewCfgWeightMode(e.target.value as any)}>
-                      <option value="equal">Equal Weighting</option>
-                      <option value="custom">Custom Subject Weights</option>
-                    </select>
-                  </label>
-                </div>
-
-                {/* Custom Subject Weights List Builder */}
-                {newCfgWeightMode === 'custom' && (
-                  <div style={{ marginTop: 14, background: '#f8fafc', padding: '14px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
-                        Custom Subject Weights (Multiplier for Overall Average)
-                      </span>
-                      <span style={{ fontSize: 11, color: '#64748b' }}>
-                        {subjects.length} subjects available
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 10px' }}>
-                      Configure relative weighting factor for each subject (e.g. 1.0 for standard, 1.5 or 2.0 for major subject).
-                    </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
-                      {subjects.map(sub => (
-                        <div key={sub.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>
-                            {sub.name} {sub.code ? `(${sub.code})` : ''}
-                          </span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0.1"
-                            style={{ width: 70, padding: '3px 6px', fontSize: 12, textAlign: 'right' }}
-                            value={newCfgSubjectWeights[sub.id] || '1.00'}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setNewCfgSubjectWeights(prev => ({ ...prev, [sub.id]: val }));
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>
+                    Grading & Reporting Policies
                   </div>
-                )}
-
-                {/* Terms / Examination Components Builder */}
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>Examination Terms & Weightages</span>
-                    <span className={`pill ${Math.abs(currentTermWeightsSum - 100) < 0.01 ? 'green' : 'amber'}`}>
-                      Total: {currentTermWeightsSum.toFixed(1)}% {Math.abs(currentTermWeightsSum - 100) < 0.01 ? '✓ Valid' : '(Must be 100%)'}
-                    </span>
-                  </div>
-
-                  {newCfgTerms.map((term, tIdx) => (
-                    <div key={tIdx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Term Name (e.g. First Term)"
-                        value={term.name}
-                        onChange={e => {
-                          const updated = [...newCfgTerms];
-                          updated[tIdx].name = e.target.value;
-                          setNewCfgTerms(updated);
-                        }}
-                      />
-                      <input
-                        type="number"
-                        step="0.5"
-                        required
-                        placeholder="Weight %"
-                        value={term.weight}
-                        onChange={e => {
-                          const updated = [...newCfgTerms];
-                          updated[tIdx].weight = e.target.value;
-                          setNewCfgTerms(updated);
-                        }}
-                      />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                      Final Reporting Scale *
                       <input
                         type="number"
                         step="1"
-                        required
-                        placeholder="Default Max Marks"
-                        value={term.max_marks}
-                        onChange={e => {
-                          const updated = [...newCfgTerms];
-                          updated[tIdx].max_marks = e.target.value;
-                          setNewCfgTerms(updated);
-                        }}
+                        min="1"
+                        placeholder="100"
+                        value={newCfgScale}
+                        onChange={e => setNewCfgScale(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                       />
-                      {newCfgTerms.length > 1 && (
-                        <button
-                          type="button"
-                          className="hr-mini danger"
-                          onClick={() => setNewCfgTerms(newCfgTerms.filter((_, i) => i !== tIdx))}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                      Passing Percentage (%) *
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="100"
+                        placeholder="40"
+                        value={newCfgPassThreshold}
+                        onChange={e => setNewCfgPassThreshold(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                      Subject Weighting Standard
+                      <div style={{ padding: '9px 12px', borderRadius: 8, background: '#f1f5f9', border: '1px solid #e2e8f0', fontSize: 12, color: '#334155', fontWeight: 600 }}>
+                        Equal Subject Weighting (Official Default)
+                      </div>
                     </div>
-                  ))}
+                  </div>
+                </div>
+
+                {/* Term Contribution & Subject Maximum Marks Matrix Table (Spec §2) */}
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Examination Terms & Subject Maximum Marks
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                        Configure examination terms, term contribution percentages (must total 100%), and independent maximum marks per subject.
+                      </div>
+                    </div>
+                    <span className={`pill ${Math.abs(currentTermWeightsSum - 100) < 0.01 ? 'green' : 'amber'}`} style={{ fontWeight: 700, fontSize: 12 }}>
+                      Total Contribution: {currentTermWeightsSum.toFixed(1)}% {Math.abs(currentTermWeightsSum - 100) < 0.01 ? '✓ Valid' : '(Must equal 100%)'}
+                    </span>
+                  </div>
+
+                  {/* Clarifying labels legend (Spec §2) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, background: '#f8fafc', padding: '10px 14px', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 12, fontSize: 11, color: '#475569', lineHeight: 1.5 }}>
+                    <div>
+                      <strong style={{ color: '#0f172a' }}>Term contribution (%):</strong> How much the term contributes to the final subject result.
+                    </div>
+                    <div>
+                      <strong style={{ color: '#0f172a' }}>Maximum marks:</strong> The highest mark obtainable in that examination.
+                    </div>
+                    <div>
+                      <strong style={{ color: '#0f172a' }}>Final reporting scale:</strong> The scale used to display the final result (default 100).
+                    </div>
+                  </div>
+
+                  {/* Matrix Table */}
+                  <div className="table-scroll" style={{ border: '1px solid #cbd5e1', borderRadius: 8, maxHeight: 280 }}>
+                    <table className="data-table" style={{ fontSize: 12, margin: 0 }}>
+                      <thead>
+                        <tr style={{ background: '#f1f5f9' }}>
+                          <th style={{ minWidth: 150, position: 'sticky', left: 0, background: '#f1f5f9', zIndex: 2 }}>TERM NAME</th>
+                          <th style={{ minWidth: 140 }}>TERM CONTRIBUTION (%)</th>
+                          {subjects.map(s => (
+                            <th key={s.id} style={{ minWidth: 110, textAlign: 'right' }}>
+                              {s.name} MAX
+                            </th>
+                          ))}
+                          <th style={{ width: 44 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {newCfgTerms.map((term, tIdx) => (
+                          <tr key={tIdx}>
+                            <td style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. First Term"
+                                value={term.name}
+                                onChange={e => {
+                                  const updated = [...newCfgTerms];
+                                  updated[tIdx].name = e.target.value;
+                                  setNewCfgTerms(updated);
+                                }}
+                                style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1' }}
+                              />
+                            </td>
+                            <td>
+                              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  max="100"
+                                  required
+                                  placeholder="20"
+                                  value={term.weight}
+                                  onChange={e => {
+                                    const updated = [...newCfgTerms];
+                                    updated[tIdx].weight = e.target.value;
+                                    setNewCfgTerms(updated);
+                                  }}
+                                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 20px 6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1', textAlign: 'right' }}
+                                />
+                                <span style={{ position: 'absolute', right: 6, fontSize: 11, color: '#94a3b8', pointerEvents: 'none' }}>%</span>
+                              </div>
+                            </td>
+                            {subjects.map(s => {
+                              const key = `${tIdx}_${s.id}`;
+                              const val = termSubjectMaxMarks[key] !== undefined ? termSubjectMaxMarks[key] : (term.default_max || '100');
+                              return (
+                                <td key={s.id} style={{ textAlign: 'right' }}>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="1"
+                                    required
+                                    placeholder="100"
+                                    value={val}
+                                    onChange={e => {
+                                      const v = e.target.value;
+                                      setTermSubjectMaxMarks(prev => ({ ...prev, [key]: v }));
+                                    }}
+                                    style={{ width: 75, boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1', textAlign: 'right' }}
+                                  />
+                                </td>
+                              );
+                            })}
+                            <td>
+                              {newCfgTerms.length > 1 ? (
+                                <button
+                                  type="button"
+                                  className="hr-mini danger"
+                                  title="Remove term"
+                                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
+                                  onClick={() => setNewCfgTerms(newCfgTerms.filter((_, i) => i !== tIdx))}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              ) : <div />}
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Total Row */}
+                        <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
+                          <td style={{ position: 'sticky', left: 0, background: '#f8fafc', zIndex: 1 }}>
+                            <strong>Total</strong>
+                          </td>
+                          <td>
+                            <span className={`pill ${Math.abs(currentTermWeightsSum - 100) < 0.01 ? 'green' : 'amber'}`} style={{ fontSize: 12, display: 'inline-block' }}>
+                              {currentTermWeightsSum.toFixed(1)}%
+                            </span>
+                          </td>
+                          {subjects.map(s => (
+                            <td key={s.id} style={{ textAlign: 'right', color: '#94a3b8', fontSize: 11 }}>—</td>
+                          ))}
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
 
                   <button
                     type="button"
                     className="outline-btn"
-                    style={{ fontSize: 12, padding: '4px 10px', marginTop: 4 }}
-                    onClick={() => setNewCfgTerms([...newCfgTerms, { name: `Term ${newCfgTerms.length + 1}`, weight: '0.00', max_marks: '100.00' }])}
+                    style={{ fontSize: 12, padding: '7px 14px', marginTop: 12 }}
+                    onClick={() => {
+                      const nextIdx = newCfgTerms.length;
+                      setNewCfgTerms([...newCfgTerms, { name: `Term ${nextIdx + 1}`, weight: '0.00', default_max: '100.00' }]);
+                    }}
                   >
                     <Plus size={13} /> Add Examination Term
                   </button>
                 </div>
               </div>
 
-              <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10, background: '#fafbfc', borderBottomLeftRadius: 18, borderBottomRightRadius: 18 }}>
                 <button type="button" className="outline-btn" onClick={() => setConfigModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Create Examination Structure</button>
               </div>

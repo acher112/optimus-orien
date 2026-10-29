@@ -277,7 +277,7 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
           </div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: '0.2rem 0' }}>Attendance Register</h1>
           <p style={{ color: 'var(--text-secondary, #64748b)', margin: 0, fontSize: '0.92rem' }}>
-            Daily participation tracking for students and campus faculty. Alterations and historical registers tracked with audit compliance.
+            Daily participation tracking for students and campus faculty.
           </p>
         </div>
 

@@ -276,7 +276,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
           <div className="fx-breadcrumb">STUDENT SUPPORT / ACADEMIC & ATTENDANCE RISK</div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: '4px 0 2px' }}>Students at Risk</h1>
           <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-            Objective evidence-based academic and attendance monitoring (INT-001..INT-040 compliant)
+            Early academic and attendance indicators to support student performance.
           </p>
         </div>
 
@@ -306,29 +306,6 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
         </div>
       </div>
 
-      {/* Compliance Disclaimer Banner */}
-      <div
-        style={{
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          borderLeft: '4px solid #6366f1',
-          padding: '10px 16px',
-          borderRadius: 8,
-          marginBottom: 16,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          fontSize: 13,
-          color: '#334155'
-        }}
-      >
-        <Info size={18} color="#6366f1" style={{ flexShrink: 0 }} />
-        <div>
-          <strong>Objective Academic Support Notice: </strong>
-          <span>This flag highlights recorded results that may need review. It is not a diagnosis or a final judgement. All flags are backed by objective historical records.</span>
-        </div>
-      </div>
-
       {/* Navigation Sub-Tabs */}
       <nav className="fx-tabs" aria-label="Risk sections">
         <button className={tab === 'list' ? 'on' : ''} onClick={() => setTab('list')}>
@@ -338,7 +315,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
           <Clock size={15} /> Insufficient data ({summary.insufficient_data_count})
         </button>
         <button className={tab === 'criteria' ? 'on' : ''} onClick={() => setTab('criteria')}>
-          <SlidersHorizontal size={15} /> Criteria (rules)
+          <SlidersHorizontal size={15} /> Risk Criteria
         </button>
         <button className={tab === 'cases' ? 'on' : ''} onClick={() => setTab('cases')}>
           <HeartHandshake size={15} /> Review cases
@@ -625,14 +602,15 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
       )}
 
       {/* ------------------------------------------------------------------- */}
-      {/* TAB 2: INSUFFICIENT DATA (INT-003, INT-004) */}
-      {/* ------------------------------------------------------------------- */}
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 2: INSUFFICIENT DATA                                      */}
+      {/* ------------------------------------------------------------- */}
       {tab === 'insufficient' && (
         <section className="panel hr-panel">
           <div className="panel-head">
             <div>
-              <h3>Insufficient Recorded Data / Excluded from Risk Evaluation</h3>
-              <p>Under rule INT-003 and INT-004, missing results are never treated as zero. Learners with fewer than the minimum data requirement are protected from risk flagging.</p>
+              <h3>Insufficient Recorded Data</h3>
+              <p>Students with fewer assessments than the required threshold are excluded from risk calculations.</p>
             </div>
             <span style={{ fontSize: 12, color: '#64748b' }}>
               <strong>{insufficientStudents.length}</strong> students excluded
@@ -683,12 +661,12 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
       {/* TAB 3: CRITERIA POLICY (RULES) */}
       {/* ------------------------------------------------------------------- */}
       {tab === 'criteria' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
           <section className="panel hr-panel">
             <div className="panel-head">
               <div>
                 <h3>Configured Criteria & Thresholds</h3>
-                <p>Objective rules evaluated against student academic and attendance records</p>
+                <p>Evaluation thresholds applied to student academic and attendance records</p>
               </div>
               {criteriaData?.active_criteria && (
                 <span className="pill green" style={{ fontWeight: 700 }}>
@@ -699,8 +677,8 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
 
             {editingCriteria ? (
               <form onSubmit={handleSaveCriteria} style={{ padding: '16px 20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                     Policy Name *
                     <input
                       type="text"
@@ -708,25 +686,41 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                       value={editingCriteria.name || ''}
                       onChange={e => setEditingCriteria({ ...editingCriteria, name: e.target.value })}
                       disabled={!isManager}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                     />
                   </label>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                      Evaluation Period
+                      <select
+                        value={editingCriteria.evaluation_period || 'whole_year'}
+                        onChange={e => setEditingCriteria({ ...editingCriteria, evaluation_period: e.target.value })}
+                        disabled={!isManager}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                      >
+                        <option value="whole_year">Whole Academic Year</option>
+                        <option value="current_term">Current Term (~90 days)</option>
+                        <option value="last_30_days">Recent Records (Last 30 Days)</option>
+                      </select>
+                    </label>
+
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                       Combine Mode
                       <select
                         value={editingCriteria.combine_mode || 'any'}
                         onChange={e => setEditingCriteria({ ...editingCriteria, combine_mode: e.target.value })}
                         disabled={!isManager}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
                       >
-                        <option value="any">Any rule matches (Disjunction)</option>
-                        <option value="all">All rules must match (Conjunction)</option>
+                        <option value="any">Any rule matches</option>
+                        <option value="all">All rules must match</option>
                         <option value="at_least_n">At least N rules match</option>
                       </select>
                     </label>
 
                     {editingCriteria.combine_mode === 'at_least_n' && (
-                      <label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                         Min Rules Match (N)
                         <input
                           type="number"
@@ -735,12 +729,13 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                           value={editingCriteria.min_rules_match || 1}
                           onChange={e => setEditingCriteria({ ...editingCriteria, min_rules_match: e.target.value })}
                           disabled={!isManager}
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                         />
                       </label>
                     )}
 
-                    <label>
-                      Minimum Recorded Results Required (INT-003/004)
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                      Minimum Assessments Required
                       <input
                         type="number"
                         min="1"
@@ -748,67 +743,57 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                         value={editingCriteria.min_data_results || 3}
                         onChange={e => setEditingCriteria({ ...editingCriteria, min_data_results: e.target.value })}
                         disabled={!isManager}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                       />
-                    </label>
-
-                    <label>
-                      Evaluation Period
-                      <select
-                        value={editingCriteria.evaluation_period || 'whole_year'}
-                        onChange={e => setEditingCriteria({ ...editingCriteria, evaluation_period: e.target.value })}
-                        disabled={!isManager}
-                      >
-                        <option value="whole_year">Whole Academic Year</option>
-                        <option value="current_term">Current Term (~90 days)</option>
-                        <option value="last_30_days">Recent Records (Last 30 Days)</option>
-                      </select>
                     </label>
                   </div>
 
-                  <h4 style={{ margin: '14px 0 6px', fontSize: 14 }}>Rule Definitions</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {(editingCriteria.rules || []).map((r: R, idx: number) => (
-                      <div
-                        key={r.id || idx}
-                        style={{
-                          background: '#f8fafc',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: 8,
-                          padding: '10px 14px',
-                          display: 'grid',
-                          gridTemplateColumns: '1.5fr 1fr 2fr',
-                          gap: 10,
-                          alignItems: 'center'
-                        }}
-                      >
-                        <div>
-                          <strong>{r.label}</strong>
-                          <div style={{ fontSize: 11, color: '#64748b' }}>Operator: {r.operator}</div>
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>Evaluation Rules</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(editingCriteria.rules || []).map((r: R, idx: number) => (
+                        <div
+                          key={r.id || idx}
+                          style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 10,
+                            padding: '12px 16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <strong style={{ fontSize: 13, color: '#1e293b' }}>{r.label}</strong>
+                              <span style={{ fontSize: 11, background: '#e2e8f0', color: '#475569', padding: '2px 7px', borderRadius: 4, fontWeight: 600 }}>
+                                Operator: {r.operator}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>Threshold:</span>
+                              <input
+                                type="number"
+                                step="any"
+                                value={r.threshold}
+                                onChange={e => {
+                                  const newRules = [...editingCriteria.rules];
+                                  newRules[idx] = { ...newRules[idx], threshold: Number(e.target.value) };
+                                  setEditingCriteria({ ...editingCriteria, rules: newRules });
+                                }}
+                                disabled={!isManager}
+                                style={{ width: 72, padding: '5px 8px', fontSize: 13, borderRadius: 6, border: '1px solid #cbd5e1', textAlign: 'right', background: '#fff' }}
+                              />
+                              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{r.unit}</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>
+                            {r.description}
+                          </div>
                         </div>
-
-                        <div>
-                          <label style={{ margin: 0, fontSize: 11 }}>
-                            Threshold ({r.unit})
-                            <input
-                              type="number"
-                              step="any"
-                              value={r.threshold}
-                              onChange={e => {
-                                const newRules = [...editingCriteria.rules];
-                                newRules[idx] = { ...newRules[idx], threshold: Number(e.target.value) };
-                                setEditingCriteria({ ...editingCriteria, rules: newRules });
-                              }}
-                              disabled={!isManager}
-                              style={{ padding: '4px 8px', fontSize: 12, height: 32 }}
-                            />
-                          </label>
-                        </div>
-
-                        <div style={{ fontSize: 11, color: '#64748b' }}>
-                          {r.description}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
 
                   {isManager && (
@@ -1103,41 +1088,47 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
       {/* ------------------------------------------------------------------- */}
       {caseModal && (
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCaseModal(null); }}>
-          <div className="modal-card">
+          <div className="modal-card" style={{ maxWidth: 540, width: 'min(540px, 95vw)' }}>
             <div className="modal-head">
-              <h3>Open Support / Review Case</h3>
-              <button onClick={() => setCaseModal(null)}><X size={18} /></button>
+              <h3 style={{ margin: 0, fontSize: 16 }}>Open Support / Review Case</h3>
+              <button type="button" onClick={() => setCaseModal(null)}><X size={18} /></button>
             </div>
             <form onSubmit={handleCreateCase}>
-              <div className="modal-fields">
-                <label>
+              <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                   Case Title *
                   <input
                     type="text"
                     required
                     value={caseTitle}
                     onChange={e => setCaseTitle(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </label>
-                <label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                   Priority
-                  <select value={casePriority} onChange={e => setCasePriority(e.target.value)}>
+                  <select
+                    value={casePriority}
+                    onChange={e => setCasePriority(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                  >
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
                 </label>
-                <label>
-                  Evidence Summary / Initial Notes *
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                  Notes & Details *
                   <textarea
                     rows={4}
                     required
                     value={caseReason}
                     onChange={e => setCaseReason(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div style={{ padding: '14px 22px', background: '#fafbfc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 8, borderBottomLeftRadius: 18, borderBottomRightRadius: 18 }}>
                 <button type="button" className="outline-btn" onClick={() => setCaseModal(null)}>Cancel</button>
                 <button type="submit" className="primary-btn" disabled={caseSubmitting}>
                   {caseSubmitting ? 'Creating Case…' : 'Create Review Case'}
@@ -1153,41 +1144,43 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
       {/* ------------------------------------------------------------------- */}
       {dismissModal && (
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setDismissModal(null); }}>
-          <div className="modal-card">
+          <div className="modal-card" style={{ maxWidth: 520, width: 'min(520px, 95vw)' }}>
             <div className="modal-head">
               <div>
-                <h3>Dismiss At-Risk Flag</h3>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+                <h3 style={{ margin: 0, fontSize: 16 }}>Dismiss At-Risk Flag</h3>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
                   For {dismissModal.student_name} ({dismissModal.full_class_name})
                 </p>
               </div>
-              <button onClick={() => setDismissModal(null)}><X size={18} /></button>
+              <button type="button" onClick={() => setDismissModal(null)}><X size={18} /></button>
             </div>
             <form onSubmit={handleDismissFlag}>
-              <div className="modal-fields">
-                <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 6, fontSize: 12, color: '#475569', marginBottom: 12 }}>
-                  <strong>Policy Requirement: </strong> An at-risk flag can only be dismissed with a recorded, substantive reason. If the student's metrics subsequently worsen below the dismissal snapshot, the flag will automatically re-emerge.
+              <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 8, fontSize: 12, color: '#475569', border: '1px solid #e2e8f0' }}>
+                  Please provide a reason for dismissing this flag. If the student's metrics decline in future assessments, the indicator will re-emerge.
                 </div>
-                <label>
-                  Substantive Justification / Reason *
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
+                  Reason for Dismissal *
                   <textarea
                     rows={3}
                     required
-                    placeholder="e.g. Student experienced bereavement in family; tutoring plan in place with Class Lead."
+                    placeholder="e.g. Tutoring plan initiated; performance affected by temporary absence."
                     value={dismissReason}
                     onChange={e => setDismissReason(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </label>
-                <label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                   Temporary Mute Until Date (Optional)
                   <input
                     type="date"
                     value={dismissUntil}
                     onChange={e => setDismissUntil(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div style={{ padding: '14px 22px', background: '#fafbfc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 8, borderBottomLeftRadius: 18, borderBottomRightRadius: 18 }}>
                 <button type="button" className="outline-btn" onClick={() => setDismissModal(null)}>Cancel</button>
                 <button type="submit" className="primary-btn" style={{ background: '#dc2626', borderColor: '#b91c1c' }} disabled={dismissSubmitting}>
                   {dismissSubmitting ? 'Dismissing Flag…' : 'Confirm Dismissal'}
