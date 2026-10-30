@@ -71,6 +71,59 @@ class StaffTests(AccessFixture):
         self.assertEqual(feed[0]['kind'], 'promoted')
         self.assertEqual(feed[0]['staff_name'], 'Tariq Ali')
 
+    def test_create_staff_without_portal_account(self):
+        r = self.call(self.principal, 'staff', {
+            'school': self.s1.id,
+            'first_name': 'Akram',
+            'last_name': 'Khan',
+            'position': 'Peon',
+            'role': 'support',
+            'salary': '25000.00',
+            'create_portal_account': False
+        })
+        self.assertEqual(r.status_code, 201)
+        data = r.json()
+        self.assertFalse(data['has_login'])
+        self.assertIsNone(data['username'])
+        self.assertEqual(data['position'], 'Peon')
+        staff_obj = StaffMember.objects.get(pk=data['id'])
+        self.assertIsNone(staff_obj.user)
+        self.assertTrue(staff_obj.salary_structures.filter(basic=Decimal('25000.00')).exists())
+        self.assertTrue(staff_obj.salary_records.filter(basic=Decimal('25000.00')).exists())
+
+    def test_create_staff_with_portal_account(self):
+        r = self.call(self.principal, 'staff', {
+            'school': self.s1.id,
+            'first_name': 'Bilal',
+            'last_name': 'Ahmed',
+            'position': 'Office Boy',
+            'role': 'support',
+            'email': 'bilal.support@test.org',
+            'password': 'SecurePassword123!',
+            'salary': '30000.00',
+            'create_portal_account': True
+        })
+        self.assertEqual(r.status_code, 201)
+        data = r.json()
+        self.assertTrue(data['has_login'])
+        self.assertEqual(data['username'], 'bilal.support@test.org')
+        staff_obj = StaffMember.objects.get(pk=data['id'])
+        self.assertIsNotNone(staff_obj.user)
+        self.assertEqual(staff_obj.user.email, 'bilal.support@test.org')
+
+    def test_create_staff_with_portal_account_missing_email_fails(self):
+        r = self.call(self.principal, 'staff', {
+            'school': self.s1.id,
+            'first_name': 'Bilal',
+            'last_name': 'Ahmed',
+            'position': 'Office Boy',
+            'role': 'support',
+            'salary': '30000.00',
+            'create_portal_account': True
+        })
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('email', r.json())
+
 
 class FinanceTests(AccessFixture):
     def cat(self, school, kind, name):

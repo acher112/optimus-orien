@@ -182,6 +182,17 @@ def staff_list(request):
     token_hash = None
     expires_at = None
 
+    create_portal_raw = data.get('create_portal_account')
+    if create_portal_raw is not None:
+        create_portal = str(create_portal_raw).lower() in ('true', '1', 'yes')
+    else:
+        create_portal = bool(
+            data.get('password') or
+            data.get('temporary_password') or
+            data.get('set_temporary_password') or
+            (role == 'teacher' and data.get('email'))
+        )
+
     if data.get('user'):
         link = User.objects.filter(pk=data['user'], school=school, organisation=school.organisation).first()
         if not link:
@@ -190,16 +201,17 @@ def staff_list(request):
             raise ValidationError({'user': 'That login is already linked to a staff record.'})
         if role == 'teacher':
             teacher_type = (data.get('teacher_type') or 'class_teacher').strip()
-    elif data.get('email') or data.get('password') or data.get('temporary_password') or data.get('set_temporary_password'):
+    elif create_portal:
         email_val = (data.get('email') or '').strip().lower()
         raw_pwd = str(data.get('password') or data.get('temporary_password') or '').strip()
         set_temp = data.get('set_temporary_password')
 
+        if not email_val:
+            raise ValidationError({'email': 'Email is required to create a portal account.'})
+        if User.objects.filter(email__iexact=email_val).exists():
+            raise ValidationError({'email': 'An account with this email address already exists.'})
+
         if role == 'teacher':
-            if not email_val:
-                raise ValidationError({'email': 'Email is required for teacher creation.'})
-            if User.objects.filter(email__iexact=email_val).exists():
-                raise ValidationError({'email': 'An account with this email address already exists.'})
             teacher_type = (data.get('teacher_type') or 'class_teacher').strip()
             if teacher_type not in ('class_teacher', 'subject_teacher', 'both'):
                 raise ValidationError({'teacher_type': 'Teacher type is required: Class teacher, Subject teacher, or Both.'})

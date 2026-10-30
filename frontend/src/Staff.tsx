@@ -195,7 +195,8 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
     subject_assignments: [{ class_id: '', subject_id: '' }],
     password: '',
     set_temporary_password: false,
-    temporary_password: ''
+    temporary_password: '',
+    create_portal_account: false
   });
 
   const [classes, setClasses] = useState<R[]>([]);
@@ -255,15 +256,36 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
     setBusy(true);
     setErr('');
     try {
-      const payload: R = { ...f };
-      if (f.role === 'teacher') {
-        if (f.teacher_type === 'class_teacher') {
-          delete payload.subject_assignments;
-        } else if (f.teacher_type === 'subject_teacher') {
-          delete payload.class_teacher_class;
-        }
-        if (f.assign_later) {
-          payload.subject_assignments = [];
+      const payload: R = {
+        school: f.school,
+        role: f.role,
+        first_name: f.first_name,
+        last_name: f.last_name,
+        position: f.position,
+        hired_on: f.hired_on,
+        phone: f.phone,
+        salary: f.salary,
+        salary_status: f.salary_status,
+        create_portal_account: Boolean(f.create_portal_account)
+      };
+      if (f.create_portal_account) {
+        payload.email = f.email;
+        payload.password = f.password;
+        payload.temporary_password = f.temporary_password;
+        payload.set_temporary_password = f.set_temporary_password;
+        if (f.role === 'teacher') {
+          payload.teacher_type = f.teacher_type;
+          if (['class_teacher', 'both'].includes(f.teacher_type)) {
+            payload.class_teacher_class = f.class_teacher_class;
+            payload.replace_existing = f.replace_existing;
+            payload.effective_date = f.effective_date;
+          }
+          if (['subject_teacher', 'both'].includes(f.teacher_type)) {
+            payload.assign_later = f.assign_later;
+            if (!f.assign_later) {
+              payload.subject_assignments = f.subject_assignments;
+            }
+          }
         }
       }
       const res: any = await request('staff/', { method: 'POST', body: JSON.stringify(payload) });
@@ -342,7 +364,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
   }
 
   return (
-    <Modal title="Add staff member" sub="Creates an HR employment record, portal login, and academic assignments." onClose={onClose}>
+    <Modal title="Add staff member" sub="Creates an HR employment record, salary assignment, and optional portal login." onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <div className="modal-fields hr-fields">
           <label>First name *<input required value={f.first_name || ''} onChange={e => set('first_name', e.target.value)} placeholder="e.g. Ayesha" /></label>
@@ -353,24 +375,115 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
               set('role', val);
               if (val === 'teacher') set('position', 'Teacher');
               else if (val === 'principal') set('position', 'Campus Principal');
+              else if (val === 'school_admin') set('position', 'School Administrator');
+              else if (val === 'accountant') set('position', 'Accountant');
+              else if (val === 'librarian') set('position', 'Librarian');
+              else if (val === 'counsellor') set('position', 'Counsellor');
+              else if (val === 'support') set('position', 'Support Staff / Peon');
+              else if (val === 'other') set('position', 'Staff Member');
             }}>
               {roleOptions(roles, leader).map(r => <option key={r} value={r}>{nice(r)}</option>)}
             </select>
           </label>
-          <label>Position / Job title *<input required placeholder="e.g. Maths Teacher" value={f.position || ''} onChange={e => set('position', e.target.value)} /></label>
+          <label>Position / Job title *<input required placeholder="e.g. Maths Teacher or Peon" value={f.position || ''} onChange={e => set('position', e.target.value)} /></label>
           <label>Campus *<select required value={f.school} onChange={e => set('school', e.target.value)}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
           <label>Hired on<input type="date" value={f.hired_on} onChange={e => set('hired_on', e.target.value)} /></label>
-          <label>Email (portal login) *<input required type="email" value={f.email || ''} onChange={e => set('email', e.target.value)} placeholder="portal-user@school.edu" /></label>
-          <label>Password (portal login) *
-            <PasswordField
-              required
-              minLength={8}
-              value={f.password || ''}
-              onChange={e => set('password', e.target.value)}
-              placeholder="Min 8 chars"
-            />
-          </label>
           <label>Phone<input value={f.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="e.g. +92 300 1234567" /></label>
+          <label>Monthly base salary *<input required type="number" step="0.01" min="1" placeholder="e.g. 50000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>
+
+          {/* CREATE PORTAL ACCOUNT TOGGLE OPTION */}
+          <div className="wide" style={{
+            background: f.create_portal_account ? '#f0fdf4' : '#f8fafc',
+            border: `1.5px solid ${f.create_portal_account ? '#86efac' : '#e2e8f0'}`,
+            borderRadius: '12px',
+            padding: '14px 16px',
+            marginTop: '4px',
+            transition: 'all 0.2s ease',
+            boxShadow: f.create_portal_account ? '0 1px 3px rgba(22, 101, 52, 0.08)' : 'none'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '220px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: f.create_portal_account ? '#dcfce7' : '#e2e8f0',
+                  color: f.create_portal_account ? '#16a34a' : '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>
+                    Create Portal Account
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    {f.create_portal_account
+                      ? 'Portal sign-in enabled. Enter email and password below.'
+                      : 'Disabled. Creates HR profile and salary only (e.g. peon, guard, driver). Click to enable portal login.'}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(f.create_portal_account)}
+                onClick={() => set('create_portal_account', !f.create_portal_account)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 14px',
+                  borderRadius: '20px',
+                  border: `1.5px solid ${f.create_portal_account ? '#16a34a' : '#cbd5e1'}`,
+                  background: f.create_portal_account ? '#16a34a' : '#ffffff',
+                  color: f.create_portal_account ? '#ffffff' : '#475569',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: f.create_portal_account ? '#ffffff' : '#94a3b8'
+                  }}
+                />
+                {f.create_portal_account ? 'Portal Account: Yes' : 'Portal Account: No'}
+              </button>
+            </div>
+          </div>
+
+          {/* Conditional Email & Password if Create Portal Account is enabled */}
+          {f.create_portal_account && (
+            <>
+              <label>Email (portal login) *
+                <input
+                  required
+                  type="email"
+                  value={f.email || ''}
+                  onChange={e => set('email', e.target.value)}
+                  placeholder="portal-user@school.edu"
+                />
+              </label>
+              <label>Password (portal login) *
+                <PasswordField
+                  required
+                  minLength={8}
+                  value={f.password || ''}
+                  onChange={e => set('password', e.target.value)}
+                  placeholder="Min 8 chars"
+                />
+              </label>
 
           {/* TEACHER SPECIFIC ASSIGNMENTS */}
           {f.role === 'teacher' && (
@@ -526,14 +639,14 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
           )}
 
           {/* PORTAL ACCESS NOTICE */}
-          <div className="wide" style={{ background: '#f0fdf4', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbf7d0', fontSize: '12px', color: '#166534', display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '6px' }}>
-            <KeyRound size={16} style={{ marginTop: '2px', flexShrink: 0, color: '#16a34a' }} />
-            <div>
-              <strong>Portal Sign-in Setup:</strong> These credentials allow the {f.role ? nice(f.role) : 'staff member'} to log directly into their portal immediately upon creation. They can change their password at any time via Profile Settings or reset it using their registered email.
-            </div>
-          </div>
-
-          <label>Monthly base salary *<input required type="number" step="0.01" min="1" placeholder="e.g. 50000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>
+              <div className="wide" style={{ background: '#f0fdf4', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbf7d0', fontSize: '12px', color: '#166534', display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '6px' }}>
+                <KeyRound size={16} style={{ marginTop: '2px', flexShrink: 0, color: '#16a34a' }} />
+                <div>
+                  <strong>Portal Sign-in Setup:</strong> These credentials allow the {f.role ? nice(f.role) : 'staff member'} to log directly into their portal immediately upon creation. They can change their password at any time via Profile Settings or reset it using their registered email.
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {err && <div className="hr-error" style={{ margin: '14px 0 0' }}>{err}</div>}
