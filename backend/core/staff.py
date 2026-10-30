@@ -4,17 +4,21 @@ Staff records are HR records, separate from sign-in accounts. Managers are organ
 admins, school admins and principals, each limited to their own campus scope. Terminating
 a staff member switches off any linked login at once; nothing is ever hard-deleted.
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+import secrets
+import hashlib
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from core.models import (
     StaffEvent, StaffMember, StaffAttendance, User,
-    SalaryStructure, SalaryRecord, FinanceCategory, FinanceEntry, RoleAssignment
+    SalaryStructure, SalaryRecord, FinanceCategory, FinanceEntry, RoleAssignment,
+    ClassTeacherAssignment, TeachingAssignment, SchoolClass, Subject, UserInvitation, OrganisationRolePolicy
 )
 from core.services.access import schools_scope
 from core.services.audit import record_event
@@ -46,6 +50,7 @@ def _get(user, pk):
 def _row(s):
     return {'id': s.id, 'first_name': s.first_name, 'last_name': s.last_name, 'full_name': s.full_name,
             'email': s.email, 'phone': s.phone, 'position': s.position, 'role': s.role,
+            'teacher_type': getattr(s, 'teacher_type', '') or (s.compute_teacher_type() if s.user_id and s.role == 'teacher' else ''),
             'status': s.status, 'hired_on': s.hired_on, 'terminated_on': s.terminated_on,
             'school': s.school_id, 'school_name': s.school.name,
             'has_login': bool(s.user_id), 'username': s.user.username if s.user_id else None}
@@ -154,18 +159,117 @@ def staff_list(request):
         raise NotFound('Campus not found.')
     role = (data.get('role') or 'teacher').strip()
     _check_role(user, role)
+    if user.role == 'principal':
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('staff.invite_teachers', True) and not policy.get('staff.manage_assignments', True):
+            raise PermissionDenied('Principals are not permitted to invite teachers.')
+        if school.pk != user.school_id:
+            raise PermissionDenied('Principals may only manage staff for their assigned campus.')
     try:
         hired = date.fromisoformat(data.get('hired_on') or date.today().isoformat())
     except ValueError:
         raise ValidationError({'hired_on': 'Use YYYY-MM-DD.'})
     link = None
-    if data.get('user'):
+    temporary_pwd = None
+    invitation_token = None
+    invite_url = None
+    target_class = None
+    active_cta = None
+    effective_date = hired
+    subject_rows = []
+    teacher_type = ''
+
+    if role == 'teacher':
+        email_val = (data.get('email') or '').strip().lower()
+        if not email_val:
+            raise ValidationError({'email': 'Email is required for teacher creation.'})
+        if User.objects.filter(email__iexact=email_val).exists():
+            raise ValidationError({'email': 'An account with this email address already exists.'})
+        teacher_type = (data.get('teacher_type') or '').strip()
+        if teacher_type not in ('class_teacher', 'subject_teacher', 'both'):
+            raise ValidationError({'teacher_type': 'Teacher type is required: Class teacher, Subject teacher, or Both.'})
+        
+        if teacher_type in ('class_teacher', 'both'):
+            cid = data.get('class_teacher_class') or data.get('class_id')
+            if not cid:
+                raise ValidationError({'class_teacher_class': 'Class is required for Class Teacher.'})
+            try:
+                target_class = SchoolClass.objects.filter(pk=int(cid), school=school).first()
+            except (ValueError, TypeError):
+                raise ValidationError({'class_teacher_class': 'Invalid class ID.'})
+            if not target_class:
+                raise ValidationError({'class_teacher_class': 'Class not found on this campus.'})
+            active_cta = ClassTeacherAssignment.objects.filter(school_class=target_class, end_date__isnull=True).first()
+            if active_cta:
+                replace = data.get('replace_existing') or data.get('replace_class_teacher')
+                if not replace:
+                    curr_name = active_cta.teacher.get_full_name() or active_cta.teacher.username
+                    return Response({'conflict': True, 'current_teacher': curr_name, 'class_id': target_class.id, 'class_name': target_class.display_name, 'detail': f"Class {target_class.display_name} already has an active class teacher ({curr_name}). Confirm replacement to proceed."}, status=409)
+                eff_raw = data.get('effective_date')
+                if eff_raw:
+                    try:
+                        effective_date = date.fromisoformat(str(eff_raw)[:10])
+                    except ValueError:
+                        effective_date = hired
+        
+        if teacher_type in ('subject_teacher', 'both'):
+            assign_later = data.get('assign_later')
+            raw_subj = data.get('subject_assignments') or []
+            if not assign_later and not raw_subj:
+                raise ValidationError({'subject_assignments': 'At least one subject assignment is required, or tick assign later.'})
+            if not assign_later:
+                for item in raw_subj:
+                    sc_id = item.get('class_id') or item.get('school_class')
+                    sb_id = item.get('subject_id') or item.get('subject')
+                    sc_obj = SchoolClass.objects.filter(pk=sc_id, school=school).first()
+                    if not sc_obj:
+                        raise ValidationError({'subject_assignments': f'Class {sc_id} not found on this campus.'})
+                    sb_obj = Subject.objects.filter(pk=sb_id, school=school).first()
+                    if not sb_obj:
+                        raise ValidationError({'subject_assignments': f'Subject {sb_id} not found on this campus.'})
+                    subject_rows.append((sc_obj, sb_obj))
+
+        set_temp = data.get('set_temporary_password') or (data.get('temporary_password') and not data.get('user'))
+        if set_temp:
+            if not getattr(school.organisation, 'allow_temporary_passwords', False):
+                raise ValidationError({'temporary_password': 'Temporary passwords are disabled by organisation policy.'})
+            raw_pwd = str(data.get('temporary_password') or data.get('password') or '').strip()
+            if len(raw_pwd) < 8:
+                raise ValidationError({'temporary_password': 'Password must be at least 8 characters.'})
+            from django.contrib.auth.password_validation import validate_password
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_password(raw_pwd)
+            except DjangoValidationError as e:
+                raise ValidationError({'temporary_password': ' '.join(e.messages)})
+            temporary_pwd = raw_pwd
+            link = User.objects.create(
+                username=email_val, email=email_val, first_name=_text(data, 'first_name', True, 100),
+                last_name=_text(data, 'last_name', True, 100), role='teacher', school=school,
+                organisation=school.organisation, is_active=True, must_change_password=True
+            )
+            link.set_password(raw_pwd)
+            link.save()
+        else:
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+            expires_at = timezone.now() + timedelta(hours=72)
+            invitation_token = raw_token
+            invite_url = f"/invitation/accept?token={raw_token}"
+            link = User.objects.create(
+                username=email_val, email=email_val, first_name=_text(data, 'first_name', True, 100),
+                last_name=_text(data, 'last_name', True, 100), role='teacher', school=school,
+                organisation=school.organisation, is_active=True, must_change_password=False
+            )
+            link.set_unusable_password()
+            link.save()
+    elif data.get('user'):
         link = User.objects.filter(pk=data['user'], school=school, organisation=school.organisation).first()
         if not link:
             raise ValidationError({'user': 'Login account not found on this campus.'})
         if StaffMember.objects.filter(user=link).exists():
             raise ValidationError({'user': 'That login is already linked to a staff record.'})
-    elif data.get('password') and (data.get('email') or data.get('username')):
+    elif data.get('password') and (data.get('email') or data.get('username')) and role != 'teacher':
         raw_pwd = str(data.get('password'))
         if len(raw_pwd) < 8:
             raise ValidationError({'password': 'Password must be at least 8 characters.'})
@@ -217,9 +321,41 @@ def staff_list(request):
         s = StaffMember.objects.create(
             school=school, user=link, first_name=_text(data, 'first_name', True, 100),
             last_name=_text(data, 'last_name', True, 100), email=_text(data, 'email', maxlen=254),
-            phone=_text(data, 'phone', maxlen=40), position=_text(data, 'position', True), role=role, hired_on=hired)
+            phone=_text(data, 'phone', maxlen=40), position=_text(data, 'position', True), role=role,
+            teacher_type=teacher_type, hired_on=hired)
         _log(s, 'hired', user, to=f'{s.position} ({role})')
         _sync_login(s, role)
+
+        if role == 'teacher' and link:
+            if invitation_token:
+                UserInvitation.objects.create(
+                    token_hash=token_hash, email=link.email, role='teacher',
+                    organisation=school.organisation, school=school, staff_member=s,
+                    invited_user=link, created_by=user, expires_at=expires_at
+                )
+            if set_temp:
+                record_event(actor=user, action='set_temporary_password', obj=link)
+
+            if target_class:
+                if active_cta:
+                    active_cta.end_date = effective_date
+                    active_cta.save(update_fields=['end_date'])
+                    old_staff = StaffMember.objects.filter(user=active_cta.teacher).first()
+                    if old_staff:
+                        old_staff.sync_teacher_type()
+                        _log(old_staff, 'role_changed', user, note=f'Replaced as class teacher of {target_class.display_name}')
+                ClassTeacherAssignment.objects.create(
+                    school_class=target_class, teacher=link, start_date=effective_date, created_by=user
+                )
+                target_class.teacher = link
+                target_class.save(update_fields=['teacher'])
+
+            for sc_item, sb_item in subject_rows:
+                TeachingAssignment.objects.create(
+                    school=school, teacher=link, school_class=sc_item, subject=sb_item,
+                    start_date=hired, created_by=user
+                )
+            s.sync_teacher_type()
 
         salary_str = str(data.get('salary') or '').strip()
         if not salary_str:
@@ -290,7 +426,13 @@ def staff_list(request):
                 )
 
         record_event(actor=user, action='create', obj=s)
-    return Response(_row(s), status=201)
+    payload = _row(s)
+    if temporary_pwd:
+        payload['temporary_password'] = temporary_pwd
+    if invitation_token:
+        payload['invitation_token'] = invitation_token
+        payload['invite_url'] = invite_url
+    return Response(payload, status=201)
 
 
 @api_view(['GET', 'PATCH', 'DELETE'])
@@ -579,3 +721,209 @@ def staff_attendance(request):
         'is_conducted': True,
     })
 
+
+
+
+@api_view(['GET', 'POST'])
+def staff_assignments(request, pk):
+    """View active/historical assignments or add new teaching assignments."""
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    if user.role == 'principal':
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('staff.manage_assignments', True):
+            raise PermissionDenied('Principals are not permitted to manage assignments.')
+
+    if request.method == 'GET':
+        if not s.user_id:
+            return Response({'teacher_type': '', 'active_class_assignments': [], 'active_subject_assignments': [], 'historical_class_assignments': [], 'historical_subject_assignments': [], 'available_classes': [], 'available_subjects': []})
+        active_cta = ClassTeacherAssignment.objects.filter(teacher=s.user, end_date__isnull=True).select_related('school_class__academic_year')
+        hist_cta = ClassTeacherAssignment.objects.filter(teacher=s.user, end_date__isnull=False).select_related('school_class__academic_year')
+        active_ta = TeachingAssignment.objects.filter(teacher=s.user, end_date__isnull=True).select_related('school_class', 'subject')
+        hist_ta = TeachingAssignment.objects.filter(teacher=s.user, end_date__isnull=False).select_related('school_class', 'subject')
+
+        classes = SchoolClass.objects.filter(school=s.school).order_by('grade_level', 'name')
+        subjects = Subject.objects.filter(school=s.school).order_by('name')
+
+        return Response({
+            'teacher_type': s.teacher_type or s.compute_teacher_type(),
+            'active_class_assignments': [{
+                'id': a.id, 'class_id': a.school_class_id, 'class_name': a.school_class.display_name,
+                'start_date': a.start_date.isoformat(), 'end_date': None
+            } for a in active_cta],
+            'active_subject_assignments': [{
+                'id': a.id, 'class_id': a.school_class_id, 'class_name': a.school_class.display_name,
+                'subject_id': a.subject_id, 'subject_name': a.subject.name,
+                'start_date': a.start_date.isoformat(), 'end_date': None
+            } for a in active_ta],
+            'historical_class_assignments': [{
+                'id': a.id, 'class_id': a.school_class_id, 'class_name': a.school_class.display_name,
+                'start_date': a.start_date.isoformat(), 'end_date': a.end_date.isoformat() if a.end_date else None
+            } for a in hist_cta],
+            'historical_subject_assignments': [{
+                'id': a.id, 'class_id': a.school_class_id, 'class_name': a.school_class.display_name,
+                'subject_id': a.subject_id, 'subject_name': a.subject.name,
+                'start_date': a.start_date.isoformat(), 'end_date': a.end_date.isoformat() if a.end_date else None
+            } for a in hist_ta],
+            'available_classes': [{'id': c.id, 'name': c.display_name, 'current_teacher': c.teacher.get_full_name() if c.teacher else None} for c in classes],
+            'available_subjects': [{'id': sub.id, 'name': sub.name, 'code': sub.code} for sub in subjects]
+        })
+
+    # POST: Add an assignment
+    if not s.user_id:
+        raise ValidationError({'detail': 'Staff member does not have a linked login user account.'})
+    kind = request.data.get('kind')  # 'class_teacher' or 'subject'
+    start_date_raw = request.data.get('start_date') or timezone.localdate().isoformat()
+    try:
+        start_date = date.fromisoformat(str(start_date_raw)[:10])
+    except ValueError:
+        raise ValidationError({'start_date': 'Use YYYY-MM-DD format.'})
+
+    with transaction.atomic():
+        if kind == 'class_teacher':
+            cid = request.data.get('class_id')
+            if not cid:
+                raise ValidationError({'class_id': 'Class is required.'})
+            target_class = SchoolClass.objects.filter(pk=cid, school=s.school).first()
+            if not target_class:
+                raise ValidationError({'class_id': 'Class not found on this campus.'})
+
+            max_classes = getattr(s.school.organisation, 'max_classes_per_class_teacher', 1)
+            current_count = ClassTeacherAssignment.objects.filter(teacher=s.user, end_date__isnull=True).exclude(school_class=target_class).count()
+            if current_count >= max_classes:
+                raise ValidationError({'class_id': f'Teacher already has maximum permitted class teacher assignments ({max_classes}).'})
+
+            active_cta = ClassTeacherAssignment.objects.filter(school_class=target_class, end_date__isnull=True).first()
+            if active_cta:
+                if active_cta.teacher_id == s.user_id:
+                    raise ValidationError({'class_id': 'Teacher is already the active class teacher of this class.'})
+                replace = request.data.get('replace_existing')
+                if not replace:
+                    curr_name = active_cta.teacher.get_full_name() or active_cta.teacher.username
+                    return Response({'conflict': True, 'current_teacher': curr_name, 'class_id': target_class.id, 'detail': f"Class already has an active class teacher: {curr_name}."}, status=409)
+                active_cta.end_date = start_date
+                active_cta.save(update_fields=['end_date'])
+                old_s = StaffMember.objects.filter(user=active_cta.teacher).first()
+                if old_s:
+                    old_s.sync_teacher_type()
+                    _log(old_s, 'role_changed', user, note=f'Replaced as class teacher of {target_class.display_name}')
+
+            ClassTeacherAssignment.objects.create(school_class=target_class, teacher=s.user, start_date=start_date, created_by=user)
+            target_class.teacher = s.user
+            target_class.save(update_fields=['teacher'])
+            _log(s, 'role_changed', user, to=f'Class teacher – {target_class.display_name}')
+        elif kind == 'subject':
+            cid = request.data.get('class_id')
+            sid = request.data.get('subject_id')
+            if not cid or not sid:
+                raise ValidationError({'detail': 'Both class_id and subject_id are required.'})
+            target_class = SchoolClass.objects.filter(pk=cid, school=s.school).first()
+            target_sub = Subject.objects.filter(pk=sid, school=s.school).first()
+            if not target_class or not target_sub:
+                raise ValidationError({'detail': 'Class and subject must belong to the teacher campus.'})
+            if TeachingAssignment.objects.filter(teacher=s.user, school_class=target_class, subject=target_sub, end_date__isnull=True).exists():
+                raise ValidationError({'detail': 'Active teaching assignment already exists for this class and subject.'})
+            TeachingAssignment.objects.create(school=s.school, teacher=s.user, school_class=target_class, subject=target_sub, start_date=start_date, created_by=user)
+            _log(s, 'role_changed', user, to=f'Subject teacher – {target_sub.name}, {target_class.display_name}')
+        else:
+            raise ValidationError({'kind': "Must be 'class_teacher' or 'subject'."})
+
+        s.sync_teacher_type()
+        record_event(actor=user, action='modify_assignments', obj=s)
+
+    return Response({'ok': True, 'teacher_type': s.teacher_type})
+
+
+@api_view(['POST'])
+def staff_end_assignment(request, pk, assignment_id):
+    """End a class-teacher or subject assignment with effective date."""
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    if user.role == 'principal':
+        policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
+        if not policy.get('staff.manage_assignments', True):
+            raise PermissionDenied('Principals are not permitted to manage assignments.')
+    kind = request.data.get('kind')
+    end_date_raw = request.data.get('end_date') or timezone.localdate().isoformat()
+    try:
+        end_date = date.fromisoformat(str(end_date_raw)[:10])
+    except ValueError:
+        raise ValidationError({'end_date': 'Use YYYY-MM-DD format.'})
+
+    with transaction.atomic():
+        if kind == 'class_teacher':
+            cta = ClassTeacherAssignment.objects.filter(pk=assignment_id, teacher=s.user, end_date__isnull=True).first()
+            if not cta:
+                raise NotFound('Active class teacher assignment not found.')
+            cta.end_date = end_date
+            cta.save(update_fields=['end_date'])
+            if cta.school_class.teacher_id == s.user_id:
+                cta.school_class.teacher = None
+                cta.school_class.save(update_fields=['teacher'])
+            _log(s, 'role_changed', user, note=f'Ended class teacher assignment for {cta.school_class.display_name}')
+        elif kind == 'subject':
+            ta = TeachingAssignment.objects.filter(pk=assignment_id, teacher=s.user, end_date__isnull=True).first()
+            if not ta:
+                raise NotFound('Active teaching assignment not found.')
+            ta.end_date = end_date
+            ta.save(update_fields=['end_date'])
+            _log(s, 'role_changed', user, note=f'Ended subject assignment for {ta.subject.name} ({ta.school_class.display_name})')
+        else:
+            raise ValidationError({'kind': "Must be 'class_teacher' or 'subject'."})
+
+        s.sync_teacher_type()
+        record_event(actor=user, action='end_assignment', obj=s)
+
+    return Response({'ok': True, 'teacher_type': s.teacher_type})
+
+
+@api_view(['POST'])
+def staff_transfer_class(request, pk):
+    """Shortcut: Move teacher to another class."""
+    user = request.user
+    _require_manager(user)
+    s = _get(user, pk)
+    old_class_id = request.data.get('old_class_id')
+    new_class_id = request.data.get('new_class_id')
+    eff_date_raw = request.data.get('effective_date') or timezone.localdate().isoformat()
+    try:
+        eff_date = date.fromisoformat(str(eff_date_raw)[:10])
+    except ValueError:
+        raise ValidationError({'effective_date': 'Use YYYY-MM-DD format.'})
+
+    new_class = SchoolClass.objects.filter(pk=new_class_id, school=s.school).first()
+    if not new_class:
+        raise ValidationError({'new_class_id': 'Target class not found.'})
+
+    with transaction.atomic():
+        if old_class_id:
+            old_cta = ClassTeacherAssignment.objects.filter(school_class_id=old_class_id, teacher=s.user, end_date__isnull=True).first()
+            if old_cta:
+                old_cta.end_date = eff_date
+                old_cta.save(update_fields=['end_date'])
+                if old_cta.school_class.teacher_id == s.user_id:
+                    old_cta.school_class.teacher = None
+                    old_cta.school_class.save(update_fields=['teacher'])
+
+        active_cta = ClassTeacherAssignment.objects.filter(school_class=new_class, end_date__isnull=True).first()
+        if active_cta:
+            if not request.data.get('replace_existing'):
+                curr_name = active_cta.teacher.get_full_name() or active_cta.teacher.username
+                return Response({'conflict': True, 'current_teacher': curr_name, 'class_id': new_class.id, 'detail': f"Class already has an active class teacher: {curr_name}."}, status=409)
+            active_cta.end_date = eff_date
+            active_cta.save(update_fields=['end_date'])
+            old_s = StaffMember.objects.filter(user=active_cta.teacher).first()
+            if old_s:
+                old_s.sync_teacher_type()
+
+        ClassTeacherAssignment.objects.create(school_class=new_class, teacher=s.user, start_date=eff_date, created_by=user)
+        new_class.teacher = s.user
+        new_class.save(update_fields=['teacher'])
+
+        s.sync_teacher_type()
+        _log(s, 'role_changed', user, to=f'Moved to class teacher of {new_class.display_name}')
+        record_event(actor=user, action='transfer_class', obj=s)
+
+    return Response({'ok': True, 'teacher_type': s.teacher_type})

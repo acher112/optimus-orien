@@ -4,7 +4,8 @@ from rest_framework.routers import DefaultRouter
 from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
-    permission_views, views_risk, exam_engine_views, principal_views, attendance_views
+    permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
+    teacher_views
 )
 
 r = DefaultRouter()
@@ -41,6 +42,15 @@ urlpatterns = [
     path('staff/<int:pk>/assign-role/', staff.staff_assign_role),
     path('staff/<int:pk>/terminate/', staff.staff_terminate),
     path('staff/<int:pk>/reinstate/', staff.staff_reinstate),
+    path('staff/<int:pk>/assignments/', staff.staff_assignments),
+    path('staff/<int:pk>/assignments/<int:assignment_id>/end/', staff.staff_end_assignment),
+    path('staff/<int:pk>/assignments/transfer-class/', staff.staff_transfer_class),
+
+    # Teacher Portal (Isolated)
+    path('teacher/dashboard/', teacher_views.teacher_dashboard),
+    path('teacher/my-class/', teacher_views.teacher_my_class),
+    path('teacher/my-subjects/', teacher_views.teacher_my_subjects),
+    path('teacher/scope/', teacher_views.teacher_scope_view),
 
     # Finance
     path('finance/summary/', finance.summary),

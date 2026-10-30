@@ -31,7 +31,7 @@ from core.models import (
     Organisation, School, User, SchoolClass, AcademicYear, Student, Enrollment,
     Subject, Assessment, Grade, Attendance, Homework, HomeworkSubmission,
     FinanceCategory, FinanceEntry, FeeHead, FeeStructure, StudentFee,
-    ReviewCase, RiskCriteria, RiskDismissal, AuditEvent
+    ReviewCase, RiskCriteria, RiskDismissal, AuditEvent, OrganisationRolePolicy
 )
 from core.services.risk import evaluate_students_at_risk, DEFAULT_RULES
 
@@ -40,6 +40,11 @@ class DashboardDefaultersRiskTests(TestCase):
     def setUp(self):
         self.today = timezone.localdate()
         self.org = Organisation.objects.create(name='Global Academy Trust', code='gat', allow_org_admin_student_access=True)
+        OrganisationRolePolicy.objects.create(
+            organisation=self.org,
+            role='principal',
+            permissions={'fees.view_campus': True, 'fees.manage': True}
+        )
 
         # Campuses with different currencies to test multi-currency isolation
         self.campus_pk = School.objects.create(organisation=self.org, code='KHI', name='Karachi Campus', currency='PKR')

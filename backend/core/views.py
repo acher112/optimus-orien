@@ -308,12 +308,54 @@ class StudentSerializer(DynamicSerializer):
  def get_section(self,o):
   e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
   return e.school_class.section if (e and e.school_class) else ''
+ def to_representation(self, instance):
+  ret = super().to_representation(instance)
+  req = self.context.get('request')
+  if req and req.user and req.user.is_authenticated and req.user.role == 'teacher' and not req.user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope = get_teacher_scope(req.user, req)
+   sc_id = ret.get('school_class_id')
+   if not (sc_id and scope.is_class_teacher(sc_id)):
+    for field in ('father_name', 'mother_name', 'guardian_phone', 'date_of_birth', 'guardians'):
+     ret.pop(field, None)
+  return ret
  class Meta:
   model=Student
   fields=[
    'id','school','school_name','admission_number','first_name','last_name','full_name',
    'father_name','mother_name','guardian_phone',
    'date_of_birth','gender','enrolled_on','active','user','guardians',
+   'class_name','school_class_id','section'
+  ]
+
+class TeacherStudentSerializer(DynamicSerializer):
+ """Limited student profile for subject teachers (data minimisation)."""
+ full_name=serializers.CharField(read_only=True)
+ school_name=serializers.CharField(source='school.name',read_only=True)
+ class_name=serializers.SerializerMethodField()
+ school_class_id=serializers.SerializerMethodField()
+ section=serializers.SerializerMethodField()
+ gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=False)
+ def get_class_name(self,o):
+  e=o.enrollments.select_related('school_class__school').filter(end_date__isnull=True).first()
+  if not e or not e.school_class:
+   return 'Unassigned'
+  sc = e.school_class
+  base = f"{sc.name} – {sc.section}" if sc.section else sc.name
+  if sc.school:
+   return f"{base} ({sc.school.name})"
+  return base
+ def get_school_class_id(self,o):
+  e=o.enrollments.filter(end_date__isnull=True).first()
+  return e.school_class_id if e else None
+ def get_section(self,o):
+  e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
+  return e.school_class.section if (e and e.school_class) else ''
+ class Meta:
+  model=Student
+  fields=[
+   'id','school','school_name','admission_number','first_name','last_name','full_name',
+   'gender','enrolled_on','active','user',
    'class_name','school_class_id','section'
   ]
 class SubjectSerializer(DynamicSerializer):
@@ -650,6 +692,33 @@ class ScopedViewSet(viewsets.ModelViewSet):
  def perform_create(self,serializer):
   user=self.request.user;model=self.queryset.model;data=serializer.validated_data
   extras={}
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope = get_teacher_scope(user, self.request)
+   if model is Assessment:
+    sc = data['school_class']
+    subj = data['subject']
+    if not scope.can_edit_subject_marks(sc.id, subj.id):
+     raise PermissionDenied('Cannot create assessment for unassigned subject')
+    extras['created_by'] = user
+    from core.models import TeachingAssignment
+    ta = TeachingAssignment.objects.filter(teacher=user, school_class=sc, subject=subj, end_date__isnull=True).first()
+    if ta:
+     extras['teaching_assignment'] = ta
+   elif model is Grade:
+    asm = data['assessment']
+    if not scope.can_edit_subject_marks(asm.school_class_id, asm.subject_id):
+     raise PermissionDenied('Cannot enter marks for unassigned subject')
+   elif model is Attendance:
+    sc = data['school_class']
+    if not scope.can_mark_daily_attendance(sc.id):
+     raise PermissionDenied('Only the class teacher may mark the daily attendance register')
+   elif model is Homework:
+    sc = data['school_class']
+    subj = data['subject']
+    if not scope.can_view_subject(sc.id, subj.id):
+     raise PermissionDenied('Cannot create homework for unassigned subject')
+    extras['created_by'] = user
   if hasattr(model, 'school') and 'school' not in data:
    from core.services.campus_filter import get_campus_for_write
    target_sch = get_campus_for_write(self.request, self.request.data)
@@ -679,6 +748,27 @@ class ScopedViewSet(viewsets.ModelViewSet):
  @transaction.atomic
  def perform_update(self,serializer):
   user=self.request.user;model=self.queryset.model;old=self.get_object();data=serializer.validated_data
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope = get_teacher_scope(user, self.request)
+   if model is Assessment:
+    if old.created_by_id and old.created_by_id != user.id:
+     raise PermissionDenied("Cannot edit another teacher's assessment")
+    if 'published' in data:
+     raise PermissionDenied('Publishing results requires school leadership')
+   elif model is Grade:
+    asm = old.assessment
+    if not scope.can_edit_subject_marks(asm.school_class_id, asm.subject_id):
+     raise PermissionDenied('Cannot edit marks for unassigned subject')
+    if asm.published:
+     raise PermissionDenied('Published grades are locked for teacher edits')
+   elif model is Attendance:
+    sc = old.school_class
+    if not scope.can_mark_daily_attendance(sc.id):
+     raise PermissionDenied('Only the class teacher may correct the daily attendance register')
+   elif model is Homework:
+    if old.created_by_id and old.created_by_id != user.id:
+     raise PermissionDenied("Cannot edit another teacher's homework")
   if model is Notification:
    if set(self.request.data) - {'read'} or 'read' not in data:
     raise APIValidationError({'detail':'Only the read state may be updated'})
@@ -715,6 +805,22 @@ class ScopedViewSet(viewsets.ModelViewSet):
   user=self.request.user
   model=self.queryset.model
   ensure_action(user,model,'delete')
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope = get_teacher_scope(user, self.request)
+   if model is Assessment:
+    if instance.created_by_id and instance.created_by_id != user.id:
+     raise PermissionDenied("Cannot delete another teacher's assessment")
+    if instance.published:
+     raise PermissionDenied("Cannot delete published assessment")
+    if Grade.objects.filter(assessment=instance).exists():
+     raise PermissionDenied("Cannot delete graded assessment")
+   elif model is Homework:
+    if instance.created_by_id and instance.created_by_id != user.id:
+     raise PermissionDenied("Cannot delete another teacher's homework")
+   elif model is Attendance:
+    if not scope.can_mark_daily_attendance(instance.school_class_id):
+     raise PermissionDenied("Only the class teacher may delete attendance records")
   if model is Student:
    Grade.objects.filter(student=instance).delete()
    Attendance.objects.filter(student=instance).delete()
@@ -777,6 +883,14 @@ class Schools(ScopedViewSet):queryset=School.objects.all();serializer_class=Scho
 class Classes(ScopedViewSet):queryset=SchoolClass.objects.all();serializer_class=ClassSerializer
 class Students(ScopedViewSet):
  queryset=Student.objects.all();serializer_class=StudentSerializer
+ def get_serializer_class(self):
+  req = getattr(self, 'request', None)
+  if req and req.user and req.user.is_authenticated and req.user.role == 'teacher' and not req.user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope = get_teacher_scope(req.user, req)
+   if not scope.full_class_ids:
+    return TeacherStudentSerializer
+  return StudentSerializer
  @transaction.atomic
  def create(self, request, *args, **kwargs):
   ensure_action(request.user, Student, 'create')
@@ -967,8 +1081,11 @@ def dashboard(request):
 @api_view(['GET'])
 def export_students(request):
  ensure_action(request.user,Student,'read')
- if not request.user.is_superuser and request.user.role not in ('organisation_admin','school_admin','principal'):
-  raise PermissionDenied('Student export requires school leadership')
+ if not request.user.is_superuser and request.user.role not in ('organisation_admin','school_admin','principal','teacher'):
+  raise PermissionDenied('Student export requires school leadership or teacher role')
+ if request.user.role == 'teacher':
+  if not getattr(request.user.organisation, 'teachers_can_export', True):
+   raise PermissionDenied('Exporting is disabled for teachers')
  if request.user.role=='organisation_admin' and not request.user.organisation.allow_org_admin_student_access:
   raise PermissionDenied('Individual student export requires explicit organisation policy')
  fmt=request.query_params.get('format') or 'csv'
@@ -994,11 +1111,19 @@ def export_students(request):
   {'key':'enrolled_on','label':'Enrolled On'},
   {'key':'active','label':'Active Status'},
  ]
+ is_teacher = request.user.role == 'teacher' and not request.user.is_superuser
+ teacher_scope = None
+ if is_teacher:
+  from core.services.teacher_scope import get_teacher_scope
+  teacher_scope = get_teacher_scope(request.user, request)
+ def _get_student_class_id(s):
+  e = s.enrollments.filter(end_date__isnull=True).first()
+  return e.school_class_id if e else None
  rows=[{
   'admission_number':s.admission_number,
   'first_name':s.first_name,
   'last_name':s.last_name,
-  'father_name':s.father_name,
+  'father_name':s.father_name if (not is_teacher or (teacher_scope and teacher_scope.is_class_teacher(_get_student_class_id(s)))) else '',
   'gender':s.gender or '',
   'school_name':s.school.name,
   'enrolled_on':str(s.enrolled_on),
@@ -1013,6 +1138,9 @@ def universal_export(request):
  user=request.user
  if not user.is_authenticated:
   raise PermissionDenied('Authentication required')
+ if user.role == 'teacher' and not user.is_superuser:
+  if not getattr(user.organisation, 'teachers_can_export', True):
+   raise PermissionDenied('Exporting is disabled for teachers')
  data=request.data if request.method=='POST' else request.query_params
  title=data.get('title') or 'Data Export'
  filename=data.get('filename') or 'export'
@@ -1025,6 +1153,10 @@ def universal_export(request):
 
 @api_view(['GET'])
 def teachers_list(request):
+ if not request.user.is_authenticated or not request.user.is_active:
+  raise PermissionDenied('Authentication required')
+ if request.user.role == 'teacher' and not request.user.is_superuser:
+  raise PermissionDenied('Teachers may not view the staff directory.')
  schools=schools_scope(request.user)
  teachers=User.objects.filter(school__in=schools,role='teacher',is_active=True).select_related('school')
  return Response({'results':[{'id':t.id,'name':t.get_full_name() or t.username,'username':t.username,'school_id':t.school_id,'school_name':t.school.name if t.school else ''} for t in teachers]})

@@ -9,6 +9,11 @@ class Organisation(models.Model):
  name=models.CharField(max_length=160)
  code=models.SlugField(unique=True)
  allow_org_admin_student_access=models.BooleanField(default=False,help_text="Explicit policy to allow organisation-level administrators access to identifiable student records")
+ allow_temporary_passwords=models.BooleanField(default=False,help_text="Allow administrators to set a temporary password during staff creation")
+ class_teacher_can_edit_all_subject_marks=models.BooleanField(default=False,help_text="Allow class teachers to edit marks for all subjects in their class")
+ teachers_keep_read_access_to_own_history=models.BooleanField(default=True,help_text="Allow teachers read-only access to records they created after assignment ends")
+ max_classes_per_class_teacher=models.PositiveIntegerField(default=1,help_text="Maximum number of classes a single teacher can be class teacher of")
+ teachers_can_export=models.BooleanField(default=True,help_text="Allow teachers to export marks and attendance within their scope")
  def __str__(self):return self.name
 
 CURRENCIES = ['PKR', 'USD', 'GBP', 'EUR', 'AED', 'SAR', 'INR', 'CAD', 'AUD']
@@ -31,6 +36,7 @@ class User(AbstractUser):
  school=models.ForeignKey(School,null=True,blank=True,on_delete=models.PROTECT)
  avatar_color=models.CharField(max_length=12,default='#8276da')
  avatar_image=models.TextField(blank=True,default='')
+ must_change_password=models.BooleanField(default=False,help_text='Force password change on next login')
  def clean(self):
   super().clean()
   if self.school_id and self.school.organisation_id != self.organisation_id:raise ValidationError('School must belong to organisation')
@@ -70,6 +76,48 @@ class Subject(models.Model):
  code=models.CharField(max_length=20)
  class Meta:constraints=[models.UniqueConstraint(fields=['school','code'],name='unique_subject_code')]
  def __str__(self):return self.name
+
+class ClassTeacherAssignment(models.Model):
+ school_class=models.ForeignKey(SchoolClass,on_delete=models.PROTECT,related_name='class_teacher_assignments')
+ teacher=models.ForeignKey(User,on_delete=models.PROTECT,related_name='class_teacher_assignments')
+ start_date=models.DateField()
+ end_date=models.DateField(null=True,blank=True)
+ created_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='+')
+ created_at=models.DateTimeField(auto_now_add=True)
+ class Meta:
+  ordering=['-start_date','-id']
+  constraints=[models.UniqueConstraint(fields=['school_class'],condition=models.Q(end_date__isnull=True),name='unique_active_class_teacher')]
+ def clean(self):
+  if self.school_class_id and self.teacher_id:
+   if self.teacher.role!='teacher' or self.teacher.school_id!=self.school_class.school_id:
+    raise ValidationError('Assigned teacher must belong to class school')
+  if self.end_date and self.start_date and self.end_date<self.start_date:
+   raise ValidationError('End date must not precede start date')
+ def __str__(self):
+  return f"{self.school_class}: {self.teacher.get_full_name() or self.teacher.username}"
+
+class TeachingAssignment(models.Model):
+ school=models.ForeignKey(School,on_delete=models.PROTECT,related_name='teaching_assignments')
+ teacher=models.ForeignKey(User,on_delete=models.PROTECT,related_name='subject_assignments')
+ school_class=models.ForeignKey(SchoolClass,on_delete=models.PROTECT,related_name='teaching_assignments')
+ subject=models.ForeignKey(Subject,on_delete=models.PROTECT,related_name='teaching_assignments')
+ start_date=models.DateField()
+ end_date=models.DateField(null=True,blank=True)
+ created_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='+')
+ created_at=models.DateTimeField(auto_now_add=True)
+ class Meta:
+  ordering=['-start_date','-id']
+  constraints=[models.UniqueConstraint(fields=['teacher','school_class','subject'],condition=models.Q(end_date__isnull=True),name='unique_active_teaching_assignment')]
+ def clean(self):
+  if self.school_class_id and self.subject_id:
+   if self.school_class.school_id!=self.school_id or self.subject.school_id!=self.school_id:
+    raise ValidationError('Class and subject must belong to the same campus')
+  if self.teacher_id and self.teacher.school_id!=self.school_id:
+   raise ValidationError('Teacher must belong to the assignment campus')
+  if self.end_date and self.start_date and self.end_date<self.start_date:
+   raise ValidationError('End date must not precede start date')
+ def __str__(self):
+  return f"{self.teacher.get_full_name() or self.teacher.username}: {self.subject} ({self.school_class})"
 
 class Student(models.Model):
  school=models.ForeignKey(School,on_delete=models.PROTECT)
@@ -118,6 +166,8 @@ class Assessment(models.Model):
  max_marks=models.DecimalField(max_digits=8,decimal_places=2,validators=[MinValueValidator(.01)])
  weight=models.DecimalField(max_digits=6,decimal_places=2,default=1,validators=[MinValueValidator(.01)])
  published=models.BooleanField(default=False)
+ created_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='created_assessments')
+ teaching_assignment=models.ForeignKey(TeachingAssignment,null=True,blank=True,on_delete=models.SET_NULL,related_name='assessments')
  def clean(self):
   if self.subject_id and self.school_class_id and self.subject.school_id!=self.school_class.school_id:raise ValidationError('Subject does not belong to class school')
   if self.school_class_id and self.date and not self.school_class.academic_year.start_date<=self.date<=self.school_class.academic_year.end_date:
@@ -371,6 +421,8 @@ class StaffMember(models.Model):
     phone=models.CharField(max_length=40,blank=True)
     position=models.CharField(max_length=120,help_text='Job title, e.g. Maths Teacher')
     role=models.CharField(max_length=32,default='teacher',help_text='Assigned role: teacher, principal, school_admin or any non-login role such as accountant')
+    TEACHER_TYPES=[('class_teacher','Class Teacher'),('subject_teacher','Subject Teacher'),('both','Both')]
+    teacher_type=models.CharField(max_length=32,blank=True,default='',choices=TEACHER_TYPES)
     status=models.CharField(max_length=16,choices=STATUS,default='active')
     hired_on=models.DateField()
     terminated_on=models.DateField(null=True,blank=True)
@@ -378,6 +430,21 @@ class StaffMember(models.Model):
     class Meta:ordering=['last_name','first_name']
     @property
     def full_name(self):return f'{self.first_name} {self.last_name}'.strip()
+    def compute_teacher_type(self):
+        if not self.user_id:
+            return self.teacher_type or ''
+        has_class=ClassTeacherAssignment.objects.filter(teacher=self.user,end_date__isnull=True).exists()
+        has_subject=TeachingAssignment.objects.filter(teacher=self.user,end_date__isnull=True).exists()
+        if has_class and has_subject:return 'both'
+        if has_class:return 'class_teacher'
+        if has_subject:return 'subject_teacher'
+        return self.teacher_type or ''
+    def sync_teacher_type(self):
+        computed=self.compute_teacher_type()
+        if computed!=self.teacher_type:
+            self.teacher_type=computed
+            StaffMember.objects.filter(pk=self.pk).update(teacher_type=computed)
+        return computed
     def __str__(self):return self.full_name
 
 class StaffEvent(models.Model):

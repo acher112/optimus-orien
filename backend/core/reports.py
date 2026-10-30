@@ -330,6 +330,8 @@ def _envelope(user, **extra):
 def overview(request):
     user = request.user
     _check_role(user)
+    if user.role == 'teacher' and not user.is_superuser:
+        raise PermissionDenied('Teachers may not access organisation-wide reports.')
     period = request.query_params.get('period', '')
     schools = list(schools_scope(user).order_by('name'))
     windows = _windows(schools, period)
@@ -392,6 +394,8 @@ def overview(request):
 def campus(request, school_id):
     user = request.user
     _check_role(user)
+    if user.role == 'teacher' and not user.is_superuser:
+        raise PermissionDenied('Teachers may not access campus-wide reports.')
     school = _school_or_404(user, school_id)
     period = request.query_params.get('period', '')
     windows = _windows([school], period)
@@ -477,6 +481,16 @@ def class_report(request, class_id):
                              'overall': _mean(vals.values()), 'subjects': vals,
                              'has_results': bool(vals)})
         students = sort_comparison_rows(students, metric_key='overall', name_key='name', reverse=True)
+    if user.role == 'teacher' and not user.is_superuser:
+        from core.services.teacher_scope import get_teacher_scope
+        t_scope = get_teacher_scope(user, request)
+        if not t_scope.is_class_teacher(klass.id):
+            allowed_codes = {data.cs[k]['subject'].code for k in data.keys({klass.id}) if t_scope.teaches_subject(klass.id, data.cs[k]['subject'].id)}
+            subjects = [s for s in subjects if s['code'] in allowed_codes]
+            for st in students:
+                st['subjects'] = {k: v for k, v in st.get('subjects', {}).items() if k in allowed_codes}
+                st['overall'] = _mean(st['subjects'].values())
+                st['has_results'] = bool(st['subjects'])
     subjects = sort_comparison_rows(subjects, metric_key='average', name_key='name', reverse=True)
     return Response(_envelope(
         user, level='class', period=_period_payload(period, windows, [klass.school]),
@@ -509,6 +523,15 @@ def subject_report(request, school_id, code):
     keys = data.keys(subject_code=code)
     if not keys and not school.subject_set.filter(code=code).exists():
         raise NotFound('Subject not found')
+    if user.role == 'teacher' and not user.is_superuser:
+        from core.services.teacher_scope import get_teacher_scope
+        t_scope = get_teacher_scope(user, request)
+        valid_classes = [c for c in classes if any(t_scope.can_view_subject(c.id, data.cs[k]['subject'].id) for k in data.keys({c.id}, code))]
+        if not valid_classes:
+            raise NotFound('Subject not found or outside authorized scope')
+        classes = valid_classes
+        data = Data(classes, windows, subject_filter=code)
+        keys = data.keys(subject_code=code)
     name = data.cs[keys[0]]['subject'].name if keys else school.subject_set.get(code=code).name
     per_class = []
     for c in classes:

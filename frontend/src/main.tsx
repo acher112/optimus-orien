@@ -36,6 +36,9 @@ import Permissions from './Permissions';
 import StudentsAtRisk from './StudentsAtRisk';
 import DashboardFinanceChart from './DashboardFinanceChart';
 import PrincipalHome from './PrincipalHome';
+import TeacherHome from './TeacherHome';
+import TeacherMyClass from './TeacherMyClass';
+import TeacherMySubjects from './TeacherMySubjects';
 import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import ErrorBoundary from './ErrorBoundary';
@@ -90,6 +93,15 @@ const SYSTEM_NAV = [
   { name: 'Audit log', icon: ShieldCheck, adminOnly: true },
   { name: 'Notifications', icon: Bell },
   { name: 'Settings', icon: Settings2 },
+];
+
+const FORBIDDEN_TEACHER_PAGES = [
+  'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee',
+  'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Fees',
+  'Staff', 'Staff Salaries', 'Salaries',
+  'Campuses', 'Campus setup', 'Academic years',
+  'Audit log', 'Permissions', 'Data import', 'Platform owner',
+  'Reports', 'Risk criteria', 'Students at Risk', 'At-risk list'
 ];
 
 const NAV_GROUPS = [
@@ -270,10 +282,21 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
   },
 };
 
-function getResourceFilterConfigs(pageName: string): FilterConfig[] {
+function getResourceFilterConfigs(pageName: string, user?: User | null, teacherScope?: any, refClasses?: any[]): FilterConfig[] {
   switch (pageName) {
-    case 'Students':
-      return [
+    case 'Students': {
+      const classOpts = user?.role === 'teacher' && teacherScope?.classes
+        ? teacherScope.classes.map((c: any) => ({ label: c.display_name || c.name, value: String(c.id) }))
+        : (refClasses || []).map((c: any) => ({ label: c.name, value: String(c.id) }));
+      const filters: FilterConfig[] = [];
+      if (classOpts.length > 0) {
+        filters.push({
+          key: 'school_class',
+          label: 'Class',
+          options: classOpts
+        });
+      }
+      filters.push(
         {
           key: 'gender',
           label: 'Gender',
@@ -290,7 +313,9 @@ function getResourceFilterConfigs(pageName: string): FilterConfig[] {
             { label: 'Inactive', value: 'false' },
           ]
         }
-      ];
+      );
+      return filters;
+    }
     case 'Classes':
       return [
         {
@@ -396,6 +421,17 @@ const Pill = ({ value }: { value: string | boolean | undefined }) => {
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [teacherScope, setTeacherScope] = useState<any>(null);
+
+  useEffect(() => {
+    if (user?.role === 'teacher') {
+      request<any>('teacher/scope/').then(res => {
+        setTeacherScope(res);
+      }).catch(() => {});
+    } else {
+      setTeacherScope(null);
+    }
+  }, [user]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState('Overview');
   const [dash, setDash] = useState<Dashboard | null>(null);
@@ -526,9 +562,11 @@ function App() {
     const qs = params.toString() ? `?${params.toString()}` : '';
     try {
       if (page === 'Overview') {
-        const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
-        setDash(await request<Dashboard>(`dashboard/${campusQs}`));
-      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'].includes(page)) {
+        if (user.role !== 'teacher') {
+          const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
+          setDash(await request<Dashboard>(`dashboard/${campusQs}`));
+        }
+      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'My Class', 'My Subjects'].includes(page)) {
         // subcomponents handle own data
       } else if (resourceInfo[page]) {
         setRecords(await list<Resource>(`${resourceInfo[page].api}/${qs}`));
@@ -559,6 +597,13 @@ function App() {
   };
 
   const config = resourceInfo[page];
+  const effectiveColumns = useMemo(() => {
+    if (!config) return [];
+    if (page === 'Students' && user?.role === 'teacher' && !teacherScope?.can_view_my_class) {
+      return config.columns.filter(c => c.key !== 'father_name');
+    }
+    return config.columns;
+  }, [config, page, user, teacherScope]);
   const filtered = records;
 
   const activeCampus = useMemo(() => campuses.find(c => c.id === activeCampusId) || null, [campuses, activeCampusId]);
@@ -838,7 +883,49 @@ function App() {
 
         {/* Dynamic Campus Selector */}
         <div className="workspace-pill-wrap" ref={campusDropdownRef}>
-          {isSingleCampusRole ? (
+          {user?.role === 'teacher' && teacherScope?.campuses && teacherScope.campuses.length > 1 ? (
+            <>
+              <button
+                className="workspace-pill interactive"
+                title="Switch campus"
+                onClick={() => setCampusDropdownOpen(v => !v)}
+              >
+                <span className="workspace-icon"><Building2 size={19} /></span>
+                <span className="workspace-name">
+                  <b>{campuses.find(c => c.id === activeCampusId)?.name || 'Assigned Campus'}</b>
+                  <small>Teaching Campus</small>
+                </span>
+                <ChevronDown size={15} style={{ transform: campusDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+              </button>
+              {campusDropdownOpen && (
+                <div className="campus-dropdown-menu">
+                  <div className="campus-dropdown-title">Your Assigned Campuses</div>
+                  {teacherScope.campuses.map((c: any) => {
+                    const isSelected = activeCampusId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        className={`campus-dropdown-item ${isSelected ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveCampusId(c.id);
+                          localStorage.setItem('optimus_active_campus_id', String(c.id));
+                          setCampusDropdownOpen(false);
+                          notify(`Switched to campus: ${c.name}`);
+                        }}
+                      >
+                        <div className="campus-item-icon"><Building2 size={15} /></div>
+                        <div className="campus-item-info">
+                          <b>{c.name}</b>
+                          <small>Teaching Branch</small>
+                        </div>
+                        {isSelected && <Check size={16} color="var(--brand-primary, #715ee8)" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : isSingleCampusRole ? (
             <div className="workspace-pill" style={{ cursor: 'default' }} title="Your assigned campus">
               <span className="workspace-icon"><Building2 size={19} /></span>
               <span className="workspace-name">
@@ -922,111 +1009,259 @@ function App() {
           )}
         </div>
 
-        <div className="nav-label">WORKSPACE</div>
-        <nav>
-          {NAV_GROUPS.map(group => {
-            const isAdmin = group.adminLabel;
-            if (isAdmin && !['organisation_admin', 'school_admin'].includes(user.role)) return null;
-            const navItems = WORKSPACE_NAV.filter(item => group.items.includes(item.name) && ((item as any).roles ? (item as any).roles.includes(user.role) : (!item.adminOnly || ['organisation_admin', 'school_admin'].includes(user.role))));
-            if (!navItems.length) return null;
-            return (
-              <React.Fragment key={group.sublabel}>
-                <div className={'nav-sublabel' + (isAdmin ? ' nav-sublabel-admin' : '')}>{group.sublabel}</div>
-                {navItems.map((item: any) => {
-                  const { name, icon: Icon, childOf } = item;
-                  if (childOf) return null; // rendered inside parent dropdown
+        {user.role === 'teacher' ? (
+          <>
+            <div className="nav-label">MY TEACHING WORKSPACE</div>
+            <nav>
+              <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
+              <button
+                type="button"
+                onClick={() => switchPage('Overview')}
+                className={'nav-item ' + (page === 'Overview' ? 'selected' : '')}
+              >
+                <LayoutDashboard size={19} strokeWidth={1.9} />
+                <span>My Home</span>
+              </button>
 
-                  const children = navItems.filter((c: any) => c.childOf === name);
-                  const isDropdown = children.length > 0;
-                  const isChildActive = isDropdown && children.some((c: any) => c.name === page);
-                  const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page));
-                  const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
+              {teacherScope?.can_view_my_class && (
+                <button
+                  type="button"
+                  onClick={() => switchPage('My Class')}
+                  className={'nav-item ' + (page === 'My Class' ? 'selected' : '')}
+                >
+                  <Users size={19} strokeWidth={1.9} />
+                  <span>My Class</span>
+                </button>
+              )}
 
-                  if (isDropdown) {
-                    return (
-                      <div key={name} className="nav-dropdown-group">
+              {teacherScope?.can_view_my_subjects && (
+                <button
+                  type="button"
+                  onClick={() => switchPage('My Subjects')}
+                  className={'nav-item ' + (page === 'My Subjects' ? 'selected' : '')}
+                >
+                  <BookOpen size={19} strokeWidth={1.9} />
+                  <span>My Subjects</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => switchPage('Students')}
+                className={'nav-item ' + (page === 'Students' ? 'selected' : '')}
+              >
+                <GraduationCap size={19} strokeWidth={1.9} />
+                <span>My Students</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchPage('Attendance')}
+                className={'nav-item ' + (page === 'Attendance' ? 'selected' : '')}
+              >
+                <ClipboardCheck size={19} strokeWidth={1.9} />
+                <span>Attendance</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchPage('Homework')}
+                className={'nav-item ' + (page === 'Homework' ? 'selected' : '')}
+              >
+                <ClipboardList size={19} strokeWidth={1.9} />
+                <span>Homework</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchPage('Examinations')}
+                className={'nav-item ' + (page === 'Examinations' ? 'selected' : '')}
+              >
+                <Award size={19} strokeWidth={1.9} />
+                <span>Academics / Exams</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchPage('Study materials')}
+                className={'nav-item ' + (page === 'Study materials' ? 'selected' : '')}
+              >
+                <BookOpen size={19} strokeWidth={1.9} />
+                <span>Study Materials</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchPage('Timetable')}
+                className={'nav-item ' + (page === 'Timetable' ? 'selected' : '')}
+              >
+                <CalendarDays size={19} strokeWidth={1.9} />
+                <span>Timetable</span>
+              </button>
+
+              {teacherScope?.can_view_my_class && (
+                <button
+                  type="button"
+                  onClick={() => switchPage('Review cases')}
+                  className={'nav-item ' + (page === 'Review cases' ? 'selected' : '')}
+                >
+                  <ShieldAlert size={19} strokeWidth={1.9} />
+                  <span>Review Cases</span>
+                </button>
+              )}
+
+              <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
+              <button
+                type="button"
+                onClick={() => switchPage('Communication')}
+                className={'nav-item ' + (page === 'Communication' ? 'selected' : '')}
+              >
+                <MessageSquare size={19} strokeWidth={1.9} />
+                <span>Communication</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Announcements')}
+                className={'nav-item ' + (page === 'Announcements' ? 'selected' : '')}
+              >
+                <Megaphone size={19} strokeWidth={1.9} />
+                <span>Announcements</span>
+              </button>
+            </nav>
+
+            <div className="nav-label nav-lower">ACCOUNT & SYSTEM</div>
+            <nav>
+              <button
+                type="button"
+                onClick={() => switchPage('Notifications')}
+                className={'nav-item ' + (page === 'Notifications' ? 'selected' : '')}
+              >
+                <Bell size={19} strokeWidth={1.9} />
+                <span>Notifications</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Settings')}
+                className={'nav-item ' + (page === 'Settings' ? 'selected' : '')}
+              >
+                <Settings2 size={19} strokeWidth={1.9} />
+                <span>My Profile</span>
+              </button>
+            </nav>
+          </>
+        ) : (
+          <>
+            <div className="nav-label">WORKSPACE</div>
+            <nav>
+              {NAV_GROUPS.map(group => {
+                const isAdmin = group.adminLabel;
+                if (isAdmin && !['organisation_admin', 'school_admin'].includes(user.role)) return null;
+                const navItems = WORKSPACE_NAV.filter(item => group.items.includes(item.name) && ((item as any).roles ? (item as any).roles.includes(user.role) : (!item.adminOnly || ['organisation_admin', 'school_admin'].includes(user.role))));
+                if (!navItems.length) return null;
+                return (
+                  <React.Fragment key={group.sublabel}>
+                    <div className={'nav-sublabel' + (isAdmin ? ' nav-sublabel-admin' : '')}>{group.sublabel}</div>
+                    {navItems.map((item: any) => {
+                      const { name, icon: Icon, childOf } = item;
+                      if (childOf) return null; // rendered inside parent dropdown
+
+                      const children = navItems.filter((c: any) => c.childOf === name);
+                      const isDropdown = children.length > 0;
+                      const isChildActive = isDropdown && children.some((c: any) => c.name === page);
+                      const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page));
+                      const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
+
+                      if (isDropdown) {
+                        return (
+                          <div key={name} className="nav-dropdown-group">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isSelfActive) {
+                                  toggleDropdown(name);
+                                } else {
+                                  setOpenDropdowns(prev => ({ ...prev, [name]: true }));
+                                  switchPage(name);
+                                }
+                              }}
+                              className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '')}
+                            >
+                              <Icon size={19} strokeWidth={1.9} />
+                              <span className="nav-item-title">{name}</span>
+                              <span
+                                className={'nav-chevron-wrap' + (isOpen ? ' open' : '')}
+                                onClick={(e) => toggleDropdown(name, e)}
+                                title={isOpen ? 'Collapse' : 'Expand'}
+                              >
+                                <ChevronDown size={15} strokeWidth={2.2} />
+                              </span>
+                            </button>
+                            {isOpen && (
+                              <div className="nav-dropdown-children">
+                                {children.map((child: any) => {
+                                  const ChildIcon = child.icon;
+                                  const isChildSelected = page === child.name;
+                                  return (
+                                    <button
+                                      key={child.name}
+                                      type="button"
+                                      onClick={() => switchPage(child.name)}
+                                      className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '')}
+                                    >
+                                      <ChildIcon size={14} strokeWidth={1.8} />
+                                      <span>{child.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
                         <button
-                          type="button"
-                          onClick={() => {
-                            if (isSelfActive) {
-                              toggleDropdown(name);
-                            } else {
-                              setOpenDropdowns(prev => ({ ...prev, [name]: true }));
-                              switchPage(name);
-                            }
-                          }}
-                          className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '')}
+                          key={name}
+                          onClick={() => switchPage(name)}
+                          className={'nav-item ' + (page === name ? 'selected' : '')}
                         >
                           <Icon size={19} strokeWidth={1.9} />
-                          <span className="nav-item-title">{name}</span>
-                          <span
-                            className={'nav-chevron-wrap' + (isOpen ? ' open' : '')}
-                            onClick={(e) => toggleDropdown(name, e)}
-                            title={isOpen ? 'Collapse' : 'Expand'}
-                          >
-                            <ChevronDown size={15} strokeWidth={2.2} />
-                          </span>
+                          <span>{name}</span>
+                          {name === 'Interventions' && !!dash?.counts.open_cases && <em>{dash.counts.open_cases}</em>}
                         </button>
-                        {isOpen && (
-                          <div className="nav-dropdown-children">
-                            {children.map((child: any) => {
-                              const ChildIcon = child.icon;
-                              const isChildSelected = page === child.name;
-                              return (
-                                <button
-                                  key={child.name}
-                                  type="button"
-                                  onClick={() => switchPage(child.name)}
-                                  className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '')}
-                                >
-                                  <ChildIcon size={14} strokeWidth={1.8} />
-                                  <span>{child.name}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </nav>
 
-                  return (
-                    <button
-                      key={name}
-                      onClick={() => switchPage(name)}
-                      className={'nav-item ' + (page === name ? 'selected' : '')}
-                    >
-                      <Icon size={19} strokeWidth={1.9} />
-                      <span>{name}</span>
-                      {name === 'Interventions' && !!dash?.counts.open_cases && <em>{dash.counts.open_cases}</em>}
-                    </button>
-                  );
-                })}
-              </React.Fragment>
-            );
-          })}
-        </nav>
-
-        <div className="nav-label nav-lower">INSIGHTS & SYSTEM</div>
-        <nav>
-          {SYSTEM_NAV.filter(item => {
-            if ((item as any).superuserOnly && !user.is_superuser) return false;
-            if ((item as any).roles) return (item as any).roles.includes(user.role);
-            return !item.adminOnly || ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
-          }).map(({ name, icon: Icon }) => (
-            <button key={name} onClick={() => switchPage(name)} className={'nav-item ' + (page === name ? 'selected' : '')}>
-              <Icon size={19} strokeWidth={1.9} />
-              <span>{name}</span>
-            </button>
-          ))}
-        </nav>
+            <div className="nav-label nav-lower">INSIGHTS & SYSTEM</div>
+            <nav>
+              {SYSTEM_NAV.filter(item => {
+                if ((item as any).superuserOnly && !user.is_superuser) return false;
+                if ((item as any).roles) return (item as any).roles.includes(user.role);
+                return !item.adminOnly || ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
+              }).map(({ name, icon: Icon }) => (
+                <button key={name} onClick={() => switchPage(name)} className={'nav-item ' + (page === name ? 'selected' : '')}>
+                  <Icon size={19} strokeWidth={1.9} />
+                  <span>{name}</span>
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
 
         <div className="sidebar-bottom">
           <div className="help-card">
             <div className="help-icon"><Sparkles size={17} /></div>
             <b>More clarity. Better outcomes.</b>
             <p>Use insights to make every campus day count.</p>
-            <button onClick={() => switchPage('Reports')}>Explore reports <ArrowRight size={14} /></button>
+            {user.role === 'teacher' ? (
+              <button onClick={() => switchPage('Examinations')}>Explore exams & marks <ArrowRight size={14} /></button>
+            ) : (
+              <button onClick={() => switchPage('Reports')}>Explore reports <ArrowRight size={14} /></button>
+            )}
             <a className="public-sidebar-link" href="/">Public homepage <ArrowUpRight size={13} /></a>
           </div>
 
@@ -1054,8 +1289,22 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu" onClick={() => setSidebar(true)} aria-label="Open menu"><Menu size={21} /></button>
             <div className="breadcrumb">
-              Workspace <ChevronRight size={14} /> <strong>{page}</strong>
+              Workspace <ChevronRight size={14} /> <strong>{page === 'Overview' && user.role === 'teacher' ? 'My Home' : page}</strong>
               {activeCampus && <span style={{ marginLeft: 8, padding: '2px 8px', background: '#eeeaff', color: '#6353d8', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{activeCampus.name}</span>}
+              {user.role === 'teacher' && teacherScope?.badges && teacherScope.badges.map((b: any, idx: number) => (
+                <span key={idx} style={{
+                  marginLeft: 6,
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: b.type === 'class_teacher' ? '#ecfdf5' : '#eff6ff',
+                  color: b.type === 'class_teacher' ? '#047857' : '#1d4ed8',
+                  border: `1px solid ${b.type === 'class_teacher' ? '#a7f3d0' : '#bfdbfe'}`
+                }}>
+                  {b.label}
+                </span>
+              ))}
             </div>
           </div>
           <div className="topbar-right">
@@ -1163,13 +1412,35 @@ function App() {
         </header>
 
         <main className="content">
-          {page === 'Campus setup' && <SchoolSetup user={user} initialSchool={setupSchool} onBack={() => switchPage('Campuses')} />}
-          {error && <div className="error-bar"><AlertCircle size={18} />{error}<button onClick={() => load()}><RefreshCw size={15} /> Retry</button></div>}
+          {/* Teacher Route Guard */}
+          {user.role === 'teacher' && (
+            FORBIDDEN_TEACHER_PAGES.includes(page) ||
+            (page === 'My Class' && !teacherScope?.can_view_my_class) ||
+            (page === 'My Subjects' && !teacherScope?.can_view_my_subjects)
+          ) ? (
+            <div className="panel" style={{ maxWidth: 560, margin: '48px auto', padding: '40px 24px', textAlign: 'center' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <ShieldAlert size={32} />
+              </div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>Access Restricted</h2>
+              <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.5, marginBottom: 24 }}>
+                You don't have access to this page. As a teacher, your portal is restricted to your assigned classes and student learning.
+              </p>
+              <button className="primary-btn" onClick={() => switchPage('Overview')}>
+                Return to My Home
+              </button>
+            </div>
+          ) : (
+            <>
+              {page === 'Campus setup' && <SchoolSetup user={user} initialSchool={setupSchool} onBack={() => switchPage('Campuses')} />}
+              {error && <div className="error-bar"><AlertCircle size={18} />{error}<button onClick={() => load()}><RefreshCw size={15} /> Retry</button></div>}
 
-          {page === 'Overview' && (
-            user.role === 'principal' ? (
-              <PrincipalHome user={user} onNavigate={switchPage} notify={notify} />
-            ) : (
+              {page === 'Overview' && (
+                user.role === 'principal' ? (
+                  <PrincipalHome user={user} onNavigate={switchPage} notify={notify} />
+                ) : user.role === 'teacher' ? (
+                  <TeacherHome user={user} onNavigate={switchPage} notify={notify} />
+                ) : (
               <>
                 <div className="welcome-row">
                 <div>
@@ -1418,7 +1689,7 @@ function App() {
                   <h1>{config.title}</h1>
                   <p>{config.desc}</p>
                 </div>
-                {config.fields.length > 0 && user.role !== 'student' && user.role !== 'parent' && (
+                {config.fields.length > 0 && !['student', 'parent', 'teacher'].includes(user.role) && (
                   <button className="primary-btn" onClick={openCreateModal}>
                     <Plus size={17} /> Add {page === 'Students' ? 'student' : page === 'Interventions' ? 'case' : page === 'Academic years' ? 'academic year' : page === 'Classes' ? 'class' : page === 'Subjects' ? 'subject' : 'record'}
                   </button>
@@ -1434,7 +1705,7 @@ function App() {
               <section className="panel resource-panel">
                 <FilterBar
                   searchPlaceholder={`Search ${page.toLowerCase()} (name, section, keyword)...`}
-                  filters={getResourceFilterConfigs(page)}
+                  filters={getResourceFilterConfigs(page, user, teacherScope, refData.classes)}
                   values={resourceFilters}
                   onChange={setResourceFilters}
                   onClear={() => setResourceFilters({})}
@@ -1442,21 +1713,23 @@ function App() {
                     <>
                       <span className="result-count">{filtered.length} records found</span>
                       <button className="outline-btn" onClick={() => load()}><RefreshCw size={15} /> Refresh</button>
-                      <ExportMenu
-                        title={`${page} Directory`}
-                        filename={`${page.toLowerCase().replace(/\s+/g, '-')}-list`}
-                        columns={config.columns.map(c => ({ key: c.key, label: c.label }))}
-                        rows={() => filtered.map(r => {
-                          const obj: Record<string, any> = {};
-                          for (const col of config.columns) {
-                            if (col.key === 'name') obj[col.key] = r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name;
-                            else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
-                            else obj[col.key] = r[col.key] ?? '—';
-                          }
-                          return obj;
-                        })}
-                        notify={notify}
-                      />
+                      {!(user?.role === 'teacher' && teacherScope?.can_export === false) && (
+                        <ExportMenu
+                          title={`${page} Directory`}
+                          filename={`${page.toLowerCase().replace(/\s+/g, '-')}-list`}
+                          columns={effectiveColumns.map(c => ({ key: c.key, label: c.label }))}
+                          rows={() => filtered.map(r => {
+                            const obj: Record<string, any> = {};
+                            for (const col of effectiveColumns) {
+                              if (col.key === 'name') obj[col.key] = r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name;
+                              else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
+                              else obj[col.key] = r[col.key] ?? '—';
+                            }
+                            return obj;
+                          })}
+                          notify={notify}
+                        />
+                      )}
                     </>
                   }
                 />
@@ -1465,14 +1738,14 @@ function App() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        {config.columns.map(c => <th key={c.key}>{c.label}</th>)}
+                        {effectiveColumns.map(c => <th key={c.key}>{c.label}</th>)}
                         <th style={{ textAlign: 'right' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.map((r, i) => (
                         <tr key={r.id}>
-                          {config.columns.map((c, j) => (
+                          {effectiveColumns.map((c, j) => (
                             <td key={c.key}>
                               {j === 0 ? (
                                 <div className="student-label">
@@ -1517,6 +1790,8 @@ function App() {
             </>
           )}
 
+          {page === 'My Class' && <TeacherMyClass user={user} onNavigate={switchPage} notify={notify} />}
+          {page === 'My Subjects' && <TeacherMySubjects user={user} onNavigate={switchPage} notify={notify} />}
           {page === 'Campuses' && <CampusesPage user={user} notify={notify} onSetupSchool={(id) => { setSetupSchool(id); switchPage('Campus setup'); }} onCampusesChanged={() => { load(); }} />}
           {page === 'Audit log' && <AuditLogView notify={notify} />}
           {page === 'Reports' && <Reports user={user} />}
@@ -1558,6 +1833,8 @@ function App() {
             <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} />
           )}
 
+            </>
+          )}
         </main>
         <footer className="footer">
           <span>© {new Date().getFullYear()} Optimus Orien. Made for better education.</span>

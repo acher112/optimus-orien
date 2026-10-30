@@ -11,7 +11,7 @@ from core.models import (
 from core.views import record_event
 
 
-def _check_class_access(user, school_class):
+def _check_class_access(user, school_class, request=None):
     """Ensure user has permission to view or manage attendance for this class."""
     if user.is_superuser or user.role == 'organisation_admin':
         if not user.is_superuser and school_class.school.organisation_id != user.organisation_id:
@@ -22,8 +22,10 @@ def _check_class_access(user, school_class):
             raise PermissionDenied('Access restricted to your assigned campus.')
         return
     if user.role == 'teacher':
-        if school_class.school_id != user.school_id:
-            raise PermissionDenied('Access restricted to your assigned campus.')
+        from core.services.teacher_scope import get_teacher_scope
+        scope = get_teacher_scope(user, request)
+        if school_class.id not in scope.class_ids:
+            raise NotFound('Classroom not found.')
         return
     raise PermissionDenied('You do not have permission to access attendance registers.')
 
@@ -46,7 +48,7 @@ def class_attendance_register(request):
     except SchoolClass.DoesNotExist:
         raise NotFound('Classroom not found.')
 
-    _check_class_access(user, school_class)
+    _check_class_access(user, school_class, request)
 
     date_raw = request.query_params.get('date') or request.data.get('date') or date.today().isoformat()
     try:
@@ -137,6 +139,12 @@ def class_attendance_register(request):
         })
 
     # POST: Save / alter student attendance
+    if user.role == 'teacher':
+        from core.services.teacher_scope import get_teacher_scope
+        scope = get_teacher_scope(user, request)
+        if not scope.is_class_teacher(school_class.id):
+            raise PermissionDenied('Only the assigned class teacher may mark or update the daily attendance register.')
+
     records_data = request.data.get('records')
     if not isinstance(records_data, list):
         raise ValidationError({'records': 'List of student attendance records required.'})

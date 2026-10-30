@@ -70,6 +70,8 @@ def ensure_action(user, model, action):
   raise PermissionDenied('Identifiable student writes require explicit organisation policy')
  if user.is_superuser:
   return
+ if user.role == 'teacher' and model is AuditEvent:
+  raise PermissionDenied('Teachers may not access the audit log.')
  if user.role == 'principal' and action in ('create', 'update', 'delete'):
   from core.models import OrganisationRolePolicy
   policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
@@ -108,14 +110,26 @@ def students_scope(user):
  q=Student.objects.filter(school__in=schools_scope(user))
  if user.role == 'student' and not user.is_superuser:return q.filter(user=user)
  if user.role == 'parent' and not user.is_superuser:return q.filter(guardians=user)
- if user.role == 'teacher' and not user.is_superuser:return q.filter(enrollments__school_class__teacher=user, enrollments__end_date__isnull=True).distinct()
+ if user.role == 'teacher' and not user.is_superuser:
+  from core.services.teacher_scope import get_teacher_scope
+  scope=get_teacher_scope(user)
+  today=timezone.localdate()
+  if not scope.class_ids:
+   return q.none()
+  return q.filter(
+   enrollments__school_class_id__in=scope.class_ids,
+   enrollments__start_date__lte=today
+  ).filter(Q(enrollments__end_date__isnull=True)|Q(enrollments__end_date__gte=today)).distinct()
  if user.role == 'organisation_admin' and not user.is_superuser:
   if not getattr(user.organisation, 'allow_org_admin_student_access', False):return q.none()
  return q
 
 def classes_scope(user):
  q=SchoolClass.objects.filter(school__in=schools_scope(user))
- if user.role == 'teacher' and not user.is_superuser:return q.filter(teacher=user)
+ if user.role == 'teacher' and not user.is_superuser:
+  from core.services.teacher_scope import get_teacher_scope
+  scope=get_teacher_scope(user)
+  return q.filter(id__in=scope.class_ids)
  if user.role in ('student','parent') and not user.is_superuser:
   return q.filter(enrollments__student__in=students_scope(user)).distinct()
  return q
@@ -132,26 +146,96 @@ def queryset_for(user, model):
  if model is Student:return students
  if model is Enrollment:return Enrollment.objects.filter(student__in=students,school_class__in=classes)
  if model is Assessment:
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope=get_teacher_scope(user)
+   cond=Q(school_class_id__in=scope.full_class_ids)
+   for cid,sid in scope.subject_pairs:
+    cond|=Q(school_class_id=cid,subject_id=sid)
+   if scope.keeps_history_read_access:
+    cond|=Q(created_by=user)
+   if not cond:
+    return Assessment.objects.none()
+   return Assessment.objects.filter(cond).distinct()
   q=Assessment.objects.filter(school_class__in=classes)
   return q.filter(published=True) if user.role in ('student','parent') and not user.is_superuser else q
  if model is Grade:
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope=get_teacher_scope(user)
+   cond=Q(assessment__school_class_id__in=scope.full_class_ids)
+   for cid,sid in scope.subject_pairs:
+    cond|=Q(assessment__school_class_id=cid,assessment__subject_id=sid)
+   if scope.keeps_history_read_access:
+    cond|=Q(assessment__created_by=user)
+   if not cond:
+    return Grade.objects.none()
+   return Grade.objects.filter(cond).filter(student__in=students).distinct()
   q=Grade.objects.filter(student__in=students,assessment__school_class__in=classes)
   return q.filter(assessment__published=True) if user.role in ('student','parent') and not user.is_superuser else q
  if model is Attendance:return Attendance.objects.filter(student__in=students,school_class__in=classes)
- if model is Homework:return Homework.objects.filter(school_class__in=classes)
- if model is HomeworkSubmission:return HomeworkSubmission.objects.filter(student__in=students,homework__school_class__in=classes)
- if model is Observation:return Observation.objects.filter(student__in=students,subject__school__in=schools)
+ if model is Homework:
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope=get_teacher_scope(user)
+   cond=Q(school_class_id__in=scope.full_class_ids)
+   for cid,sid in scope.subject_pairs:
+    cond|=Q(school_class_id=cid,subject_id=sid)
+   if scope.keeps_history_read_access:
+    cond|=Q(created_by=user)
+   if not cond:
+    return Homework.objects.none()
+   return Homework.objects.filter(cond).distinct()
+  return Homework.objects.filter(school_class__in=classes)
+ if model is HomeworkSubmission:
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope=get_teacher_scope(user)
+   cond=Q(homework__school_class_id__in=scope.full_class_ids)
+   for cid,sid in scope.subject_pairs:
+    cond|=Q(homework__school_class_id=cid,homework__subject_id=sid)
+   if scope.keeps_history_read_access:
+    cond|=Q(homework__created_by=user)
+   if not cond:
+    return HomeworkSubmission.objects.none()
+   return HomeworkSubmission.objects.filter(cond,student__in=students).distinct()
+  return HomeworkSubmission.objects.filter(student__in=students,homework__school_class__in=classes)
+ if model is Observation:
+  if user.role == 'teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope=get_teacher_scope(user)
+   today=timezone.localdate()
+   cond=(Q(student__enrollments__school_class_id__in=scope.full_class_ids,student__enrollments__start_date__lte=today)&(Q(student__enrollments__end_date__isnull=True)|Q(student__enrollments__end_date__gte=today)))
+   cond|=Q(subject_id__in=scope.assigned_subject_ids,student__in=students)
+   cond|=Q(teacher=user)
+   return Observation.objects.filter(cond).distinct()
+  return Observation.objects.filter(student__in=students,subject__school__in=schools)
  if model is ReviewCase:
   q=ReviewCase.objects.filter(school__in=schools)
   if user.role=='organisation_admin' and not user.is_superuser and not user.organisation.allow_org_admin_student_access:return q.none()
-  return q.filter(assignee=user) if user.role=='teacher' and not user.is_superuser else q
+  if user.role=='teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope=get_teacher_scope(user)
+   today=timezone.localdate()
+   cond=(Q(student__enrollments__school_class_id__in=scope.full_class_ids,student__enrollments__start_date__lte=today)&(Q(student__enrollments__end_date__isnull=True)|Q(student__enrollments__end_date__gte=today)))
+   cond|=Q(assignee=user)
+   return q.filter(cond).distinct()
+  return q
  if model is Intervention:
   q=Intervention.objects.filter(case__school__in=schools)
   if user.role=='organisation_admin' and not user.is_superuser and not user.organisation.allow_org_admin_student_access:return q.none()
-  return q.filter(case__assignee=user) if user.role=='teacher' and not user.is_superuser else q
+  if user.role=='teacher' and not user.is_superuser:
+   from core.services.teacher_scope import get_teacher_scope
+   scope=get_teacher_scope(user)
+   today=timezone.localdate()
+   cond=(Q(case__student__enrollments__school_class_id__in=scope.full_class_ids,case__student__enrollments__start_date__lte=today)&(Q(case__student__enrollments__end_date__isnull=True)|Q(case__student__enrollments__end_date__gte=today)))
+   cond|=Q(case__assignee=user)
+   return q.filter(cond).distinct()
+  return q
  if model is Notification:return Notification.objects.filter(user=user)
  if model is AuditEvent:
   if user.is_superuser:return AuditEvent.objects.all()
+  if user.role == 'teacher':return AuditEvent.objects.none()
   if user.role == 'organisation_admin':
    audits=AuditEvent.objects.filter(organisation_id=user.organisation_id)
    if not getattr(user.organisation,'allow_org_admin_student_access',False):
