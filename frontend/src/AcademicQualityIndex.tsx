@@ -14,6 +14,7 @@ interface AcademicQualityIndexProps {
   notify: (msg: string, type?: 'success' | 'error' | 'info') => void;
   activeCampusId?: number | null;
   onSelectCampus?: (id: number | null) => void;
+  campuses?: { id: number; name: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -241,7 +242,8 @@ export default function AcademicQualityIndex({
   user,
   notify,
   activeCampusId,
-  onSelectCampus
+  onSelectCampus,
+  campuses
 }: AcademicQualityIndexProps) {
   // ---------------------------------------------------------------------------
   // Navigation & Hierarchy State
@@ -298,18 +300,26 @@ export default function AcademicQualityIndex({
   const [marksGridModalOpen, setMarksGridModalOpen] = useState(false);
 
   // Available campuses for global selector (Org admin only)
-  const [campusList, setCampusList] = useState<{ id: number; name: string }[]>([]);
+  const [campusList, setCampusList] = useState<{ id: number; name: string }[]>(() => {
+    if (campuses && Array.isArray(campuses) && campuses.length > 0) return campuses;
+    return [];
+  });
 
   // ---------------------------------------------------------------------------
   // Load Campus List for Org Admin
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (isOrgAdmin) {
-      request<{ id: number; name: string }[]>('schools/')
-        .then(res => setCampusList(res || []))
-        .catch(() => {});
+    if (campuses && Array.isArray(campuses) && campuses.length > 0) {
+      setCampusList(campuses);
+    } else if (isOrgAdmin) {
+      request<any>('schools/')
+        .then(res => {
+          const list = Array.isArray(res) ? res : (Array.isArray(res?.results) ? res.results : []);
+          setCampusList(list);
+        })
+        .catch(() => setCampusList([]));
     }
-  }, [isOrgAdmin]);
+  }, [isOrgAdmin, campuses]);
 
   // ---------------------------------------------------------------------------
   // Data Fetching Dispatcher
@@ -468,7 +478,7 @@ export default function AcademicQualityIndex({
                     setBreadcrumbs([{ label: 'School-wide Overview', level: 1 }]);
                   } else {
                     const sid = parseInt(val, 10);
-                    const matched = campusList.find(c => c.id === sid);
+                    const matched = (Array.isArray(campusList) ? campusList : []).find(c => c.id === sid);
                     drillToLevel2(sid, matched?.name || `Campus ${sid}`);
                   }
                 }}
@@ -483,7 +493,7 @@ export default function AcademicQualityIndex({
                 }}
               >
                 <option value="all">🌐 All Campuses (Consolidated)</option>
-                {campusList.map(c => (
+                {(Array.isArray(campusList) ? campusList : []).map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
@@ -576,7 +586,7 @@ export default function AcademicQualityIndex({
       {/* --------------------------------------------------------------------- */}
       {!isStudentOrParent && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, fontSize: 13, color: '#64748b' }}>
-          {breadcrumbs.map((crumb, idx) => (
+          {(Array.isArray(breadcrumbs) ? breadcrumbs : []).map((crumb, idx) => (
             <React.Fragment key={crumb.level}>
               {idx > 0 && <ChevronRight size={14} color="#94a3b8" />}
               <span
@@ -673,7 +683,7 @@ export default function AcademicQualityIndex({
                 </tr>
               </thead>
               <tbody>
-                {level1Data.campuses.map(c => (
+                {(Array.isArray(level1Data?.campuses) ? level1Data.campuses : []).map(c => (
                   <tr
                     key={c.campus_id}
                     onClick={() => drillToLevel2(c.campus_id, c.campus_name)}
@@ -787,7 +797,7 @@ export default function AcademicQualityIndex({
                 </tr>
               </thead>
               <tbody>
-                {level2Data.classes.map(cls => (
+                {(Array.isArray(level2Data?.classes) ? level2Data.classes : []).map(cls => (
                   <tr
                     key={cls.class_id}
                     onClick={() => drillToLevel3(cls.class_id, cls.class_name)}
@@ -930,7 +940,7 @@ export default function AcademicQualityIndex({
                   </tr>
                 </thead>
                 <tbody>
-                  {level3Data.subjects.map(s => (
+                  {(Array.isArray(level3Data?.subjects) ? level3Data.subjects : []).map(s => (
                     <tr
                       key={s.subject_id}
                       onClick={() => drillToLevel4(s.subject_id, s.subject_name)}
@@ -992,7 +1002,7 @@ export default function AcademicQualityIndex({
                   </tr>
                 </thead>
                 <tbody>
-                  {level3Data.students.map(st => (
+                  {(Array.isArray(level3Data?.students) ? level3Data.students : []).map(st => (
                     <tr
                       key={st.student_id}
                       onClick={() => drillToLevel5(st.student_id, st.student_name)}
@@ -1150,7 +1160,7 @@ export default function AcademicQualityIndex({
                 </tr>
               </thead>
               <tbody>
-                {level4Data.students.map(st => (
+                {(Array.isArray(level4Data?.students) ? level4Data.students : []).map(st => (
                   <tr key={st.student_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td
                       onClick={() => drillToLevel5(st.student_id, st.student_name)}
@@ -1222,7 +1232,7 @@ export default function AcademicQualityIndex({
           {/* Parent Wards Tabs (if parent has multiple children) */}
           {level5Data.all_wards && level5Data.all_wards.length > 1 && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              {level5Data.all_wards.map(ward => (
+              {(Array.isArray(level5Data?.all_wards) ? level5Data.all_wards : []).map(ward => (
                 <button
                   key={ward.id}
                   onClick={() => setSelectedStudentId(ward.id)}
@@ -1353,7 +1363,7 @@ export default function AcademicQualityIndex({
                 </tr>
               </thead>
               <tbody>
-                {level5Data.subjects.map(s => (
+                {(Array.isArray(level5Data?.subjects) ? level5Data.subjects : []).map(s => (
                   <tr key={s.subject_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{s.subject_name}</td>
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: '#2563eb' }}>
@@ -1463,7 +1473,7 @@ export default function AcademicQualityIndex({
 
                   <h4 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px', color: '#0f172a' }}>Calculation Steps</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-                    {explainTrace.steps.map((st, idx) => (
+                    {(Array.isArray(explainTrace?.steps) ? explainTrace.steps : []).map((st, idx) => (
                       <div key={idx} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: 14 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{st.term || st.item}</span>
@@ -1605,7 +1615,7 @@ function ExamStructureModal({ user, campusId, notify, onClose }: ExamStructureMo
           name: newName,
           reporting_scale: newScale,
           pass_percentage: newPass,
-          terms: terms.map(t => ({
+          terms: (Array.isArray(terms) ? terms : []).map(t => ({
             name: t.name,
             order: t.order,
             contribution: t.contribution
@@ -1667,7 +1677,7 @@ function ExamStructureModal({ user, campusId, notify, onClose }: ExamStructureMo
                       No examination structures configured yet. Click "Add Structure" to set up your terms.
                     </div>
                   ) : (
-                    structures.map(st => (
+                    (Array.isArray(structures) ? structures : []).map(st => (
                       <div key={st.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, background: '#fff' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div>
@@ -1700,7 +1710,7 @@ function ExamStructureModal({ user, campusId, notify, onClose }: ExamStructureMo
 
                         {/* Terms list */}
                         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          {st.terms.map((t: any) => (
+                          {((st.terms as any[]) || []).map((t: any) => (
                             <span key={t.id} style={{ fontSize: 12, background: '#f1f5f9', padding: '4px 10px', borderRadius: 4, color: '#334155' }}>
                               <b>{t.name}</b> ({t.contribution}%)
                             </span>
@@ -1757,7 +1767,7 @@ function ExamStructureModal({ user, campusId, notify, onClose }: ExamStructureMo
                     </span>
                   </div>
 
-                  {terms.map((t, idx) => (
+                  {(Array.isArray(terms) ? terms : []).map((t, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'center' }}>
                       <input
                         type="text"
@@ -1883,7 +1893,7 @@ function MarksGridModal({ classId, className, subjectId, subjectName, notify, on
         class_id: classId,
         subject_id: subjectId,
         term_id: selectedTermId,
-        entries: students.map(s => ({
+        entries: (Array.isArray(students) ? students : []).map(s => ({
           student_id: s.student_id,
           marks: s.marks === '' ? null : s.marks,
           result_status: s.result_status
@@ -1932,7 +1942,7 @@ function MarksGridModal({ classId, className, subjectId, subjectName, notify, on
             onChange={e => setSelectedTermId(parseInt(e.target.value, 10))}
             style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
           >
-            {allTerms.map(t => (
+            {(Array.isArray(allTerms) ? allTerms : []).map(t => (
               <option key={t.id} value={t.id}>{t.name} ({t.contribution}%) — {t.structureName}</option>
             ))}
           </select>
@@ -1952,7 +1962,7 @@ function MarksGridModal({ classId, className, subjectId, subjectName, notify, on
                 </tr>
               </thead>
               <tbody>
-                {students.map((st, idx) => (
+                {(Array.isArray(students) ? students : []).map((st, idx) => (
                   <tr key={st.student_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 600 }}>{st.student_name}</td>
                     <td style={{ padding: '10px 12px', color: '#64748b' }}>{st.admission_number}</td>
