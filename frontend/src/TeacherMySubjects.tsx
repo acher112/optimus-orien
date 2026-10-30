@@ -17,7 +17,7 @@ export default function TeacherMySubjects({ user, onNavigate, notify }: TeacherM
     setLoading(true);
     setError('');
     try {
-      const res: any = await request('/api/v1/teacher/my-subjects/');
+      const res: any = await request('teacher/my-subjects/');
       setData(res);
     } catch (err: any) {
       setError(err?.message || 'Failed to load subject assignments.');

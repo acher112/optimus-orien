@@ -16,6 +16,14 @@ interface TeacherDashboardPayload {
   has_assignments: boolean;
   message?: string;
   teacher_type: string;
+  homeroom_class?: {
+    id: number;
+    name: string;
+    student_count: number;
+    register_today: 'submitted' | 'pending';
+    attendance_rate: number | null;
+    open_review_cases: number;
+  } | null;
   badges: Array<{
     type: string;
     label: string;
@@ -121,7 +129,7 @@ export default function TeacherHome({ user, onNavigate, notify }: TeacherHomePro
     setLoading(true);
     setError('');
     try {
-      const res = await request<TeacherDashboardPayload>('/api/v1/teacher/dashboard/');
+      const res = await request<TeacherDashboardPayload>('teacher/dashboard/');
       setData(res);
     } catch (err: any) {
       setError(err?.message || 'Failed to load teacher dashboard.');
@@ -243,6 +251,75 @@ export default function TeacherHome({ user, onNavigate, notify }: TeacherHomePro
           </div>
         </div>
       </div>
+
+      {/* Homeroom Class Highlight Card (For Class Teachers) */}
+      {data.homeroom_class && (
+        <div style={{
+          margin: '0 32px 24px',
+          background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+          borderRadius: '16px',
+          border: '1px solid #ddd6fe',
+          padding: '20px 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#6d28d9', background: '#fff', padding: '3px 8px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                Homeroom Authority
+              </span>
+              <span style={{ fontSize: '13px', color: '#5b21b6', fontWeight: 500 }}>
+                You are the assigned Class Teacher
+              </span>
+            </div>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#3b0764', margin: '2px 0 6px' }}>
+              {data.homeroom_class.name}
+            </h2>
+            <div style={{ display: 'flex', gap: '20px', fontSize: '13px', color: '#4c1d95', flexWrap: 'wrap' }}>
+              <span>Learners: <b>{data.homeroom_class.student_count}</b></span>
+              <span>
+                Today's Register:{' '}
+                {data.homeroom_class.register_today === 'submitted' ? (
+                  <b style={{ color: '#15803d' }}>Marked ✓</b>
+                ) : (
+                  <b style={{ color: '#b45309' }}>Pending</b>
+                )}
+              </span>
+              <span>Attendance: <b>{data.homeroom_class.attendance_rate !== null ? `${data.homeroom_class.attendance_rate}%` : '—'}</b></span>
+              <span>Care / Review Cases: <b>{data.homeroom_class.open_review_cases}</b></span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {data.homeroom_class.register_today !== 'submitted' && (
+              <button
+                onClick={() => onNavigate('Attendance')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 14px', borderRadius: '8px', background: '#7c3aed',
+                  color: '#fff', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer'
+                }}
+              >
+                <ClipboardCheck size={16} /> Mark Register Now
+              </button>
+            )}
+            <button
+              onClick={() => onNavigate('My Class')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '8px 16px', borderRadius: '8px', background: '#fff',
+                color: '#5b21b6', fontSize: '13px', fontWeight: 700, border: '1px solid #ddd6fe', cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              Open My Class Dashboard <ArrowRight size={15} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Strip */}
       <div style={{

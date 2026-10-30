@@ -394,6 +394,8 @@ def overview(request):
 def campus(request, school_id):
     user = request.user
     _check_role(user)
+    if user.role == 'teacher' and not user.is_superuser:
+        raise PermissionDenied('Teachers may not access campus-wide reports.')
     school = _school_or_404(user, school_id)
     period = request.query_params.get('period', '')
     windows = _windows([school], period)

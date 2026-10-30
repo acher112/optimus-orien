@@ -308,9 +308,36 @@ def teacher_dashboard(request):
         'homework_to_review': len(homework_to_review)
     }
 
+    # Homeroom class summary for Class Teachers
+    homeroom_class = None
+    if scope.full_class_ids:
+        primary_cid = sorted(scope.full_class_ids)[0]
+        hc = SchoolClass.objects.filter(pk=primary_cid).first()
+        if hc:
+            hc_students_count = Enrollment.objects.filter(
+                school_class=hc, start_date__lte=today
+            ).filter(Q(end_date__isnull=True) | Q(end_date__gte=today)).count()
+            hc_att_today = Attendance.objects.filter(school_class=hc, date=today).exists()
+            hc_att_tot = Attendance.objects.filter(school_class=hc).count()
+            hc_att_pres = Attendance.objects.filter(school_class=hc, status__in=['present', 'late']).count()
+            hc_att_rate = round((hc_att_pres / hc_att_tot) * 100, 1) if hc_att_tot > 0 else None
+            hc_review_cases = ReviewCase.objects.filter(
+                student__enrollments__school_class=hc, status__in=['open', 'in_progress']
+            ).distinct().count()
+
+            homeroom_class = {
+                'id': hc.id,
+                'name': hc.display_name,
+                'student_count': hc_students_count,
+                'register_today': 'submitted' if hc_att_today else 'pending',
+                'attendance_rate': hc_att_rate,
+                'open_review_cases': hc_review_cases
+            }
+
     return Response({
         'has_assignments': True,
         'teacher_type': scope.teacher_type,
+        'homeroom_class': homeroom_class,
         'badges': scope.get_assignment_badges(),
         'kpis': kpis,
         'assignments': assignment_cards,
@@ -372,14 +399,31 @@ def teacher_my_class(request):
     present_att = Attendance.objects.filter(school_class=target_class, status__in=['present', 'late']).count()
     overall_att_rate = round((present_att / total_att) * 100, 1) if total_att > 0 else None
 
-    # All subjects for this class
+    # Discover all subjects and assigned teachers for this class
+    from core.models import ClassSubject, TeachingAssignment
     asms = Assessment.objects.filter(school_class=target_class).select_related('subject')
     subject_map = {}
     for a in asms:
         if a.subject_id not in subject_map:
             subject_map[a.subject_id] = a.subject
 
-    # Calculate subject averages and coverage for all subjects in class
+    for cs in ClassSubject.objects.filter(school_class=target_class).select_related('subject'):
+        if cs.subject_id not in subject_map:
+            subject_map[cs.subject_id] = cs.subject
+
+    active_tas = TeachingAssignment.objects.filter(
+        school_class=target_class,
+        start_date__lte=today
+    ).filter(Q(end_date__isnull=True) | Q(end_date__gte=today)).select_related('subject', 'teacher')
+
+    subject_teachers = {}
+    for ta in active_tas:
+        if ta.subject_id not in subject_map:
+            subject_map[ta.subject_id] = ta.subject
+        tname = ta.teacher.get_full_name() or ta.teacher.username
+        subject_teachers[ta.subject_id] = tname
+
+    # Calculate subject averages, passing rates, and min/max
     subjects_data = []
     total_st_count = len(students)
     for sid, subj in subject_map.items():
@@ -399,19 +443,35 @@ def teacher_my_class(request):
         valid_c = len(st_pcts)
         avg_val = _mean(st_pcts) if valid_c > 0 else None
         cov_pct = round((valid_c / total_st_count) * 100, 1) if total_st_count > 0 else 0
+        hi_score = round(max(st_pcts), 1) if st_pcts else None
+        lo_score = round(min(st_pcts), 1) if st_pcts else None
+        pass_count = sum(1 for p in st_pcts if p >= 50.0)
+        pass_rate = round((pass_count / valid_c) * 100, 1) if valid_c > 0 else None
+
         subjects_data.append({
             'subject_id': subj.id,
             'subject_name': subj.name,
             'code': subj.code,
             'average': avg_val,
+            'highest_score': hi_score,
+            'lowest_score': lo_score,
+            'passing_rate': pass_rate,
             'valid_students': valid_c,
             'total_students': total_st_count,
             'coverage_pct': cov_pct,
-            'coverage_text': f"{valid_c} of {total_st_count} students have valid results"
+            'coverage_text': f"{valid_c} of {total_st_count} students assessed",
+            'assigned_teacher': subject_teachers.get(sid, 'Unassigned')
         })
 
-    # Student rows with full profile (father_name, DOB, phone, etc.)
-    student_rows = []
+    # Sort subjects by average descending
+    subjects_data.sort(key=lambda s: (s['average'] is None, -(s['average'] or 0)))
+
+    # Student rows with full profile, rank, and at-risk assessment
+    raw_student_rows = []
+    active_case_student_ids = set(ReviewCase.objects.filter(
+        student__in=students, status__in=['open', 'in_progress']
+    ).values_list('student_id', flat=True))
+
     for s in students:
         # Per-student subject marks
         st_sub_marks = {}
@@ -431,8 +491,16 @@ def teacher_my_class(request):
         s_att_tot = Attendance.objects.filter(student=s, school_class=target_class).count()
         s_att_pres = Attendance.objects.filter(student=s, school_class=target_class, status__in=['present', 'late']).count()
         s_att_rate = round((s_att_pres / s_att_tot) * 100, 1) if s_att_tot > 0 else None
+        overall_avg = _mean(st_sub_marks.values())
 
-        student_rows.append({
+        has_case = s.id in active_case_student_ids
+        is_at_risk = (
+            (overall_avg is not None and overall_avg < 50.0) or
+            (s_att_rate is not None and s_att_rate < 75.0) or
+            has_case
+        )
+
+        raw_student_rows.append({
             'id': s.id,
             'admission_number': s.admission_number,
             'first_name': s.first_name,
@@ -442,12 +510,81 @@ def teacher_my_class(request):
             'mother_name': s.mother_name,
             'guardian_phone': s.guardian_phone,
             'date_of_birth': s.date_of_birth.isoformat() if s.date_of_birth else None,
-            'gender': s.gender,
-            'enrolled_on': s.enrolled_on.isoformat(),
+            'gender': s.gender or 'not_recorded',
+            'enrolled_on': s.enrolled_on.isoformat() if s.enrolled_on else '',
             'attendance_rate': s_att_rate,
-            'overall_average': _mean(st_sub_marks.values()),
-            'subjects': st_sub_marks
+            'overall_average': overall_avg,
+            'subjects': st_sub_marks,
+            'is_at_risk': is_at_risk,
+            'has_active_case': has_case
         })
+
+    # Sort students by overall average descending, then name
+    raw_student_rows.sort(
+        key=lambda r: (r['overall_average'] is None, -(r['overall_average'] or 0), r['full_name'])
+    )
+
+    # Assign class rank
+    for idx, row in enumerate(raw_student_rows):
+        row['rank'] = idx + 1 if row['overall_average'] is not None else None
+
+    student_rows = raw_student_rows
+
+    # Class Academic Average
+    scored_students = [s['overall_average'] for s in student_rows if s['overall_average'] is not None]
+    class_academic_avg = _mean(scored_students)
+
+    # Performance Tiers
+    dist_c = sum(1 for s in student_rows if s['overall_average'] is not None and s['overall_average'] >= 80.0)
+    merit_c = sum(1 for s in student_rows if s['overall_average'] is not None and 70.0 <= s['overall_average'] < 80.0)
+    pass_c = sum(1 for s in student_rows if s['overall_average'] is not None and 50.0 <= s['overall_average'] < 70.0)
+    risk_c = sum(1 for s in student_rows if s['is_at_risk'])
+    scored_total = len(scored_students) or 1
+
+    performance_tiers = {
+        'distinction': {'count': dist_c, 'pct': round((dist_c / scored_total) * 100, 1)},
+        'merit': {'count': merit_c, 'pct': round((merit_c / scored_total) * 100, 1)},
+        'pass': {'count': pass_c, 'pct': round((pass_c / scored_total) * 100, 1)},
+        'at_risk': {'count': risk_c, 'pct': round((risk_c / (total_st_count or 1)) * 100, 1)},
+    }
+
+    # Demographics & Gender Analytics
+    boys = [s for s in student_rows if s['gender'] == 'male']
+    girls = [s for s in student_rows if s['gender'] == 'female']
+    boys_avg = _mean([s['overall_average'] for s in boys if s['overall_average'] is not None])
+    girls_avg = _mean([s['overall_average'] for s in girls if s['overall_average'] is not None])
+    gender_gap = round(girls_avg - boys_avg, 1) if (girls_avg is not None and boys_avg is not None) else None
+
+    gender_stats = {
+        'boys_count': len(boys),
+        'girls_count': len(girls),
+        'boys_average': boys_avg,
+        'girls_average': girls_avg,
+        'gender_gap_pp': gender_gap
+    }
+
+    # Attendance Breakdown
+    pres_today = att_today_qs.filter(status__in=['present', 'late']).count()
+    abs_today = att_today_qs.filter(status='absent').count()
+    late_today = att_today_qs.filter(status='late').count()
+    reg_count = sum(1 for s in student_rows if s['attendance_rate'] is not None and s['attendance_rate'] >= 90.0)
+    warn_count = sum(1 for s in student_rows if s['attendance_rate'] is not None and 75.0 <= s['attendance_rate'] < 90.0)
+    chron_count = sum(1 for s in student_rows if s['attendance_rate'] is not None and s['attendance_rate'] < 75.0)
+
+    attendance_summary = {
+        'today_status': att_today_status,
+        'today_present': pres_today,
+        'today_absent': abs_today,
+        'today_late': late_today,
+        'overall_rate': overall_att_rate,
+        'regular_count': reg_count,
+        'warning_count': warn_count,
+        'chronic_absent_count': chron_count
+    }
+
+    # Top Performers & At-Risk lists
+    top_performers = [s for s in student_rows if s['overall_average'] is not None][:5]
+    at_risk_list = [s for s in student_rows if s['is_at_risk']]
 
     # Review cases for this class
     review_cases = ReviewCase.objects.filter(
@@ -468,10 +605,16 @@ def teacher_my_class(request):
             for c in SchoolClass.objects.filter(id__in=scope.full_class_ids)
         ],
         'total_students': total_st_count,
+        'class_academic_average': class_academic_avg,
         'attendance_today': att_today_status,
         'attendance_rate': overall_att_rate,
+        'attendance_summary': attendance_summary,
+        'performance_tiers': performance_tiers,
+        'gender_stats': gender_stats,
         'subjects': subjects_data,
         'students': student_rows,
+        'top_performers': top_performers,
+        'at_risk_students': at_risk_list,
         'review_cases': [{
             'id': rc.id,
             'title': rc.title,

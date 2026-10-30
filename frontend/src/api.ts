@@ -80,7 +80,8 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     }
   }
 
-  const makeReq = (token: string) => fetch('/api/v1/' + url.replace(/^\//, ''), {
+  const cleanUrl = url.replace(/^\/?(api\/v1\/)?/, '');
+  const makeReq = (token: string) => fetch('/api/v1/' + cleanUrl, {
     ...options,
     credentials: 'include',
     headers: {
