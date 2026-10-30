@@ -5,7 +5,7 @@ from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
-    teacher_views
+    teacher_views, aqi_views
 )
 
 r = DefaultRouter()
@@ -183,6 +183,22 @@ urlpatterns = [
 
     # Principal Portal Dashboard
     path('principal/dashboard/', principal_views.principal_dashboard),
+
+    # Academic Quality Index (AQI) & Examination Engine (Levels 1 to 5)
+    path('aqi/overview/', aqi_views.aqi_overview),
+    path('aqi/campus/<int:school_id>/', aqi_views.aqi_campus),
+    path('aqi/class/<int:class_id>/', aqi_views.aqi_class),
+    path('aqi/class/<int:class_id>/subject/<int:subject_id>/', aqi_views.aqi_subject),
+    path('aqi/student/<int:student_id>/', aqi_views.aqi_student),
+    path('aqi/my-profile/', aqi_views.aqi_my_profile),
+    path('aqi/explain/', aqi_views.aqi_explain),
+    path('aqi/structures/', aqi_views.aqi_structures),
+    path('aqi/structures/<int:pk>/', aqi_views.aqi_structure_detail),
+    path('aqi/structures/<int:pk>/publish/', aqi_views.aqi_structure_publish),
+    path('aqi/structures/<int:pk>/terms/', aqi_views.aqi_structure_terms),
+    path('aqi/terms/<int:pk>/', aqi_views.aqi_term_detail),
+    path('aqi/marks-grid/', aqi_views.aqi_marks_grid),
+    path('aqi/export/', aqi_views.aqi_export),
 
     path('', include(r.urls))
 ]

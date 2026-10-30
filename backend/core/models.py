@@ -77,6 +77,38 @@ class Subject(models.Model):
  class Meta:constraints=[models.UniqueConstraint(fields=['school','code'],name='unique_subject_code')]
  def __str__(self):return self.name
 
+class Section(models.Model):
+    """Section within a class (e.g. A, B, Rose, Gold)."""
+    school_class = models.ForeignKey('SchoolClass', on_delete=models.CASCADE, related_name='class_sections')
+    name = models.CharField(max_length=40)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['school_class', 'name'], name='unique_section_per_class')
+        ]
+
+    def __str__(self):
+        return f"{self.school_class.name} - {self.name}"
+
+class ClassSubject(models.Model):
+    """Class-subject assignment defining required/applicable subjects for a class."""
+    school_class = models.ForeignKey('SchoolClass', on_delete=models.CASCADE, related_name='class_subjects')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='class_subjects')
+    required = models.BooleanField(default=True, help_text='Whether this subject is required for overall student average')
+    exempt_rules = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['subject__name']
+        constraints = [
+            models.UniqueConstraint(fields=['school_class', 'subject'], name='unique_class_subject_assignment')
+        ]
+
+    def __str__(self):
+        return f"{self.school_class.display_name} - {self.subject.name} ({'Required' if self.required else 'Elective'})" 
+
 class ClassTeacherAssignment(models.Model):
  school_class=models.ForeignKey(SchoolClass,on_delete=models.PROTECT,related_name='class_teacher_assignments')
  teacher=models.ForeignKey(User,on_delete=models.PROTECT,related_name='class_teacher_assignments')
@@ -128,8 +160,13 @@ class Student(models.Model):
  mother_name=models.CharField(max_length=100,blank=True,default='')
  guardian_phone=models.CharField(max_length=40,blank=True,default='')
  date_of_birth=models.DateField(null=True,blank=True)
- GENDER=[('male','Boy'),('female','Girl')]
- gender=models.CharField(max_length=8,choices=GENDER,blank=True,default='',db_index=True)
+ GENDER = [
+     ('male', 'Male'),
+     ('female', 'Female'),
+     ('other', 'Other'),
+     ('not_recorded', 'Not recorded'),
+ ]
+ gender = models.CharField(max_length=16, choices=GENDER, default='not_recorded', db_index=True)
  user=models.OneToOneField(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='student_record')
  guardians=models.ManyToManyField(User,related_name='wards',blank=True)
  enrolled_on=models.DateField(db_index=True)
@@ -145,6 +182,7 @@ class Student(models.Model):
 class Enrollment(models.Model):
  student=models.ForeignKey(Student,on_delete=models.PROTECT,related_name='enrollments')
  school_class=models.ForeignKey(SchoolClass,on_delete=models.PROTECT,related_name='enrollments')
+ section=models.ForeignKey('Section',null=True,blank=True,on_delete=models.SET_NULL,related_name='enrollments')
  start_date=models.DateField()
  end_date=models.DateField(null=True,blank=True)
  class Meta:constraints=[models.UniqueConstraint(fields=['student','school_class','start_date'],name='unique_enrolment_period'),models.UniqueConstraint(fields=['student'],condition=models.Q(end_date__isnull=True),name='one_active_enrollment_per_student')]
@@ -168,25 +206,37 @@ class Assessment(models.Model):
  published=models.BooleanField(default=False)
  created_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='created_assessments')
  teaching_assignment=models.ForeignKey(TeachingAssignment,null=True,blank=True,on_delete=models.SET_NULL,related_name='assessments')
+ exam_term=models.ForeignKey('ExamTerm',null=True,blank=True,on_delete=models.SET_NULL,related_name='assessments')
  def clean(self):
   if self.subject_id and self.school_class_id and self.subject.school_id!=self.school_class.school_id:raise ValidationError('Subject does not belong to class school')
   if self.school_class_id and self.date and not self.school_class.academic_year.start_date<=self.date<=self.school_class.academic_year.end_date:
    raise ValidationError('Assessment date outside class academic year')
 
 class Grade(models.Model):
- RESULT_STATUS=[('recorded','Recorded'),('absent','Absent'),('exempt','Exempt'),('incomplete','Incomplete'),('withdrawn','Withdrawn')]
+ RESULT_STATUS = [
+     ('recorded', 'Recorded'),
+     ('missing', 'Missing'),
+     ('pending', 'Pending'),
+     ('exempt', 'Exempt'),
+     ('absent', 'Absent'),
+     ('incomplete', 'Incomplete'),
+     ('withdrawn', 'Withdrawn')
+ ]
  assessment=models.ForeignKey(Assessment,on_delete=models.PROTECT,related_name='grades')
  student=models.ForeignKey(Student,on_delete=models.PROTECT,related_name='grades')
- marks=models.DecimalField(max_digits=8,decimal_places=2,validators=[MinValueValidator(0)])
+ marks=models.DecimalField(max_digits=8,decimal_places=2,null=True,blank=True,validators=[MinValueValidator(0)])
  result_status=models.CharField(max_length=16,choices=RESULT_STATUS,default='recorded')
  feedback=models.TextField(blank=True)
  class Meta:constraints=[models.UniqueConstraint(fields=['assessment','student'],name='unique_assessment_grade')]
  def clean(self):
   if self.assessment_id and self.student_id:
-   if self.marks>self.assessment.max_marks:raise ValidationError('Marks cannot exceed maximum')
+   if self.marks is not None and self.marks>self.assessment.max_marks:raise ValidationError('Marks cannot exceed maximum')
    if not Enrollment.objects.filter(student=self.student,school_class=self.assessment.school_class,start_date__lte=self.assessment.date).filter(models.Q(end_date__isnull=True)|models.Q(end_date__gte=self.assessment.date)).exists():raise ValidationError('Student not enrolled in assessed class on assessment date')
  @property
- def percentage(self):return round(float(self.marks/self.assessment.max_marks*100),1)
+ def percentage(self):
+  if self.marks is None:
+   return None
+  return round(float(self.marks/self.assessment.max_marks*100),1)
 
 class Attendance(models.Model):
  STATUS=[('present','Present'),('absent','Absent'),('late','Late'),('excused','Excused')]
@@ -1284,3 +1334,160 @@ class RoleAssignment(models.Model):
 
 
 
+
+
+class ExamStructure(models.Model):
+    """Configurable examination structure (terms, weightages, max marks) for an organisation or campus."""
+    STATUS_CHOICES = [('draft', 'Draft'), ('published', 'Published'), ('locked', 'Locked')]
+
+    name = models.CharField(max_length=120)
+    organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='exam_structures')
+    school = models.ForeignKey(School, null=True, blank=True, on_delete=models.CASCADE, related_name='exam_structures', help_text='Specific campus scope, or null for organisation-wide template')
+    academic_year = models.ForeignKey(AcademicYear, null=True, blank=True, on_delete=models.CASCADE, related_name='exam_structures')
+    classes = models.ManyToManyField(SchoolClass, blank=True, related_name='exam_structures')
+    reporting_scale = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('100.00'), validators=[MinValueValidator(Decimal('1.00'))])
+    pass_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('40.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='draft')
+    version = models.PositiveIntegerField(default=1)
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-academic_year__start_date', 'name']
+
+    def __str__(self):
+        scope = self.school.name if self.school else (self.organisation.name if self.organisation else 'Global')
+        return f"{self.name} ({scope} v{self.version}) [{self.status}]"
+
+
+class ExamStructureVersion(models.Model):
+    """Immutable JSON snapshot of a published examination structure."""
+    structure = models.ForeignKey(ExamStructure, on_delete=models.CASCADE, related_name='versions')
+    version_number = models.PositiveIntegerField()
+    snapshot = models.JSONField(help_text='Immutable snapshot of terms, contributions, max marks, scale, pass %')
+    snapshot_hash = models.CharField(max_length=64, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    published_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        ordering = ['-version_number']
+        constraints = [
+            models.UniqueConstraint(fields=['structure', 'version_number'], name='unique_structure_version')
+        ]
+
+    def __str__(self):
+        return f"{self.structure.name} v{self.version_number} ({self.snapshot_hash[:8]})"
+
+
+class ExamTerm(models.Model):
+    """Examination term contributing a percentage to final subject result."""
+    structure = models.ForeignKey(ExamStructure, on_delete=models.CASCADE, related_name='terms')
+    name = models.CharField(max_length=80)
+    order = models.PositiveSmallIntegerField(default=1)
+    contribution = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal('0.0000'), validators=[MinValueValidator(Decimal('0.0000')), MaxValueValidator(Decimal('100.0000'))])
+    reporting_period = models.CharField(max_length=80, blank=True, default='')
+
+    class Meta:
+        ordering = ['order', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['structure', 'name'], name='unique_term_name_per_structure')
+        ]
+
+    def __str__(self):
+        return f"{self.structure.name} - {self.name} ({self.contribution}%)"
+
+
+class TermSubjectMax(models.Model):
+    """Subject-specific maximum marks for an examination term."""
+    term = models.ForeignKey(ExamTerm, on_delete=models.CASCADE, related_name='subject_maxes')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='term_maxes')
+    max_marks = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('100.00'), validators=[MinValueValidator(Decimal('0.01'))])
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['term', 'subject'], name='unique_subject_per_term')
+        ]
+
+    def __str__(self):
+        return f"{self.term.name} - {self.subject.name}: Max {self.max_marks}"
+
+
+class AssessmentExemption(models.Model):
+    """Authorized exemption for an assessment, term, or whole subject."""
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='exemptions')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='assessment_exemptions')
+    term = models.ForeignKey(ExamTerm, null=True, blank=True, on_delete=models.CASCADE, related_name='exemptions')
+    reason = models.CharField(max_length=255)
+    approved_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    approved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-approved_at']
+
+    def __str__(self):
+        t_name = self.term.name if self.term else 'Whole Subject'
+        return f"Exemption: {self.enrollment.student.full_name} - {self.subject.name} ({t_name})"
+
+
+class SubjectResult(models.Model):
+    """Calculated and persisted subject result across examination terms."""
+    STATUS_CHOICES = [('complete', 'Complete'), ('pending', 'Pending'), ('exempt', 'Exempt')]
+
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='subject_results')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='subject_results')
+    structure_version = models.ForeignKey(ExamStructureVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='subject_results')
+    final_percentage = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    completed_weight = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal('0.0000'))
+    remaining_weight = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal('0.0000'))
+    accumulated_points = models.DecimalField(max_digits=20, decimal_places=10, default=Decimal('0.0000'))
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    source_hash = models.CharField(max_length=64, blank=True, default='')
+    calculated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['enrollment', 'subject', 'structure_version'], name='unique_enrollment_subject_result')
+        ]
+
+    def __str__(self):
+        return f"{self.enrollment.student.full_name} - {self.subject.name}: {self.final_percentage}% ({self.status})"
+
+
+class StudentOverallResult(models.Model):
+    """Calculated and persisted overall academic result for a student."""
+    STATUS_CHOICES = [('complete', 'Complete'), ('pending', 'Pending'), ('exempt', 'Exempt')]
+
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='overall_results')
+    structure_version = models.ForeignKey(ExamStructureVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='overall_results')
+    overall_percentage = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    required_subjects = models.PositiveSmallIntegerField(default=0)
+    completed_subjects = models.PositiveSmallIntegerField(default=0)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    calculated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['enrollment', 'structure_version'], name='unique_enrollment_overall_result')
+        ]
+
+    def __str__(self):
+        return f"{self.enrollment.student.full_name} Overall: {self.overall_percentage}% ({self.status})"
+
+
+class PublishedResult(models.Model):
+    """Immutable published result snapshot for verification and historical audit."""
+    structure_version = models.ForeignKey(ExamStructureVersion, on_delete=models.PROTECT, related_name='published_results')
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='published_aqi_results')
+    values = models.JSONField(help_text='Immutable snapshot of averages, distributions, and aggregates')
+    source_marks_hash = models.CharField(max_length=64)
+    published_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    published_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-published_at']
+
+    def __str__(self):
+        return f"PublishedResult {self.school.name} - v{self.structure_version.version_number} ({self.published_at})"

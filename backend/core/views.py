@@ -279,7 +279,7 @@ class StudentSerializer(DynamicSerializer):
  class_name=serializers.SerializerMethodField()
  school_class_id=serializers.SerializerMethodField()
  section=serializers.SerializerMethodField()
- gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=False)
+ gender=serializers.ChoiceField(choices=[('male','Male'),('female','Female'),('other','Other'),('not_recorded','Not recorded')],required=False)
  def validate(self,attrs):
   if 'guardians' in self.initial_data:
    for g_id in (self.initial_data.get('guardians') or []):
@@ -291,7 +291,7 @@ class StudentSerializer(DynamicSerializer):
    if not fn or not str(fn).strip():
     raise serializers.ValidationError({'father_name':'Father name is mandatory for new student registrations.'})
   if 'gender' in self.initial_data and not self.initial_data.get('gender'):
-   raise serializers.ValidationError({'gender':'Gender is mandatory. Please select Boy or Girl.'})
+   raise serializers.ValidationError({'gender':'Gender is mandatory. Please select Male, Female, Other, or Not recorded.'})
   return super().validate(attrs)
  def get_class_name(self,o):
   e=o.enrollments.select_related('school_class__school').filter(end_date__isnull=True).first()
@@ -335,7 +335,7 @@ class TeacherStudentSerializer(DynamicSerializer):
  class_name=serializers.SerializerMethodField()
  school_class_id=serializers.SerializerMethodField()
  section=serializers.SerializerMethodField()
- gender=serializers.ChoiceField(choices=[('male','Boy'),('female','Girl')],required=False)
+ gender=serializers.ChoiceField(choices=[('male','Male'),('female','Female'),('other','Other'),('not_recorded','Not recorded')],required=False)
  def get_class_name(self,o):
   e=o.enrollments.select_related('school_class__school').filter(end_date__isnull=True).first()
   if not e or not e.school_class:
@@ -1185,8 +1185,8 @@ def create_account(request):
  school_id=data.get('school')
  admission_number=(data.get('admission_number') or '').strip()
  gender=(data.get('gender') or '').strip().lower()
- if gender not in ('','male','female'):
-  return Response({'detail':'Gender must be male or female'},status=400)
+ if gender not in ('','male','female','other','not_recorded'):
+  return Response({'detail':'Gender must be male, female, other, or not_recorded'},status=400)
  student_id=data.get('student_id')
  class_id=data.get('class_id')
  
