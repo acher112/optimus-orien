@@ -47,7 +47,7 @@ def _school(user, value):
         value = user.school_id
     school = schools_scope(user).filter(pk=value or 0).first()
     if not school:
-        raise NotFound('Campus not found.')
+        raise ValidationError({'school': 'Choose a campus within your scope.'})
     return school
 
 

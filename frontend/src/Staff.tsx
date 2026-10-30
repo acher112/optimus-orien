@@ -193,6 +193,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
     effective_date: new Date().toISOString().slice(0, 10),
     assign_later: false,
     subject_assignments: [{ class_id: '', subject_id: '' }],
+    password: '',
     set_temporary_password: false,
     temporary_password: ''
   });
@@ -288,7 +289,10 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
           {createdCreds.temp_pwd ? (
             <div style={{ background: '#fef3c7', padding: '16px', borderRadius: '10px', border: '1px solid #fde68a', marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: '#92400e', marginBottom: '6px' }}>
-                Temporary Password (Shown Once):
+                Portal Credentials Configured:
+              </div>
+              <div style={{ fontSize: '12px', color: '#78350f', marginBottom: '8px' }}>
+                Sign-in Email: <strong>{f.email}</strong>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <code style={{ fontSize: '16px', fontWeight: 700, background: '#fff', padding: '6px 12px', borderRadius: '6px', border: '1px solid #fcd34d', color: '#b45309' }}>
@@ -296,7 +300,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
                 </code>
                 <button
                   type="button"
-                  onClick={() => { navigator.clipboard.writeText(createdCreds.temp_pwd!); setCopied(true); }}
+                  onClick={() => { navigator.clipboard.writeText(`Email: ${f.email}\nPassword: ${createdCreds.temp_pwd}`); setCopied(true); }}
                   className="outline-btn"
                   style={{ padding: '6px 10px' }}
                 >
@@ -304,7 +308,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
                 </button>
               </div>
               <p style={{ fontSize: '12px', color: '#b45309', margin: '8px 0 0' }}>
-                This password will not be displayed again. The teacher will be prompted to change it at first login.
+                The staff member can now sign in immediately to their portal with this email and password, and change their password anytime via profile settings or email reset.
               </p>
             </div>
           ) : (
@@ -356,7 +360,16 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
           <label>Position / Job title *<input required placeholder="e.g. Maths Teacher" value={f.position || ''} onChange={e => set('position', e.target.value)} /></label>
           <label>Campus *<select required value={f.school} onChange={e => set('school', e.target.value)}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
           <label>Hired on<input type="date" value={f.hired_on} onChange={e => set('hired_on', e.target.value)} /></label>
-          <label>Email (portal login) *<input required type="email" value={f.email || ''} onChange={e => set('email', e.target.value)} placeholder="teacher@school.edu" /></label>
+          <label>Email (portal login) *<input required type="email" value={f.email || ''} onChange={e => set('email', e.target.value)} placeholder="portal-user@school.edu" /></label>
+          <label>Password (portal login) *
+            <PasswordField
+              required
+              minLength={8}
+              value={f.password || ''}
+              onChange={e => set('password', e.target.value)}
+              placeholder="Min 8 chars"
+            />
+          </label>
           <label>Phone<input value={f.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="e.g. +92 300 1234567" /></label>
 
           {/* TEACHER SPECIFIC ASSIGNMENTS */}
@@ -512,41 +525,12 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
             </div>
           )}
 
-          {/* LOGIN CREDENTIALS */}
-          <div className="wide" style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginTop: '6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Login Setup</span>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#475569', cursor: 'pointer', margin: 0 }}>
-                <input
-                  type="checkbox"
-                  checked={f.set_temporary_password || false}
-                  onChange={e => set('set_temporary_password', e.target.checked)}
-                />
-                Set temporary password
-              </label>
+          {/* PORTAL ACCESS NOTICE */}
+          <div className="wide" style={{ background: '#f0fdf4', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbf7d0', fontSize: '12px', color: '#166534', display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '6px' }}>
+            <KeyRound size={16} style={{ marginTop: '2px', flexShrink: 0, color: '#16a34a' }} />
+            <div>
+              <strong>Portal Sign-in Setup:</strong> These credentials allow the {f.role ? nice(f.role) : 'staff member'} to log directly into their portal immediately upon creation. They can change their password at any time via Profile Settings or reset it using their registered email.
             </div>
-
-            {f.set_temporary_password ? (
-              <div style={{ marginTop: '8px' }}>
-                <label style={{ fontSize: '12px', margin: 0 }}>
-                  Temporary Password *
-                  <PasswordField
-                    required
-                    minLength={8}
-                    value={f.temporary_password || ''}
-                    onChange={e => set('temporary_password', e.target.value)}
-                    placeholder="Min 8 chars (letters, digits)"
-                  />
-                </label>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  Shown once upon creation; forces password reset at first sign-in.
-                </span>
-              </div>
-            ) : (
-              <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <KeyRound size={14} /> A secure, single-use activation invitation (valid 72h) will be generated.
-              </div>
-            )}
           </div>
 
           <label>Monthly base salary *<input required type="number" step="0.01" min="1" placeholder="e.g. 50000" value={f.salary || ''} onChange={e => set('salary', e.target.value)} /></label>

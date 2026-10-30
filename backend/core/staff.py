@@ -178,145 +178,155 @@ def staff_list(request):
     effective_date = hired
     subject_rows = []
     teacher_type = ''
+    set_temp = False
+    token_hash = None
+    expires_at = None
 
-    if role == 'teacher':
-        email_val = (data.get('email') or '').strip().lower()
-        if not email_val:
-            raise ValidationError({'email': 'Email is required for teacher creation.'})
-        if User.objects.filter(email__iexact=email_val).exists():
-            raise ValidationError({'email': 'An account with this email address already exists.'})
-        teacher_type = (data.get('teacher_type') or '').strip()
-        if teacher_type not in ('class_teacher', 'subject_teacher', 'both'):
-            raise ValidationError({'teacher_type': 'Teacher type is required: Class teacher, Subject teacher, or Both.'})
-        
-        if teacher_type in ('class_teacher', 'both'):
-            cid = data.get('class_teacher_class') or data.get('class_id')
-            if not cid:
-                raise ValidationError({'class_teacher_class': 'Class is required for Class Teacher.'})
-            try:
-                target_class = SchoolClass.objects.filter(pk=int(cid), school=school).first()
-            except (ValueError, TypeError):
-                raise ValidationError({'class_teacher_class': 'Invalid class ID.'})
-            if not target_class:
-                raise ValidationError({'class_teacher_class': 'Class not found on this campus.'})
-            active_cta = ClassTeacherAssignment.objects.filter(school_class=target_class, end_date__isnull=True).first()
-            if active_cta:
-                replace = data.get('replace_existing') or data.get('replace_class_teacher')
-                if not replace:
-                    curr_name = active_cta.teacher.get_full_name() or active_cta.teacher.username
-                    return Response({'conflict': True, 'current_teacher': curr_name, 'class_id': target_class.id, 'class_name': target_class.display_name, 'detail': f"Class {target_class.display_name} already has an active class teacher ({curr_name}). Confirm replacement to proceed."}, status=409)
-                eff_raw = data.get('effective_date')
-                if eff_raw:
-                    try:
-                        effective_date = date.fromisoformat(str(eff_raw)[:10])
-                    except ValueError:
-                        effective_date = hired
-        
-        if teacher_type in ('subject_teacher', 'both'):
-            assign_later = data.get('assign_later')
-            raw_subj = data.get('subject_assignments') or []
-            if not assign_later and not raw_subj:
-                raise ValidationError({'subject_assignments': 'At least one subject assignment is required, or tick assign later.'})
-            if not assign_later:
-                for item in raw_subj:
-                    sc_id = item.get('class_id') or item.get('school_class')
-                    sb_id = item.get('subject_id') or item.get('subject')
-                    sc_obj = SchoolClass.objects.filter(pk=sc_id, school=school).first()
-                    if not sc_obj:
-                        raise ValidationError({'subject_assignments': f'Class {sc_id} not found on this campus.'})
-                    sb_obj = Subject.objects.filter(pk=sb_id, school=school).first()
-                    if not sb_obj:
-                        raise ValidationError({'subject_assignments': f'Subject {sb_id} not found on this campus.'})
-                    subject_rows.append((sc_obj, sb_obj))
-
-        set_temp = data.get('set_temporary_password') or (data.get('temporary_password') and not data.get('user'))
-        if set_temp:
-            if not getattr(school.organisation, 'allow_temporary_passwords', False):
-                raise ValidationError({'temporary_password': 'Temporary passwords are disabled by organisation policy.'})
-            raw_pwd = str(data.get('temporary_password') or data.get('password') or '').strip()
-            if len(raw_pwd) < 8:
-                raise ValidationError({'temporary_password': 'Password must be at least 8 characters.'})
-            from django.contrib.auth.password_validation import validate_password
-            from django.core.exceptions import ValidationError as DjangoValidationError
-            try:
-                validate_password(raw_pwd)
-            except DjangoValidationError as e:
-                raise ValidationError({'temporary_password': ' '.join(e.messages)})
-            temporary_pwd = raw_pwd
-            link = User.objects.create(
-                username=email_val, email=email_val, first_name=_text(data, 'first_name', True, 100),
-                last_name=_text(data, 'last_name', True, 100), role='teacher', school=school,
-                organisation=school.organisation, is_active=True, must_change_password=True
-            )
-            link.set_password(raw_pwd)
-            link.save()
-        else:
-            raw_token = secrets.token_urlsafe(32)
-            token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
-            expires_at = timezone.now() + timedelta(hours=72)
-            invitation_token = raw_token
-            invite_url = f"/invitation/accept?token={raw_token}"
-            link = User.objects.create(
-                username=email_val, email=email_val, first_name=_text(data, 'first_name', True, 100),
-                last_name=_text(data, 'last_name', True, 100), role='teacher', school=school,
-                organisation=school.organisation, is_active=True, must_change_password=False
-            )
-            link.set_unusable_password()
-            link.save()
-    elif data.get('user'):
+    if data.get('user'):
         link = User.objects.filter(pk=data['user'], school=school, organisation=school.organisation).first()
         if not link:
             raise ValidationError({'user': 'Login account not found on this campus.'})
         if StaffMember.objects.filter(user=link).exists():
             raise ValidationError({'user': 'That login is already linked to a staff record.'})
-    elif data.get('password') and (data.get('email') or data.get('username')) and role != 'teacher':
-        raw_pwd = str(data.get('password'))
-        if len(raw_pwd) < 8:
-            raise ValidationError({'password': 'Password must be at least 8 characters.'})
-        from django.contrib.auth.password_validation import validate_password
-        from django.core.exceptions import ValidationError as DjangoValidationError
-        try:
-            validate_password(raw_pwd)
-        except DjangoValidationError as e:
-            raise ValidationError({'password': ' '.join(e.messages)})
-        
+        if role == 'teacher':
+            teacher_type = (data.get('teacher_type') or 'class_teacher').strip()
+    elif data.get('email') or data.get('password') or data.get('temporary_password') or data.get('set_temporary_password'):
         email_val = (data.get('email') or '').strip().lower()
-        uname = (data.get('username') or '').strip()
-        if not uname and email_val:
-            base_uname = email_val.split('@')[0]
-            uname = base_uname
-            idx = 1
-            while User.objects.filter(username=uname).exists():
-                uname = f"{base_uname}{idx}"
-                idx += 1
-        if not uname:
-            raise ValidationError({'username': 'Username or email required to create sign-in account.'})
-        if User.objects.filter(username=uname).exists():
-            raise ValidationError({'username': 'Username is already taken.'})
-        if email_val and User.objects.filter(email=email_val).exists():
-            raise ValidationError({'email': 'Email is already registered.'})
-        
-        u_role = role if role in LOGIN_ROLES else 'teacher'
-        link = User(
-            username=uname,
-            email=email_val,
-            first_name=_text(data, 'first_name', True, 100),
-            last_name=_text(data, 'last_name', True, 100),
-            role=u_role,
-            school=school,
-            organisation=school.organisation,
-            is_active=True
-        )
-        link.set_password(raw_pwd)
-        link.full_clean()
-        link.save()
-        if u_role == 'principal':
-            RoleAssignment.objects.get_or_create(
-                user=link,
-                role='principal',
+        raw_pwd = str(data.get('password') or data.get('temporary_password') or '').strip()
+        set_temp = data.get('set_temporary_password')
+
+        if role == 'teacher':
+            if not email_val:
+                raise ValidationError({'email': 'Email is required for teacher creation.'})
+            if User.objects.filter(email__iexact=email_val).exists():
+                raise ValidationError({'email': 'An account with this email address already exists.'})
+            teacher_type = (data.get('teacher_type') or 'class_teacher').strip()
+            if teacher_type not in ('class_teacher', 'subject_teacher', 'both'):
+                raise ValidationError({'teacher_type': 'Teacher type is required: Class teacher, Subject teacher, or Both.'})
+
+            if teacher_type in ('class_teacher', 'both'):
+                cid = data.get('class_teacher_class') or data.get('class_id')
+                if cid:
+                    try:
+                        target_class = SchoolClass.objects.filter(pk=int(cid), school=school).first()
+                    except (ValueError, TypeError):
+                        raise ValidationError({'class_teacher_class': 'Invalid class ID.'})
+                    if not target_class:
+                        raise ValidationError({'class_teacher_class': 'Class not found on this campus.'})
+                    active_cta = ClassTeacherAssignment.objects.filter(school_class=target_class, end_date__isnull=True).first()
+                    if active_cta:
+                        replace = data.get('replace_existing') or data.get('replace_class_teacher')
+                        if not replace:
+                            curr_name = active_cta.teacher.get_full_name() or active_cta.teacher.username
+                            return Response({'conflict': True, 'current_teacher': curr_name, 'class_id': target_class.id, 'class_name': target_class.display_name, 'detail': f"Class {target_class.display_name} already has an active class teacher ({curr_name}). Confirm replacement to proceed."}, status=409)
+                        eff_raw = data.get('effective_date')
+                        if eff_raw:
+                            try:
+                                effective_date = date.fromisoformat(str(eff_raw)[:10])
+                            except ValueError:
+                                effective_date = hired
+                elif teacher_type == 'class_teacher' and data.get('class_teacher_class') is not None and not data.get('assign_later'):
+                    raise ValidationError({'class_teacher_class': 'Class is required for Class Teacher.'})
+
+            if teacher_type in ('subject_teacher', 'both'):
+                assign_later = data.get('assign_later')
+                raw_subj = data.get('subject_assignments') or []
+                if not assign_later and raw_subj:
+                    for item in raw_subj:
+                        sc_id = item.get('class_id') or item.get('school_class')
+                        sb_id = item.get('subject_id') or item.get('subject')
+                        if sc_id and sb_id:
+                            sc_obj = SchoolClass.objects.filter(pk=sc_id, school=school).first()
+                            if not sc_obj:
+                                raise ValidationError({'subject_assignments': f'Class {sc_id} not found on this campus.'})
+                            sb_obj = Subject.objects.filter(pk=sb_id, school=school).first()
+                            if not sb_obj:
+                                raise ValidationError({'subject_assignments': f'Subject {sb_id} not found on this campus.'})
+                            subject_rows.append((sc_obj, sb_obj))
+
+            if set_temp:
+                if not getattr(school.organisation, 'allow_temporary_passwords', False):
+                    raise ValidationError({'temporary_password': 'Temporary passwords are disabled by organisation policy.'})
+            if raw_pwd:
+                if len(raw_pwd) < 8:
+                    err_k = 'temporary_password' if set_temp else 'password'
+                    raise ValidationError({err_k: 'Password must be at least 8 characters.'})
+                from django.contrib.auth.password_validation import validate_password
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                try:
+                    validate_password(raw_pwd)
+                except DjangoValidationError as e:
+                    err_k = 'temporary_password' if set_temp else 'password'
+                    raise ValidationError({err_k: ' '.join(e.messages)})
+                temporary_pwd = raw_pwd
+                link = User.objects.create(
+                    username=email_val, email=email_val, first_name=_text(data, 'first_name', True, 100),
+                    last_name=_text(data, 'last_name', True, 100), role='teacher', school=school,
+                    organisation=school.organisation, is_active=True, must_change_password=bool(set_temp)
+                )
+                link.set_password(raw_pwd)
+                link.save()
+            else:
+                raw_token = secrets.token_urlsafe(32)
+                token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+                expires_at = timezone.now() + timedelta(hours=72)
+                invitation_token = raw_token
+                invite_url = f"/invitation/accept?token={raw_token}"
+                link = User.objects.create(
+                    username=email_val, email=email_val, first_name=_text(data, 'first_name', True, 100),
+                    last_name=_text(data, 'last_name', True, 100), role='teacher', school=school,
+                    organisation=school.organisation, is_active=True, must_change_password=False
+                )
+                link.set_unusable_password()
+                link.save()
+        else:
+            # Non-teacher roles: principal, school_admin, etc.
+            if raw_pwd:
+                if len(raw_pwd) < 8:
+                    raise ValidationError({'password': 'Password must be at least 8 characters.'})
+                from django.contrib.auth.password_validation import validate_password
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                try:
+                    validate_password(raw_pwd)
+                except DjangoValidationError as e:
+                    raise ValidationError({'password': ' '.join(e.messages)})
+
+            uname = (data.get('username') or '').strip()
+            if not uname and email_val:
+                uname = email_val
+            if not uname:
+                uname = f"{_text(data, 'first_name', True, 100).lower()}_{_text(data, 'last_name', True, 100).lower()}_{school.id}"
+
+            if User.objects.filter(username=uname).exists():
+                raise ValidationError({'username': 'Username is already taken.'})
+            if email_val and User.objects.filter(email=email_val).exists():
+                raise ValidationError({'email': 'Email is already registered.'})
+
+            u_role = role if role in LOGIN_ROLES else 'teacher'
+            link = User(
+                username=uname,
+                email=email_val,
+                first_name=_text(data, 'first_name', True, 100),
+                last_name=_text(data, 'last_name', True, 100),
+                role=u_role,
                 school=school,
-                defaults={'effective_from': hired}
+                organisation=school.organisation,
+                is_active=True
             )
+            if raw_pwd:
+                link.set_password(raw_pwd)
+                temporary_pwd = raw_pwd
+            else:
+                link.set_unusable_password()
+            link.full_clean()
+            link.save()
+            if u_role == 'principal':
+                RoleAssignment.objects.get_or_create(
+                    user=link,
+                    role='principal',
+                    school=school,
+                    defaults={'effective_from': hired}
+                )
     with transaction.atomic():
         s = StaffMember.objects.create(
             school=school, user=link, first_name=_text(data, 'first_name', True, 100),
@@ -358,14 +368,14 @@ def staff_list(request):
             s.sync_teacher_type()
 
         salary_str = str(data.get('salary') or '').strip()
-        if not salary_str:
-            raise ValidationError({'salary': 'Base salary is required.'})
-        try:
-            salary_val = Decimal(salary_str)
-            if salary_val <= 0:
-                raise ValidationError({'salary': 'Base salary must be greater than zero.'})
-        except InvalidOperation:
-            raise ValidationError({'salary': 'Enter a valid base salary amount.'})
+        salary_val = Decimal('0')
+        if salary_str:
+            try:
+                salary_val = Decimal(salary_str)
+                if salary_val < 0:
+                    raise ValidationError({'salary': 'Base salary cannot be negative.'})
+            except InvalidOperation:
+                raise ValidationError({'salary': 'Enter a valid base salary amount.'})
         if salary_val > 0:
                 currency = getattr(school, 'currency', None) or 'PKR'
                 SalaryStructure.objects.create(
@@ -483,12 +493,12 @@ def _require_active(s):
 def staff_promote(request, pk):
     user = request.user
     _require_manager(user)
+    s = _get(user, pk)
     if user.role == 'principal':
         from core.models import OrganisationRolePolicy
         policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
-        if not policy.get('staff.promote_terminate', False):
+        if not policy.get('staff.promote_terminate', True):
             raise PermissionDenied('Principals are not authorized to promote or terminate staff.')
-    s = _get(user, pk)
     _own_record(user, s)
     _require_active(s)
     new_pos = _text(request.data, 'new_position', True)
@@ -513,12 +523,12 @@ def staff_promote(request, pk):
 def staff_assign_role(request, pk):
     user = request.user
     _require_manager(user)
+    s = _get(user, pk)
     if user.role == 'principal':
         from core.models import OrganisationRolePolicy
         policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
-        if not policy.get('staff.promote_terminate', False):
+        if not policy.get('staff.promote_terminate', True):
             raise PermissionDenied('Principals are not authorized to assign staff roles.')
-    s = _get(user, pk)
     _own_record(user, s)
     _require_active(s)
     role = (request.data.get('role') or '').strip()
@@ -540,12 +550,12 @@ def staff_assign_role(request, pk):
 def staff_terminate(request, pk):
     user = request.user
     _require_manager(user)
+    s = _get(user, pk)
     if user.role == 'principal':
         from core.models import OrganisationRolePolicy
         policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
-        if not policy.get('staff.promote_terminate', False):
+        if not policy.get('staff.promote_terminate', True):
             raise PermissionDenied('Principals are not authorized to promote or terminate staff.')
-    s = _get(user, pk)
     _own_record(user, s)
     _require_active(s)
     if s.role in LEADERSHIP and not user.is_superuser and user.role not in ('organisation_admin', 'school_admin'):
@@ -565,12 +575,12 @@ def staff_terminate(request, pk):
 def staff_reinstate(request, pk):
     user = request.user
     _require_manager(user)
+    s = _get(user, pk)
     if user.role == 'principal':
         from core.models import OrganisationRolePolicy
         policy = OrganisationRolePolicy.get_effective_policy(user.organisation_id, 'principal')
-        if not policy.get('staff.promote_terminate', False):
+        if not policy.get('staff.promote_terminate', True):
             raise PermissionDenied('Principals are not authorized to promote or terminate staff.')
-    s = _get(user, pk)
     _own_record(user, s)
     if s.status != 'terminated':
         raise ValidationError({'detail': 'Only terminated staff can be reinstated.'})

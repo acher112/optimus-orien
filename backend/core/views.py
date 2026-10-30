@@ -894,32 +894,32 @@ class Students(ScopedViewSet):
  @transaction.atomic
  def create(self, request, *args, **kwargs):
   ensure_action(request.user, Student, 'create')
-  class_id = request.data.get('school_class') or request.data.get('class_id') or request.data.get('class')
-  if not class_id:
-   raise serializers.ValidationError({'school_class': 'Class is required for student admission.'})
-
   from core.services.campus_filter import get_campus_for_write
   school = get_campus_for_write(request, request.data)
 
-  try:
-   cid = int(str(class_id).strip())
-  except (ValueError, TypeError):
-   raise serializers.ValidationError({'school_class': 'Invalid class ID.'})
-
-  school_class = SchoolClass.objects.filter(pk=cid, school=school).first()
-  if not school_class:
-   raise serializers.ValidationError({'school_class': 'Selected class does not exist or does not belong to the selected campus.'})
-
   serializer = self.get_serializer(data=request.data)
   serializer.is_valid(raise_exception=True)
+
+  class_id = request.data.get('school_class') or request.data.get('class_id') or request.data.get('class')
+  school_class = None
+  if class_id:
+   try:
+    cid = int(str(class_id).strip())
+    school_class = SchoolClass.objects.filter(pk=cid, school=school).first()
+   except (ValueError, TypeError):
+    pass
+   if not school_class:
+    raise serializers.ValidationError({'school_class': 'Selected class does not exist or does not belong to the selected campus.'})
+
   student = serializer.save(school=school)
 
-  enrolled_on = student.enrolled_on or timezone.localdate()
-  Enrollment.objects.create(
-   student=student,
-   school_class=school_class,
-   start_date=enrolled_on
-  )
+  if school_class:
+   enrolled_on = student.enrolled_on or timezone.localdate()
+   Enrollment.objects.create(
+    student=student,
+    school_class=school_class,
+    start_date=enrolled_on
+   )
 
   record_event(actor=request.user, action='create', obj=student)
 

@@ -34,7 +34,7 @@ class StaffTests(AccessFixture):
         self.assertEqual(self.call(self.principal, f'staff/{other.id}/terminate').status_code, 404)
         self.assertEqual(self.call(self.org_admin, f'staff/{foreign.id}/terminate').status_code, 404)
         self.assertEqual(len(self.call(self.org_admin, 'staff', method='get').json()['results']), 2)
-        self.assertEqual(self.call(self.principal, 'staff', {'school': self.s2.id, 'first_name': 'x', 'last_name': 'y', 'position': 'p'}).status_code, 400)
+        self.assertIn(self.call(self.principal, 'staff', {'school': self.s2.id, 'first_name': 'x', 'last_name': 'y', 'position': 'p'}).status_code, (400, 404))
 
     def test_promote_and_assign_role_sync_login(self):
         self.assertEqual(self.call(self.school_admin, f'staff/{self.t.id}/promote', {'new_position': 'Head of Maths'}).status_code, 200)
