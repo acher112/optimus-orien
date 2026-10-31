@@ -251,14 +251,16 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
     desc: 'Keep assignments and completion review in one place.',
     columns: [
       { key: 'title', label: 'Assignment' },
-      { key: 'due_date', label: 'Due date' },
+      { key: 'school_name', label: 'Campus' },
       { key: 'school_class', label: 'Class' },
-      { key: 'subject', label: 'Subject' }
+      { key: 'subject', label: 'Subject' },
+      { key: 'due_date', label: 'Due date' }
     ],
     fields: [
-      { key: 'title', label: 'Title', required: true },
+      { key: 'school', label: 'Campus', required: true },
       { key: 'school_class', label: 'Class', required: true },
       { key: 'subject', label: 'Subject', required: true },
+      { key: 'title', label: 'Title', required: true },
       { key: 'due_date', label: 'Due date', type: 'date', required: true },
       { key: 'description', label: 'Description' }
     ]
@@ -294,6 +296,18 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
     fields: []
   },
 };
+
+function getSingularTitle(p: string): string {
+  if (p === 'Homework') return 'homework';
+  if (p === 'Interventions') return 'support case';
+  if (p === 'Academic years') return 'academic year';
+  if (p === 'Classes') return 'class';
+  if (p === 'Subjects') return 'subject';
+  if (p === 'Students') return 'student';
+  if (p === 'Academics') return 'assessment';
+  if (p.endsWith('s')) return p.slice(0, -1).toLowerCase();
+  return p.toLowerCase();
+}
 
 function getResourceFilterConfigs(pageName: string, user?: User | null, teacherScope?: any, refClasses?: any[]): FilterConfig[] {
   switch (pageName) {
@@ -421,6 +435,15 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
           ]
         }
       ];
+    case 'Homework': {
+      const classOpts = (refClasses || []).map((c: any) => ({
+        label: c.display_name || (c.section ? `${c.name} – ${c.section}` : c.name),
+        value: String(c.id)
+      }));
+      return [
+        ...(classOpts.length > 0 ? [{ key: 'school_class', label: 'Class', options: classOpts }] : [])
+      ];
+    }
     default:
       return [];
   }
@@ -566,6 +589,12 @@ function App() {
           setActiveCampusId(null);
           localStorage.removeItem('optimus_active_campus_id');
         }
+      }).catch(() => {});
+      Promise.all([
+        list<{ id: number; name: string; school?: number }>('classes/').catch(() => []),
+        list<{ id: number; name: string; code?: string; school?: number }>('subjects/').catch(() => [])
+      ]).then(([cl, sb]) => {
+        setRefData(prev => ({ ...prev, classes: cl, subjects: sb }));
       }).catch(() => {});
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -772,6 +801,13 @@ function App() {
       }
       if (f.key === 'dob' && !val && (r as any).date_of_birth) {
         val = (r as any).date_of_birth;
+      }
+      if (f.key === 'school' && !val) {
+        val = (r as any).school || (r as any).school_id || (r as any).campus;
+        if (!val && (r as any).school_class) {
+          const matchedClass = refData.classes.find(c => String(c.id) === String((r as any).school_class));
+          if (matchedClass && matchedClass.school) val = matchedClass.school;
+        }
       }
       initial[f.key] = val !== undefined && val !== null ? String(val) : '';
     }
@@ -1808,11 +1844,42 @@ function App() {
                   <h1>{config.title}</h1>
                   <p>{config.desc}</p>
                 </div>
-                {config.fields.length > 0 && !['student', 'parent', 'teacher'].includes(user.role) && (
-                  <button className="primary-btn" onClick={openCreateModal}>
-                    <Plus size={17} /> Add {page === 'Students' ? 'student' : page === 'Interventions' ? 'case' : page === 'Academic years' ? 'academic year' : page === 'Classes' ? 'class' : page === 'Subjects' ? 'subject' : 'record'}
-                  </button>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  {campuses.length > 1 && ['organisation_admin', 'school_admin'].includes(user.role) && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f8fafc', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+                      <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                      <select
+                        style={{ border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, color: '#334155', cursor: 'pointer', outline: 'none' }}
+                        value={activeCampusId === null ? 'all' : String(activeCampusId)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === 'all') {
+                            setActiveCampusId(null);
+                            notify('Showing records across all campuses');
+                          } else {
+                            const cid = Number(val);
+                            setActiveCampusId(cid);
+                            const matched = campuses.find(c => c.id === cid);
+                            notify(`Filtered to ${matched?.name || 'selected campus'}`);
+                          }
+                        }}
+                      >
+                        <option value="all">All Campuses (Entire Organisation)</option>
+                        {campuses.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {config.fields.length > 0 && !['student', 'parent', 'teacher'].includes(user.role) && (
+                    <button className="primary-btn" onClick={openCreateModal}>
+                      <Plus size={17} /> Add {getSingularTitle(page)}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="resource-summary">
@@ -1886,7 +1953,13 @@ function App() {
                               ) : typeof r[c.key] === 'boolean' || ['status', 'priority'].includes(c.key) ? (
                                 <Pill value={r[c.key] as string | boolean} />
                               ) : (
-                                <span>{c.key === 'gender' ? (r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : '—') : String(r[c.key] ?? '—')}</span>
+                                <span>
+                                  {c.key === 'gender' ? (r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : '—')
+                                  : c.key === 'school_class' ? String(r.class_name || (refData.classes.find(cl => cl.id === r.school_class)?.name) || ((r.school_class as any)?.name) || r.school_class || '—')
+                                  : c.key === 'subject' ? String(r.subject_name || (refData.subjects.find(sb => sb.id === r.subject)?.name) || ((r.subject as any)?.name) || r.subject || '—')
+                                  : c.key === 'school' || c.key === 'school_name' ? String(r.school_name || (refData.schools.find(sc => sc.id === r.school)?.name) || (campuses.find(cp => cp.id === r.school)?.name) || ((r.school as any)?.name) || '—')
+                                  : String(r[c.key] ?? '—')}
+                                </span>
                               )}
                             </td>
                           ))}
@@ -2019,7 +2092,7 @@ function App() {
             <div className="modal-head">
               <div className="modal-icon"><Plus size={20} /></div>
               <div>
-                <h3>Create {page === 'Interventions' ? 'support case' : page === 'Academic years' ? 'academic year' : page === 'Classes' ? 'class' : page === 'Subjects' ? 'subject' : page.slice(0, -1).toLowerCase()}</h3>
+                <h3>Create {getSingularTitle(page)}</h3>
                 <p>Complete the details below to add a new entry.</p>
               </div>
               <button onClick={() => setModal(false)}><X size={20} /></button>
@@ -2362,7 +2435,10 @@ function App() {
                         <select
                           required={f.required}
                           value={form.school || String(activeCampusId || refData.schools[0]?.id || '')}
-                          onChange={e => setForm(s => ({ ...s, school: e.target.value }))}
+                          onChange={e => {
+                            const sc = e.target.value;
+                            setForm(s => ({ ...s, school: sc, school_class: '', subject: '' }));
+                          }}
                         >
                           <option value="">Select campus…</option>
                           {refData.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -2497,7 +2573,7 @@ function App() {
             <div className="modal-head">
               <div className="modal-icon"><Pencil size={20} /></div>
               <div>
-                <h3>Edit {page === 'Interventions' ? 'support case' : page === 'Academic years' ? 'academic year' : page === 'Classes' ? 'class' : page === 'Subjects' ? 'subject' : page.slice(0, -1).toLowerCase()}</h3>
+                <h3>Edit {getSingularTitle(page)}</h3>
                 <p>Modify record fields and save changes.</p>
               </div>
               <button onClick={() => setEditModal(false)}><X size={20} /></button>
@@ -2511,13 +2587,54 @@ function App() {
                       <select
                         required={f.required}
                         value={editForm.school || ''}
-                        onChange={e => setEditForm(s => ({ ...s, school: e.target.value }))}
+                        onChange={e => {
+                          const sc = e.target.value;
+                          setEditForm(s => ({ ...s, school: sc, school_class: '', subject: '' }));
+                        }}
                       >
                         <option value="">Select campus…</option>
                         {campuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </label>
                   );
+                  if (f.key === 'school_class') {
+                    const currentCampus = editForm.school || String(activeCampusId || '');
+                    const cls = currentCampus ? refData.classes.filter(c => !c.school || String(c.school) === currentCampus) : refData.classes;
+                    return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select
+                          required={f.required}
+                          value={editForm.school_class || ''}
+                          onChange={e => {
+                            const scId = e.target.value;
+                            const matchedClass = refData.classes.find(c => String(c.id) === scId);
+                            setEditForm(s => ({
+                              ...s,
+                              school_class: scId,
+                              school: s.school || (matchedClass?.school ? String(matchedClass.school) : s.school)
+                            }));
+                          }}
+                        >
+                          <option value="">Select class…</option>
+                          {cls.map(c => <option key={c.id} value={c.id}>{(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}</option>)}
+                        </select>
+                      </label>
+                    );
+                  }
+                  if (f.key === 'subject') {
+                    const currentCampus = editForm.school || String(activeCampusId || '');
+                    const subs = currentCampus ? refData.subjects.filter(s => !s.school || String(s.school) === currentCampus) : refData.subjects;
+                    return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select required={f.required} value={editForm.subject || ''} onChange={e => setEditForm(s => ({ ...s, subject: e.target.value }))}>
+                          <option value="">Select subject…</option>
+                          {subs.map(sub => <option key={sub.id} value={sub.id}>{sub.name} {sub.code ? `(${sub.code})` : ''}</option>)}
+                        </select>
+                      </label>
+                    );
+                  }
                   if (f.key === 'curriculum') return (
                     <label key={f.key}>
                       {f.label}{f.required && <span className="required"> *</span>}

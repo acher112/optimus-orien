@@ -69,9 +69,11 @@ def _can_access_subject_chat(user, school_class, subject):
 def _message_row(m):
     reply_snippet = None
     if m.reply_to:
+        sender_obj = getattr(m.reply_to, 'sender', None)
+        sender_name = (sender_obj.get_full_name() or sender_obj.username) if sender_obj else 'User'
         reply_snippet = {
             'id': m.reply_to_id,
-            'sender_name': m.reply_to.get_full_name() or m.reply_to.username,
+            'sender_name': sender_name,
             'message': m.reply_to.message[:80],
         }
 
@@ -84,7 +86,7 @@ def _message_row(m):
         'sender_role': m.sender.role,
         'sender_avatar_color': getattr(m.sender, 'avatar_color', '#8276da'),
         'message': m.message,
-        'is_teacher_answer': m.is_teacher_answer,
+        'is_teacher_answer': bool(m.is_teacher_answer),
         'reply_to': reply_snippet,
         'created_at': m.created_at.isoformat(),
     }
@@ -213,8 +215,8 @@ def messages(request):
     if reply_to_id:
         reply_to = SubjectMessage.objects.filter(pk=reply_to_id, school_class=school_class, subject=subject).first()
 
-    # Automatically flag teacher responses as answers
-    is_teacher = user.role == 'teacher' or (user.role in ('principal', 'school_admin', 'organisation_admin') and request.data.get('is_answer'))
+    # Automatically flag teacher responses as answers (always evaluate to bool, never None)
+    is_teacher = bool(user.role == 'teacher' or (user.role in ('principal', 'school_admin', 'organisation_admin') and request.data.get('is_answer')))
 
     msg = SubjectMessage.objects.create(
         school_class=school_class,

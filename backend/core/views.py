@@ -423,6 +423,11 @@ class AttendanceSerializer(DynamicSerializer):
  student_name=serializers.CharField(source='student.full_name',read_only=True)
  class Meta:model=Attendance;fields='__all__'
 class HomeworkSerializer(DynamicSerializer):
+ school=serializers.IntegerField(source='school_class.school_id',read_only=True)
+ campus=serializers.IntegerField(source='school_class.school_id',read_only=True)
+ school_name=serializers.CharField(source='school_class.school.name',read_only=True)
+ class_name=serializers.CharField(source='school_class.display_name',read_only=True)
+ subject_name=serializers.CharField(source='subject.name',read_only=True)
  class Meta:model=Homework;fields='__all__';read_only_fields=['created_by']
 class SubmissionSerializer(DynamicSerializer):
  class Meta:model=HomeworkSubmission;fields='__all__';read_only_fields=['confirmed_by']
@@ -542,8 +547,10 @@ MODEL_FILTER_SPECS = {
   'default_ordering': ['-date']
  },
  Homework: {
-  'search_fields': ['title', 'description', 'subject__name'],
+  'search_fields': ['title', 'description', 'subject__name', 'school_class__school__name'],
   'filter_map': {
+   'school': 'school_class__school_id',
+   'campus': 'school_class__school_id',
    'school_class': 'school_class_id',
    'class': 'school_class_id',
    'subject': 'subject_id',
