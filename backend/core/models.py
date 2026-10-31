@@ -26,6 +26,12 @@ class School(models.Model):
  currency=models.CharField(max_length=8,default='PKR',help_text='ISO currency code, e.g. PKR, USD')
  attendance_alert_threshold=models.DecimalField(max_digits=5,decimal_places=2,default=80,validators=[MinValueValidator(0),MaxValueValidator(100)])
  grade_alert_threshold=models.DecimalField(max_digits=5,decimal_places=2,default=60,validators=[MinValueValidator(0),MaxValueValidator(100)])
+ discussion_enabled=models.BooleanField(default=True)
+ students_can_see_grade_level_average=models.BooleanField(default=False)
+ parents_can_view_discussion=models.BooleanField(default=True)
+ discussion_allow_attachments=models.BooleanField(default=False)
+ notify_parents_on_risk=models.CharField(max_length=32,choices=[('manual','Manual'),('after_staff_confirmation','After Staff Confirmation')],default='manual')
+ blocked_words=models.TextField(blank=True,default='')
  class Meta:constraints=[models.UniqueConstraint(fields=['organisation','code'],name='unique_school_code_per_org')]
  def __str__(self):return self.name
 
@@ -239,7 +245,7 @@ class Grade(models.Model):
   return round(float(self.marks/self.assessment.max_marks*100),1)
 
 class Attendance(models.Model):
- STATUS=[('present','Present'),('absent','Absent'),('late','Late'),('excused','Excused')]
+ STATUS=[('present','Present'),('absent','Absent'),('late','Late'),('leave','Leave'),('excused','Excused')]
  student=models.ForeignKey(Student,on_delete=models.PROTECT,related_name='attendance')
  school_class=models.ForeignKey(SchoolClass,on_delete=models.PROTECT)
  date=models.DateField()
@@ -1491,3 +1497,97 @@ class PublishedResult(models.Model):
 
     def __str__(self):
         return f"PublishedResult {self.school.name} - v{self.structure_version.version_number} ({self.published_at})"
+
+# ------------------------------------------------------------------ Moderated Discussion Q&A
+class DiscussionThread(models.Model):
+    """Class-scoped, subject-based moderated question thread."""
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('answered', 'Answered'),
+        ('closed', 'Closed'),
+    ]
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='discussion_threads')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='discussion_threads')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='discussion_threads')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='discussion_threads')
+    author_student = models.ForeignKey(Student, null=True, blank=True, on_delete=models.SET_NULL, related_name='discussion_threads')
+    author_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='authored_discussion_threads')
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='open')
+    accepted_post = models.ForeignKey('DiscussionPost', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    is_locked = models.BooleanField(default=False)
+    hidden_at = models.DateTimeField(null=True, blank=True)
+    hidden_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    hidden_reason = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['school_class', 'subject', 'created_at']),
+            models.Index(fields=['school', 'status']),
+        ]
+
+    def __str__(self):
+        return f"[{self.school_class.display_name} / {self.subject.name}] {self.title}"
+
+
+class DiscussionPost(models.Model):
+    """Threaded answer/reply in a class-scoped subject Q&A thread."""
+    thread = models.ForeignKey(DiscussionThread, on_delete=models.CASCADE, related_name='posts')
+    author_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discussion_posts')
+    author_student = models.ForeignKey(Student, null=True, blank=True, on_delete=models.SET_NULL, related_name='discussion_posts')
+    author_role_label = models.CharField(max_length=64, blank=True, default='')
+    body = models.TextField()
+    parent_post = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='replies')
+    hidden_at = models.DateTimeField(null=True, blank=True)
+    hidden_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    hidden_reason = models.CharField(max_length=255, blank=True, default='')
+    edited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['thread', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"Post on {self.thread_id} by {self.author_user.username}"
+
+
+class DiscussionReport(models.Model):
+    """Moderation report filed by a student or staff member."""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('resolved', 'Resolved'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='discussion_reports')
+    thread = models.ForeignKey(DiscussionThread, null=True, blank=True, on_delete=models.CASCADE, related_name='reports')
+    post = models.ForeignKey(DiscussionPost, null=True, blank=True, on_delete=models.CASCADE, related_name='reports')
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discussion_reports')
+    reason = models.CharField(max_length=255)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    handled_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    handled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class DiscussionMute(models.Model):
+    """Temporary restriction muting a student from posting in discussions."""
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='discussion_mutes')
+    until = models.DateTimeField()
+    reason = models.CharField(max_length=255)
+    by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']

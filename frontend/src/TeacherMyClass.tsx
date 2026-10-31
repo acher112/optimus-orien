@@ -3,12 +3,14 @@ import {
   Users, ClipboardCheck, Award, AlertCircle, RefreshCw,
   Search, ShieldAlert, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, Filter, UserCheck, AlertTriangle, Eye, X, BookOpen,
-  TrendingUp, TrendingDown, Clock, HelpCircle, Layers
+  TrendingUp, TrendingDown, Clock, HelpCircle, Layers, KeyRound, Phone
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend
 } from 'recharts';
 import { request, type User } from './api';
+import { CredentialsReceiptModal, type CredentialsReceiptData } from './CredentialsReceiptModal';
+import { InformParentModal } from './InformParentModal';
 
 interface TeacherMyClassProps {
   user: User;
@@ -33,6 +35,27 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
 
   // Selected student for detail modal
   const [detailStudent, setDetailStudent] = useState<any | null>(null);
+  const [receiptData, setReceiptData] = useState<CredentialsReceiptData | null>(null);
+  const [informParentStudent, setInformParentStudent] = useState<any | null>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
+
+  const handleResetPassword = async () => {
+    if (!detailStudent) return;
+    setResettingPassword(true);
+    try {
+      const res: any = await request(`students/${detailStudent.id}/reset-password/`, {
+        method: 'POST'
+      });
+      if (res?.receipt) {
+        setReceiptData(res.receipt);
+        notify('Temporary credentials receipt generated successfully.', 'success');
+      }
+    } catch (err: any) {
+      notify(err?.message || 'Failed to reset password.', 'error');
+    } finally {
+      setResettingPassword(false);
+    }
+  };
 
   const load = useCallback(async (classId?: number | null) => {
     setLoading(true);
@@ -1083,6 +1106,45 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button
+                type="button"
+                onClick={() => setInformParentStudent(detailStudent)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  border: '1px solid #bfdbfe',
+                  background: '#eff6ff',
+                  color: '#1d4ed8',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <Phone size={14} /> Inform Parent
+              </button>
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                disabled={resettingPassword}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  border: '1px solid #fde68a',
+                  background: '#fef3c7',
+                  color: '#92400e',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: resettingPassword ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <KeyRound size={14} /> {resettingPassword ? 'Resetting…' : 'Reset Password'}
+              </button>
+              <button
                 onClick={() => setDetailStudent(null)}
                 style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, cursor: 'pointer' }}
               >
@@ -1091,6 +1153,23 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
             </div>
           </div>
         </div>
+      )}
+
+      {/* Credentials Receipt Modal */}
+      {receiptData && (
+        <CredentialsReceiptModal
+          receipt={receiptData}
+          onClose={() => setReceiptData(null)}
+        />
+      )}
+
+      {/* Inform Parent Modal */}
+      {informParentStudent && (
+        <InformParentModal
+          student={informParentStudent}
+          onClose={() => setInformParentStudent(null)}
+          notify={(msg) => notify(msg, 'success')}
+        />
       )}
     </div>
   );

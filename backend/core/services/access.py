@@ -201,6 +201,8 @@ def queryset_for(user, model):
    return HomeworkSubmission.objects.filter(cond,student__in=students).distinct()
   return HomeworkSubmission.objects.filter(student__in=students,homework__school_class__in=classes)
  if model is Observation:
+  if user.role in ('student', 'parent') and not user.is_superuser:
+   return Observation.objects.none()
   if user.role == 'teacher' and not user.is_superuser:
    from core.services.teacher_scope import get_teacher_scope
    scope=get_teacher_scope(user)
@@ -211,6 +213,8 @@ def queryset_for(user, model):
    return Observation.objects.filter(cond).distinct()
   return Observation.objects.filter(student__in=students,subject__school__in=schools)
  if model is ReviewCase:
+  if user.role in ('student', 'parent') and not user.is_superuser:
+   return ReviewCase.objects.none()
   q=ReviewCase.objects.filter(school__in=schools)
   if user.role=='organisation_admin' and not user.is_superuser and not user.organisation.allow_org_admin_student_access:return q.none()
   if user.role=='teacher' and not user.is_superuser:
@@ -222,6 +226,8 @@ def queryset_for(user, model):
    return q.filter(cond).distinct()
   return q
  if model is Intervention:
+  if user.role in ('student', 'parent') and not user.is_superuser:
+   return Intervention.objects.none()
   q=Intervention.objects.filter(case__school__in=schools)
   if user.role=='organisation_admin' and not user.is_superuser and not user.organisation.allow_org_admin_student_access:return q.none()
   if user.role=='teacher' and not user.is_superuser:
@@ -235,7 +241,7 @@ def queryset_for(user, model):
  if model is Notification:return Notification.objects.filter(user=user)
  if model is AuditEvent:
   if user.is_superuser:return AuditEvent.objects.all()
-  if user.role == 'teacher':return AuditEvent.objects.none()
+  if user.role in ('teacher', 'student', 'parent'):return AuditEvent.objects.none()
   if user.role == 'organisation_admin':
    audits=AuditEvent.objects.filter(organisation_id=user.organisation_id)
    if not getattr(user.organisation,'allow_org_admin_student_access',False):

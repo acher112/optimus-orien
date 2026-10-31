@@ -90,6 +90,11 @@ def register_account(request):
 def signout(request):logout(request);return Response({'ok':True})
 
 def user_payload(u):
+ student_id = None
+ if u.role == 'student':
+  st = getattr(u, 'student_record', None)
+  if st:
+   student_id = st.id
  return {
   'id': u.id,
   'name': u.get_full_name() or u.username,
@@ -106,6 +111,8 @@ def user_payload(u):
   'school': u.school_id,
   'school_name': u.school.name if u.school else None,
   'is_staff': u.is_staff,
+  'must_change_password': getattr(u, 'must_change_password', False),
+  'student_id': student_id,
  }
 @api_view(['GET', 'PATCH'])
 def me(request):
@@ -169,7 +176,8 @@ def change_password(request):
  except DjangoValidationError as e:
   return Response({'detail': ' '.join(e.messages)}, status=400)
  u.set_password(new_password)
- u.save()
+ u.must_change_password = False
+ u.save(update_fields=['password', 'must_change_password'])
  from django.contrib.auth import update_session_auth_hash
  update_session_auth_hash(request, u)
  record_event(actor=u, action='update', obj=u, changed_fields=['password'])
@@ -894,38 +902,70 @@ class Students(ScopedViewSet):
  @transaction.atomic
  def create(self, request, *args, **kwargs):
   ensure_action(request.user, Student, 'create')
+  if request.user.role == 'teacher' and not request.user.is_superuser:
+   raise PermissionDenied('Teachers are not permitted to register students.')
   from core.services.campus_filter import get_campus_for_write
+  from core.services.student_credentials import generate_temporary_password, generate_student_username, make_credentials_receipt
   school = get_campus_for_write(request, request.data)
 
-  serializer = self.get_serializer(data=request.data)
-  serializer.is_valid(raise_exception=True)
-
   class_id = request.data.get('school_class') or request.data.get('class_id') or request.data.get('class')
+  if not class_id:
+   raise serializers.ValidationError({'school_class': 'Class is mandatory for student admission.'})
   school_class = None
-  if class_id:
-   try:
-    cid = int(str(class_id).strip())
-    school_class = SchoolClass.objects.filter(pk=cid, school=school).first()
-   except (ValueError, TypeError):
-    pass
-   if not school_class:
-    raise serializers.ValidationError({'school_class': 'Selected class does not exist or does not belong to the selected campus.'})
+  try:
+   cid = int(str(class_id).strip())
+   school_class = SchoolClass.objects.filter(pk=cid, school=school).first()
+  except (ValueError, TypeError):
+   pass
+  if not school_class:
+   raise serializers.ValidationError({'school_class': 'Selected class does not exist or does not belong to the selected campus.'})
+
+  data_copy = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+  data_copy.pop('password', None)
+  data_copy.pop('email', None)
+
+  serializer = self.get_serializer(data=data_copy)
+  serializer.is_valid(raise_exception=True)
 
   student = serializer.save(school=school)
 
-  if school_class:
-   enrolled_on = student.enrolled_on or timezone.localdate()
-   Enrollment.objects.create(
-    student=student,
-    school_class=school_class,
-    start_date=enrolled_on
-   )
+  enrolled_on = student.enrolled_on or timezone.localdate()
+  Enrollment.objects.create(
+   student=student,
+   school_class=school_class,
+   start_date=enrolled_on
+  )
 
-  record_event(actor=request.user, action='create', obj=student)
+  username = generate_student_username(school, student.admission_number)
+  temp_password = generate_temporary_password(12)
+
+  student_user = User(
+   username=username,
+   first_name=student.first_name,
+   last_name=student.last_name,
+   role='student',
+   school=school,
+   organisation=school.organisation,
+   must_change_password=True,
+   is_active=True
+  )
+  student_user.set_password(temp_password)
+  student_user.full_clean()
+  student_user.save()
+
+  student.user = student_user
+  student.save(update_fields=['user'])
+
+  issued_by = request.user.get_full_name() or request.user.username
+  receipt = make_credentials_receipt(student, school_class, username, temp_password, issued_by)
+
+  record_event(actor=request.user, action='student_admission', obj=student)
 
   out_serializer = self.get_serializer(student)
-  headers = self.get_success_headers(out_serializer.data)
-  return Response(out_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+  res_data = dict(out_serializer.data)
+  res_data['receipt'] = receipt
+  headers = self.get_success_headers(res_data)
+  return Response(res_data, status=status.HTTP_201_CREATED, headers=headers)
 class Subjects(ScopedViewSet):queryset=Subject.objects.all();serializer_class=SubjectSerializer
 class Years(ScopedViewSet):queryset=AcademicYear.objects.all();serializer_class=YearSerializer
 class Enrollments(ScopedViewSet):queryset=Enrollment.objects.all();serializer_class=EnrollmentSerializer

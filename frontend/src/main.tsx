@@ -45,6 +45,13 @@ import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import ErrorBoundary from './ErrorBoundary';
 import PasswordField from './PasswordField';
 import AttendanceModule from './AttendanceModule';
+import { CredentialsReceiptModal, type CredentialsReceiptData } from './CredentialsReceiptModal';
+import { FirstPasswordChangeModal } from './FirstPasswordChangeModal';
+import { StudentHome } from './StudentHome';
+import { StudentAttendance } from './StudentAttendance';
+import { StudentResults } from './StudentResults';
+import { StudentDiscussion } from './StudentDiscussion';
+import { StudentProfile } from './StudentProfile';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -442,6 +449,14 @@ function App() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [receiptData, setReceiptData] = useState<CredentialsReceiptData | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(Boolean(user?.must_change_password));
+
+  useEffect(() => {
+    if (user?.must_change_password) {
+      setMustChangePassword(true);
+    }
+  }, [user]);
   const [modal, setModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState<Resource | null>(null);
@@ -702,7 +717,10 @@ function App() {
         }
       }
 
-      const created = await create(config.api, data);
+      const created: any = await create(config.api, data);
+      if (page === 'Students' && created && created.receipt) {
+        setReceiptData(created.receipt);
+      }
       if (page === 'Students' && created && created.id) {
         if (form.monthly_fee || form.admission_fee !== undefined) {
           try {
@@ -1160,6 +1178,89 @@ function App() {
               </button>
             </nav>
           </>
+        ) : user.role === 'student' ? (
+          <>
+            <div className="nav-label">STUDENT PORTAL</div>
+            <nav>
+              <div className="nav-sublabel">LEARNING & PROGRESS</div>
+              <button
+                type="button"
+                onClick={() => switchPage('Overview')}
+                className={'nav-item ' + (page === 'Overview' ? 'selected' : '')}
+              >
+                <LayoutDashboard size={19} strokeWidth={1.9} />
+                <span>My Dashboard</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Attendance')}
+                className={'nav-item ' + (page === 'Attendance' ? 'selected' : '')}
+              >
+                <ClipboardCheck size={19} strokeWidth={1.9} />
+                <span>My Attendance</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Results & Progress')}
+                className={'nav-item ' + (page === 'Results & Progress' ? 'selected' : '')}
+              >
+                <TrendingUp size={19} strokeWidth={1.9} />
+                <span>Results & Progress</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Homework')}
+                className={'nav-item ' + (page === 'Homework' ? 'selected' : '')}
+              >
+                <ClipboardList size={19} strokeWidth={1.9} />
+                <span>Homework</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Study materials')}
+                className={'nav-item ' + (page === 'Study materials' ? 'selected' : '')}
+              >
+                <BookOpen size={19} strokeWidth={1.9} />
+                <span>Study Materials</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Timetable')}
+                className={'nav-item ' + (page === 'Timetable' ? 'selected' : '')}
+              >
+                <CalendarDays size={19} strokeWidth={1.9} />
+                <span>Timetable</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Discussion')}
+                className={'nav-item ' + (page === 'Discussion' ? 'selected' : '')}
+              >
+                <MessageSquare size={19} strokeWidth={1.9} />
+                <span>Class Discussion</span>
+              </button>
+            </nav>
+
+            <div className="nav-label nav-lower">ACCOUNT & SECURITY</div>
+            <nav>
+              <button
+                type="button"
+                onClick={() => switchPage('Notifications')}
+                className={'nav-item ' + (page === 'Notifications' ? 'selected' : '')}
+              >
+                <Bell size={19} strokeWidth={1.9} />
+                <span>Notifications</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Profile')}
+                className={'nav-item ' + (page === 'Profile' ? 'selected' : '')}
+              >
+                <Settings2 size={19} strokeWidth={1.9} />
+                <span>Profile & Security</span>
+              </button>
+            </nav>
+          </>
         ) : (
           <>
             <div className="nav-label">WORKSPACE</div>
@@ -1451,6 +1552,8 @@ function App() {
                   <PrincipalHome user={user} onNavigate={switchPage} notify={notify} />
                 ) : user.role === 'teacher' ? (
                   <TeacherHome user={user} onNavigate={switchPage} notify={notify} />
+                ) : user.role === 'student' ? (
+                  <StudentHome user={user} onNavigate={switchPage} notify={notify} />
                 ) : (
               <>
                 <div className="welcome-row">
@@ -1774,6 +1877,26 @@ function App() {
                           ))}
                           <td>
                             <div className="table-actions">
+                              {page === 'Students' && ['organisation_admin', 'school_admin', 'principal', 'teacher'].includes(user.role) && (
+                                <button
+                                  className="action-btn-sm"
+                                  title="Reset Student Password"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const res: any = await request(`students/${r.id}/reset-password/`, { method: 'POST' });
+                                      if (res?.receipt) {
+                                        setReceiptData(res.receipt);
+                                        notify('Temporary credentials receipt generated successfully.');
+                                      }
+                                    } catch (err: any) {
+                                      notify(err?.message || 'Could not reset student password.');
+                                    }
+                                  }}
+                                >
+                                  <KeyRound size={13} /> <span>Reset Credentials</span>
+                                </button>
+                              )}
                               {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
                                 <>
                                   <button className="action-btn-sm edit-btn" title="Edit record" onClick={() => openEditModal(r)}>
@@ -1808,7 +1931,10 @@ function App() {
           {page === 'Reports' && <Reports user={user} />}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
           {page === 'Finance' && <Finance user={user} notify={notify} />}
-          {page === 'Attendance' && <AttendanceModule user={user} notify={notify} campuses={campuses} />}
+          {page === 'Attendance' && (user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} />)}
+          {page === 'Results & Progress' && <StudentResults user={user} notify={notify} />}
+          {page === 'Discussion' && <StudentDiscussion user={user} notify={notify} />}
+          {page === 'Profile' && <StudentProfile user={user} notify={notify} />}
           {['Student fees', 'Student Fees', 'Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page) && (
             <Fees user={user} notify={notify} initialTab={page} />
           )}
@@ -2429,6 +2555,23 @@ function App() {
 
       {toast && (
         <div className="toast"><CheckCircle2 size={18} />{toast}<button onClick={() => setToast('')}><X size={16} /></button></div>
+      )}
+
+      {receiptData && (
+        <CredentialsReceiptModal
+          receipt={receiptData}
+          onClose={() => setReceiptData(null)}
+        />
+      )}
+
+      {mustChangePassword && (
+        <FirstPasswordChangeModal
+          onSuccess={() => {
+            setMustChangePassword(false);
+            if (user) (user as any).must_change_password = false;
+          }}
+          notify={notify}
+        />
       )}
     </div>
   );

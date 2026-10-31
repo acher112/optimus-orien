@@ -15,8 +15,12 @@ export type User = {
   school_name?: string | null;
   is_staff?: boolean;
   is_superuser?: boolean;
+  must_change_password?: boolean;
+  student_id?: number | null;
   csrfToken?: string;
 };
+
+export const API_BASE_URL = '/api/v1/';
 
 export type Dashboard = {
   counts: { students: number; schools: number; classes: number; open_cases: number; teachers: number };

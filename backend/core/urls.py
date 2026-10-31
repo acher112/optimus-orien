@@ -5,7 +5,7 @@ from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
-    teacher_views, aqi_views
+    teacher_views, aqi_views, student_views, discussion_views
 )
 
 r = DefaultRouter()
@@ -200,5 +200,25 @@ urlpatterns = [
     path('aqi/marks-grid/', aqi_views.aqi_marks_grid),
     path('aqi/export/', aqi_views.aqi_export),
 
+
+    # Student Portal (Isolated)
+    path('student/dashboard/', student_views.student_dashboard),
+    path('student/attendance/', student_views.student_attendance),
+    path('student/results/', student_views.student_results),
+    path('student/profile/', student_views.student_profile),
+    path('students/<int:pk>/reset-password/', student_views.reset_student_password),
+    path('students/<int:pk>/inform-parent/', student_views.inform_parent_risk),
+
+    # Class Discussion (Moderated Subject Q&A)
+    path('discussion/threads/', discussion_views.discussion_threads),
+    path('discussion/threads/<int:pk>/', discussion_views.discussion_thread_detail),
+    path('discussion/threads/<int:pk>/reply/', discussion_views.discussion_thread_reply),
+    path('discussion/threads/<int:pk>/accept/', discussion_views.discussion_thread_accept),
+    path('discussion/threads/<int:pk>/lock/', discussion_views.discussion_thread_lock),
+    path('discussion/threads/<int:pk>/hide/', discussion_views.discussion_thread_hide),
+    path('discussion/posts/<int:pk>/hide/', discussion_views.discussion_post_hide),
+    path('discussion/reports/', discussion_views.discussion_reports),
+    path('discussion/reports/<int:pk>/resolve/', discussion_views.discussion_report_resolve),
+    path('discussion/students/<int:student_id>/mute/', discussion_views.discussion_student_mute),
     path('', include(r.urls))
 ]
