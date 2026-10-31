@@ -2339,3 +2339,169 @@ input:checked + .toggle-slider:before {
     margin: 10px auto !important;
   }
 }
+
+
+/* --- Campus Demographics Row (Students, Girls, Boys, Employees) --- */
+.campus-demographics-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f8faff;
+  border: 1px solid #e7ecf8;
+  border-radius: 12px;
+  margin-top: 2px;
+}
+.campus-demographic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+.campus-demographic-badge.total-students-badge {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+  color: #6d28d9;
+}
+.campus-demographic-badge.total-students-badge strong {
+  color: #5b21b6;
+  font-weight: 800;
+}
+.campus-demographic-badge.girls-badge {
+  background: #fdf2f8;
+  border-color: #fbcfe8;
+  color: #be185d;
+}
+.dot-circle-pink {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ec4899;
+  display: inline-block;
+  box-shadow: 0 0 0 2px #fbcfe8;
+}
+.pink-highlight {
+  color: #db2777 !important;
+  font-weight: 900 !important;
+}
+.campus-demographic-badge.boys-badge {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+.dot-circle-blue {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #2563eb;
+  display: inline-block;
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+.blue-highlight {
+  color: #1d4ed8 !important;
+  font-weight: 900 !important;
+}
+.campus-demographic-badge.employees-badge {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+.campus-demographic-badge.employees-badge strong {
+  color: #166534;
+  font-weight: 800;
+}
+.dark .campus-demographics-container {
+  background: #1c1e2e;
+  border-color: #35374c;
+}
+.dark .campus-demographic-badge {
+  background: #25283d;
+  border-color: #3e4260;
+  color: #d1d5db;
+}
+.dark .campus-demographic-badge.girls-badge {
+  background: #391c32;
+  border-color: #702456;
+  color: #f472b6;
+}
+.dark .pink-highlight {
+  color: #f472b6 !important;
+}
+.dark .campus-demographic-badge.boys-badge {
+  background: #16284a;
+  border-color: #1e40af;
+  color: #93c5fd;
+}
+.dark .blue-highlight {
+  color: #93c5fd !important;
+}
+.dark .campus-demographic-badge.total-students-badge {
+  background: #2c2250;
+  border-color: #553c9a;
+  color: #c4b5fd;
+}
+.dark .campus-demographic-badge.employees-badge {
+  background: #183726;
+  border-color: #166534;
+  color: #86efac;
+}
+
+/* --- Clickable Stat Cards on Dashboard --- */
+.stat-card.clickable {
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.stat-card.clickable:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(116, 99, 232, 0.14);
+  border-color: #b1a4fa;
+}
+.stat-card.clickable:focus-visible {
+  outline: 3px solid #7c69e8;
+  outline-offset: 2px;
+}
+.stat-nav-hint {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 800;
+  color: #7c69e8;
+  opacity: 0.8;
+}
+.stat-card.clickable:hover .stat-nav-hint {
+  opacity: 1;
+  text-decoration: underline;
+}
+.stat-icon.rose {
+  background: #ffe8ee;
+  color: #e14e74;
+}
+.stat-decor.rose {
+  background: linear-gradient(135deg, #ff9bb3, #e14e74);
+}
+.stats-grid.five-items {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+@media (max-width: 1200px) {
+  .stats-grid.five-items {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .stats-grid.five-items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 420px) {
+  .stats-grid.five-items {
+    grid-template-columns: 1fr;
+  }
+}

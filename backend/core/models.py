@@ -66,6 +66,7 @@ class SchoolClass(models.Model):
  name=models.CharField(max_length=100)
  section=models.CharField(max_length=40,blank=True,default='',db_index=True)
  grade_level=models.CharField(max_length=40,blank=True)
+ curriculum=models.CharField(max_length=120,blank=True,default='')
  teacher=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='classes_taught')
  class Meta:constraints=[models.UniqueConstraint(fields=['academic_year','name','section'],name='unique_class_in_year')]
  def clean(self):

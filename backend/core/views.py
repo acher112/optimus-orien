@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_protect
 from core.services.access import (ensure_action, queryset_for, schools_scope, students_scope, classes_scope, require_visible, validate_related, IMMUTABLE_RELATIONS)
 from core.services.audit import record_event
 from core.services.filters import apply_query_filters, sort_comparison_rows
-from django.db.models import Avg,Count,Q
+from django.db.models import Avg,Count,Q,ProtectedError
 from django.http import JsonResponse,HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -267,7 +267,49 @@ class DynamicSerializer(serializers.ModelSerializer):
  pass
 
 class SchoolSerializer(DynamicSerializer):
- class Meta:model=School;fields=['id','organisation','name','code','city','attendance_alert_threshold','grade_alert_threshold'];read_only_fields=['organisation']
+ total_students = serializers.SerializerMethodField()
+ girls_count = serializers.SerializerMethodField()
+ boys_count = serializers.SerializerMethodField()
+ total_employees = serializers.SerializerMethodField()
+ country = serializers.SerializerMethodField()
+ jurisdiction = serializers.SerializerMethodField()
+ school_settings = serializers.SerializerMethodField()
+
+ class Meta:
+  model = School
+  fields = [
+   'id', 'organisation', 'name', 'code', 'city',
+   'attendance_alert_threshold', 'grade_alert_threshold',
+   'total_students', 'girls_count', 'boys_count', 'total_employees',
+   'country', 'jurisdiction', 'school_settings'
+  ]
+  read_only_fields = ['organisation']
+
+ def get_total_students(self, obj):
+  return obj.student_set.filter(active=True).count()
+
+ def get_girls_count(self, obj):
+  return obj.student_set.filter(active=True, gender='female').count()
+
+ def get_boys_count(self, obj):
+  return obj.student_set.filter(active=True, gender='male').count()
+
+ def get_total_employees(self, obj):
+  staff_c = obj.staff.filter(status='active').count()
+  user_c = User.objects.filter(school=obj).exclude(role__in=['student', 'parent']).count()
+  return max(staff_c, user_c)
+
+ def get_country(self, obj):
+  cfg = getattr(obj, 'configuration', None)
+  return cfg.country if cfg else ''
+
+ def get_jurisdiction(self, obj):
+  cfg = getattr(obj, 'configuration', None)
+  return cfg.jurisdiction if cfg else ''
+
+ def get_school_settings(self, obj):
+  cfg = getattr(obj, 'configuration', None)
+  return cfg.school_settings if cfg else {}
 class ClassSerializer(DynamicSerializer):
  school_name=serializers.CharField(source='school.name',read_only=True)
  academic_year_name=serializers.CharField(source='academic_year.name',read_only=True)
@@ -846,7 +888,25 @@ class ScopedViewSet(viewsets.ModelViewSet):
    Homework.objects.filter(school_class=instance).delete()
    ClassSubjectTeacher.objects.filter(school_class=instance).delete()
    SubjectMessage.objects.filter(school_class=instance).delete()
+   ClassTeacherAssignment.objects.filter(school_class=instance).delete()
+   TeachingAssignment.objects.filter(school_class=instance).delete()
+   FeeStructure.objects.filter(school_class=instance).delete()
+   ExamPaper.objects.filter(school_class=instance).delete()
+   ClassTimetable.objects.filter(school_class=instance).delete()
+   StudyMaterial.objects.filter(school_class=instance).delete()
+   Section.objects.filter(school_class=instance).delete()
+   ClassSubject.objects.filter(school_class=instance).delete()
   elif model is AcademicYear:
+   ExamPaper.objects.filter(session__academic_year=instance).delete()
+   FeeStructure.objects.filter(academic_year=instance).delete()
+   ExamSession.objects.filter(academic_year=instance).delete()
+   HolidayCalendar.objects.filter(academic_year=instance).delete()
+   ExamConfiguration.objects.filter(academic_year=instance).delete()
+   ExamStudentMark.objects.filter(academic_year=instance).delete()
+   CalculatedSubjectResult.objects.filter(academic_year=instance).delete()
+   CalculatedStudentResult.objects.filter(academic_year=instance).delete()
+   ExamStructure.objects.filter(academic_year=instance).delete()
+   DiscussionThread.objects.filter(academic_year=instance).delete()
    classes=SchoolClass.objects.filter(academic_year=instance)
    for c in classes:
     Enrollment.objects.filter(school_class=c).delete()
@@ -857,6 +917,14 @@ class ScopedViewSet(viewsets.ModelViewSet):
     Homework.objects.filter(school_class=c).delete()
     ClassSubjectTeacher.objects.filter(school_class=c).delete()
     SubjectMessage.objects.filter(school_class=c).delete()
+    ClassTeacherAssignment.objects.filter(school_class=c).delete()
+    TeachingAssignment.objects.filter(school_class=c).delete()
+    FeeStructure.objects.filter(school_class=c).delete()
+    ExamPaper.objects.filter(school_class=c).delete()
+    ClassTimetable.objects.filter(school_class=c).delete()
+    StudyMaterial.objects.filter(school_class=c).delete()
+    Section.objects.filter(school_class=c).delete()
+    ClassSubject.objects.filter(school_class=c).delete()
    classes.delete()
   elif model is Subject:
    Grade.objects.filter(assessment__subject=instance).delete()
@@ -885,7 +953,12 @@ class ScopedViewSet(viewsets.ModelViewSet):
    SchoolConfiguration.objects.filter(school=instance).delete()
    ReviewCase.objects.filter(school=instance).delete()
   record_event(actor=user,action='delete',obj=instance)
-  instance.delete()
+  try:
+   instance.delete()
+  except ProtectedError as exc:
+   protected = list(exc.protected_objects)
+   types = sorted({p.__class__.__name__ for p in protected})
+   raise APIValidationError({'detail': f'Cannot delete {model.__name__} because active records exist ({", ".join(types)}). Please remove them first.'})
 
 class Schools(ScopedViewSet):queryset=School.objects.all();serializer_class=SchoolSerializer
 class Classes(ScopedViewSet):queryset=SchoolClass.objects.all();serializer_class=ClassSerializer
@@ -1116,7 +1189,7 @@ def dashboard(request):
  recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name'))
  recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}"} for x in recent]
  recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
- return Response({'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count()},'stats':stats,'schools':school_items,'recent_cases':recent,'recent_students':recent_students,'attention':cases.filter(priority='high').exclude(status='resolved').count(),'recent_notifications':list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))})
+ return Response({'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':max(StaffMember.objects.filter(school__in=schools,status='active').count(), User.objects.filter(school__in=schools).exclude(role__in=['student','parent']).count())},'stats':stats,'schools':school_items,'recent_cases':recent,'recent_students':recent_students,'attention':cases.filter(priority='high').exclude(status='resolved').count(),'recent_notifications':list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))})
 
 @api_view(['GET'])
 def export_students(request):

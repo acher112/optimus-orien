@@ -23,8 +23,8 @@ class ConfigurationSerializer(serializers.ModelSerializer):
           'status','active_version','activated_at','updated_at']
   read_only_fields=['status','active_version','activated_at','updated_at']
  def validate_programmes(self,value):
-  if not isinstance(value,list) or len(value)>25 or any(not isinstance(s,str) or len(s)>120 for s in value):
-   raise serializers.ValidationError('Provide up to 25 named programmes')
+  if not isinstance(value,list) or len(value)>120 or any(not isinstance(s,str) or len(s)>120 for s in value):
+   raise serializers.ValidationError('Provide valid named programmes')
   return [s.strip() for s in value]
  def validate_reporting_periods(self,value):
   if not isinstance(value,list) or len(value)>24 or any(not isinstance(x,dict) for x in value):

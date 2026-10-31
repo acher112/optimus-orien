@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Award, Banknote, BarChart3, Bell, BookOpen,
+  Briefcase,
   Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft,
   ChevronRight, ClipboardCheck, ClipboardList, Download, FileBarChart, GraduationCap,
   HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, MoreHorizontal,
@@ -47,6 +48,7 @@ import PasswordField from './PasswordField';
 import AttendanceModule from './AttendanceModule';
 import { CredentialsReceiptModal, type CredentialsReceiptData } from './CredentialsReceiptModal';
 import { FirstPasswordChangeModal } from './FirstPasswordChangeModal';
+import { ALL_CURRICULA } from './CurriculumSelect';
 import { StudentHome } from './StudentHome';
 import { StudentAttendance } from './StudentAttendance';
 import { StudentResults } from './StudentResults';
@@ -191,6 +193,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'name', label: 'Class' },
       { key: 'section', label: 'Section' },
       { key: 'grade_level', label: 'Grade' },
+      { key: 'curriculum', label: 'Curriculum' },
       { key: 'teacher_name', label: 'Lead teacher' },
       { key: 'school_name', label: 'Campus' },
       { key: 'academic_year_name', label: 'Academic Year' }
@@ -201,6 +204,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'school', label: 'Campus', required: true },
       { key: 'academic_year', label: 'Academic year', required: true },
       { key: 'grade_level', label: 'Grade level (e.g. Grade 8)' },
+      { key: 'curriculum', label: 'Curriculum' },
       { key: 'teacher', label: 'Lead teacher' }
     ]
   },
@@ -1562,7 +1566,7 @@ function App() {
                   <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user.name.split(' ')[0]} <span className="wave">✳</span></h1>
                   <p>Here's what's happening across your learning community today.</p>
                 </div>
-                <button className="primary-btn" onClick={() => switchPage('Reports')}><FileBarChart size={17} /> View insights <ArrowUpRight size={16} /></button>
+                <button className="primary-btn" onClick={() => switchPage('Reports')}><FileBarChart size={17} /> Reports <ArrowUpRight size={16} /></button>
               </div>
 
               <section className="hero-banner">
@@ -1592,11 +1596,12 @@ function App() {
                 <span className="live-tag"><span /> Live workspace data</span>
               </div>
 
-              <div className="stats-grid">
-                <Stat icon={GraduationCap} label="Total students" value={dash?.counts.students ?? 0} foot="Across authorised campuses" tone="lavender" />
-                <Stat icon={Building2} label="Active campuses" value={dash?.counts.schools ?? campuses.length} foot="In your organisation" tone="mint" />
-                <Stat icon={TrendingUp} label="Academic average" value={fmt(dash?.stats.academic_average)} foot={`${dash?.stats.grade_records ?? 0} recorded grades`} tone="peach" />
-                <Stat icon={ClipboardCheck} label="Attendance rate" value={fmt(dash?.stats.attendance_rate)} foot={`${dash?.stats.attendance_records ?? 0} recorded sessions`} tone="blue" />
+              <div className="stats-grid five-items">
+                <Stat icon={GraduationCap} label="Total students" value={dash?.counts.students ?? 0} foot="Across authorised campuses" tone="lavender" onClick={() => switchPage('Students')} />
+                <Stat icon={Building2} label="Active campuses" value={dash?.counts.schools ?? campuses.length} foot="In your organisation" tone="mint" onClick={() => switchPage('Campuses')} />
+                <Stat icon={TrendingUp} label="Academic average" value={fmt(dash?.stats.academic_average)} foot={`${dash?.stats.grade_records ?? 0} recorded grades`} tone="peach" onClick={() => switchPage('Examinations')} />
+                <Stat icon={ClipboardCheck} label="Attendance rate" value={fmt(dash?.stats.attendance_rate)} foot={`${dash?.stats.attendance_records ?? 0} recorded sessions`} tone="blue" onClick={() => switchPage('Attendance')} />
+                <Stat icon={Briefcase} label="Total Employees" value={(dash?.counts as any)?.employees ?? dash?.counts.teachers ?? 0} foot="Staff & faculty members" tone="rose" onClick={() => switchPage('Staff')} />
               </div>
 
               <div className="dashboard-grid">
@@ -2406,7 +2411,16 @@ function App() {
                         </label>
                       );
                     }
-                    if (f.key === 'gender') return (
+                    if (f.key === 'curriculum') return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select value={form.curriculum || ''} onChange={e => setForm(s => ({ ...s, curriculum: e.target.value }))}>
+                          <option value="">Select curriculum (optional)…</option>
+                          {ALL_CURRICULA.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </label>
+                    );
+                  if (f.key === 'gender') return (
                       <label key={f.key}>
                         {f.label}<span className="required"> *</span>
                         <select required value={form.gender || ''} onChange={e => setForm(s => ({ ...s, gender: e.target.value }))}>
@@ -2491,6 +2505,15 @@ function App() {
                       >
                         <option value="">Select campus…</option>
                         {campuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </label>
+                  );
+                  if (f.key === 'curriculum') return (
+                    <label key={f.key}>
+                      {f.label}{f.required && <span className="required"> *</span>}
+                      <select value={editForm.curriculum || ''} onChange={e => setEditForm(s => ({ ...s, curriculum: e.target.value }))}>
+                        <option value="">Select curriculum (optional)…</option>
+                        {ALL_CURRICULA.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </label>
                   );
@@ -2581,13 +2604,23 @@ function LayersIcon({ page }: { page: string }) {
   return page === 'Students' ? <GraduationCap size={23} /> : page === 'Timetable' ? <CalendarDays size={23} /> : page === 'Attendance' ? <ClipboardCheck size={23} /> : page === 'Interventions' ? <HeartHandshake size={23} /> : page === 'Academic years' ? <CalendarDays size={23} /> : page === 'Subjects' ? <BookOpen size={23} /> : page === 'Classes' ? <Users size={23} /> : <FileBarChart size={23} />;
 }
 
-function Stat({ icon: Icon, label, value, foot, tone }: { icon: typeof Users; label: string; value: string | number; foot: string; tone: string }) {
+function Stat({ icon: Icon, label, value, foot, tone, onClick }: { icon: typeof Users; label: string; value: string | number; foot: string; tone: string; onClick?: () => void }) {
   return (
-    <div className="stat-card">
+    <div
+      className={'stat-card ' + (onClick ? 'clickable' : '')}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      title={onClick ? `Click to view ${label}` : undefined}
+    >
       <div className={'stat-icon ' + tone}><Icon size={21} /></div>
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
-      <div className="stat-foot"><span className="tiny-dot" /> {foot}</div>
+      <div className="stat-foot">
+        <span className="tiny-dot" /> {foot}
+        {onClick && <span className="stat-nav-hint">View →</span>}
+      </div>
       <div className={'stat-decor ' + tone} />
     </div>
   );
@@ -3193,6 +3226,25 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                       <span className="campus-tag">{cType}</span>
                       {Boolean(s.country) && <span className="campus-tag">{String(s.country)}</span>}
                     </div>
+                  </div>
+                </div>
+
+                <div className="campus-demographics-container">
+                  <div className="campus-demographic-badge total-students-badge" title="Total active students enrolled at this campus">
+                    <GraduationCap size={15} />
+                    <span>Total Students: <strong>{Number(s.total_students || 0)}</strong></span>
+                  </div>
+                  <div className="campus-demographic-badge girls-badge" title="Girls enrolled">
+                    <span className="dot-circle-pink" />
+                    <span>Girls: <strong className="pink-highlight">{Number(s.girls_count || 0)}</strong></span>
+                  </div>
+                  <div className="campus-demographic-badge boys-badge" title="Boys enrolled">
+                    <span className="dot-circle-blue" />
+                    <span>Boys: <strong className="blue-highlight">{Number(s.boys_count || 0)}</strong></span>
+                  </div>
+                  <div className="campus-demographic-badge employees-badge" title="Total campus employees and faculty">
+                    <Briefcase size={15} />
+                    <span>Total Employees: <strong>{Number(s.total_employees || 0)}</strong></span>
                   </div>
                 </div>
 

@@ -68,8 +68,12 @@ def readiness(config):
    except (ValueError,TypeError) as exc:
     issues['reporting_periods']=f'Reporting period {idx+1}: {exc}'
     break
+ if isinstance(config.grading_policy,dict) and not config.grading_policy.get('description') and config.grading_policy.get('passing_percentage'):
+  config.grading_policy['description']=f"Minimum {config.grading_policy['passing_percentage']}% marks required to pass a grade."
  if not isinstance(config.grading_policy,dict) or not config.grading_policy.get('approach') or not config.grading_policy.get('description'):
   issues['grading_policy']='Describe the approved grading approach and its calculation basis'
+ if isinstance(config.attendance_policy,dict) and not config.attendance_policy.get('description') and config.attendance_policy.get('required_percentage'):
+  config.attendance_policy['description']=f"Minimum {config.attendance_policy['required_percentage']}% attendance required."
  if not isinstance(config.attendance_policy,dict) or not config.attendance_policy.get('recording_basis') or not config.attendance_policy.get('description'):
   issues['attendance_policy']='Describe eligible attendance opportunities and status handling'
  if not isinstance(config.school_settings,dict):issues['school_settings']='School-specific settings must be an object'
