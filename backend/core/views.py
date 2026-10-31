@@ -1,5 +1,5 @@
 from django.contrib.auth import authenticate,login,logout
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from datetime import date,timedelta
 from copy import copy
 from django.core.exceptions import ValidationError as ModelValidationError
@@ -736,8 +736,19 @@ class ScopedViewSet(viewsets.ModelViewSet):
  def destroy(self,request,*args,**kwargs):
   ensure_action(request.user,self.queryset.model,'delete')
   instance=self.get_object()
-  self.perform_destroy(instance)
-  return Response({'success':True,'detail':'Record deleted successfully'},status=status.HTTP_200_OK)
+  try:
+   self.perform_destroy(instance)
+   return Response({'success':True,'detail':'Record deleted successfully'},status=status.HTTP_200_OK)
+  except ProtectedError as exc:
+   protected = list(exc.protected_objects)
+   types = sorted({p.__class__.__name__ for p in protected})
+   return Response({'detail': f'Cannot delete {self.queryset.model.__name__} because active records exist ({", ".join(types)}). Please remove them first.'}, status=status.HTTP_400_BAD_REQUEST)
+  except IntegrityError as exc:
+   return Response({'detail': f'Cannot delete {self.queryset.model.__name__} due to database constraints: {str(exc)}'}, status=status.HTTP_400_BAD_REQUEST)
+  except Exception as exc:
+   if isinstance(exc, (APIValidationError, PermissionDenied)):
+    raise
+   return Response({'detail': f'Could not delete {self.queryset.model.__name__}: {str(exc)}'}, status=status.HTTP_400_BAD_REQUEST)
  @transaction.atomic
  def perform_create(self,serializer):
   user=self.request.user;model=self.queryset.model;data=serializer.validated_data
@@ -880,20 +891,29 @@ class ScopedViewSet(viewsets.ModelViewSet):
    ReviewCase.objects.filter(student=instance).delete()
    Enrollment.objects.filter(student=instance).delete()
   elif model is SchoolClass:
-   Enrollment.objects.filter(school_class=instance).delete()
-   Grade.objects.filter(assessment__school_class=instance).delete()
-   Assessment.objects.filter(school_class=instance).delete()
-   Attendance.objects.filter(school_class=instance).delete()
-   HomeworkSubmission.objects.filter(homework__school_class=instance).delete()
-   Homework.objects.filter(school_class=instance).delete()
+   ExamPaper.objects.filter(school_class=instance).delete()
+   ExamStudentMark.objects.filter(school_class=instance).delete()
+   CalculatedSubjectResult.objects.filter(school_class=instance).delete()
+   CalculatedStudentResult.objects.filter(school_class=instance).delete()
+   try:
+    instance.exam_structures.clear()
+   except Exception:
+    pass
+   ExamConfiguration.objects.filter(school_class=instance).update(school_class=None)
+   DiscussionThread.objects.filter(school_class=instance).delete()
+   ClassTimetable.objects.filter(school_class=instance).delete()
+   StudyMaterial.objects.filter(school_class=instance).delete()
    ClassSubjectTeacher.objects.filter(school_class=instance).delete()
    SubjectMessage.objects.filter(school_class=instance).delete()
    ClassTeacherAssignment.objects.filter(school_class=instance).delete()
    TeachingAssignment.objects.filter(school_class=instance).delete()
    FeeStructure.objects.filter(school_class=instance).delete()
-   ExamPaper.objects.filter(school_class=instance).delete()
-   ClassTimetable.objects.filter(school_class=instance).delete()
-   StudyMaterial.objects.filter(school_class=instance).delete()
+   Grade.objects.filter(assessment__school_class=instance).delete()
+   Assessment.objects.filter(school_class=instance).delete()
+   Attendance.objects.filter(school_class=instance).delete()
+   HomeworkSubmission.objects.filter(homework__school_class=instance).delete()
+   Homework.objects.filter(school_class=instance).delete()
+   Enrollment.objects.filter(school_class=instance).delete()
    Section.objects.filter(school_class=instance).delete()
    ClassSubject.objects.filter(school_class=instance).delete()
   elif model is AcademicYear:
@@ -952,7 +972,10 @@ class ScopedViewSet(viewsets.ModelViewSet):
    FinanceEntry.objects.filter(school=instance).delete()
    SchoolConfiguration.objects.filter(school=instance).delete()
    ReviewCase.objects.filter(school=instance).delete()
-  record_event(actor=user,action='delete',obj=instance)
+  try:
+   record_event(actor=user,action='delete',obj=instance)
+  except Exception:
+   pass
   try:
    instance.delete()
   except ProtectedError as exc:

@@ -1840,7 +1840,7 @@ function App() {
                           rows={() => filtered.map(r => {
                             const obj: Record<string, any> = {};
                             for (const col of effectiveColumns) {
-                              if (col.key === 'name') obj[col.key] = r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name;
+                              if (col.key === 'name') obj[col.key] = page === 'Students' ? (r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || '—') : (r.name || r.title || r.full_name || '—');
                               else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
                               else obj[col.key] = r[col.key] ?? '—';
                             }
@@ -1869,9 +1869,19 @@ function App() {
                               {j === 0 ? (
                                 <div className="student-label">
                                   <span className="student-avatar" style={{ background: dynColor[i % dynColor.length] + '18', color: dynColor[i % dynColor.length] }}>
-                                    {initials(String(c.key === 'name' ? r.full_name || `${r.first_name || ''} ${r.last_name || ''}` : r[c.key] || 'OO'))}
+                                    {initials(
+                                      String(
+                                        page === 'Students'
+                                          ? (r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || 'OO')
+                                          : (r[c.key] || r.name || r.title || r.full_name || 'OO')
+                                      )
+                                    )}
                                   </span>
-                                  <strong>{c.key === 'name' ? String(r.full_name || `${r.first_name} ${r.last_name}`) : String(r[c.key] || '—')}</strong>
+                                  <strong>
+                                    {page === 'Students'
+                                      ? String(r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || '—')
+                                      : String(r[c.key] ?? r.name ?? r.title ?? '—')}
+                                  </strong>
                                 </div>
                               ) : typeof r[c.key] === 'boolean' || ['status', 'priority'].includes(c.key) ? (
                                 <Pill value={r[c.key] as string | boolean} />
