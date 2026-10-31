@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowUpRight, CalendarDays, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X, BookOpen, KeyRound, Copy, Check } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, CalendarDays, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X, BookOpen, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import AttendanceCalendarModal, { CalendarTarget } from './AttendanceCalendarModal';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import { FilterBar } from './FilterBar';
@@ -22,6 +23,8 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
   const [action, setAction] = useState<Action | null>(null);
   const [feed, setFeed] = useState(false);
   const [viewTab, setViewTab] = useState<'directory' | 'attendance'>('directory');
+  const [calendarTarget, setCalendarTarget] = useState<CalendarTarget | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError('');
@@ -44,12 +47,18 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
   };
   const deleteStaff = async (s: R) => {
     if (!window.confirm(`Permanently delete staff member "${s.full_name}"? This removes their record and history.`)) return;
+    setDeletingId(s.id);
+    const prevRows = rows;
+    setRows(prev => prev.filter(r => r.id !== s.id));
     try {
       await request(`staff/${s.id}/`, { method: 'DELETE' });
       notify('Staff member deleted successfully');
       load();
     } catch (e) {
+      setRows(prevRows);
       setError(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -126,8 +135,9 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
                   {leader && <button className="hr-mini danger" onClick={() => setAction({ kind: 'terminate', staff: s })}><UserMinus size={13} /> Fire</button>}
                 </> : (leader ? <button className="hr-mini" onClick={() => reinstate(s)}><RotateCcw size={13} /> Reinstate</button> : null)}
                 {s.role === 'teacher' && <button className="hr-mini" title="Teaching assignments" onClick={() => setAction({ kind: 'assignments', staff: s })}><BookOpen size={13} /> Assignments</button>}
+                <button className="hr-mini" title="View attendance calendar" onClick={() => setCalendarTarget({ id: s.id, name: s.full_name, type: 'staff', roleOrClass: `${s.position || 'Staff'} (${nice(s.role)})`, emailOrRoll: s.email, campusName: s.school_name })}><CalendarDays size={13} /> Attendance</button>
                 <button className="hr-mini" onClick={() => setAction({ kind: 'history', staff: s })}><History size={13} /> History</button>
-                {leader && <button className="hr-mini danger" title="Permanently delete staff member" onClick={() => deleteStaff(s)}><Trash2 size={13} /> Delete</button>}
+                {leader && <button className="hr-mini danger" title="Permanently delete staff member" disabled={deletingId === s.id} onClick={() => deleteStaff(s)}><Trash2 size={13} /> {deletingId === s.id ? 'Deleting…' : 'Delete'}</button>}
               </td>
             </tr>
           ))}</tbody>
@@ -144,6 +154,7 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
       {action?.kind === 'terminate' && <Terminate s={action.staff} onClose={() => setAction(null)} onDone={() => done('Employment ended. Any login was switched off.')} />}
       {action?.kind === 'history' && <Timeline s={action.staff} onClose={() => setAction(null)} />}
       {action?.kind === 'assignments' && <TeachingAssignmentsModal s={action.staff} user={user} onClose={() => setAction(null)} onDone={() => done('Assignments updated')} />}
+      {calendarTarget && <AttendanceCalendarModal target={calendarTarget} onClose={() => setCalendarTarget(null)} />}
     </>
   );
 }
@@ -201,7 +212,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
 
   const [classes, setClasses] = useState<R[]>([]);
   const [subjects, setSubjects] = useState<R[]>([]);
-  const [createdCreds, setCreatedCreds] = useState<{ temp_pwd?: string; invite_url?: string } | null>(null);
+
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
@@ -288,15 +299,8 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
           }
         }
       }
-      const res: any = await request('staff/', { method: 'POST', body: JSON.stringify(payload) });
-      if (res?.temporary_password || res?.invitation_token || res?.invite_url) {
-        setCreatedCreds({
-          temp_pwd: res.temporary_password,
-          invite_url: res.invite_url || (res.invitation_token ? `/invitation/accept?token=${res.invitation_token}` : undefined)
-        });
-      } else {
-        onDone();
-      }
+      await request('staff/', { method: 'POST', body: JSON.stringify(payload) });
+      onDone();
     } catch (e: any) {
       setErr(e instanceof Error ? e.message : 'Failed to add staff member.');
     } finally {
@@ -304,64 +308,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
     }
   };
 
-  if (createdCreds) {
-    return (
-      <Modal title="Staff Login Credentials Generated" sub="Share these credentials securely with the staff member." onClose={onDone}>
-        <div style={{ padding: '16px 0' }}>
-          {createdCreds.temp_pwd ? (
-            <div style={{ background: '#fef3c7', padding: '16px', borderRadius: '10px', border: '1px solid #fde68a', marginBottom: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#92400e', marginBottom: '6px' }}>
-                Portal Credentials Configured:
-              </div>
-              <div style={{ fontSize: '12px', color: '#78350f', marginBottom: '8px' }}>
-                Sign-in Email: <strong>{f.email}</strong>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <code style={{ fontSize: '16px', fontWeight: 700, background: '#fff', padding: '6px 12px', borderRadius: '6px', border: '1px solid #fcd34d', color: '#b45309' }}>
-                  {createdCreds.temp_pwd}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => { navigator.clipboard.writeText(`Email: ${f.email}\nPassword: ${createdCreds.temp_pwd}`); setCopied(true); }}
-                  className="outline-btn"
-                  style={{ padding: '6px 10px' }}
-                >
-                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-              <p style={{ fontSize: '12px', color: '#b45309', margin: '8px 0 0' }}>
-                The staff member can now sign in immediately to their portal with this email and password, and change their password anytime via profile settings or email reset.
-              </p>
-            </div>
-          ) : (
-            <div style={{ background: '#ede9fe', padding: '16px', borderRadius: '10px', border: '1px solid #ddd6fe', marginBottom: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#5b21b6', marginBottom: '6px' }}>
-                Secure Invitation Link (Single-use, 72h expiry):
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input
-                  readOnly
-                  value={window.location.origin + (createdCreds.invite_url || '')}
-                  style={{ flex: 1, padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #c4b5fd', background: '#fff' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => { navigator.clipboard.writeText(window.location.origin + (createdCreds.invite_url || '')); setCopied(true); }}
-                  className="outline-btn"
-                  style={{ padding: '6px 10px' }}
-                >
-                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="modal-footer" style={{ marginTop: '20px' }}>
-            <button type="button" className="primary-btn" onClick={onDone}>Done</button>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
+
 
   return (
     <Modal title="Add staff member" sub="Creates an HR employment record, salary assignment, and optional portal login." onClose={onClose}>
@@ -743,12 +690,39 @@ function EditStaff({ s, roles, leader, onClose, onDone }: { s: R; roles: string[
     email: s.email || '',
     phone: s.phone || '',
   });
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [sendEmail, setSendEmail] = useState(true);
+  const [copied, setCopied] = useState(false);
+
   const { err, busy, submit } = useSubmit(`staff/${s.id}/`, onDone);
   const set = (k: string, v: string) => setF(prev => ({ ...prev, [k]: v }));
 
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789#@!$*&';
+    let pwd = '';
+    const array = new Uint8Array(12);
+    window.crypto.getRandomValues(array);
+    for (let i = 0; i < 12; i++) {
+      pwd += chars[array[i] % chars.length];
+    }
+    setNewPassword(pwd);
+    setShowPassword(true);
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload: Record<string, any> = { ...f };
+    if (newPassword.trim()) {
+      payload.password = newPassword.trim();
+      payload.send_email = sendEmail;
+    }
+    submit(payload, 'PATCH');
+  };
+
   return (
-    <Modal title={`Edit ${s.full_name}`} sub="Update staff position, details or contact information." onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); submit(f, 'PATCH'); }}>
+    <Modal title={`Edit ${s.full_name}`} sub="Update staff position, details or login credentials." onClose={onClose}>
+      <form onSubmit={handleSave}>
         <div className="modal-fields hr-fields">
           <label>First name *<input required value={f.first_name} onChange={e => set('first_name', e.target.value)} /></label>
           <label>Last name *<input required value={f.last_name} onChange={e => set('last_name', e.target.value)} /></label>
@@ -758,6 +732,81 @@ function EditStaff({ s, roles, leader, onClose, onDone }: { s: R; roles: string[
           <label>Email<input type="email" value={f.email} onChange={e => set('email', e.target.value)} /></label>
           <label>Phone<input value={f.phone} onChange={e => set('phone', e.target.value)} /></label>
         </div>
+
+        {/* Portal Credentials Section */}
+        <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <KeyRound size={16} color="#6366f1" />
+              <strong style={{ fontSize: '13px', color: '#1e293b' }}>Portal Credentials &amp; Access</strong>
+            </div>
+            <span className={`pill ${s.has_login ? 'green' : 'amber'}`}>
+              <i className="pill-dot" /> {s.has_login ? 'Active Login' : 'No Login Assigned'}
+            </span>
+          </div>
+
+          <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
+            Sign-in Email / Username: <strong style={{ color: '#0f172a' }}>{s.login_email || s.username || s.email || f.email || 'None'}</strong>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
+              Reset Password (leave empty to keep current)
+            </label>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="Enter new password (min 8 chars)"
+                style={{ flex: 1, padding: '7px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
+              />
+              <button
+                type="button"
+                className="outline-btn"
+                style={{ fontSize: '11px', padding: '6px 10px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}
+                onClick={generatePassword}
+              >
+                <RefreshCw size={12} /> Generate
+              </button>
+              <button
+                type="button"
+                className="outline-btn"
+                style={{ fontSize: '11px', padding: '6px 8px' }}
+                onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
+          </div>
+
+          {newPassword && (
+            <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <label style={{ fontSize: '12px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', margin: 0, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={sendEmail}
+                  onChange={e => setSendEmail(e.target.checked)}
+                />
+                Send new password to staff member's email
+              </label>
+              <button
+                type="button"
+                className="outline-btn"
+                style={{ fontSize: '11px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                onClick={() => {
+                  navigator.clipboard.writeText(`Email: ${s.login_email || s.username || s.email || f.email}\nPassword: ${newPassword}`);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </div>
+
         {err && <div className="hr-error" style={{ margin: '14px 0 0' }}>{err}</div>}
         <div className="modal-footer hr-modal-foot">
           <button type="button" className="outline-btn" onClick={onClose}>Cancel</button>

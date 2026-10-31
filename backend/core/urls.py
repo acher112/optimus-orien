@@ -32,6 +32,7 @@ for name, view in [
 urlpatterns = [
     # Attendance Registers (Class/Student & Staff)
     path('attendance/class-register/', attendance_views.class_attendance_register),
+    path('attendance/history/', attendance_views.attendance_history),
 
     # Staff HR & Lifecycle
     path('staff/', staff.staff_list),

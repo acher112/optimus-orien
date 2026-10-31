@@ -199,3 +199,145 @@ def class_attendance_register(request):
         'conducted_by': actor_name,
         'is_conducted': True,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def attendance_history(request):
+    """
+    Returns monthly attendance history with per-date status and monthly statistics
+    for a student or staff member.
+    """
+    user = request.user
+    target_type = (request.query_params.get('type') or 'student').lower().strip()
+    target_id = request.query_params.get('id')
+    if not target_id:
+        raise ValidationError({'id': 'User ID is required.'})
+
+    today = date.today()
+    try:
+        year = int(request.query_params.get('year') or today.year)
+        month = int(request.query_params.get('month') or today.month)
+        if not (1 <= month <= 12):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise ValidationError({'month': 'Invalid month or year.'})
+
+    if target_type == 'student':
+        from core.models import Student
+        try:
+            student = Student.objects.select_related('school').get(pk=target_id)
+        except Student.DoesNotExist:
+            raise NotFound('Student not found.')
+
+        if not user.is_superuser and user.role != 'organisation_admin':
+            if student.school_id != user.school_id and getattr(user, 'student_profile_id', None) != student.id:
+                raise PermissionDenied('Access denied to this student.')
+
+        enrollment = Enrollment.objects.filter(student=student).select_related('school_class').order_by('-start_date').first()
+        class_name = enrollment.school_class.display_name if enrollment and enrollment.school_class else 'Unassigned'
+
+        records_qs = Attendance.objects.filter(
+            student=student,
+            date__year=year,
+            date__month=month
+        ).order_by('date')
+
+        records = [
+            {
+                'date': a.date.isoformat(),
+                'status': a.status,
+                'note': a.note or '',
+            }
+            for a in records_qs
+        ]
+
+        total_days = len(records)
+        present_cnt = sum(1 for r in records if r['status'] == 'present')
+        late_cnt = sum(1 for r in records if r['status'] == 'late')
+        absent_cnt = sum(1 for r in records if r['status'] == 'absent')
+        excused_cnt = sum(1 for r in records if r['status'] in ('excused', 'leave'))
+        denom = max(total_days - excused_cnt, 0)
+        rate = round(((present_cnt + late_cnt) / denom * 100), 1) if denom > 0 else (100.0 if total_days == 0 else 0.0)
+
+        return Response({
+            'user_info': {
+                'id': student.id,
+                'name': student.full_name,
+                'type': 'student',
+                'admission_number': student.admission_number,
+                'role_or_class': class_name,
+                'gender': getattr(student, 'gender', ''),
+                'school_name': student.school.name
+            },
+            'year': year,
+            'month': month,
+            'records': records,
+            'summary': {
+                'total_days': total_days,
+                'present': present_cnt,
+                'late': late_cnt,
+                'absent': absent_cnt,
+                'excused': excused_cnt,
+                'attendance_rate': rate
+            }
+        })
+
+    elif target_type in ('staff', 'employee'):
+        from core.models import StaffMember, StaffAttendance
+        try:
+            staff = StaffMember.objects.select_related('school').get(pk=target_id)
+        except StaffMember.DoesNotExist:
+            raise NotFound('Staff member not found.')
+
+        if not user.is_superuser and user.role != 'organisation_admin':
+            if staff.school_id != user.school_id and staff.user_id != user.id:
+                raise PermissionDenied('Access denied to this staff member.')
+
+        records_qs = StaffAttendance.objects.filter(
+            staff=staff,
+            date__year=year,
+            date__month=month
+        ).order_by('date')
+
+        records = [
+            {
+                'date': a.date.isoformat(),
+                'status': a.status,
+                'note': a.note or '',
+            }
+            for a in records_qs
+        ]
+
+        total_days = len(records)
+        present_cnt = sum(1 for r in records if r['status'] == 'present')
+        late_cnt = sum(1 for r in records if r['status'] == 'late')
+        absent_cnt = sum(1 for r in records if r['status'] == 'absent')
+        excused_cnt = sum(1 for r in records if r['status'] in ('excused', 'leave'))
+        denom = max(total_days - excused_cnt, 0)
+        rate = round(((present_cnt + late_cnt) / denom * 100), 1) if denom > 0 else (100.0 if total_days == 0 else 0.0)
+
+        return Response({
+            'user_info': {
+                'id': staff.id,
+                'name': staff.full_name,
+                'type': 'staff',
+                'email': staff.email,
+                'role_or_class': f"{staff.position or 'Staff'} ({staff.role})",
+                'role': staff.role,
+                'school_name': staff.school.name
+            },
+            'year': year,
+            'month': month,
+            'records': records,
+            'summary': {
+                'total_days': total_days,
+                'present': present_cnt,
+                'late': late_cnt,
+                'absent': absent_cnt,
+                'excused': excused_cnt,
+                'attendance_rate': rate
+            }
+        })
+    else:
+        raise ValidationError({'type': "Type must be 'student' or 'staff'."})

@@ -4,6 +4,7 @@ import {
   RefreshCw, Save, Users, AlertCircle, Check
 } from 'lucide-react';
 import { list, request, type User } from './api';
+import AttendanceCalendarModal, { CalendarTarget } from './AttendanceCalendarModal';
 
 type StatusType = 'present' | 'absent' | 'late' | 'excused' | 'not_taken';
 
@@ -61,6 +62,7 @@ export default function StaffAttendanceRegister({
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [dirty, setDirty] = useState<boolean>(false);
+  const [calendarTarget, setCalendarTarget] = useState<CalendarTarget | null>(null);
 
   useEffect(() => {
     list<any>('schools').then(res => {
@@ -382,7 +384,17 @@ export default function StaffAttendanceRegister({
                   <tr key={r.staff_id}>
                     <td style={{ color: '#94a3b8', fontSize: 12 }}>{idx + 1}</td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+                        onClick={() => setCalendarTarget({
+                          id: r.staff_id,
+                          name: r.staff_name,
+                          type: 'staff',
+                          roleOrClass: `${r.position || 'Staff'} (${r.role})`,
+                          emailOrRoll: r.email,
+                        })}
+                        title="Click to view full attendance calendar"
+                      >
                         <div style={{
                           width: 32,
                           height: 32,
@@ -398,7 +410,10 @@ export default function StaffAttendanceRegister({
                           {initials}
                         </div>
                         <div>
-                          <strong>{r.staff_name}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <strong style={{ color: '#1e293b' }}>{r.staff_name}</strong>
+                            <CalendarDays size={13} color="#6366f1" />
+                          </div>
                           {r.email && <div style={{ fontSize: 11, color: '#64748b' }}>{r.email}</div>}
                         </div>
                       </div>
@@ -490,6 +505,12 @@ export default function StaffAttendanceRegister({
             </tbody>
           </table>
         </div>
+      )}
+      {calendarTarget && (
+        <AttendanceCalendarModal
+          target={calendarTarget}
+          onClose={() => setCalendarTarget(null)}
+        />
       )}
     </section>
   );

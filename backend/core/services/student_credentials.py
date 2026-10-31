@@ -33,14 +33,13 @@ def generate_temporary_password(length=12):
 
 def generate_student_username(school, admission_number):
     """
-    Generates a unique, readable system username: <campus code>-<admission number>.
-    E.g. NC-2026-0412.
+    Generates a unique, readable system username in format: OO-STU-(Number).
+    E.g. OO-STU-23.
     """
-    code = (school.code or 'SCH').strip().upper()
     adm = re.sub(r'[^A-Za-z0-9_-]', '', (admission_number or '').strip())
     if not adm:
         adm = secrets.token_hex(3).upper()
-    base_username = f"{code}-{adm}"
+    base_username = f"OO-STU-{adm}"
     username = base_username
     suffix = 1
     while User.objects.filter(username__iexact=username).exists():

@@ -53,7 +53,7 @@ def _row(s):
             'teacher_type': getattr(s, 'teacher_type', '') or (s.compute_teacher_type() if s.user_id and s.role == 'teacher' else ''),
             'status': s.status, 'hired_on': s.hired_on, 'terminated_on': s.terminated_on,
             'school': s.school_id, 'school_name': s.school.name,
-            'has_login': bool(s.user_id), 'username': s.user.username if s.user_id else None}
+            'has_login': bool(s.user_id), 'username': s.user.username if s.user_id else None, 'login_email': s.user.email if s.user_id and s.user.email else (s.email or '')}
 
 
 def _event_row(e):
@@ -448,6 +448,55 @@ def staff_list(request):
                 )
 
         record_event(actor=user, action='create', obj=s)
+
+    recipient_email = (link.email if link else None) or s.email
+    if recipient_email:
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings
+            base_fe = getattr(settings, 'FRONTEND_URL', 'https://optimus-orien.vercel.app').rstrip('/')
+            if temporary_pwd:
+                subject = f"Your Login Credentials for {school.name} - Optimus Orien"
+                message = (
+                    f"Hello {s.full_name},\n\n"
+                    f"A staff account has been created for you at {school.name}.\n\n"
+                    f"Your login credentials:\n"
+                    f"Portal: {base_fe}/login\n"
+                    f"Sign-in Email / Username: {recipient_email}\n"
+                    f"Password: {temporary_pwd}\n\n"
+                    f"Please keep your credentials secure.\n\n"
+                    f"Best regards,\n"
+                    f"{school.name} Administration"
+                )
+                send_mail(
+                    subject,
+                    message,
+                    getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@optimus-orien.com'),
+                    [recipient_email],
+                    fail_silently=True,
+                )
+            elif invitation_token:
+                full_invite = f"{base_fe}{invite_url}" if str(invite_url).startswith('/') else str(invite_url)
+                subject = f"Invitation to join {school.name} - Optimus Orien"
+                message = (
+                    f"Hello {s.full_name},\n\n"
+                    f"You have been invited to access the staff portal for {school.name}.\n\n"
+                    f"Please click the link below to set up your password:\n"
+                    f"{full_invite}\n\n"
+                    f"This link expires in 72 hours.\n\n"
+                    f"Best regards,\n"
+                    f"{school.name} Administration"
+                )
+                send_mail(
+                    subject,
+                    message,
+                    getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@optimus-orien.com'),
+                    [recipient_email],
+                    fail_silently=True,
+                )
+        except Exception as mail_err:
+            logger.warning(f"Failed sending staff credential email: {mail_err}")
+
     payload = _row(s)
     if temporary_pwd:
         payload['temporary_password'] = temporary_pwd
@@ -467,9 +516,25 @@ def staff_detail(request, pk):
         if s.role in LEADERSHIP and not user.is_superuser and user.role not in ('organisation_admin', 'school_admin'):
             raise PermissionDenied('Only an organisation or school administrator can delete a leader')
         with transaction.atomic():
-            s.events.all().delete()
-            record_event(actor=user, action='delete', obj=s)
+            from core.models import SalaryRecord, SalaryStructure, SalaryAdjustment, StaffAttendance, TeachingAssignment, ClassTeacherAssignment, RoleAssignment, StaffEvent
+            SalaryAdjustment.objects.filter(staff=s).delete()
+            SalaryRecord.objects.filter(staff=s).delete()
+            SalaryStructure.objects.filter(staff=s).delete()
+            StaffAttendance.objects.filter(staff=s).delete()
+            StaffEvent.objects.filter(staff=s).delete()
+            linked_user = s.user
+            if linked_user:
+                TeachingAssignment.objects.filter(teacher=linked_user).delete()
+                ClassTeacherAssignment.objects.filter(teacher=linked_user).delete()
+                RoleAssignment.objects.filter(user=linked_user).delete()
+                linked_user.is_active = False
+                linked_user.save(update_fields=['is_active'])
             s.delete()
+            if linked_user:
+                try:
+                    linked_user.delete()
+                except Exception:
+                    pass
         return Response({'success': True, 'detail': 'Staff member deleted.'})
     if request.method == 'PATCH':
         _own_record(user, s)
@@ -493,6 +558,75 @@ def staff_detail(request, pk):
         if changed:
             s.save(update_fields=changed)
             _log(s, 'updated', user, note='Updated: ' + ', '.join(changed))
+
+        if 'password' in request.data and str(request.data.get('password') or '').strip():
+            new_pwd = str(request.data['password']).strip()
+            send_email_flag = request.data.get('send_email', True)
+            if len(new_pwd) < 8:
+                raise ValidationError({'password': 'Password must be at least 8 characters.'})
+            from django.contrib.auth.password_validation import validate_password
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_password(new_pwd)
+            except DjangoValidationError as ve:
+                raise ValidationError({'password': ' '.join(ve.messages)})
+
+            link = s.user
+            if not link:
+                uname = s.email or f"{s.first_name.lower()}_{s.last_name.lower()}_{s.school_id}"
+                suffix = 1
+                orig = uname
+                while User.objects.filter(username=uname).exists():
+                    uname = f"{orig}_{suffix}"
+                    suffix += 1
+                link = User.objects.create(
+                    username=uname,
+                    email=s.email or '',
+                    first_name=s.first_name,
+                    last_name=s.last_name,
+                    role=s.role if s.role in LOGIN_ROLES else 'teacher',
+                    school=s.school,
+                    organisation=s.school.organisation,
+                    is_active=True
+                )
+                s.user = link
+                s.save(update_fields=['user'])
+
+            link.set_password(new_pwd)
+            if s.email and link.email != s.email:
+                link.email = s.email
+                link.username = s.email
+            link.save()
+            _log(s, 'password_reset', user, note='Password was reset')
+            record_event(actor=user, action='reset_password', obj=link)
+
+            recipient = link.email or s.email
+            if send_email_flag and recipient:
+                try:
+                    from django.core.mail import send_mail
+                    from django.conf import settings
+                    base_fe = getattr(settings, 'FRONTEND_URL', 'https://optimus-orien.vercel.app').rstrip('/')
+                    subject = f"Your Password Has Been Updated - {s.school.name}"
+                    message = (
+                        f"Hello {s.full_name},\n\n"
+                        f"Your portal password for {s.school.name} has been updated.\n\n"
+                        f"Sign-in Email / Username: {recipient}\n"
+                        f"New Password: {new_pwd}\n"
+                        f"Portal Link: {base_fe}/login\n\n"
+                        f"Please sign in with your new credentials.\n\n"
+                        f"Best regards,\n"
+                        f"{s.school.name} Administration"
+                    )
+                    send_mail(
+                        subject,
+                        message,
+                        getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@optimus-orien.com'),
+                        [recipient],
+                        fail_silently=True,
+                    )
+                except Exception as mail_err:
+                    logger.warning(f"Failed sending password reset email: {mail_err}")
+
     return Response({**_row(s), 'history': [_event_row(e) for e in s.events.select_related('actor')]})
 
 

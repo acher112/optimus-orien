@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { list, request, type User } from './api';
 import StaffAttendanceRegister from './StaffAttendanceRegister';
+import AttendanceCalendarModal, { CalendarTarget } from './AttendanceCalendarModal';
 
 type StudentStatusType = 'present' | 'absent' | 'late' | 'excused' | 'not_taken';
 
@@ -92,6 +93,7 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
   const [dirty, setDirty] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent' | 'late' | 'not_taken'>('all');
+  const [calendarTarget, setCalendarTarget] = useState<CalendarTarget | null>(null);
 
   // Load campus list if org admin
   useEffect(() => {
@@ -726,7 +728,18 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
                         <tr key={r.student_id}>
                           <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{idx + 1}</td>
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+                              onClick={() => setCalendarTarget({
+                                id: r.student_id,
+                                name: r.student_name,
+                                type: 'student',
+                                roleOrClass: classInfo.name ? `${classInfo.name} ${classInfo.section || ''}`.trim() : undefined,
+                                emailOrRoll: `Roll: ${r.admission_number}`,
+                                gender: r.gender
+                              })}
+                              title="Click to view full attendance calendar"
+                            >
                               <div style={{
                                 width: 34,
                                 height: 34,
@@ -742,7 +755,10 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
                                 {initials}
                               </div>
                               <div>
-                                <strong style={{ fontSize: '0.9rem' }}>{r.student_name}</strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{r.student_name}</strong>
+                                  <CalendarDays size={13} color="#6366f1" />
+                                </div>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
                                   Roll: <code>{r.admission_number}</code> {r.gender ? `· ${r.gender}` : ''}
                                 </div>
@@ -843,6 +859,12 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
             )}
           </section>
         </div>
+      )}
+      {calendarTarget && (
+        <AttendanceCalendarModal
+          target={calendarTarget}
+          onClose={() => setCalendarTarget(null)}
+        />
       )}
     </div>
   );

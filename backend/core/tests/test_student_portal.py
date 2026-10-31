@@ -121,7 +121,7 @@ class StudentPortalTests(TestCase):
         receipt = res.data['receipt']
         self.assertEqual(receipt['school_name'], 'North Campus')
         self.assertEqual(receipt['class_teacher_name'], 'John Doe')
-        self.assertTrue(receipt['username'].startswith('NC-2026-001'))
+        self.assertTrue(receipt['username'].startswith('OO-STU-2026-001'))
         self.assertTrue(len(receipt['temporary_password']) >= 10)
 
         # Verify linked User exists and requires password change
