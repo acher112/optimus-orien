@@ -530,6 +530,12 @@ def exam_marks_grid(request, paper_id):
                 grade.feedback = feedback
                 grade.save(update_fields=['marks', 'result_status', 'feedback'])
 
+            try:
+                from core.services.risk_alerts import check_and_notify_grade_risk
+                check_and_notify_grade_risk(student, grade, paper.assessment)
+            except Exception:
+                pass
+
             updated_count += 1
 
         record_event(actor=user, action='update_marks', obj=paper)

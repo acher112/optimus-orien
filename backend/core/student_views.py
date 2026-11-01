@@ -14,7 +14,7 @@ from rest_framework.exceptions import PermissionDenied, NotFound, ValidationErro
 
 from core.models import (
     Student, SchoolClass, Enrollment, Attendance, Notification,
-    AcademicYear, Homework, User, ClassTeacherAssignment, AuditEvent
+    AcademicYear, Homework, User, ClassTeacherAssignment, AuditEvent, Grade
 )
 from core.services.access import students_scope
 from core.services.teacher_scope import get_teacher_scope
@@ -60,8 +60,16 @@ def _resolve_student_for_user(request, student_id=None):
     if not student_id:
         raise ValidationError({"detail": "Student ID is required."})
 
-    s_scope = students_scope(user)
-    student = s_scope.filter(id=student_id).select_related('school', 'school__organisation').first()
+    student = None
+    if user.is_superuser:
+        student = Student.objects.filter(id=student_id).select_related('school', 'school__organisation').first()
+    elif user.role == 'organisation_admin':
+        student = Student.objects.filter(school__organisation_id=user.organisation_id, id=student_id).select_related('school', 'school__organisation').first()
+    elif user.role in ('principal', 'school_admin'):
+        student = Student.objects.filter(school_id=user.school_id, id=student_id).select_related('school', 'school__organisation').first()
+    elif user.role == 'teacher':
+        student = Student.objects.filter(school_id=user.school_id, id=student_id).select_related('school', 'school__organisation').first()
+
     if not student:
         raise Http404("Student record not found.")
     return student
@@ -451,7 +459,8 @@ def student_results(request):
     profile = get_student_aqi_profile(aqi_sc, student.id, academic_year_id=ay_id)
 
     # Respect school.students_can_see_grade_level_average
-    if not student.school.students_can_see_grade_level_average:
+    can_see_gl = getattr(student.school, 'students_can_see_grade_level_average', False) if student.school else False
+    if not can_see_gl:
         profile['grade_level_average'] = None
         profile['campus_average'] = None
         profile['can_see_grade_level_average'] = False
@@ -491,16 +500,119 @@ def student_results(request):
 @permission_classes([IsAuthenticated])
 def student_profile(request):
     """
-    Student profile details (read-only for student/parent).
+    Unified 360-degree Student Profile for admin, principals, teachers, and students/parents:
+    Includes identity, parental details, academic results & AQI performance,
+    recent assessment grades, and full attendance overview.
     """
     student_id = request.query_params.get('student_id')
     student = _resolve_student_for_user(request, student_id)
 
-    active_enr = student.enrollments.filter(end_date__isnull=True).select_related('school_class').first()
+    active_enr = student.enrollments.filter(end_date__isnull=True).select_related('school_class__academic_year', 'school_class__school').first()
     school_class = active_enr.school_class if active_enr else None
     class_display = school_class.display_name if school_class and hasattr(school_class, 'display_name') else (
         f"{school_class.name} - {school_class.section}" if school_class and school_class.section else (school_class.name if school_class else 'Unassigned')
     )
+
+    # Class Teacher
+    teacher_name = "Not assigned yet"
+    if school_class:
+        cta = ClassTeacherAssignment.objects.filter(school_class=school_class).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=timezone.localdate())
+        ).select_related('teacher').first()
+        if cta and cta.teacher:
+            staff_rec = getattr(cta.teacher, 'staff_record', None)
+            if staff_rec and (staff_rec.first_name or staff_rec.last_name):
+                teacher_name = f"{staff_rec.first_name} {staff_rec.last_name}".strip()
+            else:
+                teacher_name = cta.teacher.get_full_name() or cta.teacher.username
+
+    # Academic Year
+    ay_name = "Current Academic Year"
+    if school_class and school_class.academic_year:
+        ay_name = school_class.academic_year.name
+    else:
+        ay = AcademicYear.objects.filter(school=student.school, active=True).first()
+        if ay:
+            ay_name = ay.name
+
+    # Attendance Summary
+    att_records = Attendance.objects.filter(student=student)
+    held_days = att_records.count()
+    present_cnt = att_records.filter(status='present').count()
+    late_cnt = att_records.filter(status='late').count()
+    absent_cnt = att_records.filter(status='absent').count()
+    leave_cnt = att_records.filter(status__in=['leave', 'excused']).count()
+    denominator = max(held_days - leave_cnt, 0)
+    attended = present_cnt + late_cnt
+    att_rate = round((attended / denominator * 100), 1) if denominator > 0 else 100.0
+
+    # Academic Performance & AQI Profile
+    academic_summary = {
+        'overall_percentage': None,
+        'class_average': None,
+        'difference': None,
+        'difference_text': None,
+        'status': 'pending',
+        'subjects': [],
+        'boys_class_average': None,
+        'girls_class_average': None,
+    }
+    try:
+        aqi_sc = aqi_scope(request.user)
+        aqi_prof = get_student_aqi_profile(aqi_sc, student.id)
+        if aqi_prof:
+            subjects = aqi_prof.get('subjects', [])
+            for s in subjects:
+                pct = s.get('final_percentage')
+                if pct is not None:
+                    if pct >= 75.0:
+                        s['risk_level'] = 'secure'
+                        s['risk_label'] = 'Secure'
+                        s['risk_color'] = '#10b981'
+                        s['guidance'] = 'Strong performance across assessments. Keep up the consistent effort!'
+                    elif pct >= 60.0:
+                        s['risk_level'] = 'progressing'
+                        s['risk_label'] = 'Progressing'
+                        s['risk_color'] = '#f59e0b'
+                        s['guidance'] = 'Consistent progress. Focus revision on weaker topic areas to advance.'
+                    else:
+                        s['risk_level'] = 'needs_support'
+                        s['risk_label'] = 'Needs Support'
+                        s['risk_color'] = '#ef4444'
+                        s['guidance'] = 'Focus area: review core concepts and practice sessions with your teacher.'
+                else:
+                    s['risk_level'] = 'no_marks'
+                    s['risk_label'] = 'Pending'
+                    s['risk_color'] = '#94a3b8'
+                    s['guidance'] = 'No assessment marks published yet.'
+
+            academic_summary = {
+                'overall_percentage': aqi_prof.get('overall_percentage'),
+                'class_average': aqi_prof.get('class_average'),
+                'difference': aqi_prof.get('difference'),
+                'difference_text': aqi_prof.get('difference_text'),
+                'status': aqi_prof.get('status', 'pending'),
+                'subjects': subjects,
+                'boys_class_average': aqi_prof.get('boys_class_average'),
+                'girls_class_average': aqi_prof.get('girls_class_average'),
+            }
+    except Exception:
+        pass
+
+    # Recent assessment grades
+    recent_grades = []
+    grades = Grade.objects.filter(student=student).select_related('assessment__subject').order_by('-assessment__date')[:8]
+    for g in grades:
+        max_m = g.assessment.max_marks or 100
+        pct = round((g.marks / max_m * 100), 1) if max_m else None
+        recent_grades.append({
+            'assessment_title': g.assessment.title,
+            'subject_name': g.assessment.subject.name if g.assessment.subject else 'General',
+            'marks': float(g.marks),
+            'max_marks': float(max_m),
+            'percentage': pct,
+            'date': g.assessment.date.isoformat() if g.assessment.date else None
+        })
 
     guardians = []
     for g in student.guardians.all():
@@ -522,13 +634,31 @@ def student_profile(request):
         'gender': student.gender,
         'date_of_birth': student.date_of_birth.isoformat() if student.date_of_birth else None,
         'enrolled_on': student.enrolled_on.isoformat() if student.enrolled_on else None,
+        'school_id': student.school_id,
         'school_name': student.school.name,
         'school_code': student.school.code,
+        'class_id': school_class.id if school_class else None,
         'class_name': class_display,
         'section': school_class.section if school_class else '',
-        'username': student.user.username if student.user else None,
+        'class_teacher_name': teacher_name,
+        'academic_year': ay_name,
+        'active': student.active,
         'guardians': guardians,
-        'must_change_password': getattr(student.user, 'must_change_password', False) if student.user else False
+        'username': student.user.username if student.user else None,
+        'has_account': bool(student.user),
+        'must_change_password': getattr(student.user, 'must_change_password', False) if student.user else False,
+        'attendance_summary': {
+            'rate': att_rate,
+            'attended_days': attended,
+            'held_days': held_days,
+            'present_count': present_cnt,
+            'late_count': late_cnt,
+            'absent_count': absent_cnt,
+            'leave_count': leave_cnt,
+            'formula': f"{attended} of {denominator} days attended ({att_rate}%)"
+        },
+        'academic_summary': academic_summary,
+        'recent_grades': recent_grades,
     })
 
 

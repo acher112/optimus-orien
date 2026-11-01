@@ -3,7 +3,7 @@ import {
   Users, ClipboardCheck, Award, AlertCircle, RefreshCw,
   Search, ShieldAlert, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, Filter, UserCheck, AlertTriangle, Eye, X, BookOpen,
-  TrendingUp, TrendingDown, Clock, HelpCircle, Layers, KeyRound, Phone
+  TrendingUp, TrendingDown, Clock, HelpCircle, Layers, KeyRound, Phone, User as UserIcon
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend
@@ -669,7 +669,29 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
                           {st.rank ? `#${st.rank}` : '—'}
                         </td>
                         <td style={{ padding: '12px 12px' }}>
-                          <div style={{ fontWeight: 600, color: '#2563eb' }}>{st.full_name}</div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: st.id } }));
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              margin: 0,
+                              font: 'inherit',
+                              fontWeight: 600,
+                              color: '#2563eb',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              textDecoration: 'underline',
+                              textDecorationColor: '#bfdbfe'
+                            }}
+                            title="Click to view 360° student profile"
+                          >
+                            {st.full_name}
+                          </button>
                           <div style={{ fontSize: 11, color: '#64748b' }}>{st.admission_number}</div>
                         </td>
                         <td style={{ padding: '12px 12px', color: '#334155' }}>
@@ -1020,6 +1042,29 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
                 </h2>
                 <div style={{ fontSize: 13, color: '#64748b' }}>
                   Admission ID: <b>{detailStudent.admission_number}</b> • Class Rank: <b>#{detailStudent.rank || '—'}</b>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: detailStudent.id } }));
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: '#4f46e5',
+                      border: 'none',
+                      color: '#ffffff',
+                      padding: '5px 12px',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <UserIcon size={13} /> View 360° Comprehensive Profile
+                  </button>
                 </div>
               </div>
               <button

@@ -515,13 +515,22 @@ def compute_student_full_profile(
             'student_name': student.full_name,
             'admission_number': student.admission_number,
             'gender': student.gender,
-            'campus_name': student.school.name,
+            'campus_name': student.school.name if student.school else '',
+            'class_id': None,
             'class_name': 'Unassigned',
+            'academic_year': '',
             'overall_percentage': None,
             'class_average': None,
             'difference': None,
+            'difference_text': None,
+            'status': 'pending',
             'subjects': [],
-            'status': 'pending'
+            'boys_class_average': None,
+            'boys_count': 0,
+            'girls_class_average': None,
+            'girls_count': 0,
+            'gender_gap_pp': None,
+            'eligible_class_students': 0
         }
 
     school_class = active_enr.school_class
@@ -1094,19 +1103,22 @@ def get_student_aqi_profile(
 
     if scope.role in ('student', 'parent'):
         min_size = scope.min_group_size
-        if profile['boys_count'] < min_size:
+        boys_cnt = profile.get('boys_count', 0)
+        if boys_cnt < min_size:
             profile['boys_class_average'] = None
             profile['boys_privacy_notice'] = "Not enough students to show"
         else:
             profile['boys_privacy_notice'] = None
 
-        if profile['girls_count'] < min_size:
+        girls_cnt = profile.get('girls_count', 0)
+        if girls_cnt < min_size:
             profile['girls_class_average'] = None
             profile['girls_privacy_notice'] = "Not enough students to show"
         else:
             profile['girls_privacy_notice'] = None
 
-        if profile['eligible_class_students'] < min_size:
+        elig_cnt = profile.get('eligible_class_students', 0)
+        if elig_cnt < min_size:
             profile['class_average'] = None
             profile['class_privacy_notice'] = "Not enough students to show"
             profile['difference'] = None
@@ -1114,12 +1126,12 @@ def get_student_aqi_profile(
         else:
             profile['class_privacy_notice'] = None
 
-    profile['overall_percentage'] = round_display(profile['overall_percentage'])
-    profile['class_average'] = round_display(profile['class_average'])
-    profile['difference'] = round_display(profile['difference'])
-    profile['boys_class_average'] = round_display(profile['boys_class_average'])
-    profile['girls_class_average'] = round_display(profile['girls_class_average'])
-    profile['gender_gap_pp'] = round_display(profile['gender_gap_pp'])
+    profile['overall_percentage'] = round_display(profile.get('overall_percentage'))
+    profile['class_average'] = round_display(profile.get('class_average'))
+    profile['difference'] = round_display(profile.get('difference'))
+    profile['boys_class_average'] = round_display(profile.get('boys_class_average'))
+    profile['girls_class_average'] = round_display(profile.get('girls_class_average'))
+    profile['gender_gap_pp'] = round_display(profile.get('gender_gap_pp'))
 
     for s in profile.get('subjects', []):
         s['final_percentage'] = round_display(s.get('final_percentage'))

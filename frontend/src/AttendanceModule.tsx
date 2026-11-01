@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ClipboardCheck, Users, CalendarDays, CheckCircle2, Clock,
   AlertTriangle, XCircle, RefreshCw, Save, Check, Search,
-  ChevronRight, ArrowRight, UserCheck, Filter, AlertCircle
+  ChevronRight, ArrowRight, UserCheck, Filter, AlertCircle, User as UserIcon
 } from 'lucide-react';
 import { list, request, type User } from './api';
 import StaffAttendanceRegister from './StaffAttendanceRegister';
@@ -757,7 +757,30 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
                               <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{r.student_name}</strong>
-                                  <CalendarDays size={13} color="#6366f1" />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: r.student_id } }));
+                                    }}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3,
+                                      background: '#eef2ff',
+                                      border: '1px solid #c7d2fe',
+                                      color: '#4f46e5',
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="View 360° Profile"
+                                  >
+                                    <UserIcon size={10} /> Profile
+                                  </button>
+                                  <span title="Attendance calendar"><CalendarDays size={13} color="#6366f1" /></span>
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
                                   Roll: <code>{r.admission_number}</code> {r.gender ? `· ${r.gender}` : ''}

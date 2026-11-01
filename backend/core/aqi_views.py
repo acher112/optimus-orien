@@ -682,7 +682,7 @@ def aqi_marks_grid(request):
                         )
                     status = 'recorded'
 
-                Grade.objects.update_or_create(
+                grade_obj, _ = Grade.objects.update_or_create(
                     assessment=assessment,
                     student_id=student_id,
                     defaults={
@@ -692,6 +692,13 @@ def aqi_marks_grid(request):
                     }
                 )
                 saved_count += 1
+                try:
+                    from core.services.risk_alerts import check_and_notify_grade_risk
+                    st_obj = Student.objects.filter(id=student_id).first()
+                    if st_obj:
+                        check_and_notify_grade_risk(st_obj, grade_obj, assessment)
+                except Exception:
+                    pass
 
             record_event(
                 actor=request.user,

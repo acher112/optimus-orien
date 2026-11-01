@@ -813,6 +813,15 @@ class ScopedViewSet(viewsets.ModelViewSet):
   validate_model(model,data,server_attrs=extras)
   saved=serializer.save(**extras)
   record_event(actor=user,action='create',obj=saved,changed_fields=list(data))
+  try:
+   if model is Attendance:
+    from core.services.risk_alerts import check_and_notify_attendance_risk
+    check_and_notify_attendance_risk(saved.student, saved.school_class)
+   elif model is Grade:
+    from core.services.risk_alerts import check_and_notify_grade_risk
+    check_and_notify_grade_risk(saved.student, saved, saved.assessment)
+  except Exception:
+   pass
  @transaction.atomic
  def perform_update(self,serializer):
   user=self.request.user;model=self.queryset.model;old=self.get_object();data=serializer.validated_data
@@ -868,6 +877,15 @@ class ScopedViewSet(viewsets.ModelViewSet):
   before={k:getattr(old,k) for k in data}
   saved=serializer.save(**extras)
   record_event(actor=user,action='update',obj=saved,changed_fields=list(data),before=before,after=data)
+  try:
+   if model is Attendance:
+    from core.services.risk_alerts import check_and_notify_attendance_risk
+    check_and_notify_attendance_risk(saved.student, saved.school_class)
+   elif model is Grade:
+    from core.services.risk_alerts import check_and_notify_grade_risk
+    check_and_notify_grade_risk(saved.student, saved, saved.assessment)
+  except Exception:
+   pass
  @transaction.atomic
  def perform_destroy(self,instance):
   user=self.request.user

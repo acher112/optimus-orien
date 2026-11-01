@@ -7,6 +7,7 @@ import {
 import { list, request, type Resource, type User } from './api';
 import LocationMapModal from './LocationMapModal';
 import CurriculumSelect from './CurriculumSelect';
+import { ALL_LOCALES, ALL_CURRENCIES } from './localeData';
 import './setup.css';
 
 type Period = { name: string; start: string; end: string };
@@ -350,8 +351,37 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
                     </select>
                   </Input>
 
-                  <Input label="Locale *" description="BCP 47 locale identifier used for date & number display preferences (e.g. en-PK for English - Pakistan).">
-                    <input placeholder="en-PK" value={form.locale} onChange={e => field('locale', e.target.value)} />
+                  <Input label="Locale *" description="Select locale identifier used for date, calendar, and number formatting.">
+                    <select value={form.locale} onChange={e => field('locale', e.target.value)}>
+                      <option value="">Select locale...</option>
+                      {ALL_LOCALES.map(loc => (
+                        <option key={loc.value} value={loc.value}>
+                          {loc.label} ({loc.value})
+                        </option>
+                      ))}
+                    </select>
+                  </Input>
+
+                  <Input label="Campus Currency *" description="Official operational currency for student fees, invoices, payroll, and financials.">
+                    <select
+                      value={((form.school_settings as any)?.currency) || (data?.school as any)?.currency || 'PKR'}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForm(f => ({
+                          ...f,
+                          school_settings: {
+                            ...(f.school_settings || {}),
+                            currency: val
+                          }
+                        }));
+                      }}
+                    >
+                      {ALL_CURRENCIES.map(cur => (
+                        <option key={cur.code} value={cur.code}>
+                          {cur.code} — {cur.name} ({cur.symbol})
+                        </option>
+                      ))}
+                    </select>
                   </Input>
 
                   <div className="setup-inline-help">
@@ -516,6 +546,7 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
                     <div><span>Country</span><b>{clean(form.country)}</b></div>
                     <div><span>Time zone</span><b>{clean(form.timezone)}</b></div>
                     <div><span>Locale</span><b>{clean(form.locale)}</b></div>
+                    <div><span>Campus Currency</span><b>{((form.school_settings as any)?.currency) || (data?.school as any)?.currency || 'PKR'}</b></div>
                     <div><span>Location</span><b>{clean(form.jurisdiction)}</b></div>
                     <div><span>Curriculum</span><b>{form.programmes.length ? form.programmes.join(', ') : 'None added'}</b></div>
                     <div><span>Academic year</span><b>{clean(form.academic_year_name)}</b></div>

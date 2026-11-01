@@ -151,32 +151,41 @@ def announcements_list(request):
         )
         record_event(actor=user, action='create', obj=ann)
 
-        if priority in ('important', 'urgent'):
-            notif_users = User.objects.filter(is_active=True)
-            if school:
-                notif_users = notif_users.filter(school=school)
-            elif user.organisation:
-                notif_users = notif_users.filter(organisation=user.organisation)
+        # Generate notifications for all announcements (normal, important, or urgent)
+        notif_users = User.objects.filter(is_active=True)
+        if school:
+            notif_users = notif_users.filter(school=school)
+        elif user.organisation:
+            notif_users = notif_users.filter(organisation=user.organisation)
 
-            if target_role == 'students':
-                notif_users = notif_users.filter(role='student')
-            elif target_role == 'teachers':
-                notif_users = notif_users.filter(role='teacher')
-            elif target_role == 'principals':
-                notif_users = notif_users.filter(role='principal')
-            elif target_role == 'parents':
-                notif_users = notif_users.filter(role='parent')
+        if target_role == 'students':
+            notif_users = notif_users.filter(role='student')
+        elif target_role == 'teachers':
+            notif_users = notif_users.filter(role='teacher')
+        elif target_role == 'principals':
+            notif_users = notif_users.filter(role='principal')
+        elif target_role == 'parents':
+            notif_users = notif_users.filter(role='parent')
+        elif target_role == 'staff':
+            notif_users = notif_users.filter(role__in=['principal', 'school_admin', 'teacher'])
 
-            notifications = [
-                Notification(
-                    user=u,
-                    title=f"[{priority.upper()}] {title}",
-                    body=content[:250]
-                )
-                for u in notif_users[:500]
-            ]
-            if notifications:
-                Notification.objects.bulk_create(notifications)
+        # Ensure the creator also receives a copy in their notifications
+        all_recipient_ids = set(notif_users.values_list('id', flat=True)[:500])
+        all_recipient_ids.add(user.id)
+        recipient_users = User.objects.filter(id__in=all_recipient_ids)
+
+        badge = f"[{priority.upper()}] " if priority in ('important', 'urgent') else ""
+        notif_title = f"{badge}Announcement: {title}"[:180]
+        notifications = [
+            Notification(
+                user=u,
+                title=notif_title,
+                body=content[:380]
+            )
+            for u in recipient_users
+        ]
+        if notifications:
+            Notification.objects.bulk_create(notifications)
 
     return Response(_serialize(ann), status=201)
 

@@ -264,24 +264,50 @@ export default function AttendanceCalendarModal({
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              border: 'none',
-              background: '#f1f5f9',
-              borderRadius: '8px',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#64748b'
-            }}
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {target.type === 'student' && (
+              <button
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#eef2ff',
+                  border: '1px solid #c7d2fe',
+                  color: '#4f46e5',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: target.id } }));
+                }}
+                title="View full 360° student profile"
+              >
+                <UserIcon size={14} /> View 360° Profile
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                border: 'none',
+                background: '#f1f5f9',
+                borderRadius: '8px',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#64748b'
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Body */}

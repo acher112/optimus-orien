@@ -4,7 +4,7 @@ import {
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, RefreshCw, Search,
   ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye, Clock,
   CheckCheck, Info, SlidersHorizontal, BookOpen, HeartHandshake, TrendingUp, TrendingDown,
-  Minus, ShieldCheck
+  Minus, ShieldCheck, User as UserIcon
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { list, request, type User } from './api';
@@ -490,7 +490,30 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                       <tr key={s.student_id}>
                         <td>
                           <div>
-                            <strong>{s.student_name}</strong>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: s.student_id } }));
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  margin: 0,
+                                  font: 'inherit',
+                                  fontWeight: 700,
+                                  color: '#2563eb',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  textDecoration: 'underline',
+                                  textDecorationColor: '#bfdbfe',
+                                  textUnderlineOffset: '2px'
+                                }}
+                                title="Click to view 360° student profile"
+                              >
+                                {s.student_name}
+                              </button>
                             <div style={{ fontSize: 11, color: '#64748b' }}>Father: {s.father_name}</div>
                           </div>
                         </td>
@@ -963,6 +986,29 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                 <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
                   {drawerStudent.student_name} ({drawerStudent.admission_number || 'No ID'}) — {drawerStudent.full_class_name}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: drawerStudent.student_id } }));
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    marginTop: 6,
+                    padding: '3px 8px',
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    color: '#2563eb',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                  title="Open full 360° comprehensive student profile"
+                >
+                  <UserIcon size={12} /> View 360° Profile
+                </button>
               </div>
               <button onClick={() => setDrawerStudent(null)}><X size={18} /></button>
             </div>

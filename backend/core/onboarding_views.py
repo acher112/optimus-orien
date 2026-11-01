@@ -53,8 +53,12 @@ def may_manage(user,school):
 
 
 def payload(school,config):
- return {'school':{'id':school.pk,'name':school.name,'code':school.code,'organisation':school.organisation_id},
-         'configuration':ConfigurationSerializer(config).data if config else None,
+ data_conf = ConfigurationSerializer(config).data if config else None
+ if data_conf and isinstance(data_conf.get('school_settings'), dict):
+  if not data_conf['school_settings'].get('currency'):
+   data_conf['school_settings']['currency'] = getattr(school, 'currency', 'PKR')
+ return {'school':{'id':school.pk,'name':school.name,'code':school.code,'organisation':school.organisation_id,'currency':getattr(school,'currency','PKR')},
+         'configuration':data_conf,
          'readiness':readiness(config),
          'versions':list(config.versions.values('version','activated_at')[:12]) if config else []}
 
@@ -82,6 +86,11 @@ def school_configuration(request,school_id):
   config=ser.save(status='draft')
   config.full_clean()
   config.save()
+  if isinstance(config.school_settings, dict) and config.school_settings.get('currency'):
+   new_curr = str(config.school_settings['currency']).strip().upper()[:8]
+   if new_curr and school.currency != new_curr:
+    school.currency = new_curr
+    school.save(update_fields=['currency'])
   record_event(actor=request.user,action='school_setup_draft',obj=school,changed_fields=sorted(changed))
  return Response(payload(school,config))
 
@@ -117,6 +126,11 @@ def activate_school_configuration(request,school_id):
            'active': True,
        }
    )
+  if isinstance(config.school_settings, dict) and config.school_settings.get('currency'):
+   new_curr = str(config.school_settings['currency']).strip().upper()[:8]
+   if new_curr and school.currency != new_curr:
+    school.currency = new_curr
+    school.save(update_fields=['currency'])
   record_event(actor=request.user,action='school_setup_activated',obj=school,
                changed_fields=['status','active_version'],after={'status':'active','active_version':config.active_version})
  return Response(payload(school,config))

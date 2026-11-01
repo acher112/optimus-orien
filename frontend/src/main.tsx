@@ -54,6 +54,7 @@ import { StudentAttendance } from './StudentAttendance';
 import { StudentResults } from './StudentResults';
 import { StudentDiscussion } from './StudentDiscussion';
 import { StudentProfile } from './StudentProfile';
+import StudentProfileModal from './StudentProfileModal';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -538,6 +539,7 @@ function App() {
 
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const campusDropdownRef = useRef<HTMLDivElement>(null);
+  const notifWrapRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
 
   const [accentHex, setAccentHex] = useState(() => getStoredTheme().colorHex);
@@ -556,6 +558,19 @@ function App() {
     return () => window.removeEventListener('optimus_theme_change', handler);
   }, []);
 
+  const [viewStudentId, setViewStudentId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleViewStudent = (e: Event) => {
+      const ce = e as CustomEvent<{ studentId?: number | string }>;
+      if (ce.detail?.studentId) {
+        setViewStudentId(Number(ce.detail.studentId));
+      }
+    };
+    window.addEventListener('optimus_view_student_profile', handleViewStudent);
+    return () => window.removeEventListener('optimus_view_student_profile', handleViewStudent);
+  }, []);
+
   // Close menus and sidebar when clicking outside
   useEffect(() => {
     const clickOutside = (e: MouseEvent) => {
@@ -564,6 +579,9 @@ function App() {
       }
       if (campusDropdownRef.current && !campusDropdownRef.current.contains(e.target as Node)) {
         setCampusDropdownOpen(false);
+      }
+      if (notifWrapRef.current && !notifWrapRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
       }
       if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
         setSidebar(false);
@@ -574,6 +592,59 @@ function App() {
     return () => document.removeEventListener('mousedown', clickOutside);
   }, []);
 
+  const [popNotifs, setPopNotifs] = useState<Array<{ id: string | number; title: string; body: string; created_at?: string; is_announcement?: boolean; priority?: string }>>([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+
+  const fetchHeaderNotifications = useCallback(async () => {
+    if (!user) return;
+    setLoadingNotifs(true);
+    try {
+      const [notifList, annList] = await Promise.all([
+        list<any>('notifications/').catch(() => []),
+        request<any>('announcements/').then(r => r?.results || []).catch(() => [])
+      ]);
+
+      const items: Array<{ id: string | number; title: string; body: string; created_at?: string; is_announcement?: boolean; priority?: string }> = [];
+
+      (annList || []).slice(0, 5).forEach((a: any) => {
+        items.push({
+          id: `ann-${a.id}`,
+          title: a.title,
+          body: a.content || '',
+          created_at: a.created_at,
+          is_announcement: true,
+          priority: a.priority
+        });
+      });
+
+      (notifList || []).slice(0, 10).forEach((n: any) => {
+        const isAnn = n.title?.toLowerCase().includes('announcement');
+        if (!items.some(it => it.title === n.title || it.title === n.title.replace(/^\[.*?\]\s*(Announcement:\s*)?/i, ''))) {
+          items.push({
+            id: n.id,
+            title: n.title,
+            body: n.body,
+            created_at: n.created_at,
+            is_announcement: isAnn,
+            priority: n.title?.includes('[URGENT]') ? 'urgent' : n.title?.includes('[IMPORTANT]') ? 'important' : undefined
+          });
+        }
+      });
+
+      setPopNotifs(items);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingNotifs(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchHeaderNotifications();
+    }
+  }, [user, fetchHeaderNotifications]);
+
   const dynColor = useMemo(() => [accentHex, '#23b7a0', '#f29d50', '#6c9eff', '#e477a1', '#b4a0e9'], [accentHex]);
   const notify = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -583,6 +654,15 @@ function App() {
     applyTheme(mode, color);
     request<User>('auth/me/').then(u => {
       setUser(u);
+      if (['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(u.role)) {
+        if (u.school) {
+          setActiveCampusId(u.school);
+          localStorage.setItem('optimus_active_campus_id', String(u.school));
+        } else {
+          setActiveCampusId(null);
+          localStorage.removeItem('optimus_active_campus_id');
+        }
+      }
       list<{ id: number; name: string; code?: string; city?: string }>('schools').then(scs => {
         setCampuses(scs);
         if (activeCampusId && !scs.some(s => s.id === activeCampusId)) {
@@ -603,7 +683,7 @@ function App() {
     if (!user) return;
     setError('');
     const params = new URLSearchParams();
-    if (activeCampusId) params.set('school', String(activeCampusId));
+    if (activeCampusId && !['student', 'parent'].includes(user.role)) params.set('school', String(activeCampusId));
     Object.entries(resourceFilters).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') {
         params.set(k, String(v));
@@ -1469,24 +1549,70 @@ function App() {
             </button>
 
             {/* Notifications Menu */}
-            <div className="notif-wrap">
-              <button className="icon-button notification-trigger" title="Notifications" onClick={() => setShowNotifications(v => !v)}>
-                <Bell size={19} /><i />
+            <div className="notif-wrap" ref={notifWrapRef}>
+              <button
+                className="icon-button notification-trigger"
+                title="Notifications and announcements"
+                onClick={() => {
+                  setShowNotifications(v => {
+                    const next = !v;
+                    if (next) fetchHeaderNotifications();
+                    return next;
+                  });
+                }}
+              >
+                <Bell size={19} />
+                {popNotifs.length > 0 && <i />}
               </button>
               {showNotifications && (
                 <div className="notification-menu">
-                  <b>Recent notifications</b>
-                  {(dash?.recent_notifications || []).length ? (
-                    (dash?.recent_notifications || []).map(n => (
-                      <div key={n.id} className="notification-row">
-                        <Bell size={15} />
-                        <span><strong>{n.title}</strong><small>{n.body}</small></span>
-                      </div>
-                    ))
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
+                    <b style={{ fontSize: 13, color: '#1e293b' }}>Recent notifications & announcements</b>
+                    {loadingNotifs && <RefreshCw size={13} className="spin" style={{ color: '#6366f1' }} />}
+                  </div>
+                  {popNotifs.length > 0 ? (
+                    <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                      {popNotifs.map(n => (
+                        <div key={n.id} className="notification-row" style={{ alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: '1px solid #f8fafc' }}>
+                          <div style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 8,
+                            background: n.is_announcement ? '#fef3c7' : '#eff6ff',
+                            color: n.is_announcement ? '#d97706' : '#4f46e5',
+                            display: 'grid',
+                            placeItems: 'center',
+                            flexShrink: 0,
+                            marginTop: 2
+                          }}>
+                            {n.is_announcement ? <Megaphone size={15} /> : <Bell size={15} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                              {n.is_announcement && (
+                                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4 }}>
+                                  Announcement
+                                </span>
+                              )}
+                              {n.priority === 'urgent' && (
+                                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', background: '#fee2e2', color: '#b91c1c', padding: '1px 6px', borderRadius: 4 }}>
+                                  Urgent
+                                </span>
+                              )}
+                              <strong style={{ fontSize: 13, color: '#1e293b' }}>{n.title}</strong>
+                            </div>
+                            <small style={{ fontSize: 12, color: '#64748b', display: 'block', lineHeight: 1.4 }}>{n.body}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
-                    <p>Your workspace is up to date.</p>
+                    <p style={{ color: '#94a3b8', fontSize: 13, margin: '14px 0', textAlign: 'center' }}>Your workspace is up to date.</p>
                   )}
-                  <button onClick={() => { setShowNotifications(false); switchPage('Notifications'); }}>
+                  <button
+                    style={{ marginTop: 10, width: '100%', justifyContent: 'center' }}
+                    onClick={() => { setShowNotifications(false); switchPage('Notifications'); }}
+                  >
                     View all notifications <ArrowRight size={14} />
                   </button>
                 </div>
@@ -1944,11 +2070,35 @@ function App() {
                                       )
                                     )}
                                   </span>
-                                  <strong>
-                                    {page === 'Students'
-                                      ? String(r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || '—')
-                                      : String(r[c.key] ?? r.name ?? r.title ?? '—')}
-                                  </strong>
+                                  {page === 'Students' ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: r.id } }));
+                                      }}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        font: 'inherit',
+                                        fontWeight: 700,
+                                        color: '#4f46e5',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        textDecoration: 'underline',
+                                        textDecorationColor: '#c7d2fe',
+                                        textUnderlineOffset: '3px'
+                                      }}
+                                      title="Click to view 360° student profile"
+                                    >
+                                      {String(r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || '—')}
+                                    </button>
+                                  ) : (
+                                    <strong>
+                                      {String(r[c.key] ?? r.name ?? r.title ?? '—')}
+                                    </strong>
+                                  )}
                                 </div>
                               ) : typeof r[c.key] === 'boolean' || ['status', 'priority'].includes(c.key) ? (
                                 <Pill value={r[c.key] as string | boolean} />
@@ -1965,6 +2115,24 @@ function App() {
                           ))}
                           <td>
                             <div className="table-actions">
+                              {page === 'Students' && (
+                                <button
+                                  className="action-btn-sm"
+                                  title="View 360° Student Profile"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: r.id } }));
+                                  }}
+                                  style={{
+                                    background: '#eff6ff',
+                                    color: '#2563eb',
+                                    borderColor: '#bfdbfe',
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  <UserRound size={13} /> <span>Profile</span>
+                                </button>
+                              )}
                               {page === 'Students' && ['organisation_admin', 'school_admin', 'principal', 'teacher'].includes(user.role) && (
                                 <button
                                   className="action-btn-sm"
@@ -2711,6 +2879,14 @@ function App() {
         <CredentialsReceiptModal
           receipt={receiptData}
           onClose={() => setReceiptData(null)}
+        />
+      )}
+
+      {viewStudentId && (
+        <StudentProfileModal
+          studentId={viewStudentId}
+          onClose={() => setViewStudentId(null)}
+          notify={notify}
         />
       )}
 

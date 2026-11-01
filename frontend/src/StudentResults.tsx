@@ -232,8 +232,26 @@ export const StudentResults: React.FC<Props> = ({ user, notify }) => {
           Subject Breakdown & Guidance
         </h3>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-          {subjects.map((s: any) => (
+        {subjects.length === 0 ? (
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 14,
+            padding: 32,
+            border: '1px solid #e2e8f0',
+            textAlign: 'center',
+            color: '#64748b'
+          }}>
+            <BookOpen size={32} color="#94a3b8" style={{ marginBottom: 10, display: 'inline-block' }} />
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+              No assessment results yet
+            </div>
+            <div style={{ fontSize: 13 }}>
+              Your teacher has not published results for any subjects yet. Once assessments are graded and published, your subject-wise grades, class comparisons, and progress guidance will appear here.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+            {subjects.map((s: any) => (
             <div
               key={s.subject_id}
               style={{
@@ -326,6 +344,7 @@ export const StudentResults: React.FC<Props> = ({ user, notify }) => {
             </div>
           ))}
         </div>
+      )}
       </div>
     </div>
   );

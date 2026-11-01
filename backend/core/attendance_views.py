@@ -190,6 +190,18 @@ def class_attendance_register(request):
             obj=school_class
         )
 
+        try:
+            from core.services.risk_alerts import check_and_notify_attendance_risk
+            from core.models import Student
+            for item in records_data:
+                s_id = item.get('student_id')
+                if s_id in enrolled_student_ids:
+                    st_obj = Student.objects.filter(id=s_id).first()
+                    if st_obj:
+                        check_and_notify_attendance_risk(st_obj, school_class)
+        except Exception:
+            pass
+
     actor_name = (user.get_full_name() or user.username).strip()
     return Response({
         'success': True,

@@ -58,6 +58,11 @@ def resolve_campus(request):
     if not user_school_id:
         return []
 
+    if user.role in ('student', 'parent'):
+        # Students and parents are strictly scoped to their assigned campus;
+        # ignore any query param pollution from admin switching or stale browser state.
+        return [user_school_id]
+
     if not is_all_request:
         try:
             target_id = int(str(raw_val).strip())
