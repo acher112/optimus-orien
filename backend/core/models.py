@@ -2006,3 +2006,164 @@ class ParentCallbackRequest(models.Model):
 
     def __str__(self):
         return f"CallbackRequest: {self.guardian.full_name} -> {self.teacher.username} regarding {self.student.full_name}"
+
+
+# =============================================================================
+# PLATFORM-LEVEL LANDING PAGE & CMS CONTENT MODELS (UNSCOPED)
+# =============================================================================
+
+class LandingHeroSlide(models.Model):
+    """
+    Platform-level hero slides for public landing page.
+    Unscoped (no school_id). Managed exclusively by Platform Owner / Admin.
+    """
+    title = models.CharField(max_length=255, blank=True, default='')
+    title_ur = models.CharField(max_length=255, blank=True, default='')
+    subtitle = models.TextField(blank=True, default='')
+    subtitle_ur = models.TextField(blank=True, default='')
+    image_url = models.CharField(max_length=500, blank=True, default='')
+    mobile_image_url = models.CharField(max_length=500, blank=True, default='')
+    cta_text = models.CharField(max_length=100, blank=True, default='')
+    cta_text_ur = models.CharField(max_length=100, blank=True, default='')
+    cta_link = models.CharField(max_length=500, blank=True, default='')
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'landing_hero_slides'
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return self.title or f"Slide #{self.id}"
+
+
+class LandingCoreFeature(models.Model):
+    """
+    Platform-level 6 core features.
+    Unscoped. Managed exclusively by Platform Owner.
+    """
+    title = models.CharField(max_length=255)
+    title_ur = models.CharField(max_length=255, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    description_ur = models.TextField(blank=True, default='')
+    icon_key = models.CharField(max_length=100, default='academic')
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'landing_core_features'
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return self.title
+
+
+class LandingFAQ(models.Model):
+    """
+    Platform-level FAQs.
+    Unscoped. Managed exclusively by Platform Owner.
+    """
+    question = models.CharField(max_length=500)
+    question_ur = models.CharField(max_length=500, blank=True, default='')
+    answer = models.TextField()
+    answer_ur = models.TextField(blank=True, default='')
+    category = models.CharField(max_length=100, blank=True, default='general')
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'landing_faqs'
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return self.question
+
+
+class LandingPlan(models.Model):
+    """
+    Platform-level subscription packages/plans (maps old packages table).
+    Unscoped. Managed exclusively by Platform Owner.
+    """
+    name = models.CharField(max_length=100)
+    name_ur = models.CharField(max_length=100, blank=True, default='')
+    slug = models.SlugField(max_length=100, unique=True)
+    tagline = models.CharField(max_length=255, blank=True, default='')
+    tagline_ur = models.CharField(max_length=255, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    description_ur = models.TextField(blank=True, default='')
+    price_usd_per_student = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('3.60'))
+    price_pkr_per_student = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('499.00'))
+    student_limit = models.PositiveIntegerField(default=0)
+    campus_limit = models.PositiveIntegerField(default=1)
+    interval = models.CharField(max_length=20, default='monthly')
+    trial_days = models.PositiveSmallIntegerField(default=30)
+    features = models.JSONField(default=list, blank=True)
+    features_ur = models.JSONField(default=list, blank=True)
+    is_featured = models.BooleanField(default=False)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'landing_plans'
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return f"{self.name} (${self.price_usd_per_student}/student)"
+
+
+class LandingSiteSetting(models.Model):
+    """
+    Platform-level global site settings for landing page.
+    Unscoped. Managed exclusively by Platform Owner.
+    """
+    key = models.CharField(max_length=100, unique=True)
+    value = models.TextField(blank=True, default='')
+    value_ur = models.TextField(blank=True, default='')
+    description = models.CharField(max_length=255, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'landing_site_settings'
+        ordering = ['key']
+
+    def __str__(self):
+        return self.key
+
+
+class LandingContactMessage(models.Model):
+    """
+    Inquiries submitted from the public landing page contact form / modal.
+    Unscoped. Visible to Platform Admin only.
+    No personal data logged in application logs.
+    """
+    STATUS_CHOICES = [
+        ('new', 'New'),
+        ('reviewed', 'Reviewed'),
+        ('archived', 'Archived'),
+    ]
+
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    phone = models.CharField(max_length=50, blank=True, default='')
+    company = models.CharField(max_length=255, blank=True, default='')
+    subject = models.CharField(max_length=255, blank=True, default='')
+    message = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'landing_contact_messages'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Contact: {self.name} <{self.email}> - {self.subject or 'General Inquiry'}"

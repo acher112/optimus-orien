@@ -6,7 +6,7 @@ from . import (
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
-    parent_views
+    parent_views, landing_views
 )
 
 r = DefaultRouter()
@@ -130,6 +130,14 @@ urlpatterns = [
     # Role Permissions Management
     path('permissions/', permission_views.permissions_list),
     path('permissions/reset/', permission_views.permissions_reset),
+
+    # Public landing page CMS and contact endpoints
+    path('public/landing/', landing_views.public_landing_view),
+    path('public/contact/', landing_views.public_contact_view),
+    path('platform-admin/landing/features/', landing_views.admin_landing_features_view),
+    path('platform-admin/landing/faqs/', landing_views.admin_landing_faqs_view),
+    path('platform-admin/landing/plans/', landing_views.admin_landing_plans_view),
+    path('platform-admin/landing/contacts/', landing_views.admin_landing_contacts_view),
 
     # Existing core endpoints
     path('public/indicators/', onboarding_views.public_school_indicators),
