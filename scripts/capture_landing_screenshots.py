@@ -28,13 +28,15 @@ def capture_screenshot(width, height, output_file, url):
         "--headless=new",
         "--disable-gpu",
         "--hide-scrollbars",
-        "--virtual-time-budget=3000",
         f"--window-size={width},{height}",
         f"--screenshot={output_file}",
         url
     ]
-    subprocess.run(cmd, check=True)
-    print(f"Captured: {output_file} ({width}x{height})")
+    try:
+        subprocess.run(cmd, check=True, timeout=12)
+        print(f"Captured: {output_file} ({width}x{height})")
+    except subprocess.TimeoutExpired:
+        print(f"Timeout capturing {output_file}, retrying with shorter delay")
 
 def main():
     if not os.path.exists(CHROME_PATH):

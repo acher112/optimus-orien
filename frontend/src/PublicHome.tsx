@@ -93,11 +93,6 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
 
   return (
     <div className="landing-root" dir={locale === 'ur' ? 'rtl' : 'ltr'}>
-      {/* Test Environment Banner */}
-      <div className="test-env-banner" role="alert">
-        <span>⚠️ Test environment. Do not enter real student data.</span>
-      </div>
-
       {/* Floating Animated Orbs */}
       <div className="bg-orbs" aria-hidden="true">
         <div className="orb orb-1" />
