@@ -45,9 +45,12 @@ def resolve_campus(request):
         try:
             target_id = int(str(raw_val).strip())
         except (ValueError, TypeError):
-            raise NotFound('Invalid campus ID')
+            return allowed_ids
         if target_id not in allowed_ids:
-            raise NotFound('Campus not found or outside authorized scope')
+            # If an organisation admin's request carries a campus ID outside their organisation
+            # (e.g. stale client localStorage from previous session), gracefully default to their
+            # allowed campuses rather than bricking the workspace with a 404 error.
+            return allowed_ids
         return [target_id]
 
     # Single-campus role
@@ -133,6 +136,10 @@ def get_campus_for_write(request, data=None):
         request.query_params.get('school') if hasattr(request, 'query_params') else None
     )
     if not school_id or str(school_id).lower() in ('all', 'overall', ''):
+        if is_admin:
+            allowed = list(schools_scope(user))
+            if len(allowed) == 1:
+                return allowed[0]
         raise ValidationError({'school': 'Campus is required for this operation.'})
 
     try:
@@ -142,6 +149,10 @@ def get_campus_for_write(request, data=None):
 
     school = schools_scope(user).filter(pk=sid).first()
     if not school:
+        if is_admin:
+            allowed = list(schools_scope(user))
+            if len(allowed) == 1:
+                return allowed[0]
         raise NotFound('Campus not found or outside authorized scope.')
     return school
 

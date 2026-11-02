@@ -24,9 +24,9 @@ from core.services.access import schools_scope
 from core.services.audit import record_event
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
-LOGIN_ROLES = ('school_admin', 'principal', 'teacher')       # roles that map to a sign-in role
-LEADERSHIP = ('school_admin', 'principal')                    # only senior managers may grant these
-STAFF_ROLES = ['teacher', 'principal', 'school_admin', 'accountant', 'librarian', 'counsellor', 'support', 'additional', 'other']
+LOGIN_ROLES = ('organisation_admin', 'school_admin', 'principal', 'teacher')       # roles that map to a sign-in role
+LEADERSHIP = ('organisation_admin', 'school_admin', 'principal')                    # only senior managers may grant these
+STAFF_ROLES = ['teacher', 'principal', 'school_admin', 'organisation_admin', 'accountant', 'librarian', 'counsellor', 'support', 'additional', 'other']
 
 
 def _require_manager(user):
@@ -78,6 +78,8 @@ def _check_role(actor, role):
         raise ValidationError({'role': f'Role must be one of: {", ".join(STAFF_ROLES)}'})
     if role in LEADERSHIP and not actor.is_superuser and actor.role not in ('organisation_admin', 'school_admin'):
         raise PermissionDenied('Only an organisation or school administrator can assign leadership roles')
+    if role == 'organisation_admin' and not actor.is_superuser and actor.role != 'organisation_admin':
+        raise PermissionDenied('Only an organisation administrator can assign the organisation administrator role')
 
 
 def _own_record(actor, staff):

@@ -148,9 +148,9 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
       )}
 
       {action?.kind === 'add' && <AddStaff schools={schools} roles={roles} leader={leader} user={user} onClose={() => setAction(null)} onDone={() => done('Staff member added')} />}
-      {action?.kind === 'promote' && <Promote s={action.staff} roles={roles} leader={leader} onClose={() => setAction(null)} onDone={() => done('Promotion saved')} />}
-      {action?.kind === 'role' && <AssignRole s={action.staff} roles={roles} leader={leader} onClose={() => setAction(null)} onDone={() => done('Role updated')} />}
-      {action?.kind === 'edit' && <EditStaff s={action.staff} roles={roles} leader={leader} onClose={() => setAction(null)} onDone={() => done('Staff record updated')} />}
+      {action?.kind === 'promote' && <Promote s={action.staff} roles={roles} leader={leader} isOrgAdmin={user.role === 'organisation_admin' || !!user.is_superuser} onClose={() => setAction(null)} onDone={() => done('Promotion saved')} />}
+      {action?.kind === 'role' && <AssignRole s={action.staff} roles={roles} leader={leader} isOrgAdmin={user.role === 'organisation_admin' || !!user.is_superuser} onClose={() => setAction(null)} onDone={() => done('Role updated')} />}
+      {action?.kind === 'edit' && <EditStaff s={action.staff} roles={roles} leader={leader} isOrgAdmin={user.role === 'organisation_admin' || !!user.is_superuser} onClose={() => setAction(null)} onDone={() => done('Staff record updated')} />}
       {action?.kind === 'terminate' && <Terminate s={action.staff} onClose={() => setAction(null)} onDone={() => done('Employment ended. Any login was switched off.')} />}
       {action?.kind === 'history' && <Timeline s={action.staff} onClose={() => setAction(null)} />}
       {action?.kind === 'assignments' && <TeachingAssignmentsModal s={action.staff} user={user} onClose={() => setAction(null)} onDone={() => done('Assignments updated')} />}
@@ -181,13 +181,19 @@ function useSubmit(path: string, onDone: () => void) {
   return { err, busy, submit };
 }
 
-const roleOptions = (roles: string[], leader: boolean) => {
-  const filtered = roles.filter(r => leader || (r !== 'principal' && r !== 'school_admin'));
+const roleOptions = (roles: string[], leader: boolean, isOrgAdmin?: boolean) => {
+  const filtered = roles.filter(r => {
+    if (r === 'organisation_admin') return !!isOrgAdmin;
+    if (leader) return true;
+    return r !== 'principal' && r !== 'school_admin';
+  });
+  if (isOrgAdmin && !filtered.includes('organisation_admin')) filtered.push('organisation_admin');
   if (!filtered.includes('additional')) filtered.push('additional');
   return filtered;
 };
 
 function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: R[]; roles: string[]; leader: boolean; user: User; onClose: () => void; onDone: () => void }) {
+  const isOrgAdmin = user.role === 'organisation_admin' || !!user.is_superuser;
   const [f, setF] = useState<R>({
     school: user.school || schools[0]?.id || '',
     role: 'teacher',
@@ -329,7 +335,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
               else if (val === 'support') set('position', 'Support Staff / Peon');
               else if (val === 'other') set('position', 'Staff Member');
             }}>
-              {roleOptions(roles, leader).map(r => <option key={r} value={r}>{nice(r)}</option>)}
+              {roleOptions(roles, leader, isOrgAdmin).map(r => <option key={r} value={r}>{r === 'organisation_admin' ? 'Organisation Administrator (Co-Admin)' : nice(r)}</option>)}
             </select>
           </label>
           <label>Position / Job title *<input required placeholder="e.g. Maths Teacher or Peon" value={f.position || ''} onChange={e => set('position', e.target.value)} /></label>
@@ -602,7 +608,7 @@ function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: 
     </Modal>
   );
 }
-function Promote({ s, roles, leader, onClose, onDone }: { s: R; roles: string[]; leader: boolean; onClose: () => void; onDone: () => void }) {
+function Promote({ s, roles, leader, isOrgAdmin, onClose, onDone }: { s: R; roles: string[]; leader: boolean; isOrgAdmin?: boolean; onClose: () => void; onDone: () => void }) {
   const [pos, setPos] = useState(''); const [role, setRole] = useState(''); const [note, setNote] = useState('');
   const { err, busy, submit } = useSubmit(`staff/${s.id}/promote/`, onDone);
   return (
@@ -610,7 +616,7 @@ function Promote({ s, roles, leader, onClose, onDone }: { s: R; roles: string[];
       <form onSubmit={e => { e.preventDefault(); submit({ new_position: pos, new_role: role, note }); }}>
         <div className="modal-fields hr-fields">
           <label className="wide">New position *<input required value={pos} onChange={e => setPos(e.target.value)} placeholder="e.g. Head of Maths" /></label>
-          <label className="wide">New role (optional)<select value={role} onChange={e => setRole(e.target.value)}><option value="">Keep {nice(s.role)}</option>{roleOptions(roles, leader).filter(r => r !== s.role).map(r => <option key={r} value={r}>{nice(r)}</option>)}</select></label>
+          <label className="wide">New role (optional)<select value={role} onChange={e => setRole(e.target.value)}><option value="">Keep {nice(s.role)}</option>{roleOptions(roles, leader, isOrgAdmin).filter(r => r !== s.role).map(r => <option key={r} value={r}>{r === 'organisation_admin' ? 'Organisation Administrator (Co-Admin)' : nice(r)}</option>)}</select></label>
           <label className="wide">Note<input value={note} onChange={e => setNote(e.target.value)} /></label>
         </div>
         {err && <div className="hr-error">{err}</div>}
@@ -620,14 +626,14 @@ function Promote({ s, roles, leader, onClose, onDone }: { s: R; roles: string[];
   );
 }
 
-function AssignRole({ s, roles, leader, onClose, onDone }: { s: R; roles: string[]; leader: boolean; onClose: () => void; onDone: () => void }) {
+function AssignRole({ s, roles, leader, isOrgAdmin, onClose, onDone }: { s: R; roles: string[]; leader: boolean; isOrgAdmin?: boolean; onClose: () => void; onDone: () => void }) {
   const [role, setRole] = useState(''); const [note, setNote] = useState('');
   const { err, busy, submit } = useSubmit(`staff/${s.id}/assign-role/`, onDone);
   return (
     <Modal title={`Assign role to ${s.full_name}`} sub={`Current role: ${nice(s.role)}${s.has_login ? ' · their login role is updated too' : ''}`} onClose={onClose}>
       <form onSubmit={e => { e.preventDefault(); submit({ role, note }); }}>
         <div className="modal-fields hr-fields">
-          <label className="wide">Role *<select required value={role} onChange={e => setRole(e.target.value)}><option value="">Choose a role…</option>{roleOptions(roles, leader).filter(r => r !== s.role).map(r => <option key={r} value={r}>{nice(r)}</option>)}</select></label>
+          <label className="wide">Role *<select required value={role} onChange={e => setRole(e.target.value)}><option value="">Choose a role…</option>{roleOptions(roles, leader, isOrgAdmin).filter(r => r !== s.role).map(r => <option key={r} value={r}>{r === 'organisation_admin' ? 'Organisation Administrator (Co-Admin)' : nice(r)}</option>)}</select></label>
           <label className="wide">Note<input value={note} onChange={e => setNote(e.target.value)} /></label>
         </div>
         {!leader && <div className="hr-hint">Only organisation or school administrators can grant principal or school admin.</div>}
@@ -680,7 +686,7 @@ function HistoryFeed() {
   return <section className="panel hr-panel hr-feed"><div className="panel-head"><div><h3>Recent staff changes</h3><p>Hires, promotions, role changes and terminations</p></div></div><EventList events={top} /></section>;
 }
 
-function EditStaff({ s, roles, leader, onClose, onDone }: { s: R; roles: string[]; leader: boolean; onClose: () => void; onDone: () => void }) {
+function EditStaff({ s, roles, leader, isOrgAdmin, onClose, onDone }: { s: R; roles: string[]; leader: boolean; isOrgAdmin?: boolean; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState<R>({
     first_name: s.first_name || '',
     last_name: s.last_name || '',
@@ -727,7 +733,7 @@ function EditStaff({ s, roles, leader, onClose, onDone }: { s: R; roles: string[
           <label>First name *<input required value={f.first_name} onChange={e => set('first_name', e.target.value)} /></label>
           <label>Last name *<input required value={f.last_name} onChange={e => set('last_name', e.target.value)} /></label>
           <label>Position *<input required placeholder="e.g. Lead Educator" value={f.position} onChange={e => set('position', e.target.value)} /></label>
-          <label>Role<select value={f.role} onChange={e => set('role', e.target.value)}>{roleOptions(roles, leader).map(r => <option key={r} value={r}>{nice(r)}</option>)}</select></label>
+          <label>Role<select value={f.role} onChange={e => set('role', e.target.value)}>{roleOptions(roles, leader, isOrgAdmin).map(r => <option key={r} value={r}>{r === 'organisation_admin' ? 'Organisation Administrator (Co-Admin)' : nice(r)}</option>)}</select></label>
           <label>Hired on<input type="date" value={f.hired_on} onChange={e => set('hired_on', e.target.value)} /></label>
           <label>Email<input type="email" value={f.email} onChange={e => set('email', e.target.value)} /></label>
           <label>Phone<input value={f.phone} onChange={e => set('phone', e.target.value)} /></label>

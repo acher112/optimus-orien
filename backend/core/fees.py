@@ -54,6 +54,9 @@ def _school(user, value):
         raise NotFound('Invalid campus ID.')
     school = schools_scope(user).filter(pk=sid).first()
     if not school:
+        allowed = list(schools_scope(user))
+        if len(allowed) == 1 and (user.role == 'organisation_admin' or user.is_superuser):
+            return allowed[0]
         raise NotFound('Campus not found or outside authorized scope.')
     return school
 

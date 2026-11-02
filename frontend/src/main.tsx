@@ -517,8 +517,7 @@ function App() {
     if (user && ['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(user.role)) {
       return user.school || null;
     }
-    const saved = localStorage.getItem('optimus_active_campus_id');
-    return saved ? Number(saved) : null;
+    return null;
   });
 
   useEffect(() => {
@@ -671,7 +670,14 @@ function App() {
       }
       list<{ id: number; name: string; code?: string; city?: string }>('schools').then(scs => {
         setCampuses(scs);
-        if (activeCampusId && !scs.some(s => s.id === activeCampusId)) {
+        const saved = localStorage.getItem('optimus_active_campus_id');
+        const savedId = saved ? Number(saved) : null;
+        if (savedId && scs.some(s => s.id === savedId)) {
+          setActiveCampusId(savedId);
+        } else if (u.role !== 'organisation_admin' && u.school && scs.some(s => s.id === u.school)) {
+          setActiveCampusId(u.school);
+          localStorage.setItem('optimus_active_campus_id', String(u.school));
+        } else {
           setActiveCampusId(null);
           localStorage.removeItem('optimus_active_campus_id');
         }
@@ -689,7 +695,8 @@ function App() {
     if (!user) return;
     setError('');
     const params = new URLSearchParams();
-    if (activeCampusId && !['student', 'parent'].includes(user.role)) params.set('school', String(activeCampusId));
+    const safeCampusId = (activeCampusId && campuses.some(c => c.id === activeCampusId)) ? activeCampusId : null;
+    if (safeCampusId && !['student', 'parent'].includes(user.role)) params.set('school', String(safeCampusId));
     Object.entries(resourceFilters).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') {
         params.set(k, String(v));
@@ -699,7 +706,7 @@ function App() {
     try {
       if (page === 'Overview') {
         if (user.role !== 'teacher') {
-          const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
+          const campusQs = safeCampusId ? `?school=${safeCampusId}` : '';
           setDash(await request<Dashboard>(`dashboard/${campusQs}`));
         }
       } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Academic Quality Index', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'My Class', 'My Subjects'].includes(page)) {
@@ -712,7 +719,7 @@ function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load data');
     }
-  }, [page, user, activeCampusId, resourceFilters]);
+  }, [page, user, activeCampusId, campuses, resourceFilters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -997,6 +1004,8 @@ function App() {
     <Login
       onLogin={u => {
         window.history.replaceState(null, '', '/app');
+        localStorage.removeItem('optimus_active_campus_id');
+        setActiveCampusId(null);
         const { mode, color } = getStoredTheme();
         const isD = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
         setDark(isD);
@@ -1624,7 +1633,7 @@ function App() {
               <b>{user.name}</b>
               <small>{user.role === 'organisation_admin' ? 'Super Owner' : nice(user.role)}</small>
             </div>
-            <button aria-label="Sign out" title="Sign out" onClick={async () => { await logout(); setUser(null); }}>
+            <button aria-label="Sign out" title="Sign out" onClick={async () => { localStorage.removeItem('optimus_active_campus_id'); setActiveCampusId(null); await logout(); setUser(null); }}>
               <LogOut size={18} />
             </button>
           </div>
@@ -1794,7 +1803,7 @@ function App() {
                       {dark ? <Sun size={16} /> : <Moon size={16} />} <span>{dark ? 'Switch to Light mode' : 'Switch to Dark mode'}</span>
                     </button>
                     <div className="campus-dropdown-divider" />
-                    <button className="profile-menu-item danger" onClick={async () => { await logout(); setUser(null); }}>
+                    <button className="profile-menu-item danger" onClick={async () => { localStorage.removeItem('optimus_active_campus_id'); setActiveCampusId(null); await logout(); setUser(null); }}>
                       <LogOut size={16} /> <span>Sign out</span>
                     </button>
                   </div>
@@ -3446,14 +3455,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
                     />
                   </label>
                 </div>
-                <label>
-                  Administrative Role
-                  <select value={regForm.role} onChange={e => setRegForm({ ...regForm, role: e.target.value })}>
-                    <option value="organisation_admin">Organisation Administrator (Full trust & multi-campus control)</option>
-                    <option value="school_admin">Campus Administrator (Single school management)</option>
-                    <option value="teacher">Educator / Academic Lead</option>
-                  </select>
-                </label>
+
                 {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
                 <button type="submit" className="login-submit" disabled={pending}>
                   {pending ? 'Creating workspace…' : 'Create workspace & sign in'} <ArrowRight size={18} />
@@ -3734,7 +3736,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                               <div>
                                 <div className="account-meta">
                                   <b>{u.name}</b>
-                                  <span className={'account-role-pill ' + rClass}>{u.role.replace('_', ' ')}</span>
+                                  <span className={'account-role-pill ' + rClass}>{u.role === 'organisation_admin' ? 'Organisation Co-Admin' : u.role.replace('_', ' ')}</span>
                                 </div>
                                 <small>@{u.username}{u.email ? ` • ${u.email}` : ''}{u.admission_number ? ` • ID: ${u.admission_number}` : ''}{u.date_joined ? ` • Joined ${u.date_joined}` : ''}</small>
                               </div>
@@ -3782,10 +3784,16 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                                 <option value="teacher">Educator / Teacher</option>
                                 <option value="student">Student / Learner</option>
                                 <option value="parent">Parent / Guardian</option>
-                                {isOrgAdmin && <option value="organisation_admin">Organisation Administrator</option>}
+                                {isOrgAdmin && <option value="organisation_admin">Organisation Administrator (Co-Admin)</option>}
                               </select>
                             </label>
                           </div>
+
+                          {af.role === 'organisation_admin' && (
+                            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#1e40af', marginBottom: 12 }}>
+                              <strong>Organisation Administrator (Co-Admin):</strong> Grants full administrative access across all campuses of this organisation, including campus creation, settings, and staff management.
+                            </div>
+                          )}
 
                           {af.role === 'principal' && (
                             <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#5b21b6', marginBottom: 12 }}>
