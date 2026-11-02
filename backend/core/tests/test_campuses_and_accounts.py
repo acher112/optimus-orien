@@ -202,7 +202,14 @@ class CampusesAndAccountsTests(TestCase):
   self.assertIn('trust_school_admin', usernames)
   self.assertIn('trust_teacher', usernames)
 
- def test_public_registration_endpoint_closed(self):
+ def test_public_individual_registration_endpoint_closed(self):
+  """Individual user self-registration without organisation details is closed with HTTP 410 per Spec 19 §3."""
+  res = self.client.post('/api/v1/auth/register/', {'email': 'stranger@example.com', 'password': 'password123'}, format='json')
+  self.assertEqual(res.status_code, 410)
+  self.assertIn('closed', res.data['detail'].lower())
+
+ def test_saas_organisation_and_campus_self_registration(self):
+  """SaaS self-service onboarding: creates organisation, campus, org admin user, and trial subscription."""
   payload = {
    'first_name': 'Eleanor',
    'last_name': 'Vance',
@@ -216,8 +223,16 @@ class CampusesAndAccountsTests(TestCase):
    'role': 'organisation_admin'
   }
   res = self.client.post('/api/v1/auth/register/', payload, format='json')
-  self.assertEqual(res.status_code, 410)
-  self.assertIn('closed', res.data['detail'].lower())
+  self.assertEqual(res.status_code, 201)
+  self.assertEqual(res.data['role'], 'organisation_admin')
+  self.assertTrue(res.data['organisation'])
+  self.assertTrue(res.data['school'])
+  self.assertIn('csrfToken', res.data)
+  from core.models import Organisation, OrganisationSubscription
+  org = Organisation.objects.get(id=res.data['organisation'])
+  self.assertEqual(org.name, 'Beacon Ridge Academy Trust')
+  sub = OrganisationSubscription.objects.get(organisation=org)
+  self.assertEqual(sub.status, 'trial')
 
  def test_signin_returns_csrf_token(self):
   res = self.client.post('/api/v1/auth/login/', {'username': 'trust_org_admin', 'password': 'ValidPassword123!'}, format='json')

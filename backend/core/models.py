@@ -1298,7 +1298,7 @@ class OrganisationRolePolicy(models.Model):
         'finance.view_campus': True,
         'fees.view_campus': False,
         'salaries.view_campus': False,
-        'staff.promote_terminate': True,
+        'staff.promote_terminate': False,
     }
 
     @classmethod
