@@ -115,9 +115,9 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
   };
 
   const genderLabel = (g?: string) => {
-    if (g === 'male') return { label: 'Boy', color: '#2563eb', bg: '#dbeafe' };
-    if (g === 'female') return { label: 'Girl', color: '#db2777', bg: '#fce7f3' };
-    return { label: g ? g.charAt(0).toUpperCase() + g.slice(1) : 'Not recorded', color: '#64748b', bg: '#f1f5f9' };
+    if (g === 'male') return { label: 'Boy', color: '#2563eb', bg: '#dbeafe', border: '#bfdbfe' };
+    if (g === 'female') return { label: 'Girl', color: '#db2777', bg: '#fce7f3', border: '#fbcfe8' };
+    return { label: g ? g.charAt(0).toUpperCase() + g.slice(1) : 'Not recorded', color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' };
   };
 
   const gInfo = profile ? genderLabel(profile.gender) : null;
@@ -191,8 +191,9 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                 width: 64,
                 height: 64,
                 borderRadius: '50%',
-                background: '#ffffff',
-                color: '#4f46e5',
+                background: profile.gender === 'female' ? '#fdf2f8' : profile.gender === 'male' ? '#eff6ff' : '#ffffff',
+                color: profile.gender === 'female' ? '#db2777' : profile.gender === 'male' ? '#2563eb' : '#4f46e5',
+                border: `2px solid ${profile.gender === 'female' ? '#fbcfe8' : profile.gender === 'male' ? '#bfdbfe' : '#e2e8f0'}`,
                 fontSize: 22,
                 fontWeight: 800,
                 display: 'grid',
@@ -212,6 +213,7 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                     fontWeight: 800,
                     background: gInfo?.bg,
                     color: gInfo?.color,
+                    border: `1px solid ${gInfo?.border || 'transparent'}`,
                     padding: '2px 8px',
                     borderRadius: 12
                   }}>
@@ -501,22 +503,6 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                           {profile.academic_summary?.class_average !== null ? `${profile.academic_summary.class_average}%` : '—'}
                         </div>
                       </div>
-                      {profile.academic_summary?.boys_class_average !== null && (
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: 11, color: '#2563eb', fontWeight: 700, textTransform: 'uppercase' }}>Boys Avg</div>
-                          <div style={{ fontSize: 18, fontWeight: 800, color: '#2563eb' }}>
-                            {profile.academic_summary.boys_class_average}%
-                          </div>
-                        </div>
-                      )}
-                      {profile.academic_summary?.girls_class_average !== null && (
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: 11, color: '#db2777', fontWeight: 700, textTransform: 'uppercase' }}>Girls Avg</div>
-                          <div style={{ fontSize: 18, fontWeight: 800, color: '#db2777' }}>
-                            {profile.academic_summary.girls_class_average}%
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
 

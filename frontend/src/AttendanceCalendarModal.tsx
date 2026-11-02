@@ -222,10 +222,10 @@ export default function AttendanceCalendarModal({
                 height: '46px',
                 borderRadius: '12px',
                 background: target.type === 'student'
-                  ? (target.gender === 'female' ? '#fce7f3' : '#e0e7ff')
+                  ? (target.gender === 'female' ? '#fce7f3' : '#dbeafe')
                   : '#dbeafe',
                 color: target.type === 'student'
-                  ? (target.gender === 'female' ? '#db2777' : '#4338ca')
+                  ? (target.gender === 'female' ? '#db2777' : '#2563eb')
                   : '#1d4ed8',
                 display: 'flex',
                 alignItems: 'center',

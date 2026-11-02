@@ -908,6 +908,12 @@ class ScopedViewSet(viewsets.ModelViewSet):
     if not scope.can_mark_daily_attendance(instance.school_class_id):
      raise PermissionDenied("Only the class teacher may delete attendance records")
   if model is Student:
+   from core.models import StudentFee, FeePayment, FeePaymentAllocation, Concession
+   FeePaymentAllocation.objects.filter(payment__student=instance).delete()
+   FeePaymentAllocation.objects.filter(student_fee__student=instance).delete()
+   FeePayment.objects.filter(student=instance).delete()
+   StudentFee.objects.filter(student=instance).delete()
+   Concession.objects.filter(student=instance).delete()
    Grade.objects.filter(student=instance).delete()
    Attendance.objects.filter(student=instance).delete()
    HomeworkSubmission.objects.filter(student=instance).delete()
@@ -972,6 +978,10 @@ class ScopedViewSet(viewsets.ModelViewSet):
     ClassSubject.objects.filter(school_class=c).delete()
    classes.delete()
   elif model is Subject:
+   from core.models import TeachingAssignment, AssessmentCategory, ExamPaper
+   TeachingAssignment.objects.filter(subject=instance).delete()
+   AssessmentCategory.objects.filter(subject=instance).delete()
+   ExamPaper.objects.filter(subject=instance).delete()
    Grade.objects.filter(assessment__subject=instance).delete()
    Assessment.objects.filter(subject=instance).delete()
    HomeworkSubmission.objects.filter(homework__subject=instance).delete()

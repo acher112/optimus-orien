@@ -49,12 +49,14 @@ import AttendanceModule from './AttendanceModule';
 import { CredentialsReceiptModal, type CredentialsReceiptData } from './CredentialsReceiptModal';
 import { FirstPasswordChangeModal } from './FirstPasswordChangeModal';
 import { ALL_CURRICULA } from './CurriculumSelect';
+import CurriculumSingleSelect from './CurriculumSingleSelect';
 import { StudentHome } from './StudentHome';
 import { StudentAttendance } from './StudentAttendance';
 import { StudentResults } from './StudentResults';
 import { StudentDiscussion } from './StudentDiscussion';
 import { StudentProfile } from './StudentProfile';
 import StudentProfileModal from './StudentProfileModal';
+import PsychologicalEvaluation from './PsychologicalEvaluation';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -80,6 +82,7 @@ const WORKSPACE_NAV = [
   { name: 'Concessions', icon: Sparkles, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Receipts', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
+  { name: 'Psychological Evaluation', icon: Activity, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Students at Risk', icon: AlertCircle, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'At-risk list', icon: AlertCircle, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Risk criteria', icon: SlidersHorizontal, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -129,7 +132,7 @@ const NAV_GROUPS = [
       'Timetable'
     ]
   },
-  { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
+  { sublabel: 'STUDENT SUPPORT', items: ['Psychological Evaluation', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
@@ -1163,6 +1166,15 @@ function App() {
                 <span>My Home</span>
               </button>
 
+                            <button
+                type="button"
+                onClick={() => switchPage('Psychological Evaluation')}
+                className={'nav-item ' + (page === 'Psychological Evaluation' ? 'selected' : '')}
+              >
+                <Activity size={19} strokeWidth={1.9} />
+                <span>Psychological Evaluation</span>
+              </button>
+
               {teacherScope?.can_view_my_class && (
                 <button
                   type="button"
@@ -1327,6 +1339,15 @@ function App() {
                 <TrendingUp size={19} strokeWidth={1.9} />
                 <span>Results & Progress</span>
               </button>
+              <button
+                type="button"
+                onClick={() => switchPage('My Development Profile')}
+                className={'nav-item ' + (page === 'My Development Profile' ? 'selected' : '')}
+              >
+                <Sparkles size={19} strokeWidth={1.9} />
+                <span>My Development Profile</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => switchPage('Homework')}
@@ -2104,7 +2125,21 @@ function App() {
                                 <Pill value={r[c.key] as string | boolean} />
                               ) : (
                                 <span>
-                                  {c.key === 'gender' ? (r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : '—')
+                                  {c.key === 'gender' ? (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      padding: '2px 8px',
+                                      borderRadius: 12,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      background: r.gender === 'female' ? '#fce7f3' : r.gender === 'male' ? '#dbeafe' : '#f1f5f9',
+                                      color: r.gender === 'female' ? '#db2777' : r.gender === 'male' ? '#2563eb' : '#64748b',
+                                      border: `1px solid ${r.gender === 'female' ? '#fbcfe8' : r.gender === 'male' ? '#bfdbfe' : '#e2e8f0'}`
+                                    }}>
+                                      {r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : '—'}
+                                    </span>
+                                  )
                                   : c.key === 'school_class' ? String(r.class_name || (refData.classes.find(cl => cl.id === r.school_class)?.name) || ((r.school_class as any)?.name) || r.school_class || '—')
                                   : c.key === 'subject' ? String(r.subject_name || (refData.subjects.find(sb => sb.id === r.subject)?.name) || ((r.subject as any)?.name) || r.subject || '—')
                                   : c.key === 'school' || c.key === 'school_name' ? String(r.school_name || (refData.schools.find(sc => sc.id === r.school)?.name) || (campuses.find(cp => cp.id === r.school)?.name) || ((r.school as any)?.name) || '—')
@@ -2240,6 +2275,17 @@ function App() {
           {page === 'Announcements' && <Announcements user={user} notify={notify} />}
           {page === 'Settings' && <Settings user={user} onUserUpdated={u => setUser(u)} notify={notify} />}
           {page === 'Permissions' && <Permissions user={user} notify={notify} />}
+                    {(page === 'Psychological Evaluation' || page === 'My Development Profile') && (
+            <ErrorBoundary fallbackTitle="Psychological Evaluation">
+              <PsychologicalEvaluation
+                user={user}
+                notify={notify}
+                activeCampusId={activeCampusId}
+                initialMode={page === 'My Development Profile' ? 'student' : undefined}
+                onNavigate={switchPage}
+              />
+            </ErrorBoundary>
+          )}
           {['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'].includes(page) && (
             <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} />
           )}
@@ -2668,10 +2714,12 @@ function App() {
                     if (f.key === 'curriculum') return (
                       <label key={f.key}>
                         {f.label}{f.required && <span className="required"> *</span>}
-                        <select value={form.curriculum || ''} onChange={e => setForm(s => ({ ...s, curriculum: e.target.value }))}>
-                          <option value="">Select curriculum (optional)…</option>
-                          {ALL_CURRICULA.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
+                        <CurriculumSingleSelect
+                          value={form.curriculum || ''}
+                          onChange={val => setForm(s => ({ ...s, curriculum: val }))}
+                          placeholder="Select curriculum or type to search…"
+                          required={f.required}
+                        />
                       </label>
                     );
                   if (f.key === 'gender') return (
@@ -2806,10 +2854,12 @@ function App() {
                   if (f.key === 'curriculum') return (
                     <label key={f.key}>
                       {f.label}{f.required && <span className="required"> *</span>}
-                      <select value={editForm.curriculum || ''} onChange={e => setEditForm(s => ({ ...s, curriculum: e.target.value }))}>
-                        <option value="">Select curriculum (optional)…</option>
-                        {ALL_CURRICULA.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <CurriculumSingleSelect
+                        value={editForm.curriculum || ''}
+                        onChange={val => setEditForm(s => ({ ...s, curriculum: val }))}
+                        placeholder="Select curriculum or type to search…"
+                        required={f.required}
+                      />
                     </label>
                   );
                   if (f.key === 'gender') return (

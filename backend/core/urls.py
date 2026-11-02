@@ -5,7 +5,7 @@ from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
-    teacher_views, aqi_views, student_views, discussion_views
+    teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views
 )
 
 r = DefaultRouter()
@@ -221,5 +221,24 @@ urlpatterns = [
     path('discussion/reports/', discussion_views.discussion_reports),
     path('discussion/reports/<int:pk>/resolve/', discussion_views.discussion_report_resolve),
     path('discussion/students/<int:student_id>/mute/', discussion_views.discussion_student_mute),
+
+    # Psychological Evaluation Module (School-Based Behavioural & Developmental Profile)
+    path('psychological-evaluations/template/', psychological_evaluation_views.evaluation_template_view),
+    path('psychological-evaluations/overview/', psychological_evaluation_views.hierarchical_overview),
+    path('psychological-evaluations/class-summary/', psychological_evaluation_views.class_evaluation_summary),
+    path('psychological-evaluations/student-profile/<int:student_id>/', psychological_evaluation_views.student_profile_view),
+    path('psychological-evaluations/my-profile/', psychological_evaluation_views.student_my_profile_view),
+    path('psychological-evaluations/workspace/', psychological_evaluation_views.teacher_workspace_view),
+    path('psychological-evaluations/evaluations/find/', psychological_evaluation_views.get_evaluation_detail),
+    path('psychological-evaluations/evaluations/save/', psychological_evaluation_views.save_evaluation_view),
+    path('psychological-evaluations/evaluations/<int:pk>/revise/', psychological_evaluation_views.revise_evaluation_view),
+    path('psychological-evaluations/publications/publish/', psychological_evaluation_views.publish_evaluation_view),
+    path('psychological-evaluations/safeguarding/refer/', psychological_evaluation_views.create_safeguarding_referral),
+    path('psychological-evaluations/safeguarding/list/', psychological_evaluation_views.list_safeguarding_referrals),
+    path('psychological-evaluations/gender-analytics/', psychological_evaluation_views.gender_analytics_view),
+    path('psychological-evaluations/audit-logs/', psychological_evaluation_views.evaluation_audit_logs_view),
+    path('psychological-evaluations/export/', psychological_evaluation_views.export_evaluations_csv),
+
     path('', include(r.urls))
+
 ]

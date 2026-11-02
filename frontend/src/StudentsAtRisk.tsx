@@ -522,8 +522,9 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                         <td>
                           <span style={{
                             fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
-                            background: s.gender === 'male' ? '#eff6ff' : '#fdf2f8',
-                            color: s.gender === 'male' ? '#1d4ed8' : '#be185d'
+                            background: s.gender === 'male' ? '#dbeafe' : '#fce7f3',
+                            color: s.gender === 'male' ? '#2563eb' : '#db2777',
+                            border: `1px solid ${s.gender === 'male' ? '#bfdbfe' : '#fbcfe8'}`
                           }}>
                             {s.gender_label}
                           </span>

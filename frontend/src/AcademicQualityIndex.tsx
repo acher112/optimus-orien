@@ -954,10 +954,10 @@ export default function AcademicQualityIndex({
                       <td style={{ padding: '14px 16px' }}>
                         {s.average_scaled_marks !== null ? s.average_scaled_marks.toFixed(1) : '—'}
                       </td>
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 16px', color: '#2563eb', fontWeight: 600 }}>
                         {s.boys_average !== null ? `${s.boys_average.toFixed(1)}%` : '—'}
                       </td>
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 16px', color: '#db2777', fontWeight: 600 }}>
                         {s.girls_average !== null ? `${s.girls_average.toFixed(1)}%` : '—'}
                       </td>
                       <td style={{ padding: '14px 16px' }}>
@@ -1011,7 +1011,21 @@ export default function AcademicQualityIndex({
                     >
                       <td style={{ padding: '14px 16px', fontWeight: 600, color: '#2563eb' }}>{st.student_name}</td>
                       <td style={{ padding: '14px 16px', color: '#64748b' }}>{st.admission_number}</td>
-                      <td style={{ padding: '14px 16px', textTransform: 'capitalize' }}>{st.gender}</td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background: st.gender === 'female' ? '#fce7f3' : st.gender === 'male' ? '#dbeafe' : '#f1f5f9',
+                          color: st.gender === 'female' ? '#db2777' : st.gender === 'male' ? '#2563eb' : '#64748b',
+                          border: `1px solid ${st.gender === 'female' ? '#fbcfe8' : st.gender === 'male' ? '#bfdbfe' : '#e2e8f0'}`
+                        }}>
+                          {st.gender === 'male' ? 'Boy' : st.gender === 'female' ? 'Girl' : (st.gender || '—')}
+                        </span>
+                      </td>
                       <td style={{ padding: '14px 16px' }}>{st.section_name || '—'}</td>
                       <td style={{ padding: '14px 16px', fontWeight: 700 }}>
                         {st.overall_percentage !== null ? `${st.overall_percentage.toFixed(2)}%` : '—'}
@@ -1169,7 +1183,21 @@ export default function AcademicQualityIndex({
                       {st.student_name}
                     </td>
                     <td style={{ padding: '14px 16px', color: '#64748b' }}>{st.admission_number}</td>
-                    <td style={{ padding: '14px 16px', textTransform: 'capitalize' }}>{st.gender}</td>
+                    <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background: st.gender === 'female' ? '#fce7f3' : st.gender === 'male' ? '#dbeafe' : '#f1f5f9',
+                          color: st.gender === 'female' ? '#db2777' : st.gender === 'male' ? '#2563eb' : '#64748b',
+                          border: `1px solid ${st.gender === 'female' ? '#fbcfe8' : st.gender === 'male' ? '#bfdbfe' : '#e2e8f0'}`
+                        }}>
+                          {st.gender === 'male' ? 'Boy' : st.gender === 'female' ? 'Girl' : (st.gender || '—')}
+                        </span>
+                      </td>
                     <td style={{ padding: '14px 16px', fontWeight: 700 }}>
                       {st.final_percentage !== null ? `${st.final_percentage.toFixed(2)}%` : '—'}
                     </td>

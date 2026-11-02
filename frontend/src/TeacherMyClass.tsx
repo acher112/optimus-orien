@@ -703,8 +703,9 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
                         <td style={{ padding: '12px 10px' }}>
                           <span style={{
                             padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                            background: st.gender === 'male' ? '#eff6ff' : st.gender === 'female' ? '#fdf2f8' : '#f8fafc',
-                            color: st.gender === 'male' ? '#1d4ed8' : st.gender === 'female' ? '#be185d' : '#64748b'
+                            background: st.gender === 'male' ? '#dbeafe' : st.gender === 'female' ? '#fce7f3' : '#f8fafc',
+                            color: st.gender === 'male' ? '#2563eb' : st.gender === 'female' ? '#db2777' : '#64748b',
+                            border: `1px solid ${st.gender === 'male' ? '#bfdbfe' : st.gender === 'female' ? '#fbcfe8' : 'transparent'}`
                           }}>
                             {st.gender === 'male' ? 'Boy' : st.gender === 'female' ? 'Girl' : '—'}
                           </span>

@@ -1592,3 +1592,242 @@ class DiscussionMute(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+# ==============================================================================
+# PSYCHOLOGICAL EVALUATION MODULE (School-Based Behavioural & Developmental Profile)
+# ==============================================================================
+
+class EvaluationTemplate(models.Model):
+    """Questionnaire template version and administration instructions."""
+    version = models.CharField(max_length=20, unique=True, default='1.0')
+    name = models.CharField(max_length=200, default='18-Item Student Behavioural & Developmental Framework')
+    status = models.CharField(max_length=32, choices=[('active', 'Active'), ('archived', 'Archived')], default='active')
+    effective_from = models.DateField(default=date.today)
+    effective_to = models.DateField(null=True, blank=True)
+    validation_status = models.CharField(max_length=200, default='Developmental observation framework — validation in progress.')
+    instructions = models.TextField(
+        default="Evaluate the student's observable behaviour during the previous five school days. "
+                "Base your responses on actual interactions and classroom observations. "
+                "Do not make assumptions about the student's personality, family circumstances, "
+                "mental health, or behaviour outside the setting you observed."
+    )
+    disclaimer = models.TextField(
+        default="Based on teacher observations during the selected period. This profile reflects observed behaviours, "
+                "not a psychological diagnosis or fixed personality assessment."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'evaluation_templates'
+        ordering = ['-version']
+
+    def __str__(self):
+        return f"{self.name} (v{self.version})"
+
+
+class EvaluationDimension(models.Model):
+    """The 6 core behavioural and developmental dimensions."""
+    template = models.ForeignKey(EvaluationTemplate, on_delete=models.CASCADE, related_name='dimensions')
+    dimension_key = models.CharField(max_length=50)
+    dimension_name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default='')
+    display_order = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        db_table = 'evaluation_dimensions'
+        ordering = ['display_order']
+        constraints = [
+            models.UniqueConstraint(fields=['template', 'dimension_key'], name='unique_dim_key_per_template')
+        ]
+
+    def __str__(self):
+        return f"{self.dimension_name} (v{self.template.version})"
+
+
+class EvaluationQuestion(models.Model):
+    """Positively framed observation item within a dimension."""
+    dimension = models.ForeignKey(EvaluationDimension, on_delete=models.CASCADE, related_name='questions')
+    question_text = models.TextField()
+    display_order = models.PositiveIntegerField(default=1)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'evaluation_questions'
+        ordering = ['display_order']
+
+    def __str__(self):
+        return f"Q{self.display_order}: {self.question_text[:60]}"
+
+
+class WeeklyEvaluation(models.Model):
+    """Weekly teacher-led behavioural observation record for a student."""
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('submitted', 'Submitted'),
+        ('revised', 'Revised'),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='weekly_evaluations')
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conducted_weekly_evaluations')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='weekly_evaluations')
+    campus = models.ForeignKey(School, null=True, blank=True, on_delete=models.SET_NULL, related_name='campus_weekly_evaluations')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='weekly_evaluations')
+    section = models.ForeignKey(Section, null=True, blank=True, on_delete=models.SET_NULL, related_name='weekly_evaluations')
+    subject = models.ForeignKey(Subject, null=True, blank=True, on_delete=models.SET_NULL, related_name='weekly_evaluations')
+    observation_context = models.CharField(max_length=120, default='Homeroom / Classroom Observation')
+    evaluation_week = models.CharField(max_length=32, db_index=True)
+    template_version = models.CharField(max_length=20, default='1.0')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+
+    # Optional teacher reflections
+    strengths_observed = models.TextField(blank=True, default='')
+    support_areas = models.TextField(blank=True, default='')
+    support_action = models.TextField(blank=True, default='')
+
+    # Strictly internal notes (confidential, never exposed to students)
+    teacher_notes = models.TextField(blank=True, default='', help_text='Confidential internal notes')
+
+    # Student-visible feedback (approved for viewing on publication)
+    student_visible_feedback = models.TextField(blank=True, default='', help_text='Approved constructive feedback')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'weekly_evaluations'
+        ordering = ['-evaluation_week', '-updated_at']
+        indexes = [
+            models.Index(fields=['student', 'evaluation_week']),
+            models.Index(fields=['school', 'evaluation_week']),
+            models.Index(fields=['school_class', 'evaluation_week']),
+            models.Index(fields=['teacher', 'evaluation_week']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['teacher', 'student', 'evaluation_week', 'observation_context'],
+                name='unique_teacher_eval_context_week'
+            )
+        ]
+
+    def __str__(self):
+        return f"WeeklyEvaluation {self.student.full_name} by {self.teacher.username} ({self.evaluation_week})"
+
+
+class EvaluationResponse(models.Model):
+    """Response to an observation item (1-5 or null for unobserved)."""
+    evaluation = models.ForeignKey(WeeklyEvaluation, on_delete=models.CASCADE, related_name='responses')
+    question = models.ForeignKey(EvaluationQuestion, on_delete=models.CASCADE, related_name='responses')
+    response_value = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    observation_note = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'evaluation_responses'
+        constraints = [
+            models.UniqueConstraint(fields=['evaluation', 'question'], name='unique_response_per_question')
+        ]
+
+    def __str__(self):
+        return f"Eval #{self.evaluation_id} Q#{self.question_id}: {self.response_value}"
+
+
+class EvaluationDomainScore(models.Model):
+    """Calculated 0-100 normalized score per dimension."""
+    SCORE_STATUS_CHOICES = [
+        ('valid', 'Valid'),
+        ('insufficient', 'Insufficient observations'),
+    ]
+
+    evaluation = models.ForeignKey(WeeklyEvaluation, on_delete=models.CASCADE, related_name='domain_scores')
+    dimension = models.ForeignKey(EvaluationDimension, on_delete=models.CASCADE, related_name='domain_scores')
+    valid_response_count = models.PositiveSmallIntegerField(default=0)
+    average_response = models.FloatField(null=True, blank=True)
+    normalized_score = models.FloatField(null=True, blank=True)
+    score_status = models.CharField(max_length=24, choices=SCORE_STATUS_CHOICES, default='insufficient')
+
+    class Meta:
+        db_table = 'evaluation_domain_scores'
+        constraints = [
+            models.UniqueConstraint(fields=['evaluation', 'dimension'], name='unique_domain_score_per_eval')
+        ]
+
+    def __str__(self):
+        return f"Score {self.dimension.dimension_name}: {self.normalized_score} ({self.score_status})"
+
+
+class EvaluationPublication(models.Model):
+    """Publication approval status for releasing weekly profile to student view."""
+    VISIBILITY_CHOICES = [
+        ('published', 'Published'),
+        ('unpublished', 'Unpublished'),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='evaluation_publications')
+    evaluation_week = models.CharField(max_length=32, db_index=True)
+    published_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='published_evaluations')
+    published_at = models.DateTimeField(auto_now_add=True)
+    visibility_status = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='published')
+    notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'evaluation_publications'
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'evaluation_week'], name='unique_student_publication_week')
+        ]
+
+    def __str__(self):
+        return f"Publication {self.student.full_name} ({self.evaluation_week}) - {self.visibility_status}"
+
+
+class EvaluationAuditLog(models.Model):
+    """Comprehensive audit trail for compliance, safeguarding, and revisions."""
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='evaluation_audit_logs')
+    action = models.CharField(max_length=40, db_index=True)
+    record_type = models.CharField(max_length=60)
+    record_id = models.CharField(max_length=60)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    relevant_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'evaluation_audit_logs'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"[{self.timestamp}] {self.actor}: {self.action} on {self.record_type} #{self.record_id}"
+
+
+class EvaluationSafeguardingReferral(models.Model):
+    """Restricted safeguarding escalation workflow independent from evaluation scoring."""
+    URGENCY_CHOICES = [
+        ('standard', 'Standard Referral'),
+        ('high', 'High Concern'),
+        ('immediate', 'Immediate Safeguarding Concern'),
+    ]
+    STATUS_CHOICES = [
+        ('submitted', 'Submitted'),
+        ('under_review', 'Under Review'),
+        ('action_taken', 'Action Taken'),
+        ('closed', 'Closed'),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='safeguarding_referrals')
+    evaluation = models.ForeignKey(WeeklyEvaluation, null=True, blank=True, on_delete=models.SET_NULL, related_name='safeguarding_referrals')
+    referred_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='safeguarding_referrals_made')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='safeguarding_referrals')
+    concern_description = models.TextField()
+    urgency_level = models.CharField(max_length=20, choices=URGENCY_CHOICES, default='standard')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted')
+    designated_lead_notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'evaluation_safeguarding_referrals'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Safeguarding Referral for {self.student.full_name} ({self.urgency_level})"

@@ -744,8 +744,9 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
                                 width: 34,
                                 height: 34,
                                 borderRadius: '50%',
-                                background: r.gender === 'female' ? '#fce7f3' : '#e0e7ff',
-                                color: r.gender === 'female' ? '#db2777' : '#4338ca',
+                                background: r.gender === 'female' ? '#fce7f3' : '#dbeafe',
+                                color: r.gender === 'female' ? '#db2777' : '#2563eb',
+                                border: `1.5px solid ${r.gender === 'female' ? '#fbcfe8' : '#bfdbfe'}`,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -783,7 +784,20 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
                                   <span title="Attendance calendar"><CalendarDays size={13} color="#6366f1" /></span>
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                  Roll: <code>{r.admission_number}</code> {r.gender ? `· ${r.gender}` : ''}
+                                  Roll: <code>{r.admission_number}</code> {r.gender ? (
+                                    <span style={{
+                                      marginLeft: 6,
+                                      padding: '1px 6px',
+                                      borderRadius: 8,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      background: r.gender === 'female' ? '#fce7f3' : '#dbeafe',
+                                      color: r.gender === 'female' ? '#db2777' : '#2563eb',
+                                      border: `1px solid ${r.gender === 'female' ? '#fbcfe8' : '#bfdbfe'}`
+                                    }}>
+                                      {r.gender === 'female' ? 'Girl' : 'Boy'}
+                                    </span>
+                                  ) : ''}
                                 </div>
                               </div>
                             </div>
