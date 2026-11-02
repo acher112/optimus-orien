@@ -5,7 +5,8 @@ from . import (
     views, onboarding_views, reports, staff, finance, communication,
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
-    teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views
+    teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
+    parent_views
 )
 
 r = DefaultRouter()
@@ -238,6 +239,36 @@ urlpatterns = [
     path('psychological-evaluations/gender-analytics/', psychological_evaluation_views.gender_analytics_view),
     path('psychological-evaluations/audit-logs/', psychological_evaluation_views.evaluation_audit_logs_view),
     path('psychological-evaluations/export/', psychological_evaluation_views.export_evaluations_csv),
+
+    
+    # Parent Management (Principal & Org Admin)
+    path('parents/', parent_views.parent_list),
+    path('parents/check-duplicate/', parent_views.parent_check_duplicate),
+    path('parents/register/', parent_views.parent_register),
+    path('parents/export/', parent_views.parent_export),
+    path('parents/<int:pk>/', parent_views.parent_detail),
+    path('parents/<int:pk>/reveal-identity/', parent_views.parent_reveal_identity),
+    path('parents/<int:pk>/link-child/', parent_views.parent_link_child),
+    path('parents/<int:pk>/revoke-relationship/<int:rel_id>/', parent_views.parent_revoke_relationship),
+    path('parents/<int:pk>/relationships/<int:rel_id>/', parent_views.parent_update_relationship),
+    path('parents/<int:pk>/suspend/', parent_views.parent_suspend),
+    path('parents/<int:pk>/reset-password/', parent_views.parent_reset_password),
+
+    # Parent Portal (Self-Service for Parents)
+    path('parent/home/', parent_views.parent_home),
+    path('parent/children/<int:student_id>/overview/', parent_views.parent_child_overview),
+    path('parent/children/<int:student_id>/results/', parent_views.parent_child_results),
+    path('parent/children/<int:student_id>/attendance/', parent_views.parent_child_attendance),
+    path('parent/children/<int:student_id>/risk-and-support/', parent_views.parent_child_risk_and_support),
+    path('parent/alerts/<int:alert_id>/acknowledge/', parent_views.parent_acknowledge_alert),
+    path('parent/children/<int:student_id>/teachers/', parent_views.parent_child_teachers),
+    path('parent/children/<int:student_id>/callback-request/', parent_views.parent_create_callback),
+    path('parent/children/<int:student_id>/homework/', parent_views.parent_child_homework),
+    path('parent/children/<int:student_id>/fees/', parent_views.parent_child_fees),
+    path('parent/children/<int:student_id>/report-card/', parent_views.parent_child_report_card),
+    path('parent/notifications/', parent_views.parent_notifications_list),
+    path('parent/notifications/<int:pk>/read/', parent_views.parent_notification_mark_read),
+    path('parent/notification-preferences/', parent_views.parent_notification_preferences),
 
     path('', include(r.urls))
 

@@ -154,10 +154,32 @@ class AQIScope:
             self.allowed_levels = [5]
             self.can_view_schoolwide = False
             self.can_view_all_campuses = False
-            wards = list(self.user.wards.all())
-            if not wards:
-                raise NotFound('No linked student profiles found for this parent account.')
-            self.student_ids = {w.id for w in wards}
+            from django.utils import timezone
+            today = timezone.localdate()
+            profile = getattr(self.user, 'guardian_profile', None)
+            if profile:
+                from core.models import GuardianRelationship
+                rels = GuardianRelationship.objects.filter(
+                    guardian=profile,
+                    status='active',
+                    verified_at__isnull=False,
+                    can_view_academics=True,
+                    start_date__lte=today
+                ).filter(Q(end_date__isnull=True) | Q(end_date__gte=today))
+                s_ids = list(rels.values_list('student_id', flat=True))
+                if not s_ids:
+                    raise NotFound('No linked student profiles found for this parent account.')
+                self.student_ids = set(s_ids)
+            else:
+                wards = list(self.user.wards.all())
+                if not wards:
+                    raise NotFound('No linked student profiles found for this parent account.')
+                self.student_ids = {w.id for w in wards}
+            students = Student.objects.filter(id__in=self.student_ids)
+            self.school_ids = set(students.values_list('school_id', flat=True))
+            enrs = Enrollment.objects.filter(student__in=students, end_date__isnull=True)
+            self.class_ids = set(enrs.values_list('school_class_id', flat=True))
+            return
             self.school_ids = {w.school_id for w in wards}
             self.class_ids = set(
                 Enrollment.objects.filter(

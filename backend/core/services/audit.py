@@ -9,6 +9,8 @@ VALUE_FIELDS={'status','priority','published','active','read','completed','assig
               'grade_alert_threshold'}
 
 def scope_for(instance):
+ if hasattr(instance, 'student') and instance.student: return scope_for(instance.student)
+ if hasattr(instance, 'guardian') and instance.guardian: return scope_for(instance.guardian)
  if isinstance(instance,(StaffMember,FinanceEntry,FinanceCategory,RiskCriteria,RiskDismissal)):return instance.school.organisation,instance.school
  if isinstance(instance,Organisation):return instance,None
  if isinstance(instance,School):return instance.organisation,instance

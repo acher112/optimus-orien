@@ -8,7 +8,7 @@ import {
   HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, MoreHorizontal,
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
-  Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound
+  Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -57,6 +57,8 @@ import { StudentDiscussion } from './StudentDiscussion';
 import { StudentProfile } from './StudentProfile';
 import StudentProfileModal from './StudentProfileModal';
 import PsychologicalEvaluation from './PsychologicalEvaluation';
+import ParentPortal from './ParentPortal';
+import ParentManagement from './ParentManagement';
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -88,6 +90,7 @@ const WORKSPACE_NAV = [
   { name: 'Risk criteria', icon: SlidersHorizontal, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Review cases', icon: ShieldAlert, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Interventions', icon: HeartHandshake },
+  { name: 'Parents', icon: UserCheck, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
@@ -134,7 +137,7 @@ const NAV_GROUPS = [
   },
   { sublabel: 'STUDENT SUPPORT', items: ['Psychological Evaluation', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
-  { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
+  { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries', 'Parents'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
 ];
@@ -1402,6 +1405,97 @@ function App() {
               </button>
             </nav>
           </>
+                ) : user.role === 'parent' ? (
+          <>
+            <div className="nav-label">PARENT PORTAL</div>
+            <nav>
+              <div className="nav-sublabel">FAMILY & PROGRESS</div>
+              <button
+                type="button"
+                onClick={() => switchPage('Family Home')}
+                className={'nav-item ' + (['Family Home', 'Overview'].includes(page) ? 'selected' : '')}
+              >
+                <Users size={19} strokeWidth={1.9} />
+                <span>Family Home</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Results & Progress')}
+                className={'nav-item ' + (page === 'Results & Progress' ? 'selected' : '')}
+              >
+                <TrendingUp size={19} strokeWidth={1.9} />
+                <span>Results & AQI</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Attendance')}
+                className={'nav-item ' + (page === 'Attendance' ? 'selected' : '')}
+              >
+                <ClipboardCheck size={19} strokeWidth={1.9} />
+                <span>Attendance</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Risk & Support')}
+                className={'nav-item ' + (page === 'Risk & Support' ? 'selected' : '')}
+              >
+                <AlertTriangle size={19} strokeWidth={1.9} />
+                <span>Risk & Support</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Teachers')}
+                className={'nav-item ' + (page === 'Teachers' ? 'selected' : '')}
+              >
+                <PhoneCall size={19} strokeWidth={1.9} />
+                <span>Teachers</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Homework')}
+                className={'nav-item ' + (page === 'Homework' ? 'selected' : '')}
+              >
+                <ClipboardList size={19} strokeWidth={1.9} />
+                <span>Homework</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Fees')}
+                className={'nav-item ' + (['Fees', 'Student fees'].includes(page) ? 'selected' : '')}
+              >
+                <Wallet size={19} strokeWidth={1.9} />
+                <span>Fees</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Announcements')}
+                className={'nav-item ' + (page === 'Announcements' ? 'selected' : '')}
+              >
+                <Megaphone size={19} strokeWidth={1.9} />
+                <span>Announcements</span>
+              </button>
+            </nav>
+
+            <div className="nav-label nav-lower">ACCOUNT & SECURITY</div>
+            <nav>
+              <button
+                type="button"
+                onClick={() => switchPage('Notifications')}
+                className={'nav-item ' + (page === 'Notifications' ? 'selected' : '')}
+              >
+                <Bell size={19} strokeWidth={1.9} />
+                <span>Notifications</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPage('Profile')}
+                className={'nav-item ' + (page === 'Profile' ? 'selected' : '')}
+              >
+                <Settings2 size={19} strokeWidth={1.9} />
+                <span>Profile & Security</span>
+              </button>
+            </nav>
+          </>
         ) : (
           <>
             <div className="nav-label">WORKSPACE</div>
@@ -1741,6 +1835,8 @@ function App() {
                   <TeacherHome user={user} onNavigate={switchPage} notify={notify} />
                 ) : user.role === 'student' ? (
                   <StudentHome user={user} onNavigate={switchPage} notify={notify} />
+                ) : user.role === 'parent' ? (
+                  <ParentPortal user={user} notify={notify} initialPage={page} />
                 ) : (
               <>
                 <div className="welcome-row">
@@ -2221,6 +2317,8 @@ function App() {
           {page === 'Audit log' && <AuditLogView notify={notify} />}
           {page === 'Reports' && <Reports user={user} />}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
+          {page === 'Parents' && <ParentManagement user={user} notify={notify} campuses={campuses} />}
+          {user.role === 'parent' && ['Overview', 'Family Home', 'Results & Progress', 'Attendance', 'Risk & Support', 'Teachers', 'Homework', 'Fees'].includes(page) && <ParentPortal user={user} notify={notify} initialPage={page} />}
           {page === 'Finance' && <Finance user={user} notify={notify} />}
           {page === 'Attendance' && (user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} />)}
           {page === 'Results & Progress' && <StudentResults user={user} notify={notify} />}

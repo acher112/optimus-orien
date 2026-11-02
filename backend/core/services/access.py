@@ -89,7 +89,19 @@ def schools_scope(user):
  if not user.is_authenticated or not user.is_active: return School.objects.none()
  if user.is_superuser:return School.objects.all()
  if user.role == 'student':return School.objects.filter(student__user=user).distinct()
- if user.role == 'parent':return School.objects.filter(student__guardians=user).distinct()
+ if user.role == 'parent':
+  today = timezone.localdate()
+  profile = getattr(user, 'guardian_profile', None)
+  if profile:
+   from core.models import GuardianRelationship
+   s_ids = GuardianRelationship.objects.filter(
+    guardian=profile,
+    status='active',
+    verified_at__isnull=False,
+    start_date__lte=today
+   ).filter(Q(end_date__isnull=True) | Q(end_date__gte=today)).values_list('student_id', flat=True)
+   return School.objects.filter(student__id__in=s_ids).distinct()
+  return School.objects.filter(student__guardians=user).distinct()
  if not user.organisation_id:return School.objects.none()
  if user.role == 'organisation_admin':return School.objects.filter(organisation_id=user.organisation_id)
  if user.role == 'principal':
@@ -109,7 +121,19 @@ def schools_scope(user):
 def students_scope(user):
  q=Student.objects.filter(school__in=schools_scope(user))
  if user.role == 'student' and not user.is_superuser:return q.filter(user=user)
- if user.role == 'parent' and not user.is_superuser:return q.filter(guardians=user)
+ if user.role == 'parent' and not user.is_superuser:
+  today = timezone.localdate()
+  profile = getattr(user, 'guardian_profile', None)
+  if profile:
+   from core.models import GuardianRelationship
+   s_ids = GuardianRelationship.objects.filter(
+    guardian=profile,
+    status='active',
+    verified_at__isnull=False,
+    start_date__lte=today
+   ).filter(Q(end_date__isnull=True) | Q(end_date__gte=today)).values_list('student_id', flat=True)
+   return q.filter(id__in=s_ids)
+  return q.filter(guardians=user)
  if user.role == 'teacher' and not user.is_superuser:
   from core.services.teacher_scope import get_teacher_scope
   scope=get_teacher_scope(user)

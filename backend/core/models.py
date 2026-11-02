@@ -31,6 +31,10 @@ class School(models.Model):
  parents_can_view_discussion=models.BooleanField(default=True)
  discussion_allow_attachments=models.BooleanField(default=False)
  notify_parents_on_risk=models.CharField(max_length=32,choices=[('manual','Manual'),('after_staff_confirmation','After Staff Confirmation')],default='manual')
+ parent_risk_notification_mode = models.CharField(max_length=32, choices=[('auto', 'Auto'), ('after_staff_confirmation', 'After Staff Confirmation'), ('manual', 'Manual')], default='auto')
+ show_teacher_contact_to_parents = models.BooleanField(default=False)
+ parents_can_view_fees = models.BooleanField(default=True)
+ aqi_min_group_size = models.PositiveIntegerField(default=5)
  blocked_words=models.TextField(blank=True,default='')
  class Meta:constraints=[models.UniqueConstraint(fields=['organisation','code'],name='unique_school_code_per_org')]
  def __str__(self):return self.name
@@ -941,6 +945,7 @@ class UserInvitation(models.Model):
     organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='invitations')
     school = models.ForeignKey(School, null=True, blank=True, on_delete=models.CASCADE, related_name='invitations')
     staff_member = models.ForeignKey('StaffMember', null=True, blank=True, on_delete=models.SET_NULL, related_name='invitations')
+    guardian_profile = models.ForeignKey('GuardianProfile', null=True, blank=True, on_delete=models.SET_NULL, related_name='invitations')
     invited_user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='invitations_received')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='issued_invitations')
     expires_at = models.DateTimeField()
@@ -1831,3 +1836,173 @@ class EvaluationSafeguardingReferral(models.Model):
 
     def __str__(self):
         return f"Safeguarding Referral for {self.student.full_name} ({self.urgency_level})"
+
+
+class GuardianProfile(models.Model):
+    """Explicit parent/guardian identity record per organisation."""
+    organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='guardian_profiles')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='guardian_profile')
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField(db_index=True)
+    mobile = models.CharField(max_length=32, db_index=True)
+    alternate_phone = models.CharField(max_length=32, blank=True, default='')
+    address = models.TextField(blank=True, default='')
+    preferred_language = models.CharField(max_length=8, choices=[('en', 'English'), ('ur', 'Urdu')], default='en')
+    occupation = models.CharField(max_length=120, blank=True, default='')
+    emergency_contact = models.CharField(max_length=120, blank=True, default='')
+
+    identity_type = models.CharField(max_length=20, choices=[('cnic', 'CNIC'), ('passport', 'Passport'), ('other', 'Other')], default='cnic')
+    identity_number_encrypted = models.TextField(help_text="Encrypted identity number at rest")
+    identity_last4 = models.CharField(max_length=8)
+    identity_hash = models.CharField(max_length=64, db_index=True, help_text="HMAC-SHA256 hash for duplicate detection")
+
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'guardian_profiles'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['organisation', 'identity_hash'], name='unique_guardian_identity_per_org')
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} ({self.masked_identity})"
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
+    @property
+    def masked_identity(self):
+        from core.services.guardian_crypto import mask_identity_number
+        return mask_identity_number(self.identity_type, self.identity_last4)
+
+
+class GuardianRelationship(models.Model):
+    """M:N link between Guardian and Student with explicit permissions and audit."""
+    guardian = models.ForeignKey(GuardianProfile, on_delete=models.CASCADE, related_name='relationships')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='guardian_relationships')
+    relationship = models.CharField(max_length=20, choices=[('father', 'Father'), ('mother', 'Mother'), ('guardian', 'Guardian'), ('other', 'Other')], default='guardian')
+    is_primary = models.BooleanField(default=True)
+
+    can_view_academics = models.BooleanField(default=True)
+    can_view_attendance = models.BooleanField(default=True)
+    can_view_homework = models.BooleanField(default=True)
+    can_view_fees = models.BooleanField(default=True)
+    receive_notifications = models.BooleanField(default=True)
+
+    status = models.CharField(max_length=20, choices=[('active', 'Active'), ('suspended', 'Suspended'), ('revoked', 'Revoked')], default='active', db_index=True)
+    start_date = models.DateField(default=date.today)
+    end_date = models.DateField(null=True, blank=True)
+    verified_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verification_note = models.TextField(blank=True, default='')
+
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'guardian_relationships'
+        ordering = ['-is_primary', '-created_at']
+        indexes = [
+            models.Index(fields=['guardian', 'student']),
+            models.Index(fields=['status', 'start_date', 'end_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.guardian.full_name} -> {self.student.full_name} ({self.relationship}) [{self.status}]"
+
+
+class ParentNotificationPreference(models.Model):
+    """Parent opt-in/opt-out preferences."""
+    guardian = models.ForeignKey(GuardianProfile, on_delete=models.CASCADE, related_name='notification_preferences')
+    notification_type = models.CharField(max_length=40, db_index=True)
+    in_app = models.BooleanField(default=True)
+    email = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'parent_notification_preferences'
+        constraints = [
+            models.UniqueConstraint(fields=['guardian', 'notification_type'], name='unique_pref_per_guardian_type')
+        ]
+
+
+class ParentRiskAlert(models.Model):
+    """Lifecycle tracking for student risk conditions alerted to parents."""
+    STATUS_CHOICES = [
+        ('active', 'Active Alert'),
+        ('read', 'Read'),
+        ('acknowledged', 'Acknowledged'),
+        ('resolved', 'Resolved'),
+    ]
+    CONFIRMATION_CHOICES = [
+        ('pending', 'Pending Confirmation'),
+        ('confirmed', 'Confirmed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    guardian = models.ForeignKey(GuardianProfile, on_delete=models.CASCADE, related_name='risk_alerts')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='parent_risk_alerts')
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    condition_type = models.CharField(max_length=32)
+    subject = models.ForeignKey(Subject, null=True, blank=True, on_delete=models.SET_NULL)
+    condition_key = models.CharField(max_length=64, db_index=True)
+    title = models.CharField(max_length=200)
+    evidence_text = models.TextField()
+    class_teacher_name = models.CharField(max_length=120)
+    subject_teacher_name = models.CharField(max_length=120, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    read_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_note = models.CharField(max_length=255, blank=True, default='')
+    staff_confirmation_status = models.CharField(max_length=20, choices=CONFIRMATION_CHOICES, default='confirmed')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'parent_risk_alerts'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['guardian', 'student', 'status']),
+            models.Index(fields=['student', 'condition_key', 'status']),
+        ]
+
+    @property
+    def alert_type(self):
+        return self.condition_type
+
+    def __str__(self):
+        return f"RiskAlert: {self.student.full_name} ({self.condition_key}) -> {self.guardian.full_name} [{self.status}]"
+
+
+class ParentCallbackRequest(models.Model):
+    """Parent meeting / call-back request sent to the child's class teacher."""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('declined', 'Declined'),
+    ]
+
+    guardian = models.ForeignKey(GuardianProfile, on_delete=models.CASCADE, related_name='callback_requests')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='callback_requests')
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='callback_requests_received')
+    topic = models.CharField(max_length=120)
+    message = models.TextField(blank=True, default='')
+    preferred_time = models.CharField(max_length=80, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    response_notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'parent_callback_requests'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"CallbackRequest: {self.guardian.full_name} -> {self.teacher.username} regarding {self.student.full_name}"
