@@ -73,11 +73,16 @@ def aqi_campus(request, school_id):
     scope.check_level(2)
 
     academic_year_id = request.query_params.get('academic_year')
-    data = get_campus_aqi(
-        scope,
-        school_id=school_id,
-        academic_year_id=int(academic_year_id) if academic_year_id else None
-    )
+    from core.services.cache_service import get_or_set_aqi_cache
+    org_id = request.user.organisation_id or 0
+    scope_key = f"ay_{academic_year_id or 'latest'}"
+    def _compute():
+        return get_campus_aqi(
+            scope,
+            school_id=school_id,
+            academic_year_id=int(academic_year_id) if academic_year_id else None
+        )
+    data, _ = get_or_set_aqi_cache(org_id, school_id, 2, scope_key, _compute)
     return Response(data)
 
 

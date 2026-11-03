@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import date
+from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator,MaxValueValidator
@@ -72,7 +73,9 @@ class SchoolClass(models.Model):
  grade_level=models.CharField(max_length=40,blank=True)
  curriculum=models.CharField(max_length=120,blank=True,default='')
  teacher=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='classes_taught')
- class Meta:constraints=[models.UniqueConstraint(fields=['academic_year','name','section'],name='unique_class_in_year')]
+ class Meta:
+  constraints=[models.UniqueConstraint(fields=['academic_year','name','section'],name='unique_class_in_year')]
+  indexes=[models.Index(fields=['school','academic_year'],name='cls_sch_year_idx')]
  def clean(self):
   if self.academic_year_id and self.school_id and self.academic_year.school_id!=self.school_id:raise ValidationError('Invalid class academic year')
   if self.teacher_id and (self.teacher.role!='teacher' or self.teacher.school_id!=self.school_id):raise ValidationError('Assigned teacher must belong to class school')
@@ -182,7 +185,12 @@ class Student(models.Model):
  guardians=models.ManyToManyField(User,related_name='wards',blank=True)
  enrolled_on=models.DateField(db_index=True)
  active=models.BooleanField(default=True,db_index=True)
- class Meta:constraints=[models.UniqueConstraint(fields=['school','admission_number'],name='unique_admission_per_school')]
+ class Meta:
+  constraints=[models.UniqueConstraint(fields=['school','admission_number'],name='unique_admission_per_school')]
+  indexes=[
+   models.Index(fields=['school','active'],name='student_school_act_idx'),
+   models.Index(fields=['school','last_name','first_name'],name='student_school_name_idx'),
+  ]
  def clean(self):
   if self.user_id and (self.user.role!='student' or (self.user.organisation_id!=self.school.organisation_id)):
    raise ValidationError('Student account must have student role and matching organisation')
@@ -196,7 +204,9 @@ class Enrollment(models.Model):
  section=models.ForeignKey('Section',null=True,blank=True,on_delete=models.SET_NULL,related_name='enrollments')
  start_date=models.DateField()
  end_date=models.DateField(null=True,blank=True)
- class Meta:constraints=[models.UniqueConstraint(fields=['student','school_class','start_date'],name='unique_enrolment_period'),models.UniqueConstraint(fields=['student'],condition=models.Q(end_date__isnull=True),name='one_active_enrollment_per_student')]
+ class Meta:
+  constraints=[models.UniqueConstraint(fields=['student','school_class','start_date'],name='unique_enrolment_period'),models.UniqueConstraint(fields=['student'],condition=models.Q(end_date__isnull=True),name='one_active_enrollment_per_student')]
+  indexes=[models.Index(fields=['school_class','end_date'],name='enr_class_end_idx')]
  def clean(self):
   if self.student_id and self.school_class_id:
    if not self.pk and self.student.school_id!=self.school_class.school_id:raise ValidationError('New enrollment must use current student school')
@@ -218,6 +228,8 @@ class Assessment(models.Model):
  created_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='created_assessments')
  teaching_assignment=models.ForeignKey(TeachingAssignment,null=True,blank=True,on_delete=models.SET_NULL,related_name='assessments')
  exam_term=models.ForeignKey('ExamTerm',null=True,blank=True,on_delete=models.SET_NULL,related_name='assessments')
+ class Meta:
+  indexes=[models.Index(fields=['school_class','subject','date'],name='asmt_cls_sb_dt_idx')]
  def clean(self):
   if self.subject_id and self.school_class_id and self.subject.school_id!=self.school_class.school_id:raise ValidationError('Subject does not belong to class school')
   if self.school_class_id and self.date and not self.school_class.academic_year.start_date<=self.date<=self.school_class.academic_year.end_date:
@@ -238,7 +250,12 @@ class Grade(models.Model):
  marks=models.DecimalField(max_digits=8,decimal_places=2,null=True,blank=True,validators=[MinValueValidator(0)])
  result_status=models.CharField(max_length=16,choices=RESULT_STATUS,default='recorded')
  feedback=models.TextField(blank=True)
- class Meta:constraints=[models.UniqueConstraint(fields=['assessment','student'],name='unique_assessment_grade')]
+ class Meta:
+  constraints=[models.UniqueConstraint(fields=['assessment','student'],name='unique_assessment_grade')]
+  indexes=[
+   models.Index(fields=['student','result_status'],name='grade_std_stat_idx'),
+   models.Index(fields=['assessment','result_status'],name='grade_asmt_stat_idx'),
+  ]
  def clean(self):
   if self.assessment_id and self.student_id:
    if self.marks is not None and self.marks>self.assessment.max_marks:raise ValidationError('Marks cannot exceed maximum')
@@ -259,7 +276,13 @@ class Attendance(models.Model):
  recorded_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name='+')
  created_at=models.DateTimeField(auto_now_add=True,null=True,blank=True)
  updated_at=models.DateTimeField(auto_now=True,null=True,blank=True)
- class Meta:constraints=[models.UniqueConstraint(fields=['student','school_class','date'],name='unique_attendance_session')]
+ class Meta:
+  constraints=[models.UniqueConstraint(fields=['student','school_class','date'],name='unique_attendance_session')]
+  indexes=[
+   models.Index(fields=['school_class','date'],name='att_class_date_idx'),
+   models.Index(fields=['student','date','status'],name='att_std_date_st_idx'),
+   models.Index(fields=['date','status'],name='att_date_status_idx'),
+  ]
  def clean(self):
   if self.student_id and self.school_class_id:
    if not Enrollment.objects.filter(student=self.student,school_class=self.school_class,start_date__lte=self.date).filter(models.Q(end_date__isnull=True)|models.Q(end_date__gte=self.date)).exists():raise ValidationError('Student not enrolled on attendance date')
@@ -385,6 +408,11 @@ class Notification(models.Model):
  body=models.CharField(max_length=400)
  read=models.BooleanField(default=False)
  created_at=models.DateTimeField(auto_now_add=True)
+ class Meta:
+  indexes=[
+   models.Index(fields=['user','read','created_at'],name='notif_usr_rd_crt_idx'),
+   models.Index(fields=['user','created_at'],name='notif_usr_crt_idx'),
+  ]
 
 class AuditEvent(models.Model):
  actor=models.ForeignKey(User,null=True,on_delete=models.SET_NULL)
@@ -542,6 +570,10 @@ class StaffAttendance(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['staff', 'date'], name='unique_staff_attendance_day')
         ]
+        indexes = [
+            models.Index(fields=['school', 'date'], name='staffatt_school_date_idx'),
+            models.Index(fields=['staff', 'date'], name='staffatt_staff_date_idx'),
+        ]
 
     def __str__(self):
         return f"{self.staff.full_name} - {self.date}: {self.status}"
@@ -678,6 +710,11 @@ class StudentFee(models.Model):
     class Meta:
         ordering = ['due_date', 'id']
         constraints = [models.UniqueConstraint(fields=['student', 'head', 'period'], name='unique_student_fee_period')]
+        indexes = [
+            models.Index(fields=['student', 'status', 'due_date'], name='fee_std_stat_due_idx'),
+            models.Index(fields=['status', 'due_date'], name='fee_stat_due_idx'),
+            models.Index(fields=['period', 'status'], name='fee_period_stat_idx'),
+        ]
 
     @property
     def net_due(self):
@@ -709,6 +746,11 @@ class FeePayment(models.Model):
 
     class Meta:
         ordering = ['-paid_on', '-id']
+        indexes = [
+            models.Index(fields=['school', 'paid_on'], name='feepay_sch_paid_idx'),
+            models.Index(fields=['school', 'status', 'voided'], name='feepay_sch_stat_idx'),
+            models.Index(fields=['student', 'paid_on'], name='feepay_std_paid_idx'),
+        ]
 
     def __str__(self):
         return f"Receipt #{self.receipt_number}: {self.student.full_name} ({self.amount})"
@@ -1184,6 +1226,11 @@ class ExamStudentMark(models.Model):
         ordering = ['student__last_name', 'student__first_name']
         constraints = [
             models.UniqueConstraint(fields=['student', 'component', 'subject'], name='unique_student_mark_per_component_subject')
+        ]
+        indexes = [
+            models.Index(fields=['school_class', 'component', 'subject'], name='mark_cls_comp_sb_idx'),
+            models.Index(fields=['academic_year', 'school_class'], name='mark_yr_cls_idx'),
+            models.Index(fields=['student', 'academic_year'], name='mark_std_yr_idx'),
         ]
 
     def clean(self):
@@ -2167,3 +2214,48 @@ class LandingContactMessage(models.Model):
 
     def __str__(self):
         return f"Contact: {self.name} <{self.email}> - {self.subject or 'General Inquiry'}"
+
+
+class BackgroundJob(models.Model):
+    """Asynchronous task queue for heavy operations (PDFs, challans, imports, AQI)."""
+    JOB_TYPES = [
+        ('bulk_challan', 'Bulk Fee Challan Generation'),
+        ('report_card_pdf', 'Report Card PDFs'),
+        ('csv_import', 'CSV Data Import'),
+        ('aqi_recalculation', 'AQI Campus Recalculation'),
+        ('bulk_notifications', 'Bulk Notification Dispatch'),
+    ]
+    STATUS_CHOICES = [
+        ('queued', 'Queued'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    organisation = models.ForeignKey('Organisation', on_delete=models.CASCADE, null=True, blank=True, related_name='background_jobs')
+    school = models.ForeignKey('School', on_delete=models.CASCADE, null=True, blank=True, related_name='background_jobs')
+    job_type = models.CharField(max_length=40, choices=JOB_TYPES, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued', db_index=True)
+    payload = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=3)
+    error_message = models.TextField(blank=True, default='')
+    scheduled_at = models.DateTimeField(default=timezone.now, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['scheduled_at', 'id']
+        indexes = [
+            models.Index(fields=['status', 'scheduled_at'], name='job_status_sched_idx'),
+            models.Index(fields=['school', 'status'], name='job_school_status_idx'),
+            models.Index(fields=['organisation', 'status'], name='job_org_status_idx'),
+        ]
+
+    def __str__(self):
+        return f"Job #{self.id} [{self.job_type}] - {self.status}"

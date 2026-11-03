@@ -25,25 +25,76 @@ import csv
 @require_GET
 def health(request):return JsonResponse({'status':'ok','service':'optimus-orien'})
 
+@require_GET
+def health_ready(request):
+ """
+ Deep readiness check for orchestrators (Render, K8s, Load Balancers).
+ Validates database query execution, schema migration state, and cache operability.
+ """
+ from django.db import connection
+ from django.db.migrations.executor import MigrationExecutor
+ from django.core.cache import cache
+
+ checks = {}
+ is_ready = True
+
+ try:
+  with connection.cursor() as cursor:
+   cursor.execute("SELECT 1")
+   row = cursor.fetchone()
+   checks['database'] = 'connected' if row and row[0] == 1 else 'unexpected_result'
+ except Exception as exc:
+  checks['database'] = f'error: {str(exc)}'
+  is_ready = False
+
+ try:
+  executor = MigrationExecutor(connection)
+  targets = executor.loader.graph.leaf_nodes()
+  plan = executor.migration_plan(targets)
+  checks['pending_migrations'] = len(plan)
+  checks['migration_status'] = 'up_to_date' if len(plan) == 0 else 'pending'
+  if len(plan) > 0:
+   is_ready = False
+ except Exception as exc:
+  checks['migrations'] = f'error: {str(exc)}'
+  is_ready = False
+
+ try:
+  cache_key = 'optimus:health:ready_ping'
+  cache.set(cache_key, 'pong', timeout=10)
+  pong = cache.get(cache_key)
+  checks['cache'] = 'operational' if pong == 'pong' else 'cache_miss'
+ except Exception as exc:
+  checks['cache'] = f'error: {str(exc)}'
+
+ status_code = 200 if is_ready else 503
+ return JsonResponse({
+  'status': 'ready' if is_ready else 'degraded',
+  'service': 'optimus-orien',
+  'checks': checks
+ }, status=status_code)
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def csrf(request):
  from django.middleware.csrf import get_token
  return Response({'csrfToken':get_token(request)})
 
-class LoginThrottle(AnonRateThrottle):
-	scope='login'
-	def allow_request(self, request, view):
-		import sys
-		if 'test' in sys.argv:
-			return True
-		return super().allow_request(request, view)
+from core.throttles import (
+    LoginThrottle,
+    SignupThrottle,
+    PasswordResetThrottle,
+    HeavyEndpointThrottle,
+    PerAccountLoginLockoutThrottle,
+)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @throttle_classes([LoginThrottle])
 def _signin_api(request):
  identifier=(request.data.get('username') or request.data.get('email') or '').strip()
+ if PerAccountLoginLockoutThrottle.is_locked(identifier):
+  return Response({'detail':'Account temporarily locked due to excessive failed attempts. Please try again in 15 minutes.'},status=429)
  password=request.data.get('password') or ''
  admin_env_user=(os.getenv('INITIAL_ADMIN_USERNAME') or '').strip()
  admin_env_pass=(os.getenv('INITIAL_ADMIN_PASSWORD') or '').strip()
@@ -62,7 +113,9 @@ def _signin_api(request):
    user=target
 
  if not user or not user.is_active:
+  PerAccountLoginLockoutThrottle.record_failure(identifier)
   return Response({'detail':'Invalid credentials'},status=400)
+ PerAccountLoginLockoutThrottle.reset(identifier)
  login(request,user)
  from django.middleware.csrf import get_token
  payload=user_payload(user)
@@ -78,7 +131,7 @@ def signin(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([LoginThrottle])
+@throttle_classes([SignupThrottle])
 def _register_api(request):
 	"""
 	Self-service SaaS Institution Registration.
@@ -317,7 +370,7 @@ def change_password(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([LoginThrottle])
+@throttle_classes([PasswordResetThrottle])
 def forgot_password(request):
  identifier = str(request.data.get('email') or request.data.get('username') or request.data.get('identifier') or '').strip()
  if not identifier:
@@ -357,7 +410,7 @@ def forgot_password(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([LoginThrottle])
+@throttle_classes([PasswordResetThrottle])
 def reset_password_with_token(request):
  data = request.data
  uid_raw = str(data.get('uid') or '').strip()
@@ -475,8 +528,16 @@ class StudentSerializer(DynamicSerializer):
   if 'gender' in self.initial_data and not self.initial_data.get('gender'):
    raise serializers.ValidationError({'gender':'Gender is mandatory. Please select Male, Female, Other, or Not recorded.'})
   return super().validate(attrs)
+ def _get_active_enrollment(self, o):
+  cache = getattr(o, '_prefetched_objects_cache', {})
+  if 'enrollments' in cache:
+   for e in cache['enrollments']:
+    if e.end_date is None:
+     return e
+   return None
+  return o.enrollments.select_related('school_class__school').filter(end_date__isnull=True).first()
  def get_class_name(self,o):
-  e=o.enrollments.select_related('school_class__school').filter(end_date__isnull=True).first()
+  e = self._get_active_enrollment(o)
   if not e or not e.school_class:
    return 'Unassigned'
   sc = e.school_class
@@ -485,10 +546,10 @@ class StudentSerializer(DynamicSerializer):
    return f"{base} ({sc.school.name})"
   return base
  def get_school_class_id(self,o):
-  e=o.enrollments.filter(end_date__isnull=True).first()
+  e = self._get_active_enrollment(o)
   return e.school_class_id if e else None
  def get_section(self,o):
-  e=o.enrollments.select_related('school_class').filter(end_date__isnull=True).first()
+  e = self._get_active_enrollment(o)
   return e.school_class.section if (e and e.school_class) else ''
  def to_representation(self, instance):
   ret = super().to_representation(instance)
@@ -1153,7 +1214,13 @@ class ScopedViewSet(viewsets.ModelViewSet):
 class Schools(ScopedViewSet):queryset=School.objects.all();serializer_class=SchoolSerializer
 class Classes(ScopedViewSet):queryset=SchoolClass.objects.all();serializer_class=ClassSerializer
 class Students(ScopedViewSet):
- queryset=Student.objects.all();serializer_class=StudentSerializer
+ queryset=Student.objects.select_related('school', 'user')
+ serializer_class=StudentSerializer
+ def get_queryset(self):
+  return super().get_queryset().select_related('school', 'user').prefetch_related(
+   'guardians',
+   models.Prefetch('enrollments', queryset=Enrollment.objects.filter(end_date__isnull=True).select_related('school_class__school'))
+  )
  def get_serializer_class(self):
   req = getattr(self, 'request', None)
   if req and req.user and req.user.is_authenticated and req.user.role == 'teacher' and not req.user.is_superuser:
@@ -1234,9 +1301,16 @@ class Years(ScopedViewSet):queryset=AcademicYear.objects.all();serializer_class=
 class Enrollments(ScopedViewSet):queryset=Enrollment.objects.all();serializer_class=EnrollmentSerializer
 class Assessments(ScopedViewSet):queryset=Assessment.objects.all();serializer_class=AssessmentSerializer
 class Grades(ScopedViewSet):
- queryset=Grade.objects.all();serializer_class=GradeSerializer
+ queryset=Grade.objects.select_related('student', 'assessment')
+ serializer_class=GradeSerializer
+ def get_queryset(self):
+  return super().get_queryset().select_related('student', 'assessment')
  def destroy(self,request,*args,**kwargs):raise PermissionDenied('Grades cannot be deleted through API.')
-class AttendanceRecords(ScopedViewSet):queryset=Attendance.objects.all();serializer_class=AttendanceSerializer
+class AttendanceRecords(ScopedViewSet):
+ queryset=Attendance.objects.select_related('student', 'school_class')
+ serializer_class=AttendanceSerializer
+ def get_queryset(self):
+  return super().get_queryset().select_related('student', 'school_class')
 class HomeworkItems(ScopedViewSet):queryset=Homework.objects.all();serializer_class=HomeworkSerializer
 class Submissions(ScopedViewSet):queryset=HomeworkSubmission.objects.all();serializer_class=SubmissionSerializer
 class Observations(ScopedViewSet):queryset=Observation.objects.all();serializer_class=ObservationSerializer
@@ -1363,23 +1437,49 @@ def student_stats(students,classes=None):
 def dashboard(request):
  u=request.user;students=students_scope(u);schools=schools_scope(u);classes=classes_scope(u)
  school_param=request.query_params.get('school') or request.query_params.get('campus')
+ target_school_id = None
  if school_param:
   try:
    sid=int(school_param)
+   target_school_id = sid
    schools=schools.filter(pk=sid)
    students=students.filter(school_id=sid)
    classes=classes.filter(school_id=sid)
   except (ValueError,TypeError):pass
- stats=student_stats(students,classes)
- cases=queryset_for(u,ReviewCase) if u.role not in ('parent','student') else ReviewCase.objects.none()
- school_items=[]
- for school in schools[:20]:
-  scoped_students=students.filter(school=school)
-  school_items.append({'id':school.id,'name':school.name,'students':scoped_students.count(),**student_stats(scoped_students,classes.filter(school=school))})
- recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name'))
- recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}"} for x in recent]
- recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
- return Response({'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':max(StaffMember.objects.filter(school__in=schools,status='active').count(), User.objects.filter(school__in=schools).exclude(role__in=['student','parent']).count())},'stats':stats,'schools':school_items,'recent_cases':recent,'recent_students':recent_students,'attention':cases.filter(priority='high').exclude(status='resolved').count(),'recent_notifications':list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))})
+ else:
+  if u.school_id:
+   target_school_id = u.school_id
+  elif schools.count() == 1:
+   target_school_id = schools.first().id
+  else:
+   target_school_id = 0
+
+ from core.services.cache_service import get_or_set_dashboard_cache
+
+ def _compute_dashboard():
+  stats=student_stats(students,classes)
+  cases=queryset_for(u,ReviewCase) if u.role not in ('parent','student') else ReviewCase.objects.none()
+  school_items=[]
+  for school in schools[:20]:
+   scoped_students=students.filter(school=school)
+   school_items.append({'id':school.id,'name':school.name,'students':scoped_students.count(),**student_stats(scoped_students,classes.filter(school=school))})
+  recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name'))
+  recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}"} for x in recent]
+  recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
+  return {
+   'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':max(StaffMember.objects.filter(school__in=schools,status='active').count(), User.objects.filter(school__in=schools).exclude(role__in=['student','parent']).count())},
+   'stats':stats,
+   'schools':school_items,
+   'recent_cases':recent,
+   'recent_students':recent_students,
+   'attention':cases.filter(priority='high').exclude(status='resolved').count(),
+  }
+
+ org_id = u.organisation_id or 0
+ base_data, _ = get_or_set_dashboard_cache(org_id, target_school_id, u.role, _compute_dashboard)
+ resp = dict(base_data)
+ resp['recent_notifications'] = list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))
+ return Response(resp)
 
 @api_view(['GET'])
 def export_students(request):

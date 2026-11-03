@@ -37,8 +37,8 @@ export default function FaqSection({ faqs, locale }: FaqSectionProps) {
       id: 3,
       question: isUr ? 'آپٹیمس اورین کو کون استعمال کر سکتا ہے؟' : 'Who can use Optimus Orien?',
       answer: isUr
-        ? '<p>سکول مالکان، ایڈمنسٹریٹر، پرنسپل، اساتذہ، طلباء اور والدین اپنے کردار کے مخصوص پورٹل تک رسائی حاصل کر سکتے ہیں۔</p>'
-        : '<p>School owners, administrators, principals, teachers, students and parents can access role-specific portals.</p>',
+        ? '<p>سکول مالکان، ایڈمنسٹریٹر، پرنسپل، اساتذہ اور طلباء اپنے کردار کے مخصوص پورٹل تک رسائی حاصل کر سکتے ہیں۔</p>'
+        : '<p>School owners, administrators, principals, teachers, and students can access role-specific portals.</p>',
     },
     {
       id: 4,
@@ -55,13 +55,6 @@ export default function FaqSection({ faqs, locale }: FaqSectionProps) {
       answer: isUr
         ? '<p>سکول کی ترتیبات کے مطابق، آپٹیمس اورین امتحانی نمبر، حاضری، مضامین کی مہارتیں، کلاس کارکردگی اور سال بہ سال ترقی کا ریکارڈ مرتب کرتا ہے۔</p>'
         : "<p>Depending on the school's configuration, Optimus Orien can organize academic marks, attendance, subject skills, classroom performance and longitudinal performance data.</p>",
-    },
-    {
-      id: 6,
-      question: isUr ? 'کیا والدین بچے کی کارکردگی دیکھ سکتے ہیں؟' : 'Can parents access student performance?',
-      answer: isUr
-        ? '<p>جی ہاں، پیرنٹ پورٹل والدین کو اپنے بچے کی تعلیمی کارکردگی، حاضری، مہارتوں اور پیش رفت سے باخبر رکھتا ہے۔</p>'
-        : "<p>Yes. The Parent Portal is designed to provide parents with relevant information about their child's academic performance, attendance, skills and progress.</p>",
     },
     {
       id: 7,

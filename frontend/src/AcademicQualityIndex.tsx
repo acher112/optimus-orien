@@ -251,13 +251,13 @@ export default function AcademicQualityIndex({
   const isOrgAdmin = user.is_superuser || user.role === 'organisation_admin';
   const isPrincipal = user.role === 'principal' || user.role === 'school_admin';
   const isTeacher = user.role === 'teacher';
-  const isStudentOrParent = user.role === 'student' || user.role === 'parent';
+  const isStudentOrParent = user.role === 'student';
 
   // Initial Level:
   // Org Admin -> 1 (School-wide)
   // Principal -> 2 (Campus)
   // Teacher -> 3 (Class) or 4 (Subject)
-  // Student/Parent -> 5 (Profile)
+  // Student -> 5 (Profile)
   const initialLevel = useMemo(() => {
     if (isOrgAdmin) return 1;
     if (isPrincipal) return 2;

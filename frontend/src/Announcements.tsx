@@ -30,7 +30,6 @@ const AUDIENCE_TABS = [
   { key: 'staff', label: 'Staff', icon: Users },
   { key: 'teachers', label: 'Teachers', icon: Users },
   { key: 'principals', label: 'Principals', icon: Users },
-  { key: 'parents', label: 'Parents', icon: Users },
 ];
 
 export default function Announcements({ user, notify }: { user: AuthUser; notify: (m: string) => void }) {
@@ -349,7 +348,6 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
                     <option value="staff">Staff Only</option>
                     <option value="teachers">Teachers Only</option>
                     <option value="principals">Principals Only</option>
-                    <option value="parents">Parents Only</option>
                   </select>
                 </label>
 

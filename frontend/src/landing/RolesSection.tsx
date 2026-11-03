@@ -5,7 +5,7 @@ interface RolesSectionProps {
   locale: 'en' | 'ur';
 }
 
-type RoleKey = 'Admin' | 'Principal' | 'Teacher' | 'Student' | 'Parent';
+type RoleKey = 'Admin' | 'Principal' | 'Teacher' | 'Student';
 
 interface RoleConfig {
   key: RoleKey;
@@ -57,15 +57,6 @@ export default function RolesSection({ locale }: RolesSectionProps) {
       badge: isUr ? 'ذاتی تعلیمی پیش رفت اور رہنمائی' : 'Personal Progress & Reflection',
       image: '/images/dashboard-student.png',
       icon: <BookOpen size={16} />,
-    },
-    {
-      key: 'Parent',
-      label: isUr ? 'کردار' : 'Role',
-      name: isUr ? 'والدین' : 'Parent',
-      url: 'portal.optimus-orien.io/parent',
-      badge: isUr ? 'بچے کی تعلیمی و حاضری کارکردگی' : 'Child Academic & Attendance Insights',
-      image: '/images/dashboard-parent.png',
-      icon: <Heart size={16} />,
     },
   ];
 

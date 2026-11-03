@@ -88,7 +88,6 @@ export default function FooterSection({
               <li><a href="#platform">Principal</a></li>
               <li><a href="#platform">Teacher</a></li>
               <li><a href="#platform">Student</a></li>
-              <li><a href="#platform">Parent</a></li>
             </ul>
           </div>
 

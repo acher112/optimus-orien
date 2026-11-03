@@ -28,7 +28,7 @@ export default function StepsSection({ locale = 'en' }: StepsSectionProps) {
         },
         {
           title: 'اقدام کریں (Act)',
-          desc: 'اساتذہ، منتظمین اور والدین بروقت مناسب اقدام کر سکتے ہیں۔',
+          desc: 'اساتذہ اور منتظمین بروقت مناسب اقدام کر سکتے ہیں۔',
         },
         {
           title: 'نگرانی کریں (Monitor)',
@@ -54,7 +54,7 @@ export default function StepsSection({ locale = 'en' }: StepsSectionProps) {
         },
         {
           title: 'Act',
-          desc: 'Teachers, administrators and parents can take appropriate action.',
+          desc: 'Teachers and administrators can take appropriate action.',
         },
         {
           title: 'Monitor',

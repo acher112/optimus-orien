@@ -413,7 +413,7 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                     {profile.guardians && profile.guardians.length > 0 && (
                       <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>
-                          Linked Parent Portal Accounts:
+                          Linked Guardian Accounts:
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                           {profile.guardians.map(g => (

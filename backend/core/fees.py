@@ -1001,7 +1001,12 @@ def defaulters(request):
         student__school_id__in=school_ids,
         status__in=['unpaid', 'partial'],
         due_date__lt=cutoff_date
-    ).exclude(status__in=['waived', 'void']).select_related('student', 'student__school', 'head')
+    ).exclude(status__in=['waived', 'void']).select_related(
+        'student', 'student__school', 'head'
+    ).prefetch_related(
+        'allocations__payment',
+        'student__enrollments__school_class'
+    )
 
     # Filters
     if request.query_params.get('class'):
@@ -1021,18 +1026,29 @@ def defaulters(request):
             Q(student__father_name__icontains=q_val)
         )
 
+    from django.db.models import Max
+    fees_list = list(qs)
+    student_ids = list({f.student_id for f in fees_list})
+    last_pay_map = {}
+    if student_ids:
+        lp_qs = FeePayment.objects.filter(student_id__in=student_ids, voided=False, status='approved').values('student_id').annotate(latest=Max('paid_on'))
+        last_pay_map = {item['student_id']: item['latest'] for item in lp_qs}
+
     # Group fee lines per student
     student_map = {}
-    for fee in qs:
+    for fee in fees_list:
         sid = fee.student_id
-        already_paid = fee.allocations.filter(payment__voided=False, payment__status='approved').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+        already_paid = sum(
+            a.amount for a in fee.allocations.all()
+            if not a.payment.voided and a.payment.status == 'approved'
+        )
         unpaid = max(Decimal('0.00'), fee.net_due - already_paid)
         if unpaid <= Decimal('0.00'):
             continue
 
         if sid not in student_map:
             st = fee.student
-            en = st.enrollments.filter(end_date__isnull=True).select_related('school_class').first()
+            en = next((e for e in st.enrollments.all() if e.end_date is None), None)
             cls_name = 'Unassigned'
             sec_name = ''
             cls_id = None
@@ -1042,7 +1058,7 @@ def defaulters(request):
                 cls_name = sc.name
                 sec_name = sc.section or ''
 
-            last_pay = FeePayment.objects.filter(student=st, voided=False, status='approved').order_by('-paid_on').first()
+            last_pay_date = last_pay_map.get(sid)
 
             student_map[sid] = {
                 'student_id': sid,
@@ -1057,7 +1073,7 @@ def defaulters(request):
                 'class_name': cls_name,
                 'section': sec_name,
                 'full_class_name': f"{cls_name} – {sec_name}" if sec_name else cls_name,
-                'last_payment_date': str(last_pay.paid_on) if last_pay else None,
+                'last_payment_date': str(last_pay_date) if last_pay_date else None,
                 'overdue_lines_count': 0,
                 'total_outstanding': Decimal('0.00'),
                 'oldest_due_date': fee.due_date,

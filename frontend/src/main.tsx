@@ -16,17 +16,17 @@ import {
   createAccount, registerCampus, schoolUsers, updateProfile, forgotPassword, resetPassword,
   type User, type Dashboard, type Resource
 } from './api';
-import PublicHome from './PublicHome';
-import SchoolSetup from './SchoolSetup';
-import Reports from './Reports';
+const PublicHome = React.lazy(() => import('./PublicHome'));
+const SchoolSetup = React.lazy(() => import('./SchoolSetup'));
+const Reports = React.lazy(() => import('./Reports'));
 import Staff from './Staff';
-import Finance from './Finance';
-import Fees from './Fees';
-import Salaries from './Salaries';
-import Examinations from './Examinations';
-import AcademicQualityIndex from './AcademicQualityIndex';
-import PlatformOwner from './PlatformOwner';
-import DataImport from './DataImport';
+const Finance = React.lazy(() => import('./Finance'));
+const Fees = React.lazy(() => import('./Fees'));
+const Salaries = React.lazy(() => import('./Salaries'));
+const Examinations = React.lazy(() => import('./Examinations'));
+const AcademicQualityIndex = React.lazy(() => import('./AcademicQualityIndex'));
+const PlatformOwner = React.lazy(() => import('./PlatformOwner'));
+const DataImport = React.lazy(() => import('./DataImport'));
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
@@ -35,8 +35,8 @@ import StudyMaterials from './StudyMaterials';
 import ExportMenu from './ExportMenu';
 import Settings from './Settings';
 import Permissions from './Permissions';
-import StudentsAtRisk from './StudentsAtRisk';
-import DashboardFinanceChart from './DashboardFinanceChart';
+const StudentsAtRisk = React.lazy(() => import('./StudentsAtRisk'));
+const DashboardFinanceChart = React.lazy(() => import('./DashboardFinanceChart'));
 import PrincipalHome from './PrincipalHome';
 import TeacherHome from './TeacherHome';
 import TeacherMyClass from './TeacherMyClass';
@@ -45,7 +45,7 @@ import { FilterBar, type FilterConfig } from './FilterBar';
 import { getStoredTheme, applyTheme, type ThemeMode } from './theme';
 import ErrorBoundary from './ErrorBoundary';
 import PasswordField from './PasswordField';
-import AttendanceModule from './AttendanceModule';
+const AttendanceModule = React.lazy(() => import('./AttendanceModule'));
 import { CredentialsReceiptModal, type CredentialsReceiptData } from './CredentialsReceiptModal';
 import { FirstPasswordChangeModal } from './FirstPasswordChangeModal';
 import { ALL_CURRICULA } from './CurriculumSelect';
@@ -56,9 +56,19 @@ import { StudentResults } from './StudentResults';
 import { StudentDiscussion } from './StudentDiscussion';
 import { StudentProfile } from './StudentProfile';
 import StudentProfileModal from './StudentProfileModal';
-import PsychologicalEvaluation from './PsychologicalEvaluation';
-import ParentPortal from './ParentPortal';
-import ParentManagement from './ParentManagement';
+const PsychologicalEvaluation = React.lazy(() => import('./PsychologicalEvaluation'));
+
+const ViewLoadingSkeleton = () => (
+  <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ height: '32px', width: '220px', background: 'var(--border, #e2e8f0)', borderRadius: '6px', opacity: 0.6 }} />
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+      <div style={{ height: '90px', background: 'var(--border, #e2e8f0)', borderRadius: '8px', opacity: 0.5 }} />
+      <div style={{ height: '90px', background: 'var(--border, #e2e8f0)', borderRadius: '8px', opacity: 0.5 }} />
+      <div style={{ height: '90px', background: 'var(--border, #e2e8f0)', borderRadius: '8px', opacity: 0.5 }} />
+    </div>
+    <div style={{ height: '260px', background: 'var(--border, #e2e8f0)', borderRadius: '8px', opacity: 0.4 }} />
+  </div>
+);
 import './style.css';
 
 const WORKSPACE_NAV = [
@@ -73,8 +83,8 @@ const WORKSPACE_NAV = [
   { name: 'Homework', icon: ClipboardList },
   { name: 'Academics', icon: FileBarChart },
   { name: 'Examinations', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
-  { name: 'Academic Quality Index', icon: TrendingUp, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
-  { name: 'Study materials', icon: BookOpen, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
+  { name: 'Academic Quality Index', icon: TrendingUp, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
+  { name: 'Study materials', icon: BookOpen, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Student fees', icon: Receipt, roles: ['organisation_admin', 'school_admin'] },
   { name: 'Fee overview', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Fee structure', icon: FileSpreadsheet, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
@@ -83,19 +93,18 @@ const WORKSPACE_NAV = [
   { name: 'Defaulters', icon: AlertCircle, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Concessions', icon: Sparkles, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Receipts', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
-  { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
+  { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Psychological Evaluation', icon: Activity, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Students at Risk', icon: AlertCircle, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'At-risk list', icon: AlertCircle, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Risk criteria', icon: SlidersHorizontal, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Review cases', icon: ShieldAlert, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Interventions', icon: HeartHandshake },
-  { name: 'Parents', icon: UserCheck, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
+  { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
 
@@ -105,7 +114,7 @@ function BriefcaseIcon(props: any) {
 
 const SYSTEM_NAV = [
   { name: 'Reports', icon: BarChart3, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
-  { name: 'My performance', icon: TrendingUp, roles: ['student', 'parent'] },
+  { name: 'My performance', icon: TrendingUp, roles: ['student'] },
   { name: 'Platform owner', icon: ShieldCheck, superuserOnly: true },
   { name: 'Permissions', icon: KeyRound, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Audit log', icon: ShieldCheck, adminOnly: true },
@@ -137,7 +146,7 @@ const NAV_GROUPS = [
   },
   { sublabel: 'STUDENT SUPPORT', items: ['Psychological Evaluation', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
-  { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries', 'Parents'] },
+  { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
 ];
@@ -511,10 +520,10 @@ function App() {
       [name]: !prev[name]
     }));
   };
-  const isSingleCampusRole = !!user && ['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(user.role);
+  const isSingleCampusRole = !!user && ['principal', 'school_admin', 'teacher', 'student'].includes(user.role);
   const [campuses, setCampuses] = useState<Array<{ id: number; name: string; code?: string; city?: string }>>([]);
   const [activeCampusId, setActiveCampusId] = useState<number | null>(() => {
-    if (user && ['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(user.role)) {
+    if (user && ['principal', 'school_admin', 'teacher', 'student'].includes(user.role)) {
       return user.school || null;
     }
     return null;
@@ -659,7 +668,7 @@ function App() {
     applyTheme(mode, color);
     request<User>('auth/me/').then(u => {
       setUser(u);
-      if (['principal', 'school_admin', 'teacher', 'student', 'parent'].includes(u.role)) {
+      if (['principal', 'school_admin', 'teacher', 'student'].includes(u.role)) {
         if (u.school) {
           setActiveCampusId(u.school);
           localStorage.setItem('optimus_active_campus_id', String(u.school));
@@ -696,7 +705,7 @@ function App() {
     setError('');
     const params = new URLSearchParams();
     const safeCampusId = (activeCampusId && campuses.some(c => c.id === activeCampusId)) ? activeCampusId : null;
-    if (safeCampusId && !['student', 'parent'].includes(user.role)) params.set('school', String(safeCampusId));
+    if (safeCampusId && user.role !== 'student') params.set('school', String(safeCampusId));
     Object.entries(resourceFilters).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') {
         params.set(k, String(v));
@@ -997,7 +1006,7 @@ function App() {
 
   const isPublicRoute = typeof window !== 'undefined' && (window.location.pathname === '/' || window.location.pathname === '');
   if (isPublicRoute) {
-    return <PublicHome authenticated={Boolean(user)} />;
+    return <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading...</div></div>}><PublicHome authenticated={Boolean(user)} /></React.Suspense>;
   }
 
   if (!user) return (
@@ -1414,97 +1423,6 @@ function App() {
               </button>
             </nav>
           </>
-                ) : user.role === 'parent' ? (
-          <>
-            <div className="nav-label">PARENT PORTAL</div>
-            <nav>
-              <div className="nav-sublabel">FAMILY & PROGRESS</div>
-              <button
-                type="button"
-                onClick={() => switchPage('Family Home')}
-                className={'nav-item ' + (['Family Home', 'Overview'].includes(page) ? 'selected' : '')}
-              >
-                <Users size={19} strokeWidth={1.9} />
-                <span>Family Home</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Results & Progress')}
-                className={'nav-item ' + (page === 'Results & Progress' ? 'selected' : '')}
-              >
-                <TrendingUp size={19} strokeWidth={1.9} />
-                <span>Results & AQI</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Attendance')}
-                className={'nav-item ' + (page === 'Attendance' ? 'selected' : '')}
-              >
-                <ClipboardCheck size={19} strokeWidth={1.9} />
-                <span>Attendance</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Risk & Support')}
-                className={'nav-item ' + (page === 'Risk & Support' ? 'selected' : '')}
-              >
-                <AlertTriangle size={19} strokeWidth={1.9} />
-                <span>Risk & Support</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Teachers')}
-                className={'nav-item ' + (page === 'Teachers' ? 'selected' : '')}
-              >
-                <PhoneCall size={19} strokeWidth={1.9} />
-                <span>Teachers</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Homework')}
-                className={'nav-item ' + (page === 'Homework' ? 'selected' : '')}
-              >
-                <ClipboardList size={19} strokeWidth={1.9} />
-                <span>Homework</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Fees')}
-                className={'nav-item ' + (['Fees', 'Student fees'].includes(page) ? 'selected' : '')}
-              >
-                <Wallet size={19} strokeWidth={1.9} />
-                <span>Fees</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Announcements')}
-                className={'nav-item ' + (page === 'Announcements' ? 'selected' : '')}
-              >
-                <Megaphone size={19} strokeWidth={1.9} />
-                <span>Announcements</span>
-              </button>
-            </nav>
-
-            <div className="nav-label nav-lower">ACCOUNT & SECURITY</div>
-            <nav>
-              <button
-                type="button"
-                onClick={() => switchPage('Notifications')}
-                className={'nav-item ' + (page === 'Notifications' ? 'selected' : '')}
-              >
-                <Bell size={19} strokeWidth={1.9} />
-                <span>Notifications</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Profile')}
-                className={'nav-item ' + (page === 'Profile' ? 'selected' : '')}
-              >
-                <Settings2 size={19} strokeWidth={1.9} />
-                <span>Profile & Security</span>
-              </button>
-            </nav>
-          </>
         ) : (
           <>
             <div className="nav-label">WORKSPACE</div>
@@ -1844,8 +1762,6 @@ function App() {
                   <TeacherHome user={user} onNavigate={switchPage} notify={notify} />
                 ) : user.role === 'student' ? (
                   <StudentHome user={user} onNavigate={switchPage} notify={notify} />
-                ) : user.role === 'parent' ? (
-                  <ParentPortal user={user} notify={notify} initialPage={page} />
                 ) : (
               <>
                 <div className="welcome-row">
@@ -1946,7 +1862,9 @@ function App() {
 
               {/* Operating Income vs Expense Chart (Dashboard Requirement) */}
               {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
-                <DashboardFinanceChart user={user} notify={notify} campuses={campuses} onNavigate={switchPage} />
+                <React.Suspense fallback={<div style={{ height: 280, background: 'var(--panel, #ffffff)', borderRadius: 12, border: '1px solid var(--border, #e2e8f0)', marginBottom: 20 }} />}>
+                  <DashboardFinanceChart user={user} notify={notify} campuses={campuses} onNavigate={switchPage} />
+                </React.Suspense>
               )}
 
               {/* Operational Action Cards: Defaulters & Students at Risk */}
@@ -2126,7 +2044,7 @@ function App() {
                     </div>
                   )}
 
-                  {config.fields.length > 0 && !['student', 'parent', 'teacher'].includes(user.role) && (
+                  {config.fields.length > 0 && !['student', 'teacher'].includes(user.role) && (
                     <button className="primary-btn" onClick={openCreateModal}>
                       <Plus size={17} /> Add {getSingularTitle(page)}
                     </button>
@@ -2320,14 +2238,13 @@ function App() {
             </>
           )}
 
+          <React.Suspense fallback={<ViewLoadingSkeleton />}>
           {page === 'My Class' && <TeacherMyClass user={user} onNavigate={switchPage} notify={notify} />}
           {page === 'My Subjects' && <TeacherMySubjects user={user} onNavigate={switchPage} notify={notify} />}
           {page === 'Campuses' && <CampusesPage user={user} notify={notify} onSetupSchool={(id) => { setSetupSchool(id); switchPage('Campus setup'); }} onCampusesChanged={() => { load(); }} />}
           {page === 'Audit log' && <AuditLogView notify={notify} />}
           {page === 'Reports' && <Reports user={user} />}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
-          {page === 'Parents' && <ParentManagement user={user} notify={notify} campuses={campuses} />}
-          {user.role === 'parent' && ['Overview', 'Family Home', 'Results & Progress', 'Attendance', 'Risk & Support', 'Teachers', 'Homework', 'Fees'].includes(page) && <ParentPortal user={user} notify={notify} initialPage={page} />}
           {page === 'Finance' && <Finance user={user} notify={notify} />}
           {page === 'Attendance' && (user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} />)}
           {page === 'Results & Progress' && <StudentResults user={user} notify={notify} />}
@@ -2396,6 +2313,7 @@ function App() {
           {['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'].includes(page) && (
             <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} />
           )}
+          </React.Suspense>
 
             </>
           )}
@@ -3727,7 +3645,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                     {users.length > 0 ? (
                       <div className="accounts-list">
                         {users.map(u => {
-                          const rClass = u.role === 'organisation_admin' || u.role === 'school_admin' ? 'role-admin' : u.role === 'principal' ? 'role-principal' : u.role === 'teacher' ? 'role-teacher' : u.role === 'student' ? 'role-student' : 'role-parent';
+                          const rClass = u.role === 'organisation_admin' || u.role === 'school_admin' ? 'role-admin' : u.role === 'principal' ? 'role-principal' : u.role === 'teacher' ? 'role-teacher' : u.role === 'student' ? 'role-student' : 'role-other';
                           return (
                             <div className="account-row" key={u.id}>
                               <div className="account-avatar" style={{ background: COLOR2[u.id % COLOR2.length] + '22', color: COLOR2[u.id % COLOR2.length] }}>
@@ -3783,7 +3701,6 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                                 {(isOrgAdmin || user.role === 'school_admin') && <option value="principal">Campus Principal / Head</option>}
                                 <option value="teacher">Educator / Teacher</option>
                                 <option value="student">Student / Learner</option>
-                                <option value="parent">Parent / Guardian</option>
                                 {isOrgAdmin && <option value="organisation_admin">Organisation Administrator (Co-Admin)</option>}
                               </select>
                             </label>
@@ -3814,17 +3731,6 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                             </div>
                           )}
 
-                          {af.role === 'parent' && (
-                            <div className="acf-row">
-                              <label>Link to student / ward
-                                <select value={af.student_id || ''} onChange={e => setAccountField(sid, 'student_id', e.target.value)}>
-                                  <option value="">Select student…</option>
-                                  {students.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
-                                </select>
-                              </label>
-                              <label>Assigned campus<input readOnly value={String(s.name)} className="readonly-input" /></label>
-                            </div>
-                          )}
 
                           {af.role === 'teacher' && (
                             <div className="acf-row">

@@ -701,7 +701,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
             <Receipt size={40} strokeWidth={1.5} style={{ margin: '0 auto 12px', opacity: 0.6 }} />
             <h4 style={{ margin: '0 0 6px', fontSize: 16 }}>Automated Monthly Invoicing</h4>
             <p style={{ maxWidth: 500, margin: '0 auto 16px', fontSize: 13 }}>
-              Generate fee vouchers for all enrolled students across an entire campus or target specific class cohorts. Generated vouchers feed directly into student ledgers and parent portals.
+              Generate fee vouchers for all enrolled students across an entire campus or target specific class cohorts. Generated vouchers feed directly into student ledgers.
             </p>
             <button className="primary-btn" onClick={() => setVoucherModal(true)}>
               <Receipt size={16} /> Launch Voucher Generation Wizard

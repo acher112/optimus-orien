@@ -147,7 +147,7 @@ export const CredentialsReceiptModal: React.FC<Props> = ({ receipt, onClose }) =
           borderBottom: '1px solid #fde68a'
         }}>
           <AlertTriangle size={16} />
-          <span>CONFIDENTIAL · Give to the student or parent. Contains single-use temporary credentials.</span>
+          <span>CONFIDENTIAL · Give to the student or guardian. Contains single-use temporary credentials.</span>
         </div>
 
         {/* Receipt Content */}

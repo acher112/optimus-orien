@@ -375,6 +375,8 @@ def engine_configuration_publish(request, pk):
         )
 
         record_event(actor=user, action='publish', obj=config)
+        from core.services.cache_service import invalidate_school_cache
+        invalidate_school_cache(config.school_id)
 
     return Response({
         'id': config.id,
