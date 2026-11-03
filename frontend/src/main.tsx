@@ -2564,41 +2564,70 @@ function App() {
                         </div>
 
                         {/* Due Date Options */}
-                        <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                        <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 10 }}>
                             Fee Due Date Option
                           </div>
-                          <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: dueDateMode === 'custom' ? 10 : 0 }}>
-                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: dueDateMode === 'custom' ? 12 : 0 }}>
+                            <label style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              margin: 0,
+                              padding: '10px 14px',
+                              borderRadius: 8,
+                              border: dueDateMode === 'standard' ? '1.5px solid #6366f1' : '1px solid #cbd5e1',
+                              background: dueDateMode === 'standard' ? '#eef2ff' : '#ffffff',
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: dueDateMode === 'standard' ? '#4338ca' : '#475569'
+                            }}>
                               <input
                                 type="radio"
                                 name="due_date_mode"
                                 value="standard"
                                 checked={dueDateMode === 'standard'}
                                 onChange={() => setDueDateMode('standard')}
+                                style={{ width: 16, height: 16, margin: 0, padding: 0, flexShrink: 0, cursor: 'pointer' }}
                               />
-                              Standard / Same date for all (Default 10 days)
+                              <span>Standard (Default 10 days)</span>
                             </label>
-                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                            <label style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              margin: 0,
+                              padding: '10px 14px',
+                              borderRadius: 8,
+                              border: dueDateMode === 'custom' ? '1.5px solid #6366f1' : '1px solid #cbd5e1',
+                              background: dueDateMode === 'custom' ? '#eef2ff' : '#ffffff',
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: dueDateMode === 'custom' ? '#4338ca' : '#475569'
+                            }}>
                               <input
                                 type="radio"
                                 name="due_date_mode"
                                 value="custom"
                                 checked={dueDateMode === 'custom'}
                                 onChange={() => setDueDateMode('custom')}
+                                style={{ width: 16, height: 16, margin: 0, padding: 0, flexShrink: 0, cursor: 'pointer' }}
                               />
-                              Custom due date for this student
+                              <span>Custom due date for this student</span>
                             </label>
                           </div>
                           {dueDateMode === 'custom' && (
-                            <div style={{ marginTop: 8 }}>
-                              <label style={{ margin: 0, maxWidth: 220 }}>
-                                Custom Due Date <span className="required">*</span>
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
+                              <label style={{ margin: 0, maxWidth: 220, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                                <span>Custom Due Date <span className="required" style={{ color: '#ef4444' }}>*</span></span>
                                 <input
                                   type="date"
                                   required={dueDateMode === 'custom'}
                                   value={customDueDate}
                                   onChange={e => setCustomDueDate(e.target.value)}
+                                  style={{ width: '100%', marginTop: 0 }}
                                 />
                               </label>
                             </div>
@@ -2617,7 +2646,7 @@ function App() {
                               style={{ fontSize: 12, padding: '4px 10px', height: 'auto', gap: 4 }}
                               onClick={() => setDynamicCharges(prev => [...prev, { id: Math.random().toString(36).slice(2), name: '', amount: '' }])}
                             >
-                              <Plus size={13} /> To make a new category of Charges
+                              <Plus size={13} /> Add Custom Charge
                             </button>
                           </div>
 
