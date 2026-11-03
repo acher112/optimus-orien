@@ -57,7 +57,16 @@ def announcements_list(request):
 
     if request.method == 'GET':
         user_schools = schools_scope(user)
-        qs = Announcement.objects.filter(Q(school__in=user_schools) | Q(school__isnull=True))
+        if user.is_superuser:
+            qs = Announcement.objects.all()
+        elif user.organisation:
+            qs = Announcement.objects.filter(
+                Q(school__in=user_schools) |
+                Q(school__organisation=user.organisation) |
+                Q(school__isnull=True, created_by__organisation=user.organisation)
+            )
+        else:
+            qs = Announcement.objects.filter(school__in=user_schools)
 
         if request.query_params.get('include_expired') != '1':
             qs = qs.filter(Q(expires_at__gte=today) | Q(expires_at__isnull=True))
@@ -198,8 +207,15 @@ def announcement_detail(request, pk):
     if not ann:
         raise NotFound('Announcement not found.')
 
-    if ann.school and ann.school not in schools_scope(user):
-        raise PermissionDenied('Outside your authorised campus scope.')
+    if not user.is_superuser:
+        if ann.school:
+            if ann.school not in schools_scope(user):
+                raise PermissionDenied('Outside your authorised campus scope.')
+        elif user.organisation:
+            if not ann.created_by or ann.created_by.organisation_id != user.organisation_id:
+                raise PermissionDenied('Outside your authorised scope.')
+        else:
+            raise PermissionDenied('Outside your authorised scope.')
 
     if request.method == 'GET':
         return Response(_serialize(ann))

@@ -480,9 +480,7 @@ class SchoolSerializer(DynamicSerializer):
   return obj.student_set.filter(active=True, gender='male').count()
 
  def get_total_employees(self, obj):
-  staff_c = obj.staff.filter(status='active').count()
-  user_c = User.objects.filter(school=obj).exclude(role__in=['student', 'parent']).count()
-  return max(staff_c, user_c)
+  return obj.staff.filter(status='active').count()
 
  def get_country(self, obj):
   cfg = getattr(obj, 'configuration', None)
@@ -962,7 +960,6 @@ class ScopedViewSet(viewsets.ModelViewSet):
     if not scope.can_edit_subject_marks(sc.id, subj.id):
      raise PermissionDenied('Cannot create assessment for unassigned subject')
     extras['created_by'] = user
-    from core.models import TeachingAssignment
     ta = TeachingAssignment.objects.filter(teacher=user, school_class=sc, subject=subj, end_date__isnull=True).first()
     if ta:
      extras['teaching_assignment'] = ta
@@ -1101,7 +1098,6 @@ class ScopedViewSet(viewsets.ModelViewSet):
     if not scope.can_mark_daily_attendance(instance.school_class_id):
      raise PermissionDenied("Only the class teacher may delete attendance records")
   if model is Student:
-   from core.models import StudentFee, FeePayment, FeePaymentAllocation, Concession
    FeePaymentAllocation.objects.filter(payment__student=instance).delete()
    FeePaymentAllocation.objects.filter(student_fee__student=instance).delete()
    FeePayment.objects.filter(student=instance).delete()
@@ -1153,6 +1149,11 @@ class ScopedViewSet(viewsets.ModelViewSet):
    DiscussionThread.objects.filter(academic_year=instance).delete()
    classes=SchoolClass.objects.filter(academic_year=instance)
    for c in classes:
+    try:
+     c.exam_structures.clear()
+    except Exception:
+     pass
+    ExamConfiguration.objects.filter(school_class=c).update(school_class=None)
     Enrollment.objects.filter(school_class=c).delete()
     Grade.objects.filter(assessment__school_class=c).delete()
     Assessment.objects.filter(school_class=c).delete()
@@ -1171,7 +1172,6 @@ class ScopedViewSet(viewsets.ModelViewSet):
     ClassSubject.objects.filter(school_class=c).delete()
    classes.delete()
   elif model is Subject:
-   from core.models import TeachingAssignment, AssessmentCategory, ExamPaper
    TeachingAssignment.objects.filter(subject=instance).delete()
    AssessmentCategory.objects.filter(subject=instance).delete()
    ExamPaper.objects.filter(subject=instance).delete()
@@ -1188,18 +1188,56 @@ class ScopedViewSet(viewsets.ModelViewSet):
    HomeworkSubmission.objects.filter(homework=instance).delete()
   elif model is ReviewCase:
    Intervention.objects.filter(case=instance).delete()
+  elif model is StaffMember:
+   SalaryAdjustment.objects.filter(staff=instance).delete()
+   SalaryRecord.objects.filter(staff=instance).delete()
+   SalaryStructure.objects.filter(staff=instance).delete()
+   StaffAttendance.objects.filter(staff=instance).delete()
+   StaffEvent.objects.filter(staff=instance).delete()
+   UserInvitation.objects.filter(staff_member=instance).update(staff_member=None)
+   ExamPaper.objects.filter(invigilator=instance).update(invigilator=None)
+  elif model is FeeHead:
+   FeePaymentAllocation.objects.filter(student_fee__head=instance).delete()
+   StudentFee.objects.filter(head=instance).delete()
+   Concession.objects.filter(head=instance).delete()
+   FeeStructure.objects.filter(head=instance).delete()
+  elif model is ExamSession:
+   ExamPaper.objects.filter(session=instance).delete()
+  elif model is Section:
+   Enrollment.objects.filter(section=instance).update(section=None)
   elif model is School:
    if user.organisation and School.objects.filter(organisation=user.organisation).count() <= 1:
     raise APIValidationError({'detail':'Cannot delete the only campus in your organisation.'})
+   AuditEvent.objects.filter(school=instance).update(school=None)
+   PublishedSchoolIndicator.objects.filter(school=instance).delete()
+   PublishedResult.objects.filter(school=instance).delete()
+   FeePaymentAllocation.objects.filter(payment__school=instance).delete()
+   FeePayment.objects.filter(school=instance).delete()
+   StudentFee.objects.filter(school=instance).delete()
+   Concession.objects.filter(school=instance).delete()
+   FeeStructure.objects.filter(school_class__school=instance).delete()
+   FeeStructure.objects.filter(school=instance).delete()
+   FeeHead.objects.filter(school=instance).delete()
+   SalaryAdjustment.objects.filter(staff__school=instance).delete()
+   SalaryRecord.objects.filter(school=instance).delete()
+   SalaryStructure.objects.filter(staff__school=instance).delete()
+   StaffAttendance.objects.filter(school=instance).delete()
+   TeachingAssignment.objects.filter(school=instance).delete()
+   AssessmentCategory.objects.filter(school=instance).delete()
+   ExamPaper.objects.filter(school_class__school=instance).delete()
+   ExamSession.objects.filter(school=instance).delete()
+   HolidayCalendar.objects.filter(school=instance).delete()
+   GradingScale.objects.filter(school=instance).delete()
    Student.objects.filter(school=instance).delete()
    SchoolClass.objects.filter(school=instance).delete()
    AcademicYear.objects.filter(school=instance).delete()
    Subject.objects.filter(school=instance).delete()
    StaffMember.objects.filter(school=instance).delete()
-   FinanceCategory.objects.filter(school=instance).delete()
    FinanceEntry.objects.filter(school=instance).delete()
+   FinanceCategory.objects.filter(school=instance).delete()
    SchoolConfiguration.objects.filter(school=instance).delete()
    ReviewCase.objects.filter(school=instance).delete()
+   User.objects.filter(school=instance).update(school=None)
   try:
    record_event(actor=user,action='delete',obj=instance)
   except Exception:
@@ -1467,7 +1505,7 @@ def dashboard(request):
   recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}"} for x in recent]
   recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
   return {
-   'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':max(StaffMember.objects.filter(school__in=schools,status='active').count(), User.objects.filter(school__in=schools).exclude(role__in=['student','parent']).count())},
+   'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':StaffMember.objects.filter(school__in=schools,status='active').count()},
    'stats':stats,
    'schools':school_items,
    'recent_cases':recent,
