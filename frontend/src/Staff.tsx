@@ -1003,7 +1003,7 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
                       <option value="">-- Choose Class --</option>
                       {(data?.available_classes || []).map((c: any) => (
                         <option key={c.id} value={c.id}>
-                          {c.name} {c.current_teacher ? `(Lead: ${c.current_teacher})` : ''}
+                          {c.name} {c.current_teacher ? `(Class Teacher: ${c.current_teacher})` : ''}
                         </option>
                       ))}
                     </select>
@@ -1039,7 +1039,7 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
                         checked={replaceExisting}
                         onChange={e => setReplaceExisting(e.target.checked)}
                       />
-                      Replace existing lead teacher
+                      Replace existing class teacher
                     </label>
                   )}
                 </div>

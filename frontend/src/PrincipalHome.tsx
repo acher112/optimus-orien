@@ -588,7 +588,7 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
                 <tr>
                   <th>CLASS</th>
                   <th>GRADE LEVEL</th>
-                  <th>LEAD TEACHER</th>
+                  <th>CLASS TEACHER</th>
                   <th>STUDENTS</th>
                   <th>ATTENDANCE RATE</th>
                   <th>ACADEMIC AVERAGE</th>

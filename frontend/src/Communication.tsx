@@ -291,7 +291,7 @@ export default function Communication({ user, notify }: { user: User; notify: (m
                     {activeClass?.name} &rsaquo; {activeSubject.name} ({activeSubject.code})
                   </h3>
                   <p>
-                    Lead Teacher: <strong>{activeSubject.teacher_name}</strong>
+                    Class Teacher: <strong>{activeSubject.teacher_name}</strong>
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

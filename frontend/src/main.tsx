@@ -210,7 +210,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'section', label: 'Section' },
       { key: 'grade_level', label: 'Grade' },
       { key: 'curriculum', label: 'Curriculum' },
-      { key: 'teacher_name', label: 'Lead teacher' },
+      { key: 'teacher_name', label: 'Class teacher' },
       { key: 'school_name', label: 'Campus' },
       { key: 'academic_year_name', label: 'Academic Year' }
     ],
@@ -221,7 +221,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'academic_year', label: 'Academic year', required: true },
       { key: 'grade_level', label: 'Grade level (e.g. Grade 8)' },
       { key: 'curriculum', label: 'Curriculum' },
-      { key: 'teacher', label: 'Lead teacher' }
+      { key: 'teacher', label: 'Class teacher' }
     ]
   },
   Subjects: {
@@ -2733,7 +2733,7 @@ function App() {
                         <label key={f.key}>
                           {f.label}{f.required && <span className="required"> *</span>}
                           <select value={form.teacher || ''} onChange={e => setForm(s => ({ ...s, teacher: e.target.value }))}>
-                            <option value="">Unassigned (optional)</option>
+                            <option value="">Select class teacher (optional)</option>
                             {tchs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                           </select>
                         </label>
