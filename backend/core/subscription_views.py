@@ -280,19 +280,28 @@ def school_invoice_estimate_view(request):
     plan_code = request.query_params.get('plan', 'standard')
     months = int(request.query_params.get('months', 1))
     currency = request.query_params.get('currency', 'USD').upper()
+    raw_features = request.query_params.getlist('features') or request.query_params.getlist('selected_features')
+    selected_features = []
+    for item in raw_features:
+        for part in str(item).split(','):
+            part = part.strip()
+            if part and part not in selected_features:
+                selected_features.append(part)
+    custom_students = request.query_params.get('student_count') or request.query_params.get('students')
 
     plan = Plan.objects.filter(code=plan_code, is_active=True).first()
     if not plan:
         return Response({'detail': f"Plan '{plan_code}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    active_students = get_active_enrolled_student_count(school)
+    active_students = int(custom_students) if custom_students else get_active_enrolled_student_count(school)
     try:
         estimate = calculate_invoice_estimate(
             plan=plan,
             billing_months=months,
             student_count=active_students,
             currency=currency,
-            school=school
+            school=school,
+            selected_features=selected_features
         )
     except ValueError as err:
         return Response({'detail': str(err)}, status=status.HTTP_400_BAD_REQUEST)
@@ -351,8 +360,8 @@ def school_subscription_orders_view(request):
         results = [{
             'id': o.id,
             'order_number': o.order_number,
-            'plan_code': o.plan.code,
-            'plan_name': o.plan.name,
+            'plan_code': o.plan.code if o.plan else 'custom',
+            'plan_name': o.plan.name if o.plan else 'Custom Package',
             'billing_months': o.billing_months,
             'student_count': o.student_count,
             'unit_price': str(o.unit_price),
@@ -368,8 +377,9 @@ def school_subscription_orders_view(request):
             'card_brand': o.card_brand,
             'card_last4': o.card_last4,
             'payment_reference': o.payment_reference,
-            'paid_on': o.paid_on.isoformat() if hasattr(o.paid_on, 'isoformat') else str(o.paid_on),
+            'paid_on': o.paid_on.isoformat() if (o.paid_on and hasattr(o.paid_on, 'isoformat')) else (str(o.paid_on) if o.paid_on else None),
             'payment_notes': o.payment_notes,
+            'metadata': o.metadata,
             'status': o.status,
             'reviewed_at': o.reviewed_at.isoformat() if o.reviewed_at else None,
             'review_note': o.review_note,
@@ -386,6 +396,8 @@ def school_subscription_orders_view(request):
     billing_months = data.get('billing_months') or data.get('months')
     payment_method = (data.get('payment_method') or '').lower()
     currency = (data.get('currency') or 'USD').upper()
+    selected_features = data.get('selected_features') or data.get('features')
+    custom_student_count = data.get('student_count') or data.get('students')
 
     payment_reference = data.get('payment_reference') or data.get('reference')
     paid_on = data.get('paid_on') or data.get('payment_date')
@@ -423,6 +435,8 @@ def school_subscription_orders_view(request):
                 currency=currency,
                 submitted_by=request.user,
                 provider_name=provider_name,
+                selected_features=selected_features,
+                custom_student_count=custom_student_count,
             )
         except ValueError as err:
             return Response({'detail': str(err)}, status=status.HTTP_400_BAD_REQUEST)
@@ -463,6 +477,8 @@ def school_subscription_orders_view(request):
             currency=currency,
             notes=notes,
             submitted_by=request.user,
+            selected_features=selected_features,
+            custom_student_count=custom_student_count,
         )
     except ValueError as err:
         return Response({'detail': str(err)}, status=status.HTTP_400_BAD_REQUEST)

@@ -14,6 +14,7 @@ from core.models import (
     User,
     Plan,
     BillingPeriod,
+    FeatureCatalog,
     PlatformBillingSettings,
     SchoolSubscription,
     SubscriptionOrder,
@@ -48,10 +49,11 @@ def add_calendar_months(dt, months):
     return date(year, month, day)
 
 
-def calculate_invoice_estimate(plan, billing_months, student_count, currency='USD', school=None):
+def calculate_invoice_estimate(plan, billing_months, student_count, currency='USD', school=None, selected_features=None):
     """
     Computes pricing breakdown for a proposed subscription order.
     Periods, discounts, and prices are dynamic DATA in the database, never hardcoded.
+    Supports Standard, Premium, and Custom modular packages.
     Formula:
       subtotal = student_count x unit_price x months
       discount_amount = subtotal x (discount_percentage / 100)
@@ -70,7 +72,34 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
     if currency not in ('USD', 'PKR'):
         raise ValueError("Currency must be USD or PKR.")
 
-    unit_price = plan.price_usd_per_student if currency == 'USD' else plan.price_pkr_per_student
+    student_count = max(1, int(student_count or 1))
+
+    if plan.code == 'custom':
+        # Modular dynamic pricing for Custom Package:
+        # Base platform fee: $2.00 USD / Rs 550 PKR per student per month
+        # Standard add-on module: $0.20 USD / Rs 55 PKR
+        # Premium add-on module: $0.40 USD / Rs 110 PKR
+        base_rate_usd = Decimal('2.00')
+        base_rate_pkr = Decimal('550.00')
+        addon_usd = Decimal('0.00')
+        addon_pkr = Decimal('0.00')
+
+        if selected_features:
+            cat_map = {f.key: f for f in FeatureCatalog.objects.filter(key__in=selected_features)}
+            for key in selected_features:
+                cat = cat_map.get(key)
+                if cat:
+                    if cat.is_premium_only:
+                        addon_usd += Decimal('0.40')
+                        addon_pkr += Decimal('110.00')
+                    else:
+                        addon_usd += Decimal('0.20')
+                        addon_pkr += Decimal('55.00')
+
+        unit_price = (base_rate_usd + addon_usd if currency == 'USD' else base_rate_pkr + addon_pkr).quantize(Decimal('0.01'))
+    else:
+        unit_price = plan.price_usd_per_student if currency == 'USD' else plan.price_pkr_per_student
+
     subtotal = (Decimal(student_count) * unit_price * Decimal(billing_months)).quantize(Decimal('0.01'))
     discount_percentage = period.discount_percentage
     discount_amount = (subtotal * (discount_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
@@ -109,6 +138,8 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
         'upgrade_credit_amount': upgrade_credit_amount,
         'tax_amount': tax_amount,
         'payable_amount': payable_amount,
+        'selected_features': selected_features or [],
+        'selected_features_count': len(selected_features) if selected_features else 0,
     }
 
 
@@ -142,12 +173,16 @@ def provision_school_registration_subscription(school, admin_user, plan_slug=Non
 
 
 def create_subscription_order(school, plan, billing_months, payment_reference, paid_on,
-                              amount, currency='USD', notes='', submitted_by=None):
+                              amount, currency='USD', notes='', submitted_by=None,
+                              selected_features=None, custom_student_count=None):
     """
     Submits an offline payment verification order.
     """
     now = timezone.now()
-    active_students = get_active_enrolled_student_count(school)
+    if custom_student_count:
+        active_students = int(custom_student_count)
+    else:
+        active_students = get_active_enrolled_student_count(school)
 
     if isinstance(paid_on, str):
         try:
@@ -164,7 +199,8 @@ def create_subscription_order(school, plan, billing_months, payment_reference, p
         billing_months=billing_months,
         student_count=active_students,
         currency=currency,
-        school=school
+        school=school,
+        selected_features=selected_features
     )
 
     order_number = f"ORD-{now.strftime('%Y%m')}-{uuid.uuid4().hex[:6].upper()}"
@@ -190,6 +226,10 @@ def create_subscription_order(school, plan, billing_months, payment_reference, p
         payment_reference=str(payment_reference).strip(),
         paid_on=paid_on,
         payment_notes=str(notes).strip(),
+        metadata={
+            'custom_features': selected_features or [],
+            'is_custom': plan.code == 'custom',
+        },
         status='pending',
         submitted_by=submitted_by,
     )
@@ -252,6 +292,20 @@ def approve_subscription_order(order, reviewer, review_note=''):
     sub.pending_downgrade_to_plan = None
     sub.student_count_at_last_invoice = order.student_count
     sub.save()
+
+    # Synchronize feature overrides for custom packages or clear for standard/premium
+    if order.plan.code == 'custom' or (order.metadata and order.metadata.get('custom_features')):
+        chosen_features = set(order.metadata.get('custom_features') or [])
+        all_catalog = FeatureCatalog.objects.all()
+        for feat in all_catalog:
+            is_granted = feat.key in chosen_features
+            SchoolFeatureOverride.objects.update_or_create(
+                school=school,
+                feature_key=feat.key,
+                defaults={'is_granted': is_granted, 'expires_at': new_paid_until}
+            )
+    else:
+        SchoolFeatureOverride.objects.filter(school=school).delete()
 
     event_type = 'upgraded' if old_plan == 'standard' and order.plan.code == 'premium' else 'order_approved'
     SubscriptionEvent.objects.create(
@@ -362,21 +416,26 @@ def schedule_subscription_downgrade(school, target_plan, actor=None, reason=''):
 
 
 def create_card_subscription_order(school, plan, billing_months, return_url, cancel_url,
-                                   currency='USD', submitted_by=None, provider_name=None):
+                                   currency='USD', submitted_by=None, provider_name=None,
+                                   selected_features=None, custom_student_count=None):
     """
     Initiates a hosted card payment checkout session.
     Amounts are computed on the server from the database, never taken from the browser.
     Card details NEVER touch our frontend, backend, database or logs.
     """
     now = timezone.now()
-    active_students = get_active_enrolled_student_count(school)
+    if custom_student_count:
+        active_students = int(custom_student_count)
+    else:
+        active_students = get_active_enrolled_student_count(school)
 
     estimate = calculate_invoice_estimate(
         plan=plan,
         billing_months=billing_months,
         student_count=active_students,
         currency=currency,
-        school=school
+        school=school,
+        selected_features=selected_features
     )
 
     order_number = f"ORD-{now.strftime('%Y%m')}-{uuid.uuid4().hex[:6].upper()}"
@@ -403,6 +462,10 @@ def create_card_subscription_order(school, plan, billing_months, return_url, can
         period_start=period_start,
         period_end=period_end,
         provider=resolved_provider_name,
+        metadata={
+            'custom_features': selected_features or [],
+            'is_custom': plan.code == 'custom',
+        },
         status='pending',
         submitted_by=submitted_by,
     )
@@ -533,6 +596,20 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
         sub.pending_downgrade_to_plan = None
         sub.student_count_at_last_invoice = order.student_count
         sub.save(update_fields=['plan', 'status', 'current_period_start', 'paid_until', 'grace_until', 'pending_downgrade_to_plan', 'student_count_at_last_invoice', 'updated_at'])
+
+        # Synchronize custom feature overrides
+        if order.plan.code == 'custom' or (order.metadata and order.metadata.get('custom_features')):
+            chosen_features = set(order.metadata.get('custom_features') or [])
+            all_catalog = FeatureCatalog.objects.all()
+            for feat in all_catalog:
+                is_granted = feat.key in chosen_features
+                SchoolFeatureOverride.objects.update_or_create(
+                    school=school,
+                    feature_key=feat.key,
+                    defaults={'is_granted': is_granted, 'expires_at': new_paid_until}
+                )
+        else:
+            SchoolFeatureOverride.objects.filter(school=school).delete()
 
         event_type = 'upgraded' if old_plan == 'standard' and order.plan.code == 'premium' else 'order_approved'
         SubscriptionEvent.objects.create(

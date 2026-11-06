@@ -489,3 +489,97 @@ class SubscriptionPlansAndEntitlementsTests(TestCase):
         # School A subscription query does not return School B
         self.assertEqual(SchoolSubscription.objects.filter(school=self.school_a).first().id, sub_a.id)
         self.assertEqual(SchoolSubscription.objects.filter(school=self.school_b).first().id, sub_b.id)
+
+    # --------------------------------------------------------------------------
+    # 12. Custom Package Modular Builder & Selective Gating
+    # --------------------------------------------------------------------------
+
+    def test_custom_package_dynamic_pricing_and_discounts(self):
+        """
+        Validates modular custom package pricing calculation:
+        Base fee + selected features unit rate x students x months minus multi-year duration discounts.
+        """
+        custom_plan, _ = Plan.objects.get_or_create(
+            code='custom',
+            defaults={'name': 'Custom Package', 'price_usd_per_student': Decimal('2.00'), 'price_pkr_per_student': Decimal('550.00')}
+        )
+
+        # 100 students, 12 months (15% discount), selected: attendance_daily (0.20) + aqi (0.40) -> unit_price = 2.00 + 0.60 = 2.60
+        estimate_12m = calculate_invoice_estimate(
+            plan=custom_plan,
+            billing_months=12,
+            student_count=100,
+            currency='USD',
+            selected_features=['attendance_daily', 'aqi']
+        )
+        self.assertEqual(estimate_12m['unit_price'], Decimal('2.60'))
+        # Subtotal: 100 * 2.60 * 12 = 3120.00. 15% discount = 468.00. Net = 2652.00
+        self.assertEqual(estimate_12m['subtotal'], Decimal('3120.00'))
+        self.assertEqual(estimate_12m['discount_amount'], Decimal('468.00'))
+        self.assertEqual(estimate_12m['payable_amount'], Decimal('2652.00'))
+
+        # Multi-year: 24 months (20% discount)
+        estimate_24m = calculate_invoice_estimate(
+            plan=custom_plan,
+            billing_months=24,
+            student_count=100,
+            currency='USD',
+            selected_features=['attendance_daily', 'aqi']
+        )
+        # Subtotal: 100 * 2.60 * 24 = 6240.00. 20% discount = 1248.00. Net = 4992.00
+        self.assertEqual(estimate_24m['subtotal'], Decimal('6240.00'))
+        self.assertEqual(estimate_24m['discount_percentage'], Decimal('20.00'))
+        self.assertEqual(estimate_24m['payable_amount'], Decimal('4992.00'))
+
+    def test_custom_package_order_and_selective_feature_unlocking(self):
+        """
+        Validates that ordering a custom package selectively unlocks ONLY chosen features,
+        leaving unchosen premium/standard features locked.
+        """
+        custom_plan, _ = Plan.objects.get_or_create(
+            code='custom',
+            defaults={'name': 'Custom Package', 'price_usd_per_student': Decimal('2.00'), 'price_pkr_per_student': Decimal('550.00')}
+        )
+
+        chosen_features = ['attendance_daily', 'aqi', 'aqi_history']
+        order = create_subscription_order(
+            school=self.school_a,
+            plan=custom_plan,
+            billing_months=12,
+            payment_reference='BANK-CUSTOM-001',
+            paid_on=timezone.now().date(),
+            amount=Decimal('2652.00'),
+            currency='USD',
+            submitted_by=self.admin_a,
+            selected_features=chosen_features,
+            custom_student_count=100
+        )
+
+        # Admin approves custom order
+        approve_subscription_order(order, reviewer=self.platform_admin, review_note='Custom package approved')
+
+        # Verify entitlements
+        ent = get_school_entitlements(self.school_a, use_cache=False)
+        self.assertEqual(ent['status'], 'active')
+        self.assertEqual(ent['plan'], 'custom')
+
+        # Chosen features must be unlocked
+        self.assertTrue(ent['features']['attendance_daily']['is_unlocked'])
+        self.assertTrue(ent['features']['aqi']['is_unlocked'])
+
+        # Unchosen features must remain locked
+        self.assertFalse(ent['features']['hr_payroll']['is_unlocked'])
+        self.assertFalse(ent['features']['psych_eval']['is_unlocked'])
+        self.assertFalse(ent['features']['finance_dashboard']['is_unlocked'])
+
+        # Real view check: attendance and AQI succeed, finance 403
+        self.client.force_authenticate(user=self.admin_a)
+        res_att = self.client.get(f'/api/v1/attendance/class-register/?school_class={self.class_a.id}')
+        self.assertEqual(res_att.status_code, 200)
+
+        res_aqi = self.client.get('/api/v1/aqi/overview/')
+        self.assertEqual(res_aqi.status_code, 200)
+
+        res_fin = self.client.get('/api/v1/finance/summary/')
+        self.assertEqual(res_fin.status_code, 403)
+        self.assertEqual(res_fin.data['code'], 'feature_locked')

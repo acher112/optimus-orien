@@ -2524,6 +2524,7 @@ class SubscriptionOrder(models.Model):
     refunded_at = models.DateTimeField(null=True, blank=True)
     failure_reason = models.TextField(blank=True, default='')
     payment_notes = models.TextField(blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     submitted_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='submitted_subscription_orders')
     reviewed_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='reviewed_subscription_orders')

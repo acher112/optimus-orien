@@ -28,19 +28,23 @@ Optimus Orien introduces a high-integrity, multi-tenant subscription tiers and f
      - `english_urdu`
    - Existing demo schools created by seed commands retain an active Premium subscription so live demos are not blocked.
 
-2. **Three Access Levels:**
+2. **Access Levels & Tier Architecture:**
    - **`no_plan`**: Basic access list only. All academic, financial, attendance, and intelligence modules are locked with HTTP 403 `feature_locked`.
    - **`standard`**: $3.60 USD / student / month (Seed PKR: Rs 1,000 / student / month, approximate). Unlocks Standard academic, fee, and portal features. Premium features remain locked with HTTP 403 `feature_locked` (`required_plan: 'premium'`).
-   - **`premium`**: $7.20 USD / student / month (Seed PKR: Rs 2,000 / student / month, approximate). Unlocks all features.
+   - **`premium`**: $7.20 USD / student / month (Seed PKR: Rs 2,000 / student / month, approximate). Unlocks all features across the platform.
+   - **`custom` (Custom Package Modular Builder)**: Tailored plan for schools requiring granular module selection and flexible student headcounts. Base platform fee of $2.00 USD / Rs 550 PKR per student/mo + modular add-on rates ($0.20 for standard features, $0.40 for premium features). Grants granular `SchoolFeatureOverride` records matching the exact chosen modules.
    - All prices, feature lists, and marketing copy are dynamic DATA in the database (`Plan`, `PlanFeature`, `FeatureCatalog`), never hardcoded in application logic.
 
-3. **Billing Periods & Tiered Discounts (Both Standard & Premium):**
-   - Configurable billing periods: **1 month, 4 months, 8 months, and 12 months** (stored as data in `BillingPeriod` model, editable by platform admin).
+3. **Billing Periods & Tiered Discounts (Standard, Premium & Custom):**
+   - Configurable billing periods: **1, 4, 8, 12, 24, 36, and 60 months** (stored as data in `BillingPeriod` model, editable by platform admin).
    - Term discounts:
      - 1 month: **0.00%** discount
      - 4 months: **5.00%** discount
      - 8 months: **10.00%** discount
-     - 12 months: **15.00%** discount
+     - 12 months (1 year): **15.00%** discount
+     - 24 months (2 years): **20.00%** discount
+     - 36 months (3 years): **25.00%** discount
+     - 60 months (5 years): **30.00%** discount
    - Formula:
      $$\text{Subtotal} = \text{Active Students} \times \text{Unit Price} \times \text{Months}$$
      $$\text{Discount Amount} = \text{Subtotal} \times \left(\frac{\text{Discount Percentage}}{100}\right)$$

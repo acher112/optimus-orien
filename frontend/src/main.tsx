@@ -565,12 +565,28 @@ function App() {
   }, [user, fetchSubscription]);
 
   const isFeatureUnlocked = useCallback((key: string) => {
-    if (!user || user.is_superuser || user.role === 'platform_admin') return true;
-    if (!entitlements || !entitlements.features) return true;
-    const feat = entitlements.features[key];
-    if (!feat) return true;
-    return Boolean(feat.is_unlocked);
-  }, [user, entitlements]);
+    // Platform owners without a school assignment bypass tenant feature gating
+    if (user?.role === 'platform_admin' || (user?.is_superuser && !user?.school && !activeCampusId)) {
+      return true;
+    }
+    // Entitlements from server
+    if (entitlements && entitlements.features) {
+      const feat = entitlements.features[key];
+      if (feat !== undefined) {
+        return Boolean(feat.is_unlocked);
+      }
+    }
+    // If subscription is known to be in no_plan mode
+    if (subscription?.is_no_plan || subscription?.status === 'no_plan') {
+      const basicList = [
+        'school_setup', 'people_accounts', 'authentication', 'password_change',
+        'profile_view', 'subscription_management', 'order_submission',
+        'support_contact', 'compliance_export', 'english_urdu'
+      ];
+      return basicList.includes(key);
+    }
+    return true;
+  }, [user, entitlements, subscription, activeCampusId]);
 
   const [form, setForm] = useState<Record<string, string>>({});
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -2330,7 +2346,18 @@ function App() {
               <AuditLogView notify={notify} />
             )
           )}
-          {page === 'Reports' && <Reports user={user} />}
+          {page === 'Reports' && (
+            !isFeatureUnlocked('basic_reports_csv') ? (
+              <FeatureLockedScreen
+                featureName="School Analytics & Reports"
+                description="Comprehensive student reports, attendance registers, and academic transcripts."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <Reports user={user} />
+            )
+          )}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
           {page === 'Finance' && (
             !isFeatureUnlocked('finance_dashboard') ? (
@@ -2355,14 +2382,56 @@ function App() {
               }}
             />
           )}
-          {page === 'Attendance' && (user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} />)}
-          {page === 'Results & Progress' && <StudentResults user={user} notify={notify} />}
+          {page === 'Attendance' && (
+            !isFeatureUnlocked('attendance_daily') ? (
+              <FeatureLockedScreen
+                featureName="Daily Attendance Tracking"
+                description="Daily roll call, period attendance, SMS absence alerts, and monthly registers."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} />
+            )
+          )}
+          {page === 'Results & Progress' && (
+            !isFeatureUnlocked('result_cards') ? (
+              <FeatureLockedScreen
+                featureName="Result Cards & Term Slips"
+                description="Student report card generation, position ranking, printable grade slips, and performance transcripts."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <StudentResults user={user} notify={notify} />
+            )
+          )}
           {page === 'Discussion' && <StudentDiscussion user={user} notify={notify} />}
           {page === 'Profile' && <StudentProfile user={user} notify={notify} />}
           {['Student fees', 'Student Fees', 'Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page) && (
-            <Fees user={user} notify={notify} initialTab={page} />
+            !isFeatureUnlocked('fees_offline') ? (
+              <FeatureLockedScreen
+                featureName="Fee Management & Challans"
+                description="Fee structures, monthly voucher generation, payment collection counter, fee concessions, and defaulter tracking."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <Fees user={user} notify={notify} initialTab={page} />
+            )
           )}
-          {page === 'Study materials' && <StudyMaterials user={user} notify={notify} />}
+          {page === 'Study materials' && (
+            !isFeatureUnlocked('tasks_homework') ? (
+              <FeatureLockedScreen
+                featureName="Study Materials & Digital Resources"
+                description="Curriculum-aligned syllabus files, past papers, lecture notes, and teacher material uploads."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <StudyMaterials user={user} notify={notify} />
+            )
+          )}
           {page === 'Staff Salaries' && (
             !isFeatureUnlocked('hr_payroll') ? (
               <FeatureLockedScreen
@@ -2376,22 +2445,31 @@ function App() {
             )
           )}
           {page === 'Examinations' && (
-            <ErrorBoundary fallbackTitle="Examination & Academic Performance">
-              <Examinations
-                user={user}
-                notify={notify}
-                activeCampusId={activeCampusId}
-                onSelectCampus={(newId) => {
-                  setActiveCampusId(newId);
-                  if (newId) {
-                    localStorage.setItem('optimus_active_campus_id', String(newId));
-                  } else {
-                    localStorage.removeItem('optimus_active_campus_id');
-                  }
-                }}
-                campuses={campuses}
+            !isFeatureUnlocked('exams_datesheets') ? (
+              <FeatureLockedScreen
+                featureName="Examinations, Marks & Grading"
+                description="Assessment schedule creation, date sheet generation, term examinations, and grading criteria configuration."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
               />
-            </ErrorBoundary>
+            ) : (
+              <ErrorBoundary fallbackTitle="Examination & Academic Performance">
+                <Examinations
+                  user={user}
+                  notify={notify}
+                  activeCampusId={activeCampusId}
+                  onSelectCampus={(newId) => {
+                    setActiveCampusId(newId);
+                    if (newId) {
+                      localStorage.setItem('optimus_active_campus_id', String(newId));
+                    } else {
+                      localStorage.removeItem('optimus_active_campus_id');
+                    }
+                  }}
+                  campuses={campuses}
+                />
+              </ErrorBoundary>
+            )
           )}
           {page === 'Academic Quality Index' && (
             !isFeatureUnlocked('aqi') ? (
@@ -2420,9 +2498,31 @@ function App() {
               </ErrorBoundary>
             )
           )}
-          {page === 'Timetable' && <Timetable user={user} notify={notify} />}
+          {page === 'Timetable' && (
+            !isFeatureUnlocked('timetable') ? (
+              <FeatureLockedScreen
+                featureName="Class Timetable Scheduling"
+                description="Master weekly timetables, teacher period allocation, and room conflict prevention."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <Timetable user={user} notify={notify} />
+            )
+          )}
           {page === 'Platform owner' && <PlatformOwner user={user} notify={notify} />}
-          {page === 'Data import' && <DataImport user={user} notify={notify} />}
+          {page === 'Data import' && (
+            !isFeatureUnlocked('csv_import') ? (
+              <FeatureLockedScreen
+                featureName="CSV Bulk Data Import"
+                description="Bulk batch migration and CSV imports for students, staff, academic records, and parent rosters."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <DataImport user={user} notify={notify} />
+            )
+          )}
           {page === 'My performance' && <MyPerformance />}
           {page === 'Communication' && <Communication user={user} notify={notify} />}
           {page === 'Announcements' && <Announcements user={user} notify={notify} />}
