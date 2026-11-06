@@ -175,8 +175,8 @@ export default function PricingCarouselSection({
           </h2>
           <p className="pricing-subhead">
             {isUr
-              ? 'ایک ماہ کی اعزازی رسائی حاصل کریں۔ بغیر کسی ادائیگی اور پیشگی فیس کے تمام خصوصیات کا تجربہ کریں۔'
-              : 'Get one month complimentary access. Experience the full platform with one month of free access and usage. No payment is required to get started, and there are no upfront costs or commitments during the trial period.'}
+              ? '3 روزہ اعزازی رسائی حاصل کریں۔ بغیر کسی ادائیگی اور پیشگی فیس کے تمام پریمیم خصوصیات کا تجربہ کریں۔'
+              : 'Experience full platform access with a 3-day complimentary trial. Explore all Premium features with 3 days of complimentary access. No upfront payment required to get started.'}
           </p>
 
           {/* Quick Currency Selector */}

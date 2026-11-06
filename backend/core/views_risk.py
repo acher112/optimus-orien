@@ -1,3 +1,4 @@
+from core.services.feature_permissions import requires_feature
 """Students at Risk API Views.
 Implements INT-001..INT-040 compliance:
 - Strict role-based scoping (teachers see own classes, students/parents get 403)
@@ -50,6 +51,7 @@ def _resolve_school(request):
 
 
 @api_view(['GET'])
+@requires_feature('early_intervention')
 def students_at_risk(request):
     """
     Evaluates students of a campus against active RiskCriteria with query filtering and export.
@@ -183,6 +185,7 @@ def students_at_risk(request):
 
 
 @api_view(['GET', 'POST'])
+@requires_feature('attention_indicators')
 def risk_criteria_view(request):
     """
     GET: Returns active criteria, version history, and starter template.
@@ -286,6 +289,7 @@ def risk_criteria_view(request):
 
 
 @api_view(['POST'])
+@requires_feature('attention_indicators')
 def risk_criteria_activate(request):
     """Activates an existing criteria version for a school."""
     if request.user.role not in MANAGERS and not request.user.is_superuser:
@@ -310,6 +314,7 @@ def risk_criteria_activate(request):
 
 
 @api_view(['POST'])
+@requires_feature('early_intervention')
 def risk_case_create(request, student_id):
     """Creates a ReviewCase for an at-risk student prefilled with objective evidence snapshot."""
     _check_risk_access(request.user)
@@ -357,6 +362,7 @@ def risk_case_create(request, student_id):
 
 
 @api_view(['POST'])
+@requires_feature('early_intervention')
 def risk_dismiss(request, student_id):
     """
     Dismisses an at-risk flag with mandatory justification (reason).

@@ -1042,7 +1042,7 @@ def save_evaluation(user, data):
     template = ensure_default_template()
 
     for q in EvaluationQuestion.objects.filter(dimension__template=template):
-        val = responses_dict.get(str(q.id), responses_dict.get(q.id))
+        val = responses_dict.get(str(q.id), responses_dict.get(q.id, responses_dict.get(q.display_order, responses_dict.get(str(q.display_order)))))
         # Ensure 1-5 or null (unobserved). Stored as null, never treated as zero.
         clean_val = None
         if val is not None and str(val).strip() != '' and str(val).strip() != '0':

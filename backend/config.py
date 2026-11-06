@@ -11,7 +11,7 @@ for _h in ('localhost','127.0.0.1','.onrender.com','testserver'):
 if not DEBUG and (SECRET_KEY in ('dev-only-change-before-production','change-this-to-a-long-random-secret','local-development-only-optimus-orien-not-production') or len(SECRET_KEY)<32):
  raise RuntimeError('DJANGO_SECRET_KEY must be strong and unique when DJANGO_DEBUG=false')
 INSTALLED_APPS=['django.contrib.admin','django.contrib.auth','django.contrib.contenttypes','django.contrib.sessions','django.contrib.messages','django.contrib.staticfiles','rest_framework','corsheaders','core']
-MIDDLEWARE=['django.middleware.security.SecurityMiddleware','corsheaders.middleware.CorsMiddleware','django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware','django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware','django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware','core.middleware.SlowQueryAndPerformanceMiddleware']
+MIDDLEWARE=['django.middleware.security.SecurityMiddleware','corsheaders.middleware.CorsMiddleware','django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware','django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware','django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware','core.middleware.SlowQueryAndPerformanceMiddleware','core.middleware.SubscriptionEntitlementsAndLimitedGuardMiddleware']
 ROOT_URLCONF='urls'
 TEMPLATES=[{'BACKEND':'django.template.backends.django.DjangoTemplates','DIRS':[],'APP_DIRS':True,'OPTIONS':{'context_processors':['django.template.context_processors.debug','django.template.context_processors.request','django.contrib.auth.context_processors.auth','django.contrib.messages.context_processors.messages']}}]
 WSGI_APPLICATION='wsgi.application'
@@ -78,5 +78,13 @@ STATIC_URL='static/'; STATIC_ROOT=BASE_DIR/'staticfiles'
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
 PRIVATE_STORAGE_ROOT=Path(os.getenv('PRIVATE_STORAGE_ROOT',str(BASE_DIR/'private_storage')))
 os.makedirs(PRIVATE_STORAGE_ROOT,exist_ok=True)
+
+# Payment Provider Configuration (Sandbox first, swappable by configuration)
+PAYMENT_PROVIDER = os.getenv('PAYMENT_PROVIDER', 'fake').lower()
+PADDLE_API_KEY = os.getenv('PADDLE_API_KEY', '')
+PADDLE_WEBHOOK_SECRET = os.getenv('PADDLE_WEBHOOK_SECRET', '')
+PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'true').lower() == 'true'
+PADDLE_CLIENT_TOKEN = os.getenv('PADDLE_CLIENT_TOKEN', '')
+FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:5173')
 
 LOGGING={'version':1,'disable_existing_loggers':False,'handlers':{'console':{'class':'logging.StreamHandler'}},'loggers':{'django.request':{'handlers':['console'],'level':'WARNING','propagate':False},'core':{'handlers':['console'],'level':'INFO','propagate':False}}}

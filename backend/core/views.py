@@ -1,3 +1,4 @@
+from .services.feature_permissions import requires_feature
 from django.contrib.auth import authenticate,login,logout
 from django.db import transaction, IntegrityError
 from datetime import date,timedelta
@@ -261,6 +262,10 @@ def _register_api(request):
 		record_event(actor=new_user, action='create', obj=org, changed_fields=['name', 'code'])
 		record_event(actor=new_user, action='create', obj=school, changed_fields=['name', 'code'])
 		record_event(actor=new_user, action='create', obj=sub, changed_fields=['plan', 'status'])
+
+		from .services.subscriptions import provision_school_registration_subscription
+		school_sub = provision_school_registration_subscription(school=school, admin_user=new_user, plan_slug=plan_slug)
+		record_event(actor=new_user, action='create', obj=school_sub, changed_fields=['plan', 'status'])
 
 	login(request, new_user)
 	payload = user_payload(new_user)
@@ -1388,6 +1393,18 @@ class AuditLog(viewsets.ReadOnlyModelViewSet):
  permission_classes=[IsAuthenticated]
  serializer_class=AuditSerializer
  queryset=AuditEvent.objects.all()
+ def initial(self, request, *args, **kwargs):
+  super().initial(request, *args, **kwargs)
+  if request.user and request.user.is_authenticated and not request.user.is_superuser and getattr(request.user, 'school', None):
+   from core.services.entitlements import check_feature_access
+   allowed, reason, req_plan = check_feature_access(request.user.school, 'audit_log_viewer')
+   if not allowed:
+    raise PermissionDenied({
+     'detail': reason,
+     'code': 'feature_locked',
+     'feature_key': 'audit_log_viewer',
+     'required_plan': req_plan or 'premium'
+    })
  def perform_content_negotiation(self, request, force=False):
   fmt = request.query_params.get('format')
   if fmt in ('csv', 'xlsx', 'pdf'):
@@ -1812,6 +1829,7 @@ def create_account(request):
  },status=201)
 
 @api_view(['POST'])
+@requires_feature('multi_campus')
 def register_campus(request):
  """
  Comprehensive Campus Registration matching OPTIMUS ORIEN Parts 1, 2, 4 & 19 (SCH-001/004, ORG-001/002).

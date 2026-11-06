@@ -8,7 +8,8 @@ import {
   HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, MoreHorizontal,
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
-  Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle
+  Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle,
+  CreditCard, Lock
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -16,6 +17,8 @@ import {
   createAccount, registerCampus, schoolUsers, updateProfile, forgotPassword, resetPassword,
   type User, type Dashboard, type Resource
 } from './api';
+import PlanAndBilling from './PlanAndBilling';
+import FeatureLockedScreen from './FeatureLockedScreen';
 const PublicHome = React.lazy(() => import('./PublicHome'));
 const SchoolSetup = React.lazy(() => import('./SchoolSetup'));
 const Reports = React.lazy(() => import('./Reports'));
@@ -104,6 +107,7 @@ const WORKSPACE_NAV = [
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Plan & Billing', icon: CreditCard, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
@@ -114,6 +118,7 @@ function BriefcaseIcon(props: any) {
 
 const SYSTEM_NAV = [
   { name: 'Reports', icon: BarChart3, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  { name: 'Plan & Billing', icon: CreditCard, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'My performance', icon: TrendingUp, roles: ['student'] },
   { name: 'Platform owner', icon: ShieldCheck, superuserOnly: true },
   { name: 'Permissions', icon: KeyRound, roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -123,7 +128,7 @@ const SYSTEM_NAV = [
 ];
 
 const FORBIDDEN_TEACHER_PAGES = [
-  'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee',
+  'Finance', 'Plan & Billing', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee',
   'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Fees',
   'Staff', 'Staff Salaries', 'Salaries',
   'Campuses', 'Campus setup', 'Academic years',
@@ -147,7 +152,7 @@ const NAV_GROUPS = [
   { sublabel: 'STUDENT SUPPORT', items: ['Psychological Evaluation', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
-  { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
+  { sublabel: 'FINANCE & BILLING', items: ['Finance', 'Plan & Billing'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
 ];
 
@@ -494,6 +499,36 @@ function App() {
   const [toast, setToast] = useState('');
   const [receiptData, setReceiptData] = useState<CredentialsReceiptData | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(Boolean(user?.must_change_password));
+  const [subscription, setSubscription] = useState<any>(null);
+  const [entitlements, setEntitlements] = useState<any>(null);
+
+  const fetchSubscription = useCallback(async () => {
+    if (!user || user.is_superuser) return;
+    try {
+      const [subRes, entRes] = await Promise.all([
+        request<any>('subscription/current/').catch(() => null),
+        request<any>('subscription/entitlements/').catch(() => null)
+      ]);
+      if (subRes) setSubscription(subRes);
+      if (entRes) setEntitlements(entRes);
+    } catch {
+      // unscoped or platform admin
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchSubscription();
+    }
+  }, [user, fetchSubscription]);
+
+  const isFeatureUnlocked = useCallback((key: string) => {
+    if (!user || user.is_superuser || user.role === 'platform_admin') return true;
+    if (!entitlements || !entitlements.features) return true;
+    const feat = entitlements.features[key];
+    if (!feat) return true;
+    return Boolean(feat.is_unlocked);
+  }, [user, entitlements]);
 
   useEffect(() => {
     if (user?.must_change_password) {
@@ -718,7 +753,7 @@ function App() {
           const campusQs = safeCampusId ? `?school=${safeCampusId}` : '';
           setDash(await request<Dashboard>(`dashboard/${campusQs}`));
         }
-      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Academic Quality Index', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'My Class', 'My Subjects'].includes(page)) {
+      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Plan & Billing', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Academic Quality Index', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'My Class', 'My Subjects'].includes(page)) {
         // subcomponents handle own data
       } else if (resourceInfo[page]) {
         setRecords(await list<Resource>(`${resourceInfo[page].api}/${qs}`));
@@ -1731,6 +1766,45 @@ function App() {
           </div>
         </header>
 
+        {subscription?.is_limited && ['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
+          <div style={{
+            background: 'linear-gradient(90deg, #fffbeb, #fef3c7)',
+            borderBottom: '1px solid #fde68a',
+            padding: '12px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            fontSize: '0.88rem',
+            color: '#92400e',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            zIndex: 10
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Unpaid School (Limited Read-Only Mode):</strong> All record creation and premium analytics are locked until a subscription is activated.
+              </span>
+            </div>
+            <button
+              onClick={() => switchPage('Plan & Billing')}
+              style={{
+                padding: '6px 16px',
+                background: '#d97706',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Choose Plan & Pay (Sandbox) &rarr;
+            </button>
+          </div>
+        )}
+
         <main className="content">
           {/* Teacher Route Guard */}
           {user.role === 'teacher' && (
@@ -2242,10 +2316,42 @@ function App() {
           {page === 'My Class' && <TeacherMyClass user={user} onNavigate={switchPage} notify={notify} />}
           {page === 'My Subjects' && <TeacherMySubjects user={user} onNavigate={switchPage} notify={notify} />}
           {page === 'Campuses' && <CampusesPage user={user} notify={notify} onSetupSchool={(id) => { setSetupSchool(id); switchPage('Campus setup'); }} onCampusesChanged={() => { load(); }} />}
-          {page === 'Audit log' && <AuditLogView notify={notify} />}
+          {page === 'Audit log' && (
+            !isFeatureUnlocked('audit_log_viewer') ? (
+              <FeatureLockedScreen
+                featureName="Security Audit Log Viewer"
+                description="Tamper-evident system audit log, administrative change history, and security compliance exports."
+                requiredPlan="Premium"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <AuditLogView notify={notify} />
+            )
+          )}
           {page === 'Reports' && <Reports user={user} />}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
-          {page === 'Finance' && <Finance user={user} notify={notify} />}
+          {page === 'Finance' && (
+            !isFeatureUnlocked('finance_dashboard') ? (
+              <FeatureLockedScreen
+                featureName="Institutional Finance & Ledger"
+                description="General ledger, chart of accounts, automated reconciliation, and executive financial health dashboards."
+                requiredPlan="Premium"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <Finance user={user} notify={notify} />
+            )
+          )}
+          {page === 'Plan & Billing' && (
+            <PlanAndBilling
+              user={user}
+              notify={notify}
+              onPlanChanged={() => {
+                load();
+                fetchSubscription();
+              }}
+            />
+          )}
           {page === 'Attendance' && (user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} />)}
           {page === 'Results & Progress' && <StudentResults user={user} notify={notify} />}
           {page === 'Discussion' && <StudentDiscussion user={user} notify={notify} />}
@@ -2254,7 +2360,18 @@ function App() {
             <Fees user={user} notify={notify} initialTab={page} />
           )}
           {page === 'Study materials' && <StudyMaterials user={user} notify={notify} />}
-          {page === 'Staff Salaries' && <Salaries user={user} notify={notify} />}
+          {page === 'Staff Salaries' && (
+            !isFeatureUnlocked('hr_payroll') ? (
+              <FeatureLockedScreen
+                featureName="Staff Salaries & HR Payroll"
+                description="Staff salary schedules, deductions, allowances, payroll generation, and payslip printing."
+                requiredPlan="Premium"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <Salaries user={user} notify={notify} />
+            )
+          )}
           {page === 'Examinations' && (
             <ErrorBoundary fallbackTitle="Examination & Academic Performance">
               <Examinations
@@ -2274,22 +2391,31 @@ function App() {
             </ErrorBoundary>
           )}
           {page === 'Academic Quality Index' && (
-            <ErrorBoundary fallbackTitle="Academic Quality Index">
-              <AcademicQualityIndex
-                user={user}
-                notify={notify}
-                activeCampusId={activeCampusId}
-                onSelectCampus={(newId) => {
-                  setActiveCampusId(newId);
-                  if (newId) {
-                    localStorage.setItem('optimus_active_campus_id', String(newId));
-                  } else {
-                    localStorage.removeItem('optimus_active_campus_id');
-                  }
-                }}
-                campuses={campuses}
+            !isFeatureUnlocked('aqi') ? (
+              <FeatureLockedScreen
+                featureName="Academic Quality Index (AQI)"
+                description="Multi-factor academic scoring, longitudinal term tracking, teacher effectiveness ratings, and predictive interventions."
+                requiredPlan="Premium"
+                onUpgrade={() => switchPage('Plan & Billing')}
               />
-            </ErrorBoundary>
+            ) : (
+              <ErrorBoundary fallbackTitle="Academic Quality Index">
+                <AcademicQualityIndex
+                  user={user}
+                  notify={notify}
+                  activeCampusId={activeCampusId}
+                  onSelectCampus={(newId) => {
+                    setActiveCampusId(newId);
+                    if (newId) {
+                      localStorage.setItem('optimus_active_campus_id', String(newId));
+                    } else {
+                      localStorage.removeItem('optimus_active_campus_id');
+                    }
+                  }}
+                  campuses={campuses}
+                />
+              </ErrorBoundary>
+            )
           )}
           {page === 'Timetable' && <Timetable user={user} notify={notify} />}
           {page === 'Platform owner' && <PlatformOwner user={user} notify={notify} />}
@@ -2299,19 +2425,37 @@ function App() {
           {page === 'Announcements' && <Announcements user={user} notify={notify} />}
           {page === 'Settings' && <Settings user={user} onUserUpdated={u => setUser(u)} notify={notify} />}
           {page === 'Permissions' && <Permissions user={user} notify={notify} />}
-                    {(page === 'Psychological Evaluation' || page === 'My Development Profile') && (
-            <ErrorBoundary fallbackTitle="Psychological Evaluation">
-              <PsychologicalEvaluation
-                user={user}
-                notify={notify}
-                activeCampusId={activeCampusId}
-                initialMode={page === 'My Development Profile' ? 'student' : undefined}
-                onNavigate={switchPage}
+          {(page === 'Psychological Evaluation' || page === 'My Development Profile') && (
+            !isFeatureUnlocked('psych_eval') ? (
+              <FeatureLockedScreen
+                featureName="Psychological Evaluation & Development Profile"
+                description="Clinical evaluation templates, psychological dimension scoring, behavioural milestones, and developmental observation logs."
+                requiredPlan="Premium"
+                onUpgrade={() => switchPage('Plan & Billing')}
               />
-            </ErrorBoundary>
+            ) : (
+              <ErrorBoundary fallbackTitle="Psychological Evaluation">
+                <PsychologicalEvaluation
+                  user={user}
+                  notify={notify}
+                  activeCampusId={activeCampusId}
+                  initialMode={page === 'My Development Profile' ? 'student' : undefined}
+                  onNavigate={switchPage}
+                />
+              </ErrorBoundary>
+            )
           )}
           {['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'].includes(page) && (
-            <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} />
+            !isFeatureUnlocked('early_intervention') ? (
+              <FeatureLockedScreen
+                featureName="Early Intervention & Support Cases"
+                description="Student risk indicators, multi-tier intervention plans, case notes, and remediation tracking."
+                requiredPlan="Premium"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} />
+            )
           )}
           </React.Suspense>
 

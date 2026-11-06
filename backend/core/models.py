@@ -2259,3 +2259,281 @@ class BackgroundJob(models.Model):
 
     def __str__(self):
         return f"Job #{self.id} [{self.job_type}] - {self.status}"
+
+
+# ------------------------------------------------------------------ Subscriptions, Plans & Entitlements
+
+class Plan(models.Model):
+    """
+    Platform-level subscription tier definition (Unscoped).
+    Managed exclusively by Platform Admin. Prices and details are data, not hardcoded.
+    """
+    code = models.CharField(max_length=50, unique=True, db_index=True)  # 'standard', 'premium'
+    name = models.CharField(max_length=100)
+    name_ur = models.CharField(max_length=100, blank=True, default='')
+    tagline = models.CharField(max_length=255, blank=True, default='')
+    tagline_ur = models.CharField(max_length=255, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    description_ur = models.TextField(blank=True, default='')
+    price_usd_per_student = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    price_pkr_per_student = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+
+    def __str__(self):
+        return f"{self.name} (${self.price_usd_per_student}/Rs {self.price_pkr_per_student})"
+
+
+class FeatureCatalog(models.Model):
+    """
+    Master catalog of system capabilities and feature keys (Unscoped).
+    Defines tier availability, categorization, and readiness status.
+    """
+    STATUS_CHOICES = [
+        ('available', 'Available'),
+        ('beta', 'Beta'),
+        ('coming_soon', 'Coming Soon'),
+    ]
+    CATEGORY_CHOICES = [
+        ('core', 'Core Administration'),
+        ('academics', 'Academics & Examination'),
+        ('analytics', 'Analytics & Early Intervention'),
+        ('finance', 'Fees & Finance'),
+        ('operations', 'Operations & Logistics'),
+        ('safeguarding', 'Wellbeing & Safeguarding'),
+    ]
+    key = models.CharField(max_length=80, primary_key=True)
+    name = models.CharField(max_length=150)
+    name_ur = models.CharField(max_length=150, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    description_ur = models.TextField(blank=True, default='')
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='core')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
+    is_premium_only = models.BooleanField(default=False)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'key']
+
+    def __str__(self):
+        return f"{self.name} [{self.key}] ({self.status})"
+
+
+class PlanFeature(models.Model):
+    """
+    Binding between a Plan and a FeatureKey with optional limits (Unscoped).
+    """
+    plan = models.ForeignKey(Plan, on_delete=models.CASCADE, related_name='plan_features')
+    feature_key = models.CharField(max_length=80, db_index=True)
+    is_included = models.BooleanField(default=True)
+    limits = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('plan', 'feature_key')]
+        ordering = ['plan', 'feature_key']
+
+    def __str__(self):
+        return f"{self.plan.code} -> {self.feature_key} ({'included' if self.is_included else 'excluded'})"
+
+
+class PlatformBillingSettings(models.Model):
+    """
+    Global platform-level billing parameters and offline bank deposit details (Unscoped).
+    Bank account details are entered exclusively by platform admin (never hardcoded).
+    """
+    bank_name = models.CharField(max_length=150, blank=True, default='')
+    account_title = models.CharField(max_length=150, blank=True, default='')
+    account_number = models.CharField(max_length=80, blank=True, default='')
+    iban = models.CharField(max_length=80, blank=True, default='')
+    branch_code = models.CharField(max_length=40, blank=True, default='')
+    swift_bic = models.CharField(max_length=40, blank=True, default='')
+    payment_instructions_en = models.TextField(blank=True, default='')
+    payment_instructions_ur = models.TextField(blank=True, default='')
+    default_trial_days = models.PositiveSmallIntegerField(default=0)
+    pending_grace_days = models.PositiveSmallIntegerField(default=3)
+    past_due_grace_days = models.PositiveSmallIntegerField(default=7)
+    yearly_discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    exchange_rate_note_en = models.CharField(
+        max_length=255,
+        default='PKR amounts are approximate and based on standard currency conversion estimates.'
+    )
+    exchange_rate_note_ur = models.CharField(
+        max_length=255,
+        default='روپے کی رقم تخمینی ہے اور معیاری شرح تبادلہ کے تخمینے پر مبنی ہے۔'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        verbose_name = 'Platform Billing Settings'
+        verbose_name_plural = 'Platform Billing Settings'
+
+    @classmethod
+    def get_settings(cls):
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+
+    @classmethod
+    def get_solo(cls):
+        return cls.get_settings()
+
+    def __str__(self):
+        return f"Platform Billing Settings (Trial: {self.default_trial_days}d, Grace: {self.past_due_grace_days}d)"
+
+
+class SchoolSubscription(models.Model):
+    """
+    Tenant-scoped active subscription record for an individual school.
+    PostgreSQL Row Level Security (RLS) enabled.
+    """
+    STATUS_CHOICES = [
+        ('trial', 'Trial'),
+        ('pending_approval', 'Pending Approval'),
+        ('active', 'Active'),
+        ('past_due', 'Past Due'),
+        ('limited', 'Limited (Read-Only)'),
+        ('suspended', 'Suspended'),
+    ]
+    school = models.OneToOneField('School', on_delete=models.CASCADE, related_name='subscription')
+    plan = models.ForeignKey(Plan, null=True, blank=True, on_delete=models.PROTECT, related_name='school_subscriptions')
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='trial', db_index=True)
+    trial_started_at = models.DateTimeField(null=True, blank=True)
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+    current_period_start = models.DateTimeField(null=True, blank=True)
+    paid_until = models.DateTimeField(null=True, blank=True)
+    grace_until = models.DateTimeField(null=True, blank=True)
+    student_count_at_last_invoice = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['school', 'status'], name='sub_school_status_idx'),
+            models.Index(fields=['status', 'paid_until'], name='sub_status_paid_idx'),
+            models.Index(fields=['status', 'trial_ends_at'], name='sub_status_trial_idx'),
+        ]
+
+    def __str__(self):
+        plan_name = self.plan.name if self.plan else 'No Plan'
+        return f"{self.school.name} - {plan_name} [{self.status}]"
+
+
+class SubscriptionOrder(models.Model):
+    """
+    Tenant-scoped subscription order for card payments (Paddle/Provider)
+    or offline manual bank deposits.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+    ]
+    order_number = models.CharField(max_length=40, unique=True, db_index=True)
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='subscription_orders')
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name='orders')
+    billing_months = models.PositiveSmallIntegerField(choices=[(1, '1 Month'), (3, '3 Months'), (6, '6 Months'), (12, '12 Months')])
+    student_count = models.PositiveIntegerField()
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=5, choices=[('USD', 'USD'), ('PKR', 'PKR')], default='USD')
+    provider = models.CharField(max_length=40, default='fake', db_index=True)
+    provider_reference = models.CharField(max_length=150, blank=True, default='', db_index=True)
+    provider_event_id = models.CharField(max_length=150, blank=True, default='', db_index=True)
+    checkout_url = models.TextField(blank=True, default='')
+    payment_reference = models.CharField(max_length=100, blank=True, default='')
+    paid_on = models.DateField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    refunded_at = models.DateTimeField(null=True, blank=True)
+    failure_reason = models.TextField(blank=True, default='')
+    payment_notes = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    submitted_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='submitted_subscription_orders')
+    reviewed_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='reviewed_subscription_orders')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['school', 'status'], name='order_school_status_idx'),
+            models.Index(fields=['status', 'created_at'], name='order_status_created_idx'),
+            models.Index(fields=['provider', 'provider_reference'], name='order_provider_ref_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.order_number} ({self.school.name}) - {self.amount} {self.currency} [{self.status}]"
+
+
+class SchoolFeatureOverride(models.Model):
+    """
+    Tenant-scoped per-school feature toggle granted or revoked by Platform Admin.
+    Used for live demonstrations, prospective customer trials, or enterprise pilots.
+    """
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='feature_overrides')
+    feature_key = models.CharField(max_length=80, db_index=True)
+    is_granted = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    reason = models.CharField(max_length=255)
+    granted_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('school', 'feature_key')]
+        ordering = ['school', 'feature_key']
+
+    def __str__(self):
+        action = "GRANT" if self.is_granted else "REVOKE"
+        return f"{self.school.name}: {action} {self.feature_key} ({self.reason})"
+
+
+class SubscriptionEvent(models.Model):
+    """
+    Tenant-scoped immutable audit log of all subscription status transitions,
+    trial extensions, order approvals, and platform admin overrides.
+    """
+    EVENT_CHOICES = [
+        ('trial_started', 'Trial Started'),
+        ('trial_extended', 'Trial Extended'),
+        ('order_submitted', 'Order Submitted'),
+        ('order_approved', 'Order Approved'),
+        ('order_rejected', 'Order Rejected'),
+        ('status_changed', 'Status Changed'),
+        ('downgraded_to_limited', 'Downgraded to Limited'),
+        ('suspended', 'Suspended'),
+        ('reinstated', 'Reinstated'),
+        ('override_applied', 'Override Applied'),
+    ]
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='subscription_events')
+    event_type = models.CharField(max_length=40, choices=EVENT_CHOICES, db_index=True)
+    from_status = models.CharField(max_length=30, blank=True, default='')
+    to_status = models.CharField(max_length=30, blank=True, default='')
+    from_plan = models.CharField(max_length=50, blank=True, default='')
+    to_plan = models.CharField(max_length=50, blank=True, default='')
+    actor = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    metadata = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['school', 'created_at'], name='sub_evt_school_created_idx'),
+            models.Index(fields=['event_type', 'created_at'], name='sub_evt_type_created_idx'),
+        ]
+
+    def __str__(self):
+        return f"[{self.event_type}] {self.school.name} ({self.from_status} -> {self.to_status}) at {self.created_at}"

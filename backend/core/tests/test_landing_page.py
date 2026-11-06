@@ -11,6 +11,10 @@ from core.models import (
     LandingPlan,
     LandingSiteSetting,
     LandingContactMessage,
+    Plan,
+    PlanFeature,
+    FeatureCatalog,
+    PlatformBillingSettings,
 )
 from core.services.landing_cms import seed_default_landing_content, get_public_landing_data
 
@@ -288,6 +292,10 @@ class LandingPageCmsTests(TestCase):
             LandingPlan,
             LandingSiteSetting,
             LandingContactMessage,
+            Plan,
+            PlanFeature,
+            FeatureCatalog,
+            PlatformBillingSettings,
         ]
 
         for model in unscoped_models:

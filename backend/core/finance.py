@@ -1,3 +1,4 @@
+from core.services.feature_permissions import requires_feature
 """Finance: a simple income / expense ledger with categories and chart-ready totals.
 
 Not accounting or payroll (the spec defers those). Admins, school admins and principals
@@ -159,6 +160,7 @@ def _entries(user, params, request=None, target_schools=None):
 
 
 @api_view(['GET', 'POST'])
+@requires_feature('accounts_ledger')
 def categories(request):
     user = request.user
     _require(user)
@@ -222,6 +224,7 @@ def category_detail(request, pk):
 
 
 @api_view(['GET', 'POST'])
+@requires_feature('accounts_ledger')
 def entries(request):
     user = request.user
     _require(user)
@@ -258,6 +261,7 @@ def entry_detail(request, pk):
 
 
 @api_view(['POST'])
+@requires_feature('accounts_ledger')
 def entry_void(request, pk):
     user = request.user
     _require(user)
@@ -273,6 +277,7 @@ def entry_void(request, pk):
 
 
 @api_view(['GET'])
+@requires_feature('finance_dashboard')
 def summary(request):
     """Totals plus chart-ready breakdowns: expense pie, income by category, monthly trend, multi-currency isolation."""
     user = request.user

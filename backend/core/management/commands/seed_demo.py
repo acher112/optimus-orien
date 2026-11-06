@@ -154,4 +154,17 @@ class Command(BaseCommand):
      m3=min(Decimal('100.00'),Decimal(round(base_score+8,1)))
      ExamStudentMark.objects.get_or_create(student=st,component=t3,subject=s_obj,school_class=klass,academic_year=year,defaults={'marks_obtained':m3})
   recalculate_configuration(exam_cfg.id)
+  prem_plan = Plan.objects.filter(code='premium').first()
+  if prem_plan:
+   for s_demo in (school, sister):
+    SchoolSubscription.objects.update_or_create(
+     school=s_demo,
+     defaults={
+      'plan': prem_plan,
+      'status': 'active',
+      'current_period_start': timezone.now(),
+      'paid_until': timezone.now() + timedelta(days=365),
+      'student_count_at_last_invoice': Student.objects.filter(school=s_demo).count()
+     }
+    )
   self.stdout.write(self.style.SUCCESS('Demo ready: admin / teacher / principal / teacher_west / principal_west / student_demo / parent_demo — password DemoPass123!'))

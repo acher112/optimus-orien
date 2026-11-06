@@ -27,7 +27,8 @@ from core.models import (
     Organisation, School, AcademicYear, SchoolClass, Subject, Student,
     Enrollment, Attendance, FeeHead, FinanceCategory, StudentFee, FeePayment,
     ExamComponent, ExamStructure, ExamConfiguration, ExamStudentMark,
-    User, GuardianProfile, GuardianRelationship
+    User, GuardianProfile, GuardianRelationship,
+    Plan, SchoolSubscription
 )
 
 def seed_schools():
@@ -50,6 +51,18 @@ def seed_schools():
             code=sch_code,
             defaults={'name': f'Apex Academy Campus {i}', 'organisation': org}
         )
+        prem_plan = Plan.objects.filter(code='premium').first()
+        if prem_plan:
+            SchoolSubscription.objects.update_or_create(
+                school=school,
+                defaults={
+                    'plan': prem_plan,
+                    'status': 'active',
+                    'current_period_start': timezone.now(),
+                    'paid_until': timezone.now() + timedelta(days=365),
+                    'student_count_at_last_invoice': 1000
+                }
+            )
 
         existing_students = Student.objects.filter(school=school).count()
         if existing_students >= 1000 and User.objects.filter(school=school, role='parent').count() >= 50:

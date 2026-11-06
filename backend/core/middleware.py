@@ -8,6 +8,8 @@ import json
 import logging
 from django.db import connection
 from django.conf import settings
+from django.http import JsonResponse
+from core.services.entitlements import get_effective_subscription_status
 
 logger = logging.getLogger('core.performance')
 
@@ -60,3 +62,74 @@ class SlowQueryAndPerformanceMiddleware:
                 response['X-Query-Count'] = str(queries_run)
 
         return response
+
+
+class SubscriptionEntitlementsAndLimitedGuardMiddleware:
+    """
+    Server-side guard enforcing read-only behavior during limited mode,
+    and blocking access during administrative suspension.
+    Reads and all data exports remain permanently allowed in every state.
+    """
+    WRITE_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
+    ALLOWLIST_PREFIXES = (
+        '/static/',
+        '/media/',
+        '/favicon.ico',
+        '/api/v1/auth/',
+        '/auth/',
+        '/api/v1/subscription/',
+        '/subscription/',
+        '/api/v1/public/',
+        '/public/',
+        '/api/v1/platform-admin/',
+        '/platform-admin/',
+        '/api/v1/platform/',
+        '/platform/',
+    )
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            # Check for DRF test client forced authentication
+            user = getattr(request, '_force_auth_user', None)
+
+        if not user or not user.is_authenticated:
+            return self.get_response(request)
+
+        # Superusers and platform admins without school assignment are exempt
+        if user.is_superuser or user.role == 'platform_admin' or not getattr(user, 'school', None):
+            return self.get_response(request)
+
+        path = request.path
+
+        # Always allow data exports (compliance & portability guarantees)
+        if 'export' in path.lower() or 'download' in path.lower():
+            return self.get_response(request)
+
+        # Only check mutating methods for limited mode
+        if request.method in self.WRITE_METHODS:
+            school = user.school
+            status = get_effective_subscription_status(school)
+
+            if status == 'limited':
+                # Check write-allowlist
+                if not any(path.startswith(prefix) for prefix in self.ALLOWLIST_PREFIXES):
+                    return JsonResponse({
+                        'detail': 'School account is in limited read-only mode. Please renew your subscription to perform write actions.',
+                        'code': 'limited_read_only',
+                        'status': 'limited'
+                    }, status=403)
+
+            elif status == 'suspended':
+                # Suspended accounts cannot perform non-allowlisted writes or reads
+                if not any(path.startswith(prefix) for prefix in ('/api/v1/auth/logout', '/auth/logout', '/api/v1/public/contact', '/public/contact')):
+                    return JsonResponse({
+                        'detail': 'School account is suspended. Please contact platform administration.',
+                        'code': 'account_suspended',
+                        'status': 'suspended'
+                    }, status=403)
+
+        return self.get_response(request)

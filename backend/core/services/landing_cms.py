@@ -363,11 +363,11 @@ def seed_default_landing_content():
             'description': 'Includes full access to the intelligence suite, core role portals, campus benchmarking, and early intervention tools.',
             'description_ur': 'بنیادی تجزیاتی ٹولز، تمام کرداروں کے پورٹل اور حاضری و کارکردگی کا مکمل انتظام۔',
             'price_usd_per_student': Decimal('3.60'),
-            'price_pkr_per_student': Decimal('499.00'),
+            'price_pkr_per_student': Decimal('1000.00'),
             'student_limit': 0,
             'campus_limit': 1,
             'interval': 'monthly',
-            'trial_days': 30,
+            'trial_days': 3,
             'features': [
                 "Student Profiles",
                 "Marks & Assessments",
@@ -405,11 +405,11 @@ def seed_default_landing_content():
             'description': 'Everything in Standard, plus Early Intervention System, Academic Quality Index (AQI), 5-year longitudinal analysis, and multi-campus governance.',
             'description_ur': 'اسٹینڈرڈ کی تمام خصوصیات کے ساتھ قبل از وقت رہنمائی، تعلیمی معیار انڈیکس (AQI) اور 5 سالہ ترقیاتی تجزیہ۔',
             'price_usd_per_student': Decimal('7.20'),
-            'price_pkr_per_student': Decimal('999.00'),
+            'price_pkr_per_student': Decimal('2000.00'),
             'student_limit': 0,
             'campus_limit': 5,
             'interval': 'monthly',
-            'trial_days': 30,
+            'trial_days': 3,
             'features': [
                 "Everything in Standard",
                 "Early Intervention System",
@@ -457,7 +457,7 @@ def seed_default_landing_content():
         'contact_email': ('optimusorien@gmail.com', 'optimusorien@gmail.com', 'Contact mailbox'),
         'hero_headline': ('OPTIMUS ORIEN', 'آپٹیمس اورین', 'Masthead brand wordmark'),
         'footer_tagline': ('School Performance Intelligence & Early Intervention', 'سکول کارکردگی انٹیلی جنس اور بروقت رہنمائی', 'Footer subtitle'),
-        'trial_badge': ('Get one month complimentary access.', 'ایک ماہ کی اعزازی رسائی حاصل کریں۔', 'Complimentary access offer'),
+        'trial_badge': ('Experience full platform access with a 3-day complimentary trial.', 'مکمل پلیٹ فارم تک رسائی کے لیے 3 روزہ اعزازی ٹرائل حاصل کریں۔', '3-day complimentary trial offer'),
     }
     for k, (v, vur, desc) in settings_seed.items():
         LandingSiteSetting.objects.get_or_create(

@@ -1,3 +1,4 @@
+from core.services.feature_permissions import requires_feature
 """Staff salaries: structures, monthly generation, approvals, payments, adjustments, payslips.
 
 Every paid salary creates a linked FinanceEntry (kind 'expense'). Voiding a salary record
@@ -73,6 +74,7 @@ def _parse_month(month_str):
 
 # ------------------------------------------------------------------ Salary Structures
 @api_view(['GET', 'POST'])
+@requires_feature('hr_payroll')
 def salary_structures(request):
     user = request.user
     _require_manager(user)
@@ -163,6 +165,7 @@ def salary_structures(request):
 
 # ------------------------------------------------------------------ Salary Adjustments (Bonuses, Deductions, Advances)
 @api_view(['GET', 'POST'])
+@requires_feature('hr_payroll')
 def salary_adjustments(request):
     user = request.user
     _require_manager(user)
@@ -226,6 +229,7 @@ def salary_adjustments(request):
 
 # ------------------------------------------------------------------ Monthly Generation
 @api_view(['POST'])
+@requires_feature('hr_payroll')
 def salaries_generate(request):
     """Generates draft salary records for active staff for a given month (YYYY-MM).
 
@@ -374,6 +378,7 @@ def salaries_generate(request):
 
 # ------------------------------------------------------------------ Salary Sheet & Bulk Approvals
 @api_view(['GET', 'PATCH'])
+@requires_feature('hr_payroll')
 def salaries_sheet(request):
     user = request.user
     _require_manager(user)
@@ -470,6 +475,7 @@ def salaries_sheet(request):
 
 # ------------------------------------------------------------------ Pay & Void Actions
 @api_view(['POST'])
+@requires_feature('hr_payroll')
 def salary_pay(request, pk):
     """Mark a salary record paid and create linked FinanceEntry (Expense)."""
     user = request.user
@@ -525,6 +531,7 @@ def salary_pay(request, pk):
 
 
 @api_view(['POST'])
+@requires_feature('hr_payroll')
 def salary_status_update(request, pk):
     """
     Update status of salary record (pending, paid, cancelled, draft) and optionally due_date.
@@ -627,6 +634,7 @@ def salary_status_update(request, pk):
 
 
 @api_view(['POST'])
+@requires_feature('hr_payroll')
 def salary_void(request, pk):
     """Void a salary record and void its linked FinanceEntry."""
     user = request.user
@@ -660,6 +668,7 @@ def salary_void(request, pk):
 
 # ------------------------------------------------------------------ Payslips & My Payslips
 @api_view(['GET'])
+@requires_feature('hr_payroll')
 def salary_payslip(request, pk):
     """Full printable payslip data for a salary record."""
     user = request.user
@@ -715,6 +724,7 @@ def salary_payslip(request, pk):
 
 
 @api_view(['GET'])
+@requires_feature('hr_payroll')
 def my_payslips(request):
     """Endpoint for teachers/staff to view their own paid payslips."""
     user = request.user
@@ -740,6 +750,7 @@ def my_payslips(request):
 
 # ------------------------------------------------------------------ Salaries Summary (Rollup KPI)
 @api_view(['GET'])
+@requires_feature('hr_payroll')
 def salaries_summary(request):
     user = request.user
     _require_manager(user)

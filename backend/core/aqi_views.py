@@ -1,3 +1,4 @@
+from core.services.feature_permissions import requires_feature
 """Academic Quality Index (AQI) & Examination Calculation API Views.
 
 Implements all 5 levels of the AQI hierarchy with strict server-side scoping:
@@ -43,6 +44,7 @@ from core.services.exports import export_response
 # Level 1: School-wide Consolidated Overview
 # ---------------------------------------------------------------------------
 @api_view(['GET'])
+@requires_feature('aqi_history')
 def aqi_overview(request):
     """Level 1: School-wide AQI Overview across all campuses.
 
@@ -63,6 +65,7 @@ def aqi_overview(request):
 # Level 2: Campus Dashboard
 # ---------------------------------------------------------------------------
 @api_view(['GET'])
+@requires_feature('aqi')
 def aqi_campus(request, school_id):
     """Level 2: Campus AQI Dashboard.
 
@@ -90,6 +93,7 @@ def aqi_campus(request, school_id):
 # Level 3: Class Dashboard
 # ---------------------------------------------------------------------------
 @api_view(['GET'])
+@requires_feature('aqi')
 def aqi_class(request, class_id):
     """Level 3: Class AQI Dashboard.
 
@@ -112,6 +116,7 @@ def aqi_class(request, class_id):
 # Level 4: Subject Dashboard
 # ---------------------------------------------------------------------------
 @api_view(['GET'])
+@requires_feature('aqi')
 def aqi_subject(request, class_id, subject_id):
     """Level 4: Subject AQI Dashboard.
 
@@ -135,6 +140,7 @@ def aqi_subject(request, class_id, subject_id):
 # Level 5: Student Profile
 # ---------------------------------------------------------------------------
 @api_view(['GET'])
+@requires_feature('aqi')
 def aqi_student(request, student_id):
     """Level 5: Student Academic Profile.
 
@@ -154,6 +160,7 @@ def aqi_student(request, student_id):
 
 
 @api_view(['GET'])
+@requires_feature('aqi')
 def aqi_my_profile(request):
     """Convenience landing endpoint for Student or Parent roles to view their profile."""
     scope = aqi_scope(request.user)
@@ -191,6 +198,7 @@ def aqi_my_profile(request):
 # Explain Trace Endpoint
 # ---------------------------------------------------------------------------
 @api_view(['GET'])
+@requires_feature('aqi')
 def aqi_explain(request):
     """Provides transparent step-by-step arithmetic traces for the Explain Drawer."""
     scope = aqi_scope(request.user)
@@ -216,6 +224,7 @@ def aqi_explain(request):
 # Exam Structure Setup & Management
 # ---------------------------------------------------------------------------
 @api_view(['GET', 'POST'])
+@requires_feature('aqi')
 def aqi_structures(request):
     """List or create ExamStructures scoped to user's campus permissions."""
     scope = aqi_scope(request.user)
@@ -312,6 +321,7 @@ def aqi_structures(request):
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
+@requires_feature('aqi')
 def aqi_structure_detail(request, pk):
     """Retrieve, update, or archive an ExamStructure."""
     scope = aqi_scope(request.user)
@@ -384,6 +394,7 @@ def aqi_structure_detail(request, pk):
 
 
 @api_view(['POST'])
+@requires_feature('aqi')
 def aqi_structure_publish(request, pk):
     """Validates and publishes an ExamStructure, freezing an immutable ExamStructureVersion snapshot."""
     scope = aqi_scope(request.user)
@@ -544,6 +555,7 @@ def aqi_term_detail(request, pk):
 # Marks Entry Grid (Quick Grading)
 # ---------------------------------------------------------------------------
 @api_view(['GET', 'POST'])
+@requires_feature('aqi')
 def aqi_marks_grid(request):
     """Read and bulk-save student examination marks by (class, subject, exam_term)."""
     scope = aqi_scope(request.user)

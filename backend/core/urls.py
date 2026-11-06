@@ -6,7 +6,7 @@ from . import (
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
-    parent_views, landing_views
+    parent_views, landing_views, subscription_views
 )
 
 r = DefaultRouter()
@@ -126,6 +126,28 @@ urlpatterns = [
     path('timetables/', platform_owner.class_timetables),
     path('timetables/<int:pk>/', platform_owner.timetable_detail),
     path('imports/csv/', imports.csv_import),
+
+    # Subscription, Invoicing & Entitlements
+    path('public/pricing/', subscription_views.public_pricing_view),
+    path('public/billing-info/', subscription_views.public_billing_info_view),
+    path('subscription/current/', subscription_views.school_subscription_current_view),
+    path('subscription/entitlements/', subscription_views.school_entitlements_view),
+    path('subscription/invoice-estimate/', subscription_views.school_invoice_estimate_view),
+    path('subscription/bank-details/', subscription_views.school_bank_details_view),
+    path('subscription/orders/', subscription_views.school_subscription_orders_view),
+    path('subscription/orders/<int:pk>/receipt/', subscription_views.school_order_receipt_view),
+    path('subscription/webhook/', subscription_views.subscription_payment_webhook_view),
+    path('platform-admin/billing/settings/', subscription_views.platform_admin_billing_settings_view),
+    path('platform-admin/billing/plans/', subscription_views.platform_admin_plans_view),
+    path('platform-admin/billing/plans/<int:pk>/', subscription_views.platform_admin_plan_detail_view),
+    path('platform-admin/billing/features/', subscription_views.platform_admin_features_view),
+    path('platform-admin/billing/schools/', subscription_views.platform_admin_schools_view),
+    path('platform-admin/billing/orders/', subscription_views.platform_admin_orders_view),
+    path('platform-admin/billing/orders/<int:order_id>/approve/', subscription_views.platform_admin_order_approve_view),
+    path('platform-admin/billing/orders/<int:order_id>/reject/', subscription_views.platform_admin_order_reject_view),
+    path('platform-admin/billing/schools/<int:school_id>/extend-trial/', subscription_views.platform_admin_extend_trial_view),
+    path('platform-admin/billing/schools/<int:school_id>/feature-override/', subscription_views.platform_admin_feature_overrides_view),
+    path('platform-admin/billing/schools/<int:school_id>/feature-override/<int:override_id>/', subscription_views.platform_admin_feature_override_delete_view),
 
     # Role Permissions Management
     path('permissions/', permission_views.permissions_list),

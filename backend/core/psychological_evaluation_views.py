@@ -38,6 +38,7 @@ from core.services.psychological_evaluation import (
     save_evaluation
 )
 from core.services.teacher_scope import get_teacher_scope
+from core.services.feature_permissions import requires_feature
 
 
 # ==============================================================================
@@ -45,6 +46,7 @@ from core.services.teacher_scope import get_teacher_scope
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def evaluation_template_view(request):
     """GET /api/v1/psychological-evaluations/template/
     Return the active 18-item observation questionnaire grouped into 6 dimensions.
@@ -98,6 +100,7 @@ def evaluation_template_view(request):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def hierarchical_overview(request):
     """GET /api/v1/psychological-evaluations/overview/
     Levels 1 & 2 dashboard overview.
@@ -126,6 +129,7 @@ def hierarchical_overview(request):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def class_evaluation_summary(request):
     """GET /api/v1/psychological-evaluations/class-summary/
     Level 3 class overview with student completion status and domain averages.
@@ -148,6 +152,7 @@ def class_evaluation_summary(request):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def student_profile_view(request, student_id):
     """GET /api/v1/psychological-evaluations/student-profile/<student_id>/
     Level 4 student behavioural & developmental profile.
@@ -205,6 +210,7 @@ def student_profile_view(request, student_id):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def student_my_profile_view(request):
     """GET /api/v1/psychological-evaluations/my-profile/
     Student-facing self-service development profile.
@@ -301,6 +307,7 @@ def student_my_profile_view(request):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def teacher_workspace_view(request):
     """GET /api/v1/psychological-evaluations/workspace/
     Weekly evaluation workspace for teachers.
@@ -321,6 +328,7 @@ def teacher_workspace_view(request):
 
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def get_evaluation_detail(request):
     """GET /api/v1/psychological-evaluations/evaluations/find/
     Retrieve an evaluation record or create an initial draft.
@@ -390,6 +398,7 @@ def get_evaluation_detail(request):
 
 
 @api_view(['POST'])
+@requires_feature('psych_eval')
 def save_evaluation_view(request):
     """POST /api/v1/psychological-evaluations/evaluations/save/
     Draft or submit an evaluation.
@@ -412,6 +421,7 @@ def save_evaluation_view(request):
 
 
 @api_view(['POST'])
+@requires_feature('psych_eval')
 def revise_evaluation_view(request, pk):
     """POST /api/v1/psychological-evaluations/evaluations/<pk>/revise/
     Authorized amendment of a previously submitted evaluation.
@@ -448,6 +458,7 @@ def revise_evaluation_view(request, pk):
 # ==============================================================================
 
 @api_view(['POST'])
+@requires_feature('psych_eval')
 def publish_evaluation_view(request):
     """POST /api/v1/psychological-evaluations/publications/publish/
     Publish or unpublish weekly profile to make it visible to the student.
@@ -510,6 +521,7 @@ def publish_evaluation_view(request):
 # ==============================================================================
 
 @api_view(['POST'])
+@requires_feature('psych_eval')
 def create_safeguarding_referral(request):
     """POST /api/v1/psychological-evaluations/safeguarding/refer/
     Create an immediate confidential safeguarding escalation to school leads.
@@ -565,6 +577,7 @@ def create_safeguarding_referral(request):
 
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def list_safeguarding_referrals(request):
     """GET /api/v1/psychological-evaluations/safeguarding/list/
     Restricted view for safeguarding leads, principals, and admins.
@@ -608,6 +621,7 @@ def list_safeguarding_referrals(request):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def gender_analytics_view(request):
     """GET /api/v1/psychological-evaluations/gender-analytics/
     Dedicated gender aggregate statistics endpoint.
@@ -647,6 +661,7 @@ def gender_analytics_view(request):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def evaluation_audit_logs_view(request):
     """GET /api/v1/psychological-evaluations/audit-logs/
     Admin audit logs for psychological evaluation activities.
@@ -678,6 +693,7 @@ def evaluation_audit_logs_view(request):
 # ==============================================================================
 
 @api_view(['GET'])
+@requires_feature('psych_eval')
 def export_evaluations_csv(request):
     """GET /api/v1/psychological-evaluations/export/
     Export evaluations as CSV with strict permission enforcement.
