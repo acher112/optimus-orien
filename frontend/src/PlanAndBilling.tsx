@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CreditCard, Check, Sparkles, ShieldCheck, FileText, CheckCircle2,
   AlertTriangle, Clock, ArrowRight, RefreshCw, Lock, Printer, Building2,
-  Calendar, Layers, Users, Zap
+  Calendar, Layers, Users, Zap, AlertCircle
 } from 'lucide-react';
 import { request, type User } from './api';
 import { SandboxCheckoutModal, type CheckoutOrderInfo } from './SandboxCheckoutModal';
@@ -10,6 +10,7 @@ import { ReceiptModal, type ReceiptData } from './ReceiptModal';
 
 interface PlanAndBillingProps {
   user: User;
+  activeCampusId?: number | null;
   notify?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onPlanChanged?: () => void;
 }
@@ -46,10 +47,11 @@ interface OrderHistoryItem {
   payment_reference?: string;
 }
 
-export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, notify, onPlanChanged }) => {
+export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCampusId, notify, onPlanChanged }) => {
   const [currentSub, setCurrentSub] = useState<CurrentSubscriptionData | null>(null);
   const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
   // Order Configuration State
@@ -64,18 +66,21 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, notify, on
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
+      const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
       const [subData, ordersData] = await Promise.all([
-        request<CurrentSubscriptionData>('subscription/current/'),
-        request<{ results: OrderHistoryItem[] }>('subscription/orders/')
+        request<CurrentSubscriptionData>(`subscription/current/${campusQs}`),
+        request<{ results: OrderHistoryItem[] }>(`subscription/orders/${campusQs}`).catch(() => ({ results: [] }))
       ]);
       setCurrentSub(subData);
       setOrders(ordersData?.results || []);
     } catch (err: any) {
-      if (notify) notify(err.message || 'Failed to load subscription details.', 'error');
+      setLoadError(err?.message || 'Failed to load subscription details.');
+      if (notify) notify(err?.message || 'Failed to load subscription details.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [notify]);
+  }, [activeCampusId]);
 
   useEffect(() => {
     loadData();
@@ -114,7 +119,8 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, notify, on
           plan_code: selectedPlan,
           billing_months: billingMonths,
           payment_method: 'card',
-          currency: currency
+          currency: currency,
+          ...(activeCampusId ? { school_id: activeCampusId } : {})
         })
       });
 
@@ -176,9 +182,27 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, notify, on
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh', gap: 10 }}>
-        <RefreshCw size={24} className="animate-spin" color="#2563eb" />
-        <span style={{ color: '#64748b' }}>Loading subscription status & plans...</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '50vh', gap: 14 }}>
+        <RefreshCw size={28} className="animate-spin" color="#2563eb" />
+        <span style={{ color: '#64748b', fontSize: '0.95rem' }}>Loading subscription status & plans...</span>
+      </div>
+    );
+  }
+
+  if (loadError && !currentSub) {
+    return (
+      <div style={{ maxWidth: 600, margin: '60px auto', padding: '36px 32px', textAlign: 'center', backgroundColor: 'var(--card-bg, #ffffff)', borderRadius: 16, border: '1px solid #fee2e2', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', backgroundColor: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto' }}>
+          <AlertCircle size={32} />
+        </div>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#991b1b', margin: '0 0 8px 0' }}>Unable to Load Subscription</h2>
+        <p style={{ color: '#6b7280', fontSize: '0.9rem', lineHeight: 1.5, margin: '0 0 24px 0' }}>{loadError}</p>
+        <button
+          onClick={() => loadData()}
+          style={{ padding: '10px 24px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+        >
+          <RefreshCw size={16} /> Retry
+        </button>
       </div>
     );
   }

@@ -499,36 +499,6 @@ function App() {
   const [toast, setToast] = useState('');
   const [receiptData, setReceiptData] = useState<CredentialsReceiptData | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(Boolean(user?.must_change_password));
-  const [subscription, setSubscription] = useState<any>(null);
-  const [entitlements, setEntitlements] = useState<any>(null);
-
-  const fetchSubscription = useCallback(async () => {
-    if (!user || user.is_superuser) return;
-    try {
-      const [subRes, entRes] = await Promise.all([
-        request<any>('subscription/current/').catch(() => null),
-        request<any>('subscription/entitlements/').catch(() => null)
-      ]);
-      if (subRes) setSubscription(subRes);
-      if (entRes) setEntitlements(entRes);
-    } catch {
-      // unscoped or platform admin
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) {
-      fetchSubscription();
-    }
-  }, [user, fetchSubscription]);
-
-  const isFeatureUnlocked = useCallback((key: string) => {
-    if (!user || user.is_superuser || user.role === 'platform_admin') return true;
-    if (!entitlements || !entitlements.features) return true;
-    const feat = entitlements.features[key];
-    if (!feat) return true;
-    return Boolean(feat.is_unlocked);
-  }, [user, entitlements]);
 
   useEffect(() => {
     if (user?.must_change_password) {
@@ -569,6 +539,38 @@ function App() {
       setActiveCampusId(user.school);
     }
   }, [isSingleCampusRole, user, activeCampusId]);
+
+  const [subscription, setSubscription] = useState<any>(null);
+  const [entitlements, setEntitlements] = useState<any>(null);
+
+  const fetchSubscription = useCallback(async () => {
+    if (!user || user.is_superuser) return;
+    try {
+      const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
+      const [subRes, entRes] = await Promise.all([
+        request<any>(`subscription/current/${campusQs}`).catch(() => null),
+        request<any>(`subscription/entitlements/${campusQs}`).catch(() => null)
+      ]);
+      if (subRes) setSubscription(subRes);
+      if (entRes) setEntitlements(entRes);
+    } catch {
+      // unscoped or platform admin
+    }
+  }, [user, activeCampusId]);
+
+  useEffect(() => {
+    if (user) {
+      fetchSubscription();
+    }
+  }, [user, fetchSubscription]);
+
+  const isFeatureUnlocked = useCallback((key: string) => {
+    if (!user || user.is_superuser || user.role === 'platform_admin') return true;
+    if (!entitlements || !entitlements.features) return true;
+    const feat = entitlements.features[key];
+    if (!feat) return true;
+    return Boolean(feat.is_unlocked);
+  }, [user, entitlements]);
 
   const [form, setForm] = useState<Record<string, string>>({});
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -695,7 +697,7 @@ function App() {
   }, [user, fetchHeaderNotifications]);
 
   const dynColor = useMemo(() => [accentHex, '#23b7a0', '#f29d50', '#6c9eff', '#e477a1', '#b4a0e9'], [accentHex]);
-  const notify = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+  const notify = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); }, []);
 
   useEffect(() => {
     const { mode, color } = getStoredTheme();
@@ -2345,6 +2347,7 @@ function App() {
           {page === 'Plan & Billing' && (
             <PlanAndBilling
               user={user}
+              activeCampusId={activeCampusId}
               notify={notify}
               onPlanChanged={() => {
                 load();

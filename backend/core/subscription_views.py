@@ -52,6 +52,37 @@ def _is_platform_admin(user):
     ))
 
 
+def _resolve_school_for_user(request):
+    """
+    Resolves the target school for a subscription/entitlements request.
+    Handles multi-campus organisations, organisation admins, and specific ?school= queries.
+    """
+    school_id = request.query_params.get('school')
+    if not school_id and hasattr(request, 'data') and isinstance(request.data, dict):
+        school_id = request.data.get('school_id') or request.data.get('school')
+
+    if school_id:
+        try:
+            school = School.objects.filter(id=school_id).first()
+            if school:
+                if request.user.is_superuser or request.user.role in ('platform_admin', 'owner'):
+                    return school
+                if getattr(request.user, 'organisation_id', None) and school.organisation_id == request.user.organisation_id:
+                    return school
+                if getattr(request.user, 'school_id', None) == school.id:
+                    return school
+        except (ValueError, TypeError):
+            pass
+
+    if getattr(request.user, 'school', None):
+        return request.user.school
+
+    if getattr(request.user, 'organisation', None):
+        return request.user.organisation.schools.order_by('id').first()
+
+    return None
+
+
 # ==============================================================================
 # 1. Public Pricing & Information Endpoints (Unauthenticated)
 # ==============================================================================
@@ -135,9 +166,36 @@ def school_subscription_current_view(request):
     """
     Returns current subscription status, plan details, paid dates, and active student headcount.
     """
-    school = request.user.school
+    school = _resolve_school_for_user(request)
     if not school:
-        raise PermissionDenied("User is not associated with an educational institution.")
+        return Response({
+            'school_id': None,
+            'school_name': 'Organisation / Platform Admin',
+            'status': 'active',
+            'plan': {
+                'code': 'premium',
+                'name': 'Premium Plan',
+                'name_ur': 'پریمیم پلان',
+                'tagline': 'Platform Admin Access',
+                'tagline_ur': 'ایڈمن رسائی',
+                'price_usd_per_student': '7.20',
+                'price_pkr_per_student': '2000.00',
+            },
+            'effective_tier': 'premium',
+            'is_limited': False,
+            'is_suspended': False,
+            'is_write_allowed': True,
+            'active_students': 0,
+            'student_count_at_last_invoice': 0,
+            'has_student_growth': False,
+            'trial_started_at': None,
+            'trial_ends_at': None,
+            'trial_days_remaining': None,
+            'current_period_start': None,
+            'paid_until': None,
+            'grace_until': None,
+            'grace_days_remaining': None,
+        })
 
     entitlements = get_school_entitlements(school)
     sub = SchoolSubscription.objects.filter(school=school).select_related('plan').first()
@@ -184,9 +242,8 @@ def school_entitlements_view(request):
     Authoritative server-side feature entitlements check for the school.
     Consumed by the frontend to render feature lock screens and badges.
     """
-    school = request.user.school
+    school = _resolve_school_for_user(request)
     if not school:
-        # Platform admin or superuser without school
         return Response(get_school_entitlements(None))
 
     data = get_school_entitlements(school)
@@ -200,9 +257,16 @@ def school_invoice_estimate_view(request):
     Computes real-time invoice estimate for school based on active enrolled student headcount.
     Query parameters: plan (e.g. 'premium'), months (1, 3, 6, 12), currency ('USD' or 'PKR').
     """
-    school = request.user.school
+    school = _resolve_school_for_user(request)
     if not school:
-        raise PermissionDenied("User is not associated with an educational institution.")
+        return Response({
+            'student_count': 0,
+            'gross_amount': '0.00',
+            'discount_amount': '0.00',
+            'net_amount': '0.00',
+            'currency': request.query_params.get('currency', 'USD').upper(),
+            'yearly_discount_percentage': '0.00'
+        })
 
     plan_code = request.query_params.get('plan', 'standard')
     months = int(request.query_params.get('months', 1))
@@ -262,8 +326,10 @@ def school_subscription_orders_view(request):
     GET: Lists historical and pending payment orders for this school.
     POST: Submits an offline bank deposit payment verification order.
     """
-    school = request.user.school
+    school = _resolve_school_for_user(request)
     if not school:
+        if request.method == 'GET':
+            return Response({'results': []})
         raise PermissionDenied("User is not associated with an educational institution.")
 
     if request.method == 'GET':
