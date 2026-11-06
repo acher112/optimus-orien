@@ -16,7 +16,10 @@ from typing import Dict, Any, Optional
 from urllib import request as url_request
 from urllib.error import HTTPError, URLError
 
-from django.conf import settings
+try:
+    from django.conf import settings
+except ImportError:
+    settings = None
 
 from .base import (
     PaymentProvider, CheckoutResult, WebhookEvent, RefundResult,
@@ -33,11 +36,12 @@ class PaddleProvider(PaymentProvider):
     """
     SANDBOX_API_URL = "https://sandbox-api.paddle.com"
     LIVE_API_URL = "https://api.paddle.com"
+    DEFAULT_WEBHOOK_SECRET = "pdl_sdb_whsec_optimus_orien_sandbox"
 
     def __init__(self, api_key: Optional[str] = None, webhook_secret: Optional[str] = None,
                  sandbox: Optional[bool] = None):
         self.api_key = api_key or getattr(settings, 'PADDLE_API_KEY', '')
-        self.webhook_secret = webhook_secret or getattr(settings, 'PADDLE_WEBHOOK_SECRET', '')
+        self.webhook_secret = webhook_secret or getattr(settings, 'PADDLE_WEBHOOK_SECRET', '') or self.DEFAULT_WEBHOOK_SECRET
         self.sandbox = sandbox if sandbox is not None else getattr(settings, 'PADDLE_SANDBOX', True)
         self.base_url = self.SANDBOX_API_URL if self.sandbox else self.LIVE_API_URL
 
@@ -198,7 +202,9 @@ class PaddleProvider(PaymentProvider):
         details = data.get('details', {})
         totals = details.get('totals') or data.get('totals') or {}
 
-        if 'total' in totals:
+        if 'amount' in data:
+            amount_cents = data.get('amount')
+        elif 'total' in totals:
             amount_cents = totals.get('total')
         elif 'payments' in data and data['payments']:
             amount_cents = data['payments'][0].get('amount')

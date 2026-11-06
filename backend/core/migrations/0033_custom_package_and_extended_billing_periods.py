@@ -18,8 +18,8 @@ def seed_custom_plan_and_extended_periods(apps, schema_editor):
             'tagline_ur': 'آپ کی ضروریات کے مطابق تیار کردہ پیکیج',
             'description': 'Configure student count, choose individual academic and operations modules, and pick multi-year terms with volume savings.',
             'description_ur': 'طلباء کی تعداد، درکار ماڈیولز اور کثیر سالہ مدت کا انتخاب کریں اور اپنی مرضی کے مطابق پیکیج بنائیں۔',
-            'price_usd_per_student': Decimal('2.00'),
-            'price_pkr_per_student': Decimal('550.00'),
+            'price_usd_per_student': Decimal('0.70'),
+            'price_pkr_per_student': Decimal('195.00'),
             'display_order': 3,
             'is_active': True,
         }

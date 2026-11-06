@@ -24,11 +24,21 @@ class RequiresFeature(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
-        # Platform owners, superusers, and unscoped users bypass tenant feature gating
-        if request.user.is_superuser or request.user.role == 'platform_admin' or not getattr(request.user, 'school', None):
+        # Only unscoped platform administrators bypass tenant subscription gating
+        if request.user.role == 'platform_admin' and not getattr(request.user, 'organisation_id', None):
             return True
 
-        allowed, reason, required_plan = check_feature_access(request.user.school, self.feature_key)
+        from core.subscription_views import _resolve_school_for_user
+        school = _resolve_school_for_user(request)
+        if not school:
+            raise PermissionDenied({
+                'detail': "Feature locked. No school campus associated.",
+                'code': 'feature_locked',
+                'feature_key': self.feature_key,
+                'required_plan': 'standard'
+            })
+
+        allowed, reason, required_plan = check_feature_access(school, self.feature_key)
         if not allowed:
             raise PermissionDenied({
                 'detail': reason,
@@ -50,10 +60,21 @@ def requires_feature(feature_key: str):
             if not request.user or not request.user.is_authenticated:
                 return Response({'detail': 'Authentication required.'}, status=401)
 
-            if request.user.is_superuser or request.user.role == 'platform_admin' or not getattr(request.user, 'school', None):
+            # Only unscoped platform administrators bypass tenant subscription gating
+            if request.user.role == 'platform_admin' and not getattr(request.user, 'organisation_id', None):
                 return view_func(request, *args, **kwargs)
 
-            allowed, reason, required_plan = check_feature_access(request.user.school, feature_key)
+            from core.subscription_views import _resolve_school_for_user
+            school = _resolve_school_for_user(request)
+            if not school:
+                return Response({
+                    'detail': "Feature locked. No school campus associated.",
+                    'code': 'feature_locked',
+                    'feature_key': feature_key,
+                    'required_plan': 'standard',
+                }, status=403)
+
+            allowed, reason, required_plan = check_feature_access(school, feature_key)
             if not allowed:
                 return Response({
                     'detail': reason,

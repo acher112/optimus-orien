@@ -177,22 +177,44 @@ def school_subscription_current_view(request):
     """
     school = _resolve_school_for_user(request)
     if not school:
+        is_platform_superadmin = (request.user.role == 'platform_admin' and not getattr(request.user, 'organisation_id', None))
+        if is_platform_superadmin:
+            return Response({
+                'school_id': None,
+                'school_name': 'Platform Administrator',
+                'status': 'active',
+                'plan': {
+                    'code': 'premium',
+                    'name': 'Platform Admin Access',
+                    'name_ur': 'پلیٹ فارم ایڈمن رسائی',
+                    'tagline': 'Internal Operations',
+                    'tagline_ur': 'اندرونی انتظام',
+                    'price_usd_per_student': '0.00',
+                    'price_pkr_per_student': '0.00',
+                },
+                'effective_tier': 'premium',
+                'is_no_plan': False,
+                'is_limited': False,
+                'is_suspended': False,
+                'is_write_allowed': True,
+                'active_students': 0,
+                'student_count_at_last_invoice': 0,
+                'has_student_growth': False,
+                'current_period_start': None,
+                'paid_until': None,
+                'grace_until': None,
+                'grace_days_remaining': None,
+                'pending_downgrade_to_plan': None,
+            })
+        org_name = getattr(request.user.organisation, 'name', 'No Campus Selected') if getattr(request.user, 'organisation', None) else 'No Campus Selected'
         return Response({
             'school_id': None,
-            'school_name': 'Organisation / Platform Admin',
-            'status': 'active',
-            'plan': {
-                'code': 'premium',
-                'name': 'Premium Plan',
-                'name_ur': 'پریمیم پلان',
-                'tagline': 'Platform Admin Access',
-                'tagline_ur': 'ایڈمن رسائی',
-                'price_usd_per_student': '7.20',
-                'price_pkr_per_student': '2000.00',
-            },
-            'effective_tier': 'premium',
-            'is_no_plan': False,
-            'is_limited': False,
+            'school_name': org_name,
+            'status': 'no_plan',
+            'plan': None,
+            'effective_tier': 'no_plan',
+            'is_no_plan': True,
+            'is_limited': True,
             'is_suspended': False,
             'is_write_allowed': True,
             'active_students': 0,
@@ -417,6 +439,44 @@ def school_subscription_orders_view(request):
         months_int = int(billing_months)
     except (ValueError, TypeError):
         return Response({'detail': 'billing_months must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    is_direct_activation = payment_method in ('direct', 'instant', 'activate') or data.get('auto_activate')
+    if is_direct_activation:
+        try:
+            order = create_card_subscription_order(
+                school=school,
+                plan=plan,
+                billing_months=months_int,
+                return_url='',
+                cancel_url='',
+                currency=currency,
+                submitted_by=request.user,
+                provider_name='direct',
+                selected_features=selected_features,
+                custom_student_count=custom_student_count,
+            )
+            approve_subscription_order(order, reviewer=request.user, review_note='Direct institutional activation')
+        except ValueError as err:
+            return Response({'detail': str(err)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'message': f"Plan '{plan.name}' has been successfully activated for {school.name}.",
+            'activated': True,
+            'order': {
+                'id': order.id,
+                'order_number': order.order_number,
+                'status': order.status,
+                'amount': str(order.amount),
+                'subtotal': str(order.subtotal),
+                'discount_amount': str(order.discount_amount),
+                'upgrade_credit_amount': str(order.upgrade_credit_amount),
+                'currency': order.currency,
+                'billing_months': order.billing_months,
+                'student_count': order.student_count,
+                'provider': 'direct',
+                'created_at': order.created_at.isoformat(),
+            }
+        }, status=status.HTTP_201_CREATED)
 
     is_card = (payment_method == 'card') or (payment_method != 'offline' and not payment_reference)
 

@@ -17,6 +17,7 @@ import {
   createAccount, registerCampus, schoolUsers, updateProfile, forgotPassword, resetPassword,
   type User, type Dashboard, type Resource
 } from './api';
+import { queryCache } from './queryCache';
 import PlanAndBilling from './PlanAndBilling';
 import FeatureLockedScreen from './FeatureLockedScreen';
 const PublicHome = React.lazy(() => import('./PublicHome'));
@@ -544,7 +545,7 @@ function App() {
   const [entitlements, setEntitlements] = useState<any>(null);
 
   const fetchSubscription = useCallback(async () => {
-    if (!user || user.is_superuser) return;
+    if (!user) return;
     try {
       const campusQs = activeCampusId ? `?school=${activeCampusId}` : '';
       const [subRes, entRes] = await Promise.all([
@@ -565,8 +566,8 @@ function App() {
   }, [user, fetchSubscription]);
 
   const isFeatureUnlocked = useCallback((key: string) => {
-    // Platform owners without a school assignment bypass tenant feature gating
-    if (user?.role === 'platform_admin' || (user?.is_superuser && !user?.school && !activeCampusId)) {
+    // Only platform superadmin without any school assignment bypasses tenant feature gating
+    if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) {
       return true;
     }
     // Entitlements from server
@@ -576,17 +577,47 @@ function App() {
         return Boolean(feat.is_unlocked);
       }
     }
-    // If subscription is known to be in no_plan mode
-    if (subscription?.is_no_plan || subscription?.status === 'no_plan') {
-      const basicList = [
-        'school_setup', 'people_accounts', 'authentication', 'password_change',
-        'profile_view', 'subscription_management', 'order_submission',
-        'support_contact', 'compliance_export', 'english_urdu'
-      ];
+    // Basic access list allowed on no_plan or before subscription loads
+    const basicList = [
+      'school_setup', 'people_accounts', 'authentication', 'password_change',
+      'profile_view', 'subscription_management', 'order_submission',
+      'support_contact', 'compliance_export', 'english_urdu'
+    ];
+    // If subscription is known to be in no_plan mode or not yet active
+    if (subscription?.is_no_plan || subscription?.status === 'no_plan' || !subscription?.status || subscription?.status === 'suspended') {
       return basicList.includes(key);
     }
-    return true;
+    // If subscription is active, standard or custom features apply
+    return basicList.includes(key);
   }, [user, entitlements, subscription, activeCampusId]);
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      localStorage.removeItem('optimus_active_campus_id');
+      localStorage.removeItem('optimus_user');
+      sessionStorage.clear();
+      queryCache.clear();
+    } catch {}
+
+    // Complete state reset across users for zero cross-tenant/account leakage
+    setActiveCampusId(null);
+    setCampuses([]);
+    setSubscription(null);
+    setEntitlements(null);
+    setProfileMenuOpen(false);
+    setCampusDropdownOpen(false);
+    setOpenDropdowns({});
+    setShowNotifications(false);
+    setPage('Overview');
+    setModal(false);
+    setEditModal(false);
+    setEditingRecord(null);
+
+    try {
+      await logout();
+    } catch {}
+    setUser(null);
+  }, []);
 
   const [form, setForm] = useState<Record<string, string>>({});
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -1068,6 +1099,15 @@ function App() {
         window.history.replaceState(null, '', '/app');
         localStorage.removeItem('optimus_active_campus_id');
         setActiveCampusId(null);
+        setCampuses([]);
+        setSubscription(null);
+        setEntitlements(null);
+        setProfileMenuOpen(false);
+        setCampusDropdownOpen(false);
+        setOpenDropdowns({});
+        setShowNotifications(false);
+        setPage('Overview');
+        try { queryCache.clear(); } catch {}
         const { mode, color } = getStoredTheme();
         const isD = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
         setDark(isD);
@@ -1604,7 +1644,7 @@ function App() {
               <b>{user.name}</b>
               <small>{user.role === 'organisation_admin' ? 'Super Owner' : nice(user.role)}</small>
             </div>
-            <button aria-label="Sign out" title="Sign out" onClick={async () => { localStorage.removeItem('optimus_active_campus_id'); setActiveCampusId(null); await logout(); setUser(null); }}>
+            <button aria-label="Sign out" title="Sign out" onClick={handleSignOut}>
               <LogOut size={18} />
             </button>
           </div>
@@ -1774,7 +1814,7 @@ function App() {
                       {dark ? <Sun size={16} /> : <Moon size={16} />} <span>{dark ? 'Switch to Light mode' : 'Switch to Dark mode'}</span>
                     </button>
                     <div className="campus-dropdown-divider" />
-                    <button className="profile-menu-item danger" onClick={async () => { localStorage.removeItem('optimus_active_campus_id'); setActiveCampusId(null); await logout(); setUser(null); }}>
+                    <button className="profile-menu-item danger" onClick={handleSignOut}>
                       <LogOut size={16} /> <span>Sign out</span>
                     </button>
                   </div>

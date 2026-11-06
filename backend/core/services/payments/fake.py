@@ -9,7 +9,10 @@ import json
 import time
 from decimal import Decimal
 from typing import Dict, Any, Optional
-from django.conf import settings
+try:
+    from django.conf import settings
+except ImportError:
+    settings = None
 
 from .base import (
     PaymentProvider, CheckoutResult, WebhookEvent, RefundResult,

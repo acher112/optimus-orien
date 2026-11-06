@@ -2,7 +2,10 @@
 Payment Provider Factory.
 Instantiates the configured payment provider (FakeProvider, PaddleProvider, etc.).
 """
-from django.conf import settings
+try:
+    from django.conf import settings
+except ImportError:
+    settings = None
 from typing import Optional
 
 from .base import PaymentProvider
@@ -13,12 +16,15 @@ from .paddle import PaddleProvider
 def get_payment_provider(provider_name: Optional[str] = None) -> PaymentProvider:
     """
     Returns the appropriate PaymentProvider instance based on name or settings.PAYMENT_PROVIDER.
-    Defaults to 'fake' for safe testing, CI, and local dev.
+    Defaults to 'paddle' for real MoR sandbox and live checkout.
     """
-    name = (provider_name or getattr(settings, 'PAYMENT_PROVIDER', 'fake') or 'fake').strip().lower()
+    name = (provider_name or getattr(settings, 'PAYMENT_PROVIDER', 'paddle') or 'paddle').strip().lower()
 
-    if name in ('paddle', 'paddle_v2'):
+    if name in ('paddle', 'paddle_v2', 'paddle_sandbox'):
         return PaddleProvider()
 
-    # Default to FakeProvider
-    return FakeProvider()
+    if name == 'fake':
+        return FakeProvider()
+
+    # Default to PaddleProvider
+    return PaddleProvider()

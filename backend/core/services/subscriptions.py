@@ -76,11 +76,9 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
 
     if plan.code == 'custom':
         # Modular dynamic pricing for Custom Package:
-        # Base platform fee: $2.00 USD / Rs 550 PKR per student per month
-        # Standard add-on module: $0.20 USD / Rs 55 PKR
-        # Premium add-on module: $0.40 USD / Rs 110 PKR
-        base_rate_usd = Decimal('2.00')
-        base_rate_pkr = Decimal('550.00')
+        # Base platform fee: $0.70 USD / Rs 195 PKR per student per month
+        base_rate_usd = Decimal(str(getattr(plan, 'price_usd_per_student', '0.70') or '0.70'))
+        base_rate_pkr = Decimal(str(getattr(plan, 'price_pkr_per_student', '195.00') or '195.00'))
         addon_usd = Decimal('0.00')
         addon_pkr = Decimal('0.00')
 
@@ -90,11 +88,11 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
                 cat = cat_map.get(key)
                 if cat:
                     if cat.is_premium_only:
-                        addon_usd += Decimal('0.40')
-                        addon_pkr += Decimal('110.00')
+                        addon_usd += Decimal('0.05')
+                        addon_pkr += Decimal('15.00')
                     else:
-                        addon_usd += Decimal('0.20')
-                        addon_pkr += Decimal('55.00')
+                        addon_usd += Decimal('0.02')
+                        addon_pkr += Decimal('5.00')
 
         unit_price = (base_rate_usd + addon_usd if currency == 'USD' else base_rate_pkr + addon_pkr).quantize(Decimal('0.01'))
     else:
@@ -266,8 +264,10 @@ def approve_subscription_order(order, reviewer, review_note=''):
     order.status = 'approved'
     order.reviewed_by = reviewer
     order.reviewed_at = now
+    order.paid_at = now
+    order.paid_on = now.date()
     order.review_note = str(review_note).strip()
-    order.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_note', 'updated_at'])
+    order.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'paid_at', 'paid_on', 'review_note', 'updated_at'])
 
     school = order.school
     sub = getattr(school, 'subscription', None)

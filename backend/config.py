@@ -79,8 +79,8 @@ DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
 PRIVATE_STORAGE_ROOT=Path(os.getenv('PRIVATE_STORAGE_ROOT',str(BASE_DIR/'private_storage')))
 os.makedirs(PRIVATE_STORAGE_ROOT,exist_ok=True)
 
-# Payment Provider Configuration (Sandbox first, swappable by configuration)
-PAYMENT_PROVIDER = os.getenv('PAYMENT_PROVIDER', 'fake').lower()
+# Payment Provider Configuration (Paddle Sandbox first, swappable by configuration)
+PAYMENT_PROVIDER = os.getenv('PAYMENT_PROVIDER', 'paddle').lower()
 PADDLE_API_KEY = os.getenv('PADDLE_API_KEY', '')
 PADDLE_WEBHOOK_SECRET = os.getenv('PADDLE_WEBHOOK_SECRET', '')
 PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'true').lower() == 'true'
