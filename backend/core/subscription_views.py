@@ -1,6 +1,6 @@
 """
-Views and API Endpoints for Subscriptions, Offline Invoicing, Card Payments,
-Entitlements Inspection, and Platform Admin Billing Management.
+Views and API Endpoints for Subscriptions, Invoicing, Card Payments,
+Entitlements Inspection, Upgrades/Downgrades, and Platform Admin Management.
 """
 import logging
 from decimal import Decimal
@@ -18,6 +18,7 @@ from core.models import (
     User,
     Plan,
     PlanFeature,
+    BillingPeriod,
     FeatureCatalog,
     PlatformBillingSettings,
     SchoolSubscription,
@@ -38,7 +39,7 @@ from core.services.subscriptions import (
     process_payment_webhook,
     approve_subscription_order,
     reject_subscription_order,
-    extend_school_trial,
+    schedule_subscription_downgrade,
 )
 from core.services.payments import WebhookSignatureVerificationError
 
@@ -92,12 +93,13 @@ def _resolve_school_for_user(request):
 def public_pricing_view(request):
     """
     Public pricing table endpoint.
-    Returns active plans, rates (USD and PKR), and feature breakdown directly from database.
-    Prices are data-driven, never hardcoded.
+    Returns active plans, rates (USD and PKR), billing periods, and feature breakdown from database.
+    Prices and discounts are dynamic DATA, never hardcoded.
     """
-    settings = PlatformBillingSettings.get_settings()
+    settings_obj = PlatformBillingSettings.get_settings()
     plans = Plan.objects.filter(is_active=True).prefetch_related('plan_features').order_by('display_order', 'id')
     catalog = FeatureCatalog.objects.all().order_by('display_order', 'key')
+    billing_periods = BillingPeriod.get_active_periods()
 
     plans_data = []
     for p in plans:
@@ -116,6 +118,12 @@ def public_pricing_view(request):
             'included_feature_keys': sorted(list(feature_keys)),
         })
 
+    periods_data = [{
+        'months': bp.months,
+        'discount_percentage': str(bp.discount_percentage),
+        'display_order': bp.display_order,
+    } for bp in billing_periods]
+
     features_data = [{
         'key': f.key,
         'name': f.name,
@@ -129,11 +137,10 @@ def public_pricing_view(request):
 
     return Response({
         'plans': plans_data,
+        'billing_periods': periods_data,
         'features': features_data,
-        'trial_days': settings.default_trial_days,
-        'yearly_discount_percentage': str(settings.yearly_discount_percentage),
-        'exchange_rate_note_en': settings.exchange_rate_note_en,
-        'exchange_rate_note_ur': settings.exchange_rate_note_ur,
+        'exchange_rate_note_en': settings_obj.exchange_rate_note_en,
+        'exchange_rate_note_ur': settings_obj.exchange_rate_note_ur,
     })
 
 
@@ -141,18 +148,20 @@ def public_pricing_view(request):
 @permission_classes([AllowAny])
 def public_billing_info_view(request):
     """
-    Public metadata for platform trial policies and offline bank transfer notice.
+    Public metadata for platform billing policies and periods.
     """
-    settings = PlatformBillingSettings.get_settings()
+    settings_obj = PlatformBillingSettings.get_settings()
+    billing_periods = BillingPeriod.get_active_periods()
     return Response({
-        'trial_days': settings.default_trial_days,
-        'pending_grace_days': settings.pending_grace_days,
-        'past_due_grace_days': settings.past_due_grace_days,
-        'yearly_discount_percentage': str(settings.yearly_discount_percentage),
-        'trial_text_en': f"Experience the full platform with a complimentary {settings.default_trial_days}-day Premium trial. No upfront payment required.",
-        'trial_text_ur': f"تمام جدید خصوصیات کے ساتھ {settings.default_trial_days} روزہ اعزازی پریمیم ٹرائل حاصل کریں۔ بغیر کسی پیشگی ادائیگی کے۔",
-        'exchange_rate_note_en': settings.exchange_rate_note_en,
-        'exchange_rate_note_ur': settings.exchange_rate_note_ur,
+        'pending_grace_days': settings_obj.pending_grace_days,
+        'past_due_grace_days': settings_obj.past_due_grace_days,
+        'basic_access_features': settings_obj.basic_access_features or list(PlatformBillingSettings.DEFAULT_BASIC_ACCESS_FEATURES),
+        'billing_periods': [{
+            'months': bp.months,
+            'discount_percentage': str(bp.discount_percentage)
+        } for bp in billing_periods],
+        'exchange_rate_note_en': settings_obj.exchange_rate_note_en,
+        'exchange_rate_note_ur': settings_obj.exchange_rate_note_ur,
     })
 
 
@@ -182,24 +191,23 @@ def school_subscription_current_view(request):
                 'price_pkr_per_student': '2000.00',
             },
             'effective_tier': 'premium',
+            'is_no_plan': False,
             'is_limited': False,
             'is_suspended': False,
             'is_write_allowed': True,
             'active_students': 0,
             'student_count_at_last_invoice': 0,
             'has_student_growth': False,
-            'trial_started_at': None,
-            'trial_ends_at': None,
-            'trial_days_remaining': None,
             'current_period_start': None,
             'paid_until': None,
             'grace_until': None,
             'grace_days_remaining': None,
+            'pending_downgrade_to_plan': None,
         })
 
     entitlements = get_school_entitlements(school)
-    sub = SchoolSubscription.objects.filter(school=school).select_related('plan').first()
-    plan_obj = sub.plan if (sub and sub.plan) else Plan.objects.filter(code='standard').first()
+    sub = SchoolSubscription.objects.filter(school=school).select_related('plan', 'pending_downgrade_to_plan').first()
+    plan_obj = sub.plan if (sub and sub.plan) else None
 
     plan_info = None
     if plan_obj:
@@ -219,19 +227,18 @@ def school_subscription_current_view(request):
         'status': entitlements['status'],
         'plan': plan_info,
         'effective_tier': entitlements['effective_tier'],
+        'is_no_plan': entitlements['is_no_plan'],
         'is_limited': entitlements['is_limited'],
         'is_suspended': entitlements['is_suspended'],
         'is_write_allowed': entitlements['is_write_allowed'],
         'active_students': entitlements['active_students'],
         'student_count_at_last_invoice': entitlements['student_count_at_last_invoice'],
         'has_student_growth': entitlements['has_student_growth'],
-        'trial_started_at': entitlements['trial_started_at'],
-        'trial_ends_at': entitlements['trial_ends_at'],
-        'trial_days_remaining': entitlements['trial_days_remaining'],
         'current_period_start': sub.current_period_start.isoformat() if (sub and sub.current_period_start) else None,
         'paid_until': entitlements['paid_until'],
         'grace_until': entitlements['grace_until'],
         'grace_days_remaining': entitlements['grace_days_remaining'],
+        'pending_downgrade_to_plan': entitlements.get('pending_downgrade_to_plan'),
     })
 
 
@@ -255,17 +262,19 @@ def school_entitlements_view(request):
 def school_invoice_estimate_view(request):
     """
     Computes real-time invoice estimate for school based on active enrolled student headcount.
-    Query parameters: plan (e.g. 'premium'), months (1, 3, 6, 12), currency ('USD' or 'PKR').
+    Query parameters: plan ('standard' or 'premium'), months (1, 4, 8, 12), currency ('USD' or 'PKR').
+    Calculates upgrade credit if upgrading from Standard to Premium during active period.
     """
     school = _resolve_school_for_user(request)
     if not school:
         return Response({
             'student_count': 0,
-            'gross_amount': '0.00',
+            'subtotal': '0.00',
             'discount_amount': '0.00',
-            'net_amount': '0.00',
+            'upgrade_credit_amount': '0.00',
+            'payable_amount': '0.00',
             'currency': request.query_params.get('currency', 'USD').upper(),
-            'yearly_discount_percentage': '0.00'
+            'discount_percentage': '0.00'
         })
 
     plan_code = request.query_params.get('plan', 'standard')
@@ -282,7 +291,8 @@ def school_invoice_estimate_view(request):
             plan=plan,
             billing_months=months,
             student_count=active_students,
-            currency=currency
+            currency=currency,
+            school=school
         )
     except ValueError as err:
         return Response({'detail': str(err)}, status=status.HTTP_400_BAD_REQUEST)
@@ -290,10 +300,14 @@ def school_invoice_estimate_view(request):
     return Response({
         **estimate,
         'unit_price': str(estimate['unit_price']),
+        'subtotal': str(estimate['subtotal']),
         'discount_percentage': str(estimate['discount_percentage']),
-        'gross_amount': str(estimate['gross_amount']),
         'discount_amount': str(estimate['discount_amount']),
+        'upgrade_credit_amount': str(estimate['upgrade_credit_amount']),
+        'tax_amount': str(estimate['tax_amount']),
         'payable_amount': str(estimate['payable_amount']),
+        'gross_amount': str(estimate['subtotal']),  # Compatibility alias
+        'net_amount': str(estimate['payable_amount']),  # Compatibility alias
     })
 
 
@@ -304,18 +318,18 @@ def school_bank_details_view(request):
     Returns platform offline bank deposit details for printable invoice/challan generation.
     Bank details are retrieved strictly from database configuration.
     """
-    settings = PlatformBillingSettings.get_settings()
+    settings_obj = PlatformBillingSettings.get_settings()
     return Response({
-        'bank_name': settings.bank_name,
-        'account_title': settings.account_title,
-        'account_number': settings.account_number,
-        'iban': settings.iban,
-        'branch_code': settings.branch_code,
-        'swift_bic': settings.swift_bic,
-        'payment_instructions_en': settings.payment_instructions_en,
-        'payment_instructions_ur': settings.payment_instructions_ur,
-        'exchange_rate_note_en': settings.exchange_rate_note_en,
-        'exchange_rate_note_ur': settings.exchange_rate_note_ur,
+        'bank_name': settings_obj.bank_name,
+        'account_title': settings_obj.account_title,
+        'account_number': settings_obj.account_number,
+        'iban': settings_obj.iban,
+        'branch_code': settings_obj.branch_code,
+        'swift_bic': settings_obj.swift_bic,
+        'payment_instructions_en': settings_obj.payment_instructions_en,
+        'payment_instructions_ur': settings_obj.payment_instructions_ur,
+        'exchange_rate_note_en': settings_obj.exchange_rate_note_en,
+        'exchange_rate_note_ur': settings_obj.exchange_rate_note_ur,
     })
 
 
@@ -324,7 +338,7 @@ def school_bank_details_view(request):
 def school_subscription_orders_view(request):
     """
     GET: Lists historical and pending payment orders for this school.
-    POST: Submits an offline bank deposit payment verification order.
+    POST: Submits an order (Card hosted checkout OR offline bank deposit).
     """
     school = _resolve_school_for_user(request)
     if not school:
@@ -342,9 +356,17 @@ def school_subscription_orders_view(request):
             'billing_months': o.billing_months,
             'student_count': o.student_count,
             'unit_price': str(o.unit_price),
+            'subtotal': str(o.subtotal),
             'discount_percentage': str(o.discount_percentage),
+            'discount_amount': str(o.discount_amount),
+            'upgrade_credit_amount': str(o.upgrade_credit_amount),
+            'tax_amount': str(o.tax_amount),
             'amount': str(o.amount),
             'currency': o.currency,
+            'period_start': o.period_start.isoformat() if o.period_start else None,
+            'period_end': o.period_end.isoformat() if o.period_end else None,
+            'card_brand': o.card_brand,
+            'card_last4': o.card_last4,
             'payment_reference': o.payment_reference,
             'paid_on': o.paid_on.isoformat() if hasattr(o.paid_on, 'isoformat') else str(o.paid_on),
             'payment_notes': o.payment_notes,
@@ -355,7 +377,7 @@ def school_subscription_orders_view(request):
         } for o in orders]
         return Response({'results': results})
 
-    # POST: Submit new order (Card hosted checkout OR offline bank deposit)
+    # POST: Submit new order
     if request.user.role not in ('owner', 'organisation_admin', 'school_admin'):
         raise PermissionDenied("Only school administrators can submit subscription orders.")
 
@@ -384,8 +406,6 @@ def school_subscription_orders_view(request):
     except (ValueError, TypeError):
         return Response({'detail': 'billing_months must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Branch A: Card payment (Hosted Checkout: Paddle / FakeProvider)
-    # Default payment method is 'card' unless an offline payment_reference is explicitly supplied
     is_card = (payment_method == 'card') or (payment_method != 'offline' and not payment_reference)
 
     if is_card:
@@ -414,6 +434,9 @@ def school_subscription_orders_view(request):
                 'order_number': order.order_number,
                 'status': order.status,
                 'amount': str(order.amount),
+                'subtotal': str(order.subtotal),
+                'discount_amount': str(order.discount_amount),
+                'upgrade_credit_amount': str(order.upgrade_credit_amount),
                 'currency': order.currency,
                 'billing_months': order.billing_months,
                 'student_count': order.student_count,
@@ -423,7 +446,7 @@ def school_subscription_orders_view(request):
             }
         }, status=status.HTTP_201_CREATED)
 
-    # Branch B: Offline Bank Deposit Workflow
+    # Offline Bank Deposit Workflow
     if not payment_reference or not paid_on or amount is None:
         return Response({
             'detail': 'For offline orders: payment_reference, paid_on, and amount are required.'
@@ -460,15 +483,47 @@ def school_subscription_orders_view(request):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def school_subscription_downgrade_view(request):
+    """
+    Schedules a downgrade from Premium to Standard taking effect at the end of the paid period.
+    Full Premium access remains intact until paid_until.
+    No data is deleted.
+    """
+    school = _resolve_school_for_user(request)
+    if not school:
+        raise PermissionDenied("User is not associated with an educational institution.")
+
+    if request.user.role not in ('owner', 'organisation_admin', 'school_admin'):
+        raise PermissionDenied("Only school administrators can manage subscription tiers.")
+
+    target_plan = Plan.objects.filter(code='standard', is_active=True).first()
+    if not target_plan:
+        raise NotFound("Standard plan not found.")
+
+    reason = (request.data or {}).get('reason', '')
+    try:
+        sub = schedule_subscription_downgrade(school, target_plan, actor=request.user, reason=reason)
+    except ValueError as err:
+        return Response({'detail': str(err)}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        'message': f"Downgrade to Standard plan scheduled for end of billing period ({sub.paid_until.date() if sub.paid_until else 'N/A'}).",
+        'pending_downgrade_to_plan': target_plan.code,
+        'paid_until': sub.paid_until.isoformat() if sub.paid_until else None,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
 def subscription_payment_webhook_view(request):
     """
-    Public webhook receiver for payment provider notifications (Paddle Billing, FakeProvider, etc.).
-    Cryptographically verifies signatures using the provider secret.
+    Public webhook receiver for payment provider notifications.
+    Cryptographically verifies signatures.
     Rejects bad signatures with 400.
     Rejects tampered amounts with 400.
-    Guarantees idempotent processing (duplicate event returns 200 without double-activation).
+    Guarantees idempotent processing.
     """
     raw_payload = request.body
     headers = {k: v for k, v in request.headers.items()}
@@ -496,12 +551,10 @@ def subscription_payment_webhook_view(request):
 @permission_classes([IsAuthenticated])
 def school_order_receipt_view(request, pk):
     """
-    School-scoped endpoint returning printable receipt / invoice details for a completed or approved order.
+    Plain language receipt / invoice endpoint.
+    Exposes every receipt item specified in Section 5 with student count explanation and bilingual support.
     """
-    school = getattr(request.user, 'school', None)
-    if not school and getattr(request.user, 'organisation_id', None):
-        school = School.objects.filter(organisation=request.user.organisation).first()
-
+    school = _resolve_school_for_user(request)
     if not school and not request.user.is_superuser:
         raise PermissionDenied("A school affiliation is required to view order receipts.")
 
@@ -511,26 +564,54 @@ def school_order_receipt_view(request, pk):
         raise NotFound("Subscription order not found.")
 
     settings_obj = PlatformBillingSettings.get_settings()
+    active_students_now = get_active_enrolled_student_count(order.school)
+    has_growth = active_students_now > order.student_count
+
+    # Payment method string
+    if order.card_brand and order.card_last4:
+        payment_method_str = f"{order.card_brand} ending in {order.card_last4}"
+    elif order.card_last4:
+        payment_method_str = f"Card ending in {order.card_last4}"
+    elif order.provider in ('fake', 'paddle'):
+        payment_method_str = "Card Payment (Provider Hosted)"
+    else:
+        payment_method_str = "Bank Transfer (Direct Deposit)"
+
+    receipt_date = order.paid_on or (order.paid_at.date() if order.paid_at else order.created_at.date())
 
     receipt_data = {
         'receipt_number': f"REC-{order.order_number}",
+        'date': receipt_date.isoformat(),
         'order_number': order.order_number,
         'school_name': order.school.name,
         'school_code': order.school.code,
+        'payment_reference': order.payment_reference or order.provider_reference or order.order_number,
+        'payment_method': payment_method_str,
+        'card_brand': order.card_brand,
+        'card_last4': order.card_last4,
         'plan_name': order.plan.name,
         'plan_code': order.plan.code,
-        'billing_months': order.billing_months,
-        'student_count': order.student_count,
+        'billing_period_start': order.period_start.isoformat() if order.period_start else None,
+        'billing_period_end': order.period_end.isoformat() if order.period_end else None,
+        'students_counted': order.student_count,
+        'students_counted_help_text_en': "You are charged per active student, so this number is multiplied by the monthly price.",
+        'students_counted_help_text_ur': "آپ سے فی فعال طالب علم چارج کیا جاتا ہے، اس لیے اس تعداد کو ماہانہ قیمت سے ضرب دیا جاتا ہے۔",
         'unit_price': str(order.unit_price),
+        'months': order.billing_months,
+        'subtotal': str(order.subtotal),
         'discount_percentage': str(order.discount_percentage),
+        'discount_amount': str(order.discount_amount),
+        'upgrade_credit_amount': str(order.upgrade_credit_amount),
+        'tax_amount': str(order.tax_amount),
+        'total_paid': str(order.amount),
         'amount': str(order.amount),
         'currency': order.currency,
         'status': order.status,
         'provider': order.provider,
-        'provider_reference': order.provider_reference,
-        'payment_reference': order.payment_reference,
-        'paid_at': order.paid_at.isoformat() if order.paid_at else (order.paid_on.isoformat() if order.paid_on else None),
-        'created_at': order.created_at.isoformat(),
+        'active_students_now': active_students_now,
+        'has_student_growth': has_growth,
+        'growth_notice_en': "Your student enrollment has grown beyond this invoice. Additional students are never blocked and will be included in your next renewal invoice." if has_growth else "",
+        'growth_notice_ur': "طالب علموں کی تعداد میں اضافہ ہوا ہے۔ اضافی طلباء کبھی بھی مسدود نہیں ہوں گے اور آپ کے اگلے تجدیدی بل میں شامل کیے جائیں گے۔" if has_growth else "",
         'platform_merchant': {
             'name': 'OPTIMUS ORIEN EdTech Platform',
             'support_email': 'billing@optimusorien.com',
@@ -548,31 +629,36 @@ def school_order_receipt_view(request, pk):
 @permission_classes([IsAuthenticated])
 def platform_admin_billing_settings_view(request):
     """
-    Platform admin endpoint to inspect or update platform billing bank credentials,
-    trial days, grace periods, and yearly discounts.
+    Platform admin endpoint to inspect or update platform billing parameters,
+    basic access features, grace periods, and bank instructions.
     """
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
-    settings = PlatformBillingSettings.get_settings()
+    settings_obj = PlatformBillingSettings.get_settings()
+    billing_periods = BillingPeriod.get_active_periods()
 
     if request.method == 'GET':
         return Response({
-            'bank_name': settings.bank_name,
-            'account_title': settings.account_title,
-            'account_number': settings.account_number,
-            'iban': settings.iban,
-            'branch_code': settings.branch_code,
-            'swift_bic': settings.swift_bic,
-            'payment_instructions_en': settings.payment_instructions_en,
-            'payment_instructions_ur': settings.payment_instructions_ur,
-            'default_trial_days': settings.default_trial_days,
-            'pending_grace_days': settings.pending_grace_days,
-            'past_due_grace_days': settings.past_due_grace_days,
-            'yearly_discount_percentage': str(settings.yearly_discount_percentage),
-            'exchange_rate_note_en': settings.exchange_rate_note_en,
-            'exchange_rate_note_ur': settings.exchange_rate_note_ur,
-            'updated_at': settings.updated_at.isoformat() if settings.updated_at else None,
+            'bank_name': settings_obj.bank_name,
+            'account_title': settings_obj.account_title,
+            'account_number': settings_obj.account_number,
+            'iban': settings_obj.iban,
+            'branch_code': settings_obj.branch_code,
+            'swift_bic': settings_obj.swift_bic,
+            'payment_instructions_en': settings_obj.payment_instructions_en,
+            'payment_instructions_ur': settings_obj.payment_instructions_ur,
+            'pending_grace_days': settings_obj.pending_grace_days,
+            'past_due_grace_days': settings_obj.past_due_grace_days,
+            'basic_access_features': settings_obj.basic_access_features or list(PlatformBillingSettings.DEFAULT_BASIC_ACCESS_FEATURES),
+            'billing_periods': [{
+                'months': bp.months,
+                'discount_percentage': str(bp.discount_percentage),
+                'display_order': bp.display_order
+            } for bp in billing_periods],
+            'exchange_rate_note_en': settings_obj.exchange_rate_note_en,
+            'exchange_rate_note_ur': settings_obj.exchange_rate_note_ur,
+            'updated_at': settings_obj.updated_at.isoformat() if settings_obj.updated_at else None,
         })
 
     # PUT: Update settings
@@ -584,34 +670,75 @@ def platform_admin_billing_settings_view(request):
     ]
     for f in fields:
         if f in data:
-            setattr(settings, f, str(data[f]).strip())
+            setattr(settings_obj, f, str(data[f]).strip())
 
-    if 'default_trial_days' in data:
-        settings.default_trial_days = max(1, int(data['default_trial_days']))
     if 'pending_grace_days' in data:
-        settings.pending_grace_days = max(0, int(data['pending_grace_days']))
+        settings_obj.pending_grace_days = max(0, int(data['pending_grace_days']))
     if 'past_due_grace_days' in data:
-        settings.past_due_grace_days = max(0, int(data['past_due_grace_days']))
-    if 'yearly_discount_percentage' in data:
-        settings.yearly_discount_percentage = Decimal(str(data['yearly_discount_percentage'])).quantize(Decimal('0.01'))
+        settings_obj.past_due_grace_days = max(0, int(data['past_due_grace_days']))
+    if 'basic_access_features' in data and isinstance(data['basic_access_features'], list):
+        settings_obj.basic_access_features = data['basic_access_features']
 
-    settings.updated_by = request.user
-    settings.save()
+    settings_obj.updated_by = request.user
+    settings_obj.save()
     return Response({'message': 'Platform billing settings updated successfully.'})
 
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def platform_admin_plans_view(request):
+def platform_admin_billing_periods_view(request):
     """
-    Platform admin endpoint to list or create subscription plans.
+    Platform admin endpoint to manage billing period tiers and discounts (DATA, not hardcoded).
     """
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
     if request.method == 'GET':
-        plans = Plan.objects.all().order_by('display_order', 'id')
+        periods = BillingPeriod.get_active_periods()
         results = [{
+            'id': p.id,
+            'months': p.months,
+            'discount_percentage': str(p.discount_percentage),
+            'is_active': p.is_active,
+            'display_order': p.display_order,
+        } for p in periods]
+        return Response({'results': results})
+
+    # POST / PUT: Update or create billing period
+    data = request.data or {}
+    months = data.get('months')
+    discount = data.get('discount_percentage', '0.00')
+    if not months:
+        return Response({'detail': 'months is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    period, created = BillingPeriod.objects.update_or_create(
+        months=int(months),
+        defaults={
+            'discount_percentage': Decimal(str(discount)).quantize(Decimal('0.01')),
+            'is_active': bool(data.get('is_active', True)),
+            'display_order': int(data.get('display_order', 0))
+        }
+    )
+    return Response({
+        'message': f"Billing period {period.months} months saved.",
+        'id': period.id,
+        'months': period.months,
+        'discount_percentage': str(period.discount_percentage),
+    }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def platform_admin_plans_view(request):
+    """Platform admin endpoint to list all available subscription plans."""
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    plans = Plan.objects.all().prefetch_related('plan_features').order_by('display_order', 'id')
+    results = []
+    for p in plans:
+        feature_keys = set(p.plan_features.filter(is_included=True).values_list('feature_key', flat=True))
+        results.append({
             'id': p.id,
             'code': p.code,
             'name': p.name,
@@ -622,52 +749,44 @@ def platform_admin_plans_view(request):
             'description_ur': p.description_ur,
             'price_usd_per_student': str(p.price_usd_per_student),
             'price_pkr_per_student': str(p.price_pkr_per_student),
-            'is_active': p.is_active,
             'display_order': p.display_order,
-        } for p in plans]
-        return Response({'results': results})
-
-    # POST: Create plan
-    data = request.data or {}
-    code = str(data.get('code', '')).strip().lower()
-    name = str(data.get('name', '')).strip()
-    if not code or not name:
-        return Response({'detail': 'code and name are required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    if Plan.objects.filter(code=code).exists():
-        return Response({'detail': f"Plan with code '{code}' already exists."}, status=status.HTTP_400_BAD_REQUEST)
-
-    plan = Plan.objects.create(
-        code=code,
-        name=name,
-        name_ur=str(data.get('name_ur', '')).strip(),
-        tagline=str(data.get('tagline', '')).strip(),
-        tagline_ur=str(data.get('tagline_ur', '')).strip(),
-        description=str(data.get('description', '')).strip(),
-        description_ur=str(data.get('description_ur', '')).strip(),
-        price_usd_per_student=Decimal(str(data.get('price_usd_per_student', '0.00'))),
-        price_pkr_per_student=Decimal(str(data.get('price_pkr_per_student', '0.00'))),
-        is_active=bool(data.get('is_active', True)),
-        display_order=int(data.get('display_order', 0)),
-    )
-    return Response({'id': plan.id, 'code': plan.code, 'name': plan.name}, status=status.HTTP_201_CREATED)
+            'is_active': p.is_active,
+            'included_feature_keys': sorted(list(feature_keys)),
+        })
+    return Response({'results': results})
 
 
-@api_view(['PUT'])
+@api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def platform_admin_plan_detail_view(request, pk):
-    """
-    Platform admin endpoint to edit an existing plan, its USD/PKR pricing, and texts.
-    """
+    """Platform admin endpoint to inspect or update a specific plan's details, pricing, and features."""
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
     plan = get_object_or_404(Plan, pk=pk)
-    data = request.data or {}
 
-    for field in ('name', 'name_ur', 'tagline', 'tagline_ur', 'description', 'description_ur'):
-        if field in data:
-            setattr(plan, field, str(data[field]).strip())
+    if request.method == 'GET':
+        feature_keys = set(plan.plan_features.filter(is_included=True).values_list('feature_key', flat=True))
+        return Response({
+            'id': plan.id,
+            'code': plan.code,
+            'name': plan.name,
+            'name_ur': plan.name_ur,
+            'tagline': plan.tagline,
+            'tagline_ur': plan.tagline_ur,
+            'description': plan.description,
+            'description_ur': plan.description_ur,
+            'price_usd_per_student': str(plan.price_usd_per_student),
+            'price_pkr_per_student': str(plan.price_pkr_per_student),
+            'display_order': plan.display_order,
+            'is_active': plan.is_active,
+            'included_feature_keys': sorted(list(feature_keys)),
+        })
+
+    data = request.data or {}
+    for attr in ['name', 'name_ur', 'tagline', 'tagline_ur', 'description', 'description_ur']:
+        if attr in data:
+            setattr(plan, attr, str(data[attr]).strip())
 
     if 'price_usd_per_student' in data:
         plan.price_usd_per_student = Decimal(str(data['price_usd_per_student'])).quantize(Decimal('0.01'))
@@ -679,65 +798,50 @@ def platform_admin_plan_detail_view(request, pk):
         plan.display_order = int(data['display_order'])
 
     plan.save()
-    return Response({'message': f"Plan '{plan.code}' updated successfully."})
+
+    if 'included_feature_keys' in data and isinstance(data['included_feature_keys'], list):
+        target_keys = set(data['included_feature_keys'])
+        PlanFeature.objects.filter(plan=plan).delete()
+        for k in target_keys:
+            PlanFeature.objects.create(plan=plan, feature_key=k, is_included=True)
+
+    for sub in plan.school_subscriptions.all():
+        invalidate_school_entitlements_cache(sub.school_id)
+
+    return Response({'message': f"Plan '{plan.name}' updated successfully."})
 
 
-@api_view(['GET', 'PUT'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def platform_admin_features_view(request):
-    """
-    Platform admin endpoint to list or update feature catalog items.
-    """
+    """Platform admin endpoint to list the system feature catalog."""
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
-    if request.method == 'GET':
-        features = FeatureCatalog.objects.all().order_by('display_order', 'key')
-        results = [{
-            'key': f.key,
-            'name': f.name,
-            'name_ur': f.name_ur,
-            'description': f.description,
-            'description_ur': f.description_ur,
-            'category': f.category,
-            'status': f.status,
-            'is_premium_only': f.is_premium_only,
-            'display_order': f.display_order,
-        } for f in features]
-        return Response({'results': results})
-
-    # PUT: Update a feature
-    data = request.data or {}
-    key = data.get('key')
-    feat = get_object_or_404(FeatureCatalog, key=key)
-
-    if 'name' in data:
-        feat.name = str(data['name']).strip()
-    if 'name_ur' in data:
-        feat.name_ur = str(data['name_ur']).strip()
-    if 'status' in data:
-        if data['status'] in ('available', 'beta', 'coming_soon'):
-            feat.status = data['status']
-    if 'is_premium_only' in data:
-        feat.is_premium_only = bool(data['is_premium_only'])
-
-    feat.save()
-    return Response({'message': f"Feature '{feat.key}' updated successfully."})
+    features = FeatureCatalog.objects.all().order_by('display_order', 'key')
+    results = [{
+        'key': f.key,
+        'name': f.name,
+        'name_ur': f.name_ur,
+        'description': f.description,
+        'description_ur': f.description_ur,
+        'category': f.category,
+        'status': f.status,
+        'is_premium_only': f.is_premium_only,
+        'display_order': f.display_order,
+    } for f in features]
+    return Response({'results': results})
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def platform_admin_schools_view(request):
-    """
-    Platform admin roster of all tenant schools with subscription tier, status,
-    trial/paid dates, active student headcount, and flagged student growth.
-    """
+    """Platform admin directory of institutional subscribers, statuses, and counts."""
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
-    schools = School.objects.select_related('subscription__plan', 'organisation').order_by('name')
+    schools = School.objects.select_related('subscription', 'subscription__plan', 'organisation').all().order_by('name')
     results = []
-
     for s in schools:
         sub = getattr(s, 'subscription', None)
         active_count = get_active_enrolled_student_count(s)
@@ -749,12 +853,12 @@ def platform_admin_schools_view(request):
             'school_name': s.name,
             'school_code': s.code,
             'organisation_name': s.organisation.name if s.organisation else None,
-            'plan_code': sub.plan.code if (sub and sub.plan) else 'standard',
-            'plan_name': sub.plan.name if (sub and sub.plan) else 'Standard Plan',
-            'status': sub.status if sub else 'trial',
-            'trial_ends_at': sub.trial_ends_at.isoformat() if (sub and sub.trial_ends_at) else None,
+            'plan_code': sub.plan.code if (sub and sub.plan) else 'no_plan',
+            'plan_name': sub.plan.name if (sub and sub.plan) else 'No Plan',
+            'status': sub.status if sub else 'no_plan',
             'paid_until': sub.paid_until.isoformat() if (sub and sub.paid_until) else None,
             'grace_until': sub.grace_until.isoformat() if (sub and sub.grace_until) else None,
+            'pending_downgrade_to_plan': sub.pending_downgrade_to_plan.code if (sub and sub.pending_downgrade_to_plan) else None,
             'active_students': active_count,
             'student_count_at_last_invoice': invoiced_count,
             'has_student_growth': has_growth,
@@ -767,9 +871,7 @@ def platform_admin_schools_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def platform_admin_orders_view(request):
-    """
-    Platform admin review queue of pending and historical offline subscription orders.
-    """
+    """Platform admin review queue of pending and historical offline subscription orders."""
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
@@ -788,7 +890,10 @@ def platform_admin_orders_view(request):
         'billing_months': o.billing_months,
         'student_count': o.student_count,
         'unit_price': str(o.unit_price),
+        'subtotal': str(o.subtotal),
         'discount_percentage': str(o.discount_percentage),
+        'discount_amount': str(o.discount_amount),
+        'upgrade_credit_amount': str(o.upgrade_credit_amount),
         'amount': str(o.amount),
         'currency': o.currency,
         'payment_reference': o.payment_reference,
@@ -808,9 +913,7 @@ def platform_admin_orders_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def platform_admin_order_approve_view(request, order_id):
-    """
-    Platform admin action: approves an offline bank payment order and activates the subscription.
-    """
+    """Platform admin action: approves an offline bank payment order and activates the subscription."""
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
@@ -836,9 +939,7 @@ def platform_admin_order_approve_view(request, order_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def platform_admin_order_reject_view(request, order_id):
-    """
-    Platform admin action: rejects an offline bank payment order with required audit note.
-    """
+    """Platform admin action: rejects an offline bank payment order with required audit note."""
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
@@ -858,41 +959,6 @@ def platform_admin_order_reject_view(request, order_id):
         'message': f"Order #{rejected_order.order_number} rejected.",
         'order_id': rejected_order.id,
         'status': rejected_order.status,
-    })
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def platform_admin_extend_trial_view(request, school_id):
-    """
-    Platform admin action: extends a school's trial by N days with mandatory audit reason.
-    """
-    if not _is_platform_admin(request.user):
-        raise PermissionDenied("Platform administration access required.")
-
-    school = get_object_or_404(School, id=school_id)
-    data = request.data or {}
-    days = data.get('days') or data.get('extra_days')
-    reason = data.get('reason')
-
-    if not days or not reason:
-        return Response({'detail': 'extra_days (number > 0) and reason (string) are required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        days_int = int(days)
-        sub = extend_school_trial(
-            school=school,
-            extra_days=days_int,
-            reason=reason,
-            actor=request.user
-        )
-    except ValueError as err:
-        return Response({'detail': str(err)}, status=status.HTTP_400_BAD_REQUEST)
-
-    return Response({
-        'message': f"Trial for '{school.name}' extended by {days_int} days.",
-        'trial_ends_at': sub.trial_ends_at.isoformat(),
-        'status': sub.status,
     })
 
 

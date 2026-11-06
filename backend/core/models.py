@@ -2344,11 +2344,68 @@ class PlanFeature(models.Model):
         return f"{self.plan.code} -> {self.feature_key} ({'included' if self.is_included else 'excluded'})"
 
 
+class BillingPeriod(models.Model):
+    """
+    Configurable billing period and term discount tier (DATA, editable by platform admin).
+    Placeholder defaults:
+    - 1 month: 0.00% discount
+    - 4 months: 5.00% discount
+    - 8 months: 10.00% discount
+    - 12 months: 15.00% discount
+    """
+    months = models.PositiveSmallIntegerField(unique=True, db_index=True)
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['months']
+        verbose_name = 'Billing Period'
+        verbose_name_plural = 'Billing Periods'
+
+    def __str__(self):
+        return f"{self.months} Month(s) - {self.discount_percentage}% discount"
+
+    @classmethod
+    def get_active_periods(cls):
+        """Returns active billing periods or seeds defaults if none exist."""
+        periods = list(cls.objects.filter(is_active=True).order_by('months'))
+        if not periods:
+            defaults = [
+                (1, Decimal('0.00'), 1),
+                (4, Decimal('5.00'), 2),
+                (8, Decimal('10.00'), 3),
+                (12, Decimal('15.00'), 4),
+            ]
+            for m, disc, order in defaults:
+                p, _ = cls.objects.get_or_create(
+                    months=m,
+                    defaults={'discount_percentage': disc, 'is_active': True, 'display_order': order}
+                )
+                periods.append(p)
+            periods.sort(key=lambda x: x.months)
+        return periods
+
+
 class PlatformBillingSettings(models.Model):
     """
     Global platform-level billing parameters and offline bank deposit details (Unscoped).
     Bank account details are entered exclusively by platform admin (never hardcoded).
     """
+    DEFAULT_BASIC_ACCESS_FEATURES = [
+        'school_setup',
+        'people_accounts',
+        'authentication',
+        'password_change',
+        'profile_view',
+        'subscription_management',
+        'order_submission',
+        'support_contact',
+        'compliance_export',
+        'basic_reports_csv',
+        'english_urdu',
+    ]
+
     bank_name = models.CharField(max_length=150, blank=True, default='')
     account_title = models.CharField(max_length=150, blank=True, default='')
     account_number = models.CharField(max_length=80, blank=True, default='')
@@ -2357,10 +2414,9 @@ class PlatformBillingSettings(models.Model):
     swift_bic = models.CharField(max_length=40, blank=True, default='')
     payment_instructions_en = models.TextField(blank=True, default='')
     payment_instructions_ur = models.TextField(blank=True, default='')
-    default_trial_days = models.PositiveSmallIntegerField(default=0)
     pending_grace_days = models.PositiveSmallIntegerField(default=3)
     past_due_grace_days = models.PositiveSmallIntegerField(default=7)
-    yearly_discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    basic_access_features = models.JSONField(default=list, blank=True)
     exchange_rate_note_en = models.CharField(
         max_length=255,
         default='PKR amounts are approximate and based on standard currency conversion estimates.'
@@ -2378,7 +2434,13 @@ class PlatformBillingSettings(models.Model):
 
     @classmethod
     def get_settings(cls):
-        obj, _ = cls.objects.get_or_create(id=1)
+        obj, created = cls.objects.get_or_create(
+            id=1,
+            defaults={'basic_access_features': list(cls.DEFAULT_BASIC_ACCESS_FEATURES)}
+        )
+        if not obj.basic_access_features:
+            obj.basic_access_features = list(cls.DEFAULT_BASIC_ACCESS_FEATURES)
+            obj.save(update_fields=['basic_access_features'])
         return obj
 
     @classmethod
@@ -2386,7 +2448,7 @@ class PlatformBillingSettings(models.Model):
         return cls.get_settings()
 
     def __str__(self):
-        return f"Platform Billing Settings (Trial: {self.default_trial_days}d, Grace: {self.past_due_grace_days}d)"
+        return f"Platform Billing Settings (Grace: {self.past_due_grace_days}d)"
 
 
 class SchoolSubscription(models.Model):
@@ -2395,22 +2457,19 @@ class SchoolSubscription(models.Model):
     PostgreSQL Row Level Security (RLS) enabled.
     """
     STATUS_CHOICES = [
-        ('trial', 'Trial'),
-        ('pending_approval', 'Pending Approval'),
+        ('no_plan', 'No Plan'),
         ('active', 'Active'),
         ('past_due', 'Past Due'),
-        ('limited', 'Limited (Read-Only)'),
         ('suspended', 'Suspended'),
     ]
     school = models.OneToOneField('School', on_delete=models.CASCADE, related_name='subscription')
     plan = models.ForeignKey(Plan, null=True, blank=True, on_delete=models.PROTECT, related_name='school_subscriptions')
-    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='trial', db_index=True)
-    trial_started_at = models.DateTimeField(null=True, blank=True)
-    trial_ends_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='no_plan', db_index=True)
     current_period_start = models.DateTimeField(null=True, blank=True)
     paid_until = models.DateTimeField(null=True, blank=True)
     grace_until = models.DateTimeField(null=True, blank=True)
     student_count_at_last_invoice = models.PositiveIntegerField(default=0)
+    pending_downgrade_to_plan = models.ForeignKey(Plan, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2418,7 +2477,6 @@ class SchoolSubscription(models.Model):
         indexes = [
             models.Index(fields=['school', 'status'], name='sub_school_status_idx'),
             models.Index(fields=['status', 'paid_until'], name='sub_status_paid_idx'),
-            models.Index(fields=['status', 'trial_ends_at'], name='sub_status_trial_idx'),
         ]
 
     def __str__(self):
@@ -2442,12 +2500,20 @@ class SubscriptionOrder(models.Model):
     order_number = models.CharField(max_length=40, unique=True, db_index=True)
     school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='subscription_orders')
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name='orders')
-    billing_months = models.PositiveSmallIntegerField(choices=[(1, '1 Month'), (3, '3 Months'), (6, '6 Months'), (12, '12 Months')])
+    billing_months = models.PositiveSmallIntegerField()
     student_count = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
     discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    upgrade_credit_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    tax_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=5, choices=[('USD', 'USD'), ('PKR', 'PKR')], default='USD')
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
+    card_brand = models.CharField(max_length=30, blank=True, default='')
+    card_last4 = models.CharField(max_length=4, blank=True, default='')
     provider = models.CharField(max_length=40, default='fake', db_index=True)
     provider_reference = models.CharField(max_length=150, blank=True, default='', db_index=True)
     provider_event_id = models.CharField(max_length=150, blank=True, default='', db_index=True)
@@ -2503,16 +2569,18 @@ class SchoolFeatureOverride(models.Model):
 class SubscriptionEvent(models.Model):
     """
     Tenant-scoped immutable audit log of all subscription status transitions,
-    trial extensions, order approvals, and platform admin overrides.
+    order approvals, and platform admin overrides.
     """
     EVENT_CHOICES = [
-        ('trial_started', 'Trial Started'),
-        ('trial_extended', 'Trial Extended'),
         ('order_submitted', 'Order Submitted'),
         ('order_approved', 'Order Approved'),
         ('order_rejected', 'Order Rejected'),
         ('status_changed', 'Status Changed'),
-        ('downgraded_to_limited', 'Downgraded to Limited'),
+        ('upgraded', 'Upgraded Plan'),
+        ('downgraded', 'Downgraded Plan'),
+        ('downgrade_scheduled', 'Downgrade Scheduled'),
+        ('past_due', 'Past Due'),
+        ('expired_to_no_plan', 'Expired to No Plan'),
         ('suspended', 'Suspended'),
         ('reinstated', 'Reinstated'),
         ('override_applied', 'Override Applied'),

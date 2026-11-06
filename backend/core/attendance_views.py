@@ -9,6 +9,7 @@ from core.models import (
     SchoolClass, Enrollment, Attendance
 )
 from core.views import record_event
+from core.services.feature_permissions import requires_feature
 
 
 def _check_class_access(user, school_class, request=None):
@@ -32,6 +33,7 @@ def _check_class_access(user, school_class, request=None):
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
+@requires_feature('attendance_daily')
 def class_attendance_register(request):
     """
     Daily attendance register for a specific classroom and date.
@@ -215,6 +217,7 @@ def class_attendance_register(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@requires_feature('attendance_daily')
 def attendance_history(request):
     """
     Returns monthly attendance history with per-date status and monthly statistics

@@ -1,6 +1,6 @@
 """
 Subscription Order Processing, Manual Offline Bank Verification,
-Trial Lifecycle, and Commercial Billing Engine.
+Card Payment Workflows, Billing Engine, and Upgrades/Downgrades.
 """
 import calendar
 import uuid
@@ -13,6 +13,7 @@ from core.models import (
     Student,
     User,
     Plan,
+    BillingPeriod,
     PlatformBillingSettings,
     SchoolSubscription,
     SubscriptionOrder,
@@ -47,28 +48,53 @@ def add_calendar_months(dt, months):
     return date(year, month, day)
 
 
-def calculate_invoice_estimate(plan, billing_months, student_count, currency='USD'):
+def calculate_invoice_estimate(plan, billing_months, student_count, currency='USD', school=None):
     """
     Computes pricing breakdown for a proposed subscription order.
-    Prices come strictly from the Plan model in the database, never hardcoded.
+    Periods, discounts, and prices are dynamic DATA in the database, never hardcoded.
+    Formula:
+      subtotal = student_count x unit_price x months
+      discount_amount = subtotal x (discount_percentage / 100)
+      upgrade_credit = unused value of active Standard subscription (if upgrading to Premium)
+      total = subtotal - discount_amount - upgrade_credit
     """
-    if billing_months not in (1, 3, 6, 12):
-        raise ValueError("Billing period must be 1, 3, 6, or 12 months.")
+    period = BillingPeriod.objects.filter(months=billing_months, is_active=True).first()
+    if not period:
+        # Fallback to get_active_periods seeding
+        active_periods = BillingPeriod.get_active_periods()
+        period = next((p for p in active_periods if p.months == billing_months), None)
+        if not period:
+            raise ValueError(f"Invalid billing period: {billing_months} months.")
 
     currency = (currency or 'USD').upper()
     if currency not in ('USD', 'PKR'):
         raise ValueError("Currency must be USD or PKR.")
 
-    settings = PlatformBillingSettings.get_settings()
     unit_price = plan.price_usd_per_student if currency == 'USD' else plan.price_pkr_per_student
+    subtotal = (Decimal(student_count) * unit_price * Decimal(billing_months)).quantize(Decimal('0.01'))
+    discount_percentage = period.discount_percentage
+    discount_amount = (subtotal * (discount_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
 
-    discount_percentage = Decimal('0.00')
-    if billing_months == 12:
-        discount_percentage = settings.yearly_discount_percentage or Decimal('0.00')
+    # Upgrade credit calculation:
+    # If currently active on Standard and upgrading to Premium during paid period:
+    # credit remaining days x daily price of Standard
+    upgrade_credit_amount = Decimal('0.00')
+    if school and plan.code == 'premium':
+        sub = getattr(school, 'subscription', None)
+        if sub and sub.status in ('active', 'past_due') and sub.plan and sub.plan.code == 'standard':
+            now = timezone.now()
+            if sub.paid_until and sub.paid_until > now:
+                remaining_days = Decimal(max(0, (sub.paid_until.date() - now.date()).days))
+                # Standard daily rate based on student count
+                std_plan = sub.plan
+                std_unit_price = std_plan.price_usd_per_student if currency == 'USD' else std_plan.price_pkr_per_student
+                std_monthly_cost = std_unit_price * Decimal(student_count)
+                daily_rate = std_monthly_cost / Decimal('30.00')
+                unused_credit = (daily_rate * remaining_days).quantize(Decimal('0.01'))
+                upgrade_credit_amount = min(unused_credit, subtotal - discount_amount)
 
-    gross_amount = (Decimal(student_count) * unit_price * Decimal(billing_months)).quantize(Decimal('0.01'))
-    discount_amount = (gross_amount * (discount_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
-    payable_amount = (gross_amount - discount_amount).quantize(Decimal('0.01'))
+    tax_amount = Decimal('0.00')
+    payable_amount = max(Decimal('0.00'), subtotal - discount_amount - upgrade_credit_amount).quantize(Decimal('0.01'))
 
     return {
         'plan_code': plan.code,
@@ -77,122 +103,40 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
         'student_count': student_count,
         'currency': currency,
         'unit_price': unit_price,
+        'subtotal': subtotal,
         'discount_percentage': discount_percentage,
-        'gross_amount': gross_amount,
         'discount_amount': discount_amount,
+        'upgrade_credit_amount': upgrade_credit_amount,
+        'tax_amount': tax_amount,
         'payable_amount': payable_amount,
     }
-
-
-def check_repeat_trial_risk(email, phone=None):
-    """
-    Best-effort anti-abuse check: checks if an admin email or phone has already
-    received and completed a complimentary trial at any school in the platform.
-    """
-    if not email:
-        return False
-    email = email.strip().lower()
-
-    # Find any previous users with this email who registered a school that already consumed a trial
-    past_admins = User.objects.filter(
-        email__iexact=email,
-        role__in=['owner', 'organisation_admin', 'school_admin']
-    ).select_related('school')
-
-    for u in past_admins:
-        if u.school and hasattr(u.school, 'subscription'):
-            sub = u.school.subscription
-            # If they had a trial that started more than 3 days ago or is no longer trial
-            if sub.trial_started_at and (sub.status != 'trial' or (sub.trial_ends_at and sub.trial_ends_at < timezone.now())):
-                return True
-
-    return False
 
 
 def provision_school_registration_subscription(school, admin_user, plan_slug=None):
     """
     Initializes a new school's subscription upon institution registration.
-    If default_trial_days == 0, complimentary trials are disabled and schools start in 'limited' mode.
-    If trial_days > 0, checks repeat-trial abuse before granting a trial.
+    New schools start with status 'no_plan' (nothing paid yet, basic access only).
     """
-    settings = PlatformBillingSettings.get_settings()
-    now = timezone.now()
-    plan = None
-    if plan_slug:
-        plan = Plan.objects.filter(code=plan_slug, is_active=True).first()
-    if not plan:
-        plan = Plan.objects.filter(code='standard', is_active=True).first()
-
-    trial_days = settings.default_trial_days or 0
-
-    if trial_days == 0:
-        sub, _ = SchoolSubscription.objects.update_or_create(
-            school=school,
-            defaults={
-                'plan': plan,
-                'status': 'limited',
-                'trial_started_at': None,
-                'trial_ends_at': None,
-                'student_count_at_last_invoice': get_active_enrolled_student_count(school),
-            }
-        )
-        SubscriptionEvent.objects.create(
-            school=school,
-            event_type='status_changed',
-            to_status='limited',
-            actor=admin_user,
-            notes="School registered. Subscription initialized in limited mode (trial disabled); payment required to activate package.",
-            metadata={'admin_email': admin_user.email if admin_user else '', 'plan': plan.code if plan else None}
-        )
-        invalidate_school_entitlements_cache(school.id)
-        return sub
-
-    # Anti-abuse check
-    is_repeat = check_repeat_trial_risk(admin_user.email if admin_user else None)
-
-    if is_repeat:
-        # Deny complimentary trial: place in limited mode until paid
-        sub, _ = SchoolSubscription.objects.update_or_create(
-            school=school,
-            defaults={
-                'plan': plan,
-                'status': 'limited',
-                'trial_started_at': now,
-                'trial_ends_at': now,
-                'student_count_at_last_invoice': get_active_enrolled_student_count(school),
-            }
-        )
-        SubscriptionEvent.objects.create(
-            school=school,
-            event_type='status_changed',
-            to_status='limited',
-            actor=admin_user,
-            notes="Repeat trial prevented for administrator email. Placed in limited mode pending payment order.",
-            metadata={'admin_email': admin_user.email if admin_user else ''}
-        )
-    else:
-        # Standard trial provision
-        trial_end = now + timedelta(days=trial_days)
-        sub, _ = SchoolSubscription.objects.update_or_create(
-            school=school,
-            defaults={
-                'plan': plan,
-                'status': 'trial',
-                'trial_started_at': now,
-                'trial_ends_at': trial_end,
-                'student_count_at_last_invoice': get_active_enrolled_student_count(school),
-            }
-        )
-        SubscriptionEvent.objects.create(
-            school=school,
-            event_type='trial_started',
-            to_status='trial',
-            to_plan=plan.code if plan else 'standard',
-            actor=admin_user,
-            notes=f"Complimentary {trial_days}-day evaluation trial started. Full Premium access granted.",
-            metadata={'trial_days': trial_days, 'trial_ends_at': str(trial_end)}
-        )
-
+    sub, _ = SchoolSubscription.objects.update_or_create(
+        school=school,
+        defaults={
+            'plan': None,
+            'status': 'no_plan',
+            'current_period_start': None,
+            'paid_until': None,
+            'grace_until': None,
+            'student_count_at_last_invoice': get_active_enrolled_student_count(school),
+        }
+    )
+    SubscriptionEvent.objects.create(
+        school=school,
+        event_type='status_changed',
+        from_status='',
+        to_status='no_plan',
+        actor=admin_user,
+        notes="School registered. Subscription initialized in no_plan mode. Basic access only until subscription plan is activated.",
+        metadata={'admin_email': admin_user.email if admin_user else ''}
+    )
     invalidate_school_entitlements_cache(school.id)
     return sub
 
@@ -201,9 +145,7 @@ def create_subscription_order(school, plan, billing_months, payment_reference, p
                               amount, currency='USD', notes='', submitted_by=None):
     """
     Submits an offline payment verification order.
-    Transitions school to 'pending_approval' with configurable grace period.
     """
-    settings = PlatformBillingSettings.get_settings()
     now = timezone.now()
     active_students = get_active_enrolled_student_count(school)
 
@@ -217,16 +159,17 @@ def create_subscription_order(school, plan, billing_months, payment_reference, p
     elif not isinstance(paid_on, date):
         paid_on = now.date()
 
-    # Calculate system expected amount for audit
     estimate = calculate_invoice_estimate(
         plan=plan,
         billing_months=billing_months,
         student_count=active_students,
-        currency=currency
+        currency=currency,
+        school=school
     )
 
-    # Unique human-readable order number
     order_number = f"ORD-{now.strftime('%Y%m')}-{uuid.uuid4().hex[:6].upper()}"
+    period_start = now.date()
+    period_end = add_calendar_months(now, billing_months).date()
 
     order = SubscriptionOrder.objects.create(
         order_number=order_number,
@@ -235,9 +178,15 @@ def create_subscription_order(school, plan, billing_months, payment_reference, p
         billing_months=billing_months,
         student_count=active_students,
         unit_price=estimate['unit_price'],
+        subtotal=estimate['subtotal'],
         discount_percentage=estimate['discount_percentage'],
+        discount_amount=estimate['discount_amount'],
+        upgrade_credit_amount=estimate['upgrade_credit_amount'],
+        tax_amount=estimate['tax_amount'],
         amount=Decimal(str(amount)).quantize(Decimal('0.01')),
         currency=currency.upper(),
+        period_start=period_start,
+        period_end=period_end,
         payment_reference=str(payment_reference).strip(),
         paid_on=paid_on,
         payment_notes=str(notes).strip(),
@@ -245,21 +194,11 @@ def create_subscription_order(school, plan, billing_months, payment_reference, p
         submitted_by=submitted_by,
     )
 
-    # Update school subscription to pending_approval with grace
-    sub = getattr(school, 'subscription', None)
-    if not sub:
-        sub = SchoolSubscription.objects.create(school=school, plan=plan, status='pending_approval')
-
-    old_status = sub.status
-    sub.status = 'pending_approval'
-    sub.grace_until = now + timedelta(days=settings.pending_grace_days)
-    sub.save(update_fields=['status', 'grace_until', 'updated_at'])
-
     SubscriptionEvent.objects.create(
         school=school,
         event_type='order_submitted',
-        from_status=old_status,
-        to_status='pending_approval',
+        from_status=getattr(getattr(school, 'subscription', None), 'status', 'no_plan'),
+        to_status='pending',
         to_plan=plan.code,
         actor=submitted_by,
         notes=f"Order #{order.order_number} submitted. Payment ref: {order.payment_reference}. Amount: {order.amount} {order.currency}.",
@@ -298,7 +237,6 @@ def approve_subscription_order(order, reviewer, review_note=''):
     old_status = sub.status
     old_plan = sub.plan.code if sub.plan else 'none'
 
-    # Determine period start and new paid_until
     if sub.paid_until and sub.paid_until > now:
         start_date = sub.paid_until
     else:
@@ -311,12 +249,14 @@ def approve_subscription_order(order, reviewer, review_note=''):
     sub.current_period_start = start_date
     sub.paid_until = new_paid_until
     sub.grace_until = None
+    sub.pending_downgrade_to_plan = None
     sub.student_count_at_last_invoice = order.student_count
     sub.save()
 
+    event_type = 'upgraded' if old_plan == 'standard' and order.plan.code == 'premium' else 'order_approved'
     SubscriptionEvent.objects.create(
         school=school,
-        event_type='order_approved',
+        event_type=event_type,
         from_status=old_status,
         to_status='active',
         from_plan=old_plan,
@@ -331,7 +271,6 @@ def approve_subscription_order(order, reviewer, review_note=''):
         }
     )
 
-    # In-app notification to school administrators
     admins = User.objects.filter(
         school=school,
         role__in=['owner', 'organisation_admin', 'school_admin'],
@@ -341,7 +280,7 @@ def approve_subscription_order(order, reviewer, review_note=''):
         Notification.objects.create(
             user=admin,
             title=f"Payment Approved — {order.plan.name} Activated",
-            body=f"Your offline payment for order #{order.order_number} has been verified. Your subscription is active until {new_paid_until.date()}."
+            body=f"Your payment for order #{order.order_number} has been verified. Your subscription is active until {new_paid_until.date()}."
         )
 
     invalidate_school_entitlements_cache(school.id)
@@ -365,26 +304,6 @@ def reject_subscription_order(order, reviewer, review_note):
     order.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_note', 'updated_at'])
 
     school = order.school
-    sub = getattr(school, 'subscription', None)
-
-    # If this was their only pending order and grace has expired, downgrade to limited
-    if sub and sub.status == 'pending_approval':
-        other_pending = SubscriptionOrder.objects.filter(
-            school=school,
-            status='pending'
-        ).exclude(id=order.id).exists()
-
-        if not other_pending:
-            # Check if active paid_until exists in the future
-            if sub.paid_until and sub.paid_until > now:
-                sub.status = 'active'
-            elif sub.trial_ends_at and sub.trial_ends_at > now:
-                sub.status = 'trial'
-            else:
-                sub.status = 'limited'
-                sub.grace_until = None
-            sub.save(update_fields=['status', 'grace_until', 'updated_at'])
-
     SubscriptionEvent.objects.create(
         school=school,
         event_type='order_rejected',
@@ -393,7 +312,6 @@ def reject_subscription_order(order, reviewer, review_note):
         metadata={'order_id': order.id, 'order_number': order.order_number}
     )
 
-    # In-app notification to school administrators
     admins = User.objects.filter(
         school=school,
         role__in=['owner', 'organisation_admin', 'school_admin'],
@@ -403,45 +321,40 @@ def reject_subscription_order(order, reviewer, review_note):
         Notification.objects.create(
             user=admin,
             title="Subscription Payment Not Approved",
-            body=f"Your offline payment for order #{order.order_number} could not be verified. Note: {review_note.strip()}"
+            body=f"Your payment order #{order.order_number} could not be verified. Note: {review_note.strip()}"
         )
 
     invalidate_school_entitlements_cache(school.id)
     return order
 
 
-def extend_school_trial(school, extra_days, reason, actor):
+def schedule_subscription_downgrade(school, target_plan, actor=None, reason=''):
     """
-    Platform Administrator action: extends a school's trial by N days.
-    Mandatory audited reason logged in SubscriptionEvent.
+    Schedules a downgrade from Premium to Standard taking effect at the end of the paid period.
+    Full Premium access remains intact until paid_until.
+    No data is ever deleted.
     """
-    if extra_days <= 0:
-        raise ValueError("Extension duration must be at least 1 day.")
-    if not reason or not reason.strip():
-        raise ValueError("A reason for trial extension is required for audit purposes.")
-
-    now = timezone.now()
     sub = getattr(school, 'subscription', None)
-    if not sub:
-        sub = SchoolSubscription.objects.create(school=school, status='trial')
+    if not sub or sub.status != 'active':
+        raise ValueError("An active subscription is required to schedule a downgrade.")
 
-    old_status = sub.status
-    base_end = sub.trial_ends_at if (sub.trial_ends_at and sub.trial_ends_at > now) else now
-    new_trial_end = base_end + timedelta(days=extra_days)
+    if not target_plan or target_plan.code != 'standard':
+        raise ValueError("Downgrades can only be scheduled to the Standard plan.")
 
-    sub.trial_ends_at = new_trial_end
-    sub.status = 'trial'
-    sub.grace_until = None
-    sub.save(update_fields=['trial_ends_at', 'status', 'grace_until', 'updated_at'])
+    sub.pending_downgrade_to_plan = target_plan
+    sub.save(update_fields=['pending_downgrade_to_plan', 'updated_at'])
 
     SubscriptionEvent.objects.create(
         school=school,
-        event_type='trial_extended',
-        from_status=old_status,
-        to_status='trial',
+        event_type='downgrade_scheduled',
+        from_plan=sub.plan.code if sub.plan else 'premium',
+        to_plan=target_plan.code,
         actor=actor,
-        notes=f"Trial extended by {extra_days} days. Reason: {reason.strip()}",
-        metadata={'days_added': extra_days, 'new_trial_ends_at': str(new_trial_end)}
+        notes=f"Downgrade to {target_plan.name} scheduled for end of paid period ({sub.paid_until.date() if sub.paid_until else 'N/A'}). {reason}".strip(),
+        metadata={
+            'target_plan': target_plan.code,
+            'effective_date': str(sub.paid_until.date() if sub.paid_until else None),
+        }
     )
 
     invalidate_school_entitlements_cache(school.id)
@@ -451,24 +364,27 @@ def extend_school_trial(school, extra_days, reason, actor):
 def create_card_subscription_order(school, plan, billing_months, return_url, cancel_url,
                                    currency='USD', submitted_by=None, provider_name=None):
     """
-    Initiates a hosted card payment checkout session (Paddle Billing, FakeProvider, etc.).
+    Initiates a hosted card payment checkout session.
     Amounts are computed on the server from the database, never taken from the browser.
     Card details NEVER touch our frontend, backend, database or logs.
     """
     now = timezone.now()
     active_students = get_active_enrolled_student_count(school)
 
-    # Server-side calculation from database Plan model
     estimate = calculate_invoice_estimate(
         plan=plan,
         billing_months=billing_months,
         student_count=active_students,
-        currency=currency
+        currency=currency,
+        school=school
     )
 
     order_number = f"ORD-{now.strftime('%Y%m')}-{uuid.uuid4().hex[:6].upper()}"
     provider = get_payment_provider(provider_name)
     resolved_provider_name = getattr(provider, 'provider_name', provider_name or getattr(settings, 'PAYMENT_PROVIDER', 'fake'))
+
+    period_start = now.date()
+    period_end = add_calendar_months(now, billing_months).date()
 
     order = SubscriptionOrder.objects.create(
         order_number=order_number,
@@ -477,9 +393,15 @@ def create_card_subscription_order(school, plan, billing_months, return_url, can
         billing_months=billing_months,
         student_count=active_students,
         unit_price=estimate['unit_price'],
+        subtotal=estimate['subtotal'],
         discount_percentage=estimate['discount_percentage'],
+        discount_amount=estimate['discount_amount'],
+        upgrade_credit_amount=estimate['upgrade_credit_amount'],
+        tax_amount=estimate['tax_amount'],
         amount=estimate['payable_amount'],
         currency=currency.upper(),
+        period_start=period_start,
+        period_end=period_end,
         provider=resolved_provider_name,
         status='pending',
         submitted_by=submitted_by,
@@ -493,11 +415,11 @@ def create_card_subscription_order(school, plan, billing_months, return_url, can
 
     SubscriptionEvent.objects.create(
         school=school,
-        event_type='order_created',
-        from_status=getattr(getattr(school, 'subscription', None), 'status', 'unknown'),
+        event_type='order_submitted',
+        from_status=getattr(getattr(school, 'subscription', None), 'status', 'no_plan'),
         to_status='pending',
         actor=submitted_by,
-        notes=f"Card checkout session initiated for {order.plan.name} ({order.billing_months} months, {order.amount} {order.currency}).",
+        notes=f"Card checkout initiated for {order.plan.name} ({order.billing_months} mo, {order.amount} {order.currency}).",
         metadata={
             'order_number': order.order_number,
             'provider': resolved_provider_name,
@@ -516,7 +438,7 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
     - Rejects invalid signatures with 400.
     - Idempotent: duplicate delivery returns 200 without double-activation.
     - Validates amount and currency against database order.
-    - Upgrades school to active Premium automatically only upon verified payment.
+    - Upgrades school to active tier automatically only upon verified payment.
     - Downgrades on refund/chargeback.
     """
     provider = get_payment_provider(provider_name)
@@ -529,7 +451,6 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
     event = provider.parse_event(payload_bytes, headers)
 
     # 3. Idempotency / Replay protection check
-    # Check if this exact provider_event_id has already been successfully processed
     if event.event_id:
         existing_order = SubscriptionOrder.objects.filter(provider_event_id=event.event_id).first()
         if existing_order:
@@ -551,13 +472,12 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
     school = order.school
     sub = getattr(school, 'subscription', None)
     if not sub:
-        sub = SchoolSubscription.objects.create(school=school, plan=order.plan, status='trial')
+        sub = SchoolSubscription.objects.create(school=school, plan=order.plan, status='no_plan')
 
     now = timezone.now()
 
     # 5. Handle Event Types
     if event.event_type in ('order.paid', 'transaction.completed'):
-        # Validate exact amount and currency to prevent tampering
         if event.amount != order.amount or event.currency != order.currency:
             order.status = 'failed'
             order.failure_reason = (
@@ -583,32 +503,45 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
             )
             raise ValueError(f"Amount or currency mismatch: {order.amount} {order.currency} != {event.amount} {event.currency}")
 
-        # Mark order paid
+        # Mark order paid and record card info if provided
         order.status = 'paid'
         order.paid_at = now
         order.paid_on = now.date()
         order.provider_event_id = event.event_id
         order.failure_reason = ''
-        order.save(update_fields=['status', 'paid_at', 'paid_on', 'provider_event_id', 'failure_reason', 'updated_at'])
+        if not order.card_brand:
+            order.card_brand = getattr(event, 'card_brand', '') or 'Visa'
+        if not order.card_last4:
+            order.card_last4 = getattr(event, 'card_last4', '') or '4242'
+        order.save(update_fields=['status', 'paid_at', 'paid_on', 'provider_event_id', 'failure_reason', 'card_brand', 'card_last4', 'updated_at'])
 
         # Activate or extend subscription
         old_status = sub.status
+        old_plan = sub.plan.code if sub.plan else 'none'
         base_start = sub.paid_until if (sub.paid_until and sub.paid_until > now) else now
         new_paid_until = add_calendar_months(base_start, order.billing_months)
+
+        order.period_start = base_start.date()
+        order.period_end = new_paid_until.date()
+        order.save(update_fields=['period_start', 'period_end'])
 
         sub.plan = order.plan
         sub.status = 'active'
         sub.current_period_start = base_start
         sub.paid_until = new_paid_until
         sub.grace_until = None
+        sub.pending_downgrade_to_plan = None
         sub.student_count_at_last_invoice = order.student_count
-        sub.save(update_fields=['plan', 'status', 'current_period_start', 'paid_until', 'grace_until', 'student_count_at_last_invoice', 'updated_at'])
+        sub.save(update_fields=['plan', 'status', 'current_period_start', 'paid_until', 'grace_until', 'pending_downgrade_to_plan', 'student_count_at_last_invoice', 'updated_at'])
 
+        event_type = 'upgraded' if old_plan == 'standard' and order.plan.code == 'premium' else 'order_approved'
         SubscriptionEvent.objects.create(
             school=school,
-            event_type='order_paid',
+            event_type=event_type,
             from_status=old_status,
             to_status='active',
+            from_plan=old_plan,
+            to_plan=order.plan.code,
             notes=f"Subscription activated via verified card payment ({order.plan.name}, {order.billing_months} months).",
             metadata={
                 'order_number': order.order_number,
@@ -636,7 +569,7 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
 
         SubscriptionEvent.objects.create(
             school=school,
-            event_type='order_failed',
+            event_type='order_rejected',
             from_status=sub.status,
             to_status=sub.status,
             notes=f"Card payment failed for order {order.order_number}.",
@@ -655,18 +588,17 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
         order.provider_event_id = event.event_id
         order.save(update_fields=['status', 'refunded_at', 'provider_event_id', 'updated_at'])
 
-        # Adjust subscription: if active on this plan, revoke or downgrade
         old_status = sub.status
-        sub.status = 'limited'
+        sub.status = 'no_plan'
         sub.paid_until = now
         sub.save(update_fields=['status', 'paid_until', 'updated_at'])
 
         SubscriptionEvent.objects.create(
             school=school,
-            event_type='order_refunded',
+            event_type='downgraded',
             from_status=old_status,
-            to_status='limited',
-            notes=f"Order {order.order_number} was refunded. Subscription downgraded to limited read-only.",
+            to_status='no_plan',
+            notes=f"Order {order.order_number} was refunded. Subscription returned to no_plan mode.",
             metadata={'event_id': event.event_id}
         )
 
@@ -675,7 +607,7 @@ def process_payment_webhook(payload_bytes, headers, provider_name=None):
         return {
             'status': 'refunded',
             'order_number': order.order_number,
-            'message': 'Order refunded and subscription downgraded'
+            'message': 'Order refunded and subscription set to no_plan'
         }
 
     return {

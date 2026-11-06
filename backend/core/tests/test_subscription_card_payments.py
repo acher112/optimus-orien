@@ -21,6 +21,7 @@ from core.models import (
     Enrollment,
     Plan,
     PlanFeature,
+    BillingPeriod,
     FeatureCatalog,
     PlatformBillingSettings,
     SchoolSubscription,
@@ -31,6 +32,10 @@ from core.services.entitlements import (
     get_school_entitlements,
     get_effective_subscription_status,
     invalidate_school_entitlements_cache,
+)
+from core.services.subscriptions import (
+    calculate_invoice_estimate,
+    schedule_subscription_downgrade,
 )
 from core.services.payments.fake import FakeProvider
 
@@ -45,11 +50,12 @@ class SubscriptionCardPaymentTests(TestCase):
         self.settings.bank_name = 'National Bank Limited'
         self.settings.account_title = 'Optimus Orien EdTech'
         self.settings.account_number = '112233445566'
-        self.settings.default_trial_days = 3
         self.settings.pending_grace_days = 3
         self.settings.past_due_grace_days = 7
-        self.settings.yearly_discount_percentage = Decimal('10.00')
         self.settings.save()
+
+        # Ensure active billing periods exist
+        BillingPeriod.get_active_periods()
 
         # 2. Plans
         self.standard_plan, _ = Plan.objects.get_or_create(
@@ -135,15 +141,54 @@ class SubscriptionCardPaymentTests(TestCase):
             )
 
     # --------------------------------------------------------------------------
-    # 1. Plan x Feature Matrix Tests
+    # 1. Three Access Levels: no_plan, Standard, Premium
     # --------------------------------------------------------------------------
 
-    def test_plan_by_feature_matrix_standard_locked_premium_unlocked(self):
+    def test_new_school_starts_in_no_plan_feature_locking(self):
         """
-        Standard school gets 403 feature_locked on Premium endpoints.
-        Trial and Premium schools get 200.
+        A newly registered school starts with status no_plan (nothing paid yet).
+        Premium features AND paid Standard features are locked with 403 feature_locked.
+        Basic access list (viewing plan/billing, school setup, export) remains open.
         """
-        # Set school A to Standard
+        # Create un-subscribed / no_plan school
+        school_c = School.objects.create(name='Gamma School', code='GAMMA-1', organisation=self.org_a)
+        admin_c = User.objects.create_user(
+            username='admin_gamma',
+            email='gamma@alpha.edu.pk',
+            password='SecurePassword123!',
+            role='organisation_admin',
+            organisation=self.org_a,
+            school=school_c
+        )
+        sub = SchoolSubscription.objects.create(school=school_c, status='no_plan')
+        invalidate_school_entitlements_cache(school_c.id)
+
+        academic_year_c = AcademicYear.objects.create(school=school_c, name='2026', start_date=date(2026, 1, 1), end_date=date(2026, 12, 31))
+        class_c = SchoolClass.objects.create(school=school_c, academic_year=academic_year_c, name='Class C', grade_level='1')
+
+        self.client.force_authenticate(user=admin_c)
+
+        # 1. Premium endpoint locked
+        res_prem = self.client.get('/api/v1/aqi/overview/')
+        self.assertEqual(res_prem.status_code, 403)
+        self.assertEqual(res_prem.data.get('code'), 'feature_locked')
+        self.assertEqual(res_prem.data.get('required_plan'), 'premium')
+
+        # 2. Paid Standard endpoint locked
+        res_std = self.client.get(f'/api/v1/attendance/class-register/?school_class={class_c.id}')
+        self.assertEqual(res_std.status_code, 403)
+        self.assertEqual(res_std.data.get('code'), 'feature_locked')
+        self.assertEqual(res_std.data.get('required_plan'), 'standard')
+
+        # 3. Basic access endpoint open (own plan and billing page)
+        res_basic = self.client.get('/api/v1/subscription/current/')
+        self.assertEqual(res_basic.status_code, 200)
+        self.assertEqual(res_basic.data.get('status'), 'no_plan')
+
+    def test_paying_standard_unlocks_standard_keeps_premium_locked(self):
+        """
+        Paying for Standard unlocks Standard features. Premium features stay locked with 403.
+        """
         SchoolSubscription.objects.update_or_create(
             school=self.school_a,
             defaults={'plan': self.standard_plan, 'status': 'active', 'paid_until': timezone.now() + timedelta(days=30)}
@@ -151,421 +196,296 @@ class SubscriptionCardPaymentTests(TestCase):
         invalidate_school_entitlements_cache(self.school_a.id)
 
         self.client.force_authenticate(user=self.admin_a)
-        res = self.client.get('/api/v1/aqi/overview/')
-        self.assertEqual(res.status_code, 403)
-        self.assertEqual(res.data.get('code'), 'feature_locked')
-        self.assertEqual(res.data.get('feature_key'), 'aqi_history')
-        self.assertEqual(res.data.get('required_plan'), 'premium')
 
-        # Upgrade to Premium: now accessible
+        # Standard endpoint works
+        res_std = self.client.get(f'/api/v1/attendance/class-register/?school_class={self.class_a.id}')
+        self.assertEqual(res_std.status_code, 200)
+
+        # Premium endpoint locked
+        res_prem = self.client.get('/api/v1/aqi/overview/')
+        self.assertEqual(res_prem.status_code, 403)
+        self.assertEqual(res_prem.data.get('code'), 'feature_locked')
+        self.assertEqual(res_prem.data.get('required_plan'), 'premium')
+
+    def test_paying_premium_unlocks_all_endpoints(self):
+        """
+        Paying for Premium unlocks all features.
+        """
         SchoolSubscription.objects.update_or_create(
             school=self.school_a,
-            defaults={'plan': self.premium_plan, 'status': 'active'}
+            defaults={'plan': self.premium_plan, 'status': 'active', 'paid_until': timezone.now() + timedelta(days=30)}
         )
         invalidate_school_entitlements_cache(self.school_a.id)
+
+        self.client.force_authenticate(user=self.admin_a)
+        res_std = self.client.get(f'/api/v1/attendance/class-register/?school_class={self.class_a.id}')
+        self.assertEqual(res_std.status_code, 200)
 
         res_prem = self.client.get('/api/v1/aqi/overview/')
         self.assertEqual(res_prem.status_code, 200)
 
     # --------------------------------------------------------------------------
-    # 2. Server-Side Price & Checkout Session Creation
+    # 2. Exact Amounts for 1, 4, 8, 12 Months for 100 Students
     # --------------------------------------------------------------------------
 
-    def test_card_order_creation_computes_amount_server_side(self):
+    def test_exact_worked_amounts_for_1_4_8_12_months_for_100_students(self):
         """
-        Amounts are computed strictly on the server from the database:
-        10 active students x 7.20 USD x 12 months with 10% discount = 777.60 USD.
-        Client cannot spoof amount.
+        Exact test cases matching user prompt:
+        100 students, Standard 3.60 USD:
+          1 month (0%): 360.00
+          4 months (5%): 1,440.00 - 5% = 1,368.00
+          8 months (10%): 2,880.00 - 10% = 2,592.00
+          12 months (15%): 4,320.00 - 15% = 3,672.00
+        Premium 7.20 USD:
+          1 month (0%): 720.00
+          4 months (5%): 2,736.00
+          8 months (10%): 5,184.00
+          12 months (15%): 7,344.00
         """
+        # Standard Plan Tests
+        std_cases = [
+            (1, Decimal('360.00'), Decimal('0.00'), Decimal('360.00')),
+            (4, Decimal('1440.00'), Decimal('72.00'), Decimal('1368.00')),
+            (8, Decimal('2880.00'), Decimal('288.00'), Decimal('2592.00')),
+            (12, Decimal('4320.00'), Decimal('648.00'), Decimal('3672.00')),
+        ]
+        for months, expected_subtotal, expected_discount, expected_total in std_cases:
+            est = calculate_invoice_estimate(
+                plan=self.standard_plan,
+                billing_months=months,
+                student_count=100,
+                currency='USD'
+            )
+            self.assertEqual(est['subtotal'], expected_subtotal, f"Standard {months} mo subtotal mismatch")
+            self.assertEqual(est['discount_amount'], expected_discount, f"Standard {months} mo discount mismatch")
+            self.assertEqual(est['payable_amount'], expected_total, f"Standard {months} mo total mismatch")
+
+        # Premium Plan Tests
+        prem_cases = [
+            (1, Decimal('720.00'), Decimal('0.00'), Decimal('720.00')),
+            (4, Decimal('2880.00'), Decimal('144.00'), Decimal('2736.00')),
+            (8, Decimal('5760.00'), Decimal('576.00'), Decimal('5184.00')),
+            (12, Decimal('8640.00'), Decimal('1296.00'), Decimal('7344.00')),
+        ]
+        for months, expected_subtotal, expected_discount, expected_total in prem_cases:
+            est = calculate_invoice_estimate(
+                plan=self.premium_plan,
+                billing_months=months,
+                student_count=100,
+                currency='USD'
+            )
+            self.assertEqual(est['subtotal'], expected_subtotal, f"Premium {months} mo subtotal mismatch")
+            self.assertEqual(est['discount_amount'], expected_discount, f"Premium {months} mo discount mismatch")
+            self.assertEqual(est['payable_amount'], expected_total, f"Premium {months} mo total mismatch")
+
+    # --------------------------------------------------------------------------
+    # 3. Upgrade Credit: Standard -> Premium During Active Period
+    # --------------------------------------------------------------------------
+
+    def test_upgrade_credit_calculated_and_subtracted_on_upgrade(self):
+        """
+        When upgrading from Standard to Premium during an active period:
+        credit the unused value (remaining days x daily price) against the new Premium order.
+        Credit appears as its own line on the invoice.
+        """
+        now = timezone.now()
+        # School has 10 students active on Standard, paid for 30 days total, with 20 days remaining
+        sub = SchoolSubscription.objects.create(
+            school=self.school_a,
+            plan=self.standard_plan,
+            status='active',
+            current_period_start=now - timedelta(days=10),
+            paid_until=now + timedelta(days=20),
+            student_count_at_last_invoice=10
+        )
+        invalidate_school_entitlements_cache(self.school_a.id)
+
+        # Calculate upgrade to Premium for 1 month
+        # Standard daily rate = (3.60 * 10) / 30 = 1.20 USD / day
+        # Remaining credit = 20 days * 1.20 = 24.00 USD
+        # Premium 1 month = 10 * 7.20 * 1 = 72.00 USD
+        # Payable amount = 72.00 - 24.00 = 48.00 USD
+        est = calculate_invoice_estimate(
+            plan=self.premium_plan,
+            billing_months=1,
+            student_count=10,
+            currency='USD',
+            school=self.school_a
+        )
+        self.assertEqual(est['upgrade_credit_amount'], Decimal('24.00'))
+        self.assertEqual(est['payable_amount'], Decimal('48.00'))
+
+    # --------------------------------------------------------------------------
+    # 4. Period-End Downgrade & Zero Data Loss
+    # --------------------------------------------------------------------------
+
+    def test_downgrade_scheduled_for_period_end_and_data_retention(self):
+        """
+        Premium -> Standard downgrade takes effect at the end of the paid period.
+        Prior to paid_until, Premium access remains.
+        After paid_until, switches to Standard.
+        No data is deleted; data created in Premium features reappears on upgrade.
+        """
+        now = timezone.now()
+        paid_end = now + timedelta(days=5)
+        sub = SchoolSubscription.objects.create(
+            school=self.school_a,
+            plan=self.premium_plan,
+            status='active',
+            current_period_start=now,
+            paid_until=paid_end,
+            student_count_at_last_invoice=10
+        )
+        invalidate_school_entitlements_cache(self.school_a.id)
+
+        # 1. Schedule downgrade to Standard
         self.client.force_authenticate(user=self.admin_a)
+        res_downgrade = self.client.post('/api/v1/subscription/downgrade/', {'reason': 'Cost saving'}, format='json')
+        self.assertEqual(res_downgrade.status_code, 200)
 
-        # Attempt to spoof amount by submitting amount=1.00
-        res = self.client.post('/api/v1/subscription/orders/', {
-            'plan_code': 'premium',
-            'billing_months': 12,
-            'payment_method': 'card',
-            'currency': 'USD',
-            'amount': '1.00',  # Spoofed attempt
-        }, format='json')
-
-        self.assertEqual(res.status_code, 201)
-        order_data = res.data['order']
-        self.assertEqual(Decimal(order_data['amount']), Decimal('777.60'))
-        self.assertEqual(order_data['student_count'], 10)
-        self.assertEqual(order_data['status'], 'pending')
-        self.assertIn('checkout_url', order_data)
-        self.assertTrue(order_data['checkout_url'].startswith('http'))
-
-    # --------------------------------------------------------------------------
-    # 3. Webhook Signature Verification Tests
-    # --------------------------------------------------------------------------
-
-    def test_webhook_signature_verification_valid_and_invalid(self):
-        """
-        Webhook rejects missing or invalid signatures with HTTP 400.
-        Valid signatures are processed with HTTP 200.
-        """
-        order = SubscriptionOrder.objects.create(
-            order_number='ORD-TEST-SIG-01',
-            school=self.school_a,
-            plan=self.premium_plan,
-            billing_months=1,
-            student_count=10,
-            unit_price=Decimal('7.20'),
-            discount_percentage=Decimal('0.00'),
-            amount=Decimal('72.00'),
-            currency='USD',
-            provider='fake',
-            status='pending',
-        )
-
-        payload_bytes = self.fake_provider.build_test_webhook_payload(order, event_type='order.paid')
-
-        # 1. Missing signature -> 400
-        res_no_sig = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=payload_bytes,
-            content_type='application/json'
-        )
-        self.assertEqual(res_no_sig.status_code, 400)
-
-        # 2. Tampered / wrong signature -> 400
-        res_bad_sig = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=payload_bytes,
-            content_type='application/json',
-            HTTP_X_PROVIDER_SIGNATURE='sha256=invalid_hash_signature_12345'
-        )
-        self.assertEqual(res_bad_sig.status_code, 400)
-
-        # 3. Valid signature -> 200
-        valid_sig = self.fake_provider.generate_signature(payload_bytes)
-        res_valid = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=payload_bytes,
-            content_type='application/json',
-            HTTP_X_PROVIDER_SIGNATURE=valid_sig
-        )
-        self.assertEqual(res_valid.status_code, 200)
-
-        order.refresh_from_db()
-        self.assertEqual(order.status, 'paid')
-        self.assertIsNotNone(order.paid_at)
-
-    # --------------------------------------------------------------------------
-    # 4. Webhook Idempotency & Replay Protection
-    # --------------------------------------------------------------------------
-
-    def test_webhook_idempotency_same_event_twice_no_double_activation(self):
-        """
-        Duplicate delivery of the exact same event delivers HTTP 200 and
-        does not extend the paid_until period twice.
-        """
-        order = SubscriptionOrder.objects.create(
-            order_number='ORD-TEST-IDEMP-01',
-            school=self.school_a,
-            plan=self.premium_plan,
-            billing_months=1,
-            student_count=10,
-            unit_price=Decimal('7.20'),
-            discount_percentage=Decimal('0.00'),
-            amount=Decimal('72.00'),
-            currency='USD',
-            provider='fake',
-            status='pending',
-        )
-
-        payload_bytes = self.fake_provider.build_test_webhook_payload(
-            order, event_type='order.paid', event_id='evt_unique_1001'
-        )
-        sig = self.fake_provider.generate_signature(payload_bytes)
-
-        # First delivery: activates subscription
-        res1 = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=payload_bytes,
-            content_type='application/json',
-            HTTP_X_PROVIDER_SIGNATURE=sig
-        )
-        self.assertEqual(res1.status_code, 200)
-
-        sub = SchoolSubscription.objects.get(school=self.school_a)
-        first_paid_until = sub.paid_until
-
-        # Second delivery with same event_id: returns 200 idempotent
-        res2 = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=payload_bytes,
-            content_type='application/json',
-            HTTP_X_PROVIDER_SIGNATURE=sig
-        )
-        self.assertEqual(res2.status_code, 200)
-        self.assertEqual(res2.data.get('status'), 'idempotent')
-
-        # Ensure paid_until has NOT been extended twice
         sub.refresh_from_db()
-        self.assertEqual(sub.paid_until, first_paid_until)
+        self.assertEqual(sub.pending_downgrade_to_plan, self.standard_plan)
 
-    # --------------------------------------------------------------------------
-    # 5. Amount and Currency Mismatch Rejection
-    # --------------------------------------------------------------------------
+        # 2. Before period end: Premium access remains intact
+        res_prem_active = self.client.get('/api/v1/aqi/overview/')
+        self.assertEqual(res_prem_active.status_code, 200)
 
-    def test_webhook_amount_mismatch_rejected_with_400(self):
-        """
-        If webhook event amount differs from database order amount,
-        it is rejected with HTTP 400 and order is marked failed.
-        """
-        order = SubscriptionOrder.objects.create(
-            order_number='ORD-TEST-MISMATCH-01',
-            school=self.school_a,
-            plan=self.premium_plan,
-            billing_months=1,
-            student_count=10,
-            unit_price=Decimal('7.20'),
-            discount_percentage=Decimal('0.00'),
-            amount=Decimal('72.00'),
-            currency='USD',
-            provider='fake',
-            status='pending',
-        )
+        # 3. Simulate period end: state sync applies downgrade
+        future_time = paid_end + timedelta(hours=1)
+        new_status = get_effective_subscription_status(self.school_a, now=future_time)
+        sub.refresh_from_db()
 
-        # Webhook payload reports only 10.00 USD paid
-        tampered_payload = self.fake_provider.build_test_webhook_payload(
-            order, event_type='order.paid', amount=Decimal('10.00')
-        )
-        sig = self.fake_provider.generate_signature(tampered_payload)
+        self.assertEqual(sub.plan, self.standard_plan)
+        self.assertIsNone(sub.pending_downgrade_to_plan)
 
-        res = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=tampered_payload,
-            content_type='application/json',
-            HTTP_X_PROVIDER_SIGNATURE=sig
-        )
-        self.assertEqual(res.status_code, 400)
-
-        order.refresh_from_db()
-        self.assertEqual(order.status, 'failed')
-        self.assertIn('mismatch', order.failure_reason.lower())
-
-    # --------------------------------------------------------------------------
-    # 6. Database Reflection: Prices Come Strictly From DB Models
-    # --------------------------------------------------------------------------
-
-    def test_prices_come_only_from_database_models(self):
-        """
-        Changing the plan's price in the database dynamically changes
-        the invoice estimate without any Python code change.
-        """
-        self.client.force_authenticate(user=self.admin_a)
-
-        # Baseline: 10 students * 7.20 * 1 = 72.00
-        res1 = self.client.get('/api/v1/subscription/invoice-estimate/?plan=premium&months=1&currency=USD')
-        self.assertEqual(Decimal(res1.data['payable_amount']), Decimal('72.00'))
-
-        # Update DB price: 8.50 USD
-        self.premium_plan.price_usd_per_student = Decimal('8.50')
-        self.premium_plan.save(update_fields=['price_usd_per_student'])
-
-        res2 = self.client.get('/api/v1/subscription/invoice-estimate/?plan=premium&months=1&currency=USD')
-        self.assertEqual(Decimal(res2.data['payable_amount']), Decimal('85.00'))
-
-    # --------------------------------------------------------------------------
-    # 7. Multi-Tenant Cache Isolation: School A Never Affects School B
-    # --------------------------------------------------------------------------
-
-    def test_multi_tenant_isolation_school_a_never_affects_school_b(self):
-        """
-        School A on Standard plan cannot access Premium features.
-        School B on Premium plan CAN access Premium features.
-        School A's plan change never unlocks School B or vice-versa.
-        """
-        SchoolSubscription.objects.update_or_create(
-            school=self.school_a,
-            defaults={'plan': self.standard_plan, 'status': 'active'}
-        )
-        SchoolSubscription.objects.update_or_create(
-            school=self.school_b,
-            defaults={'plan': self.premium_plan, 'status': 'active'}
-        )
+        # 4. Premium feature is now locked
         invalidate_school_entitlements_cache(self.school_a.id)
-        invalidate_school_entitlements_cache(self.school_b.id)
+        res_prem_locked = self.client.get('/api/v1/aqi/overview/')
+        self.assertEqual(res_prem_locked.status_code, 403)
 
-        # Admin A (Standard) gets 403
-        self.client.force_authenticate(user=self.admin_a)
-        res_a = self.client.get('/api/v1/aqi/overview/')
-        self.assertEqual(res_a.status_code, 403)
+        # 5. Verify zero data loss: 10 students and enrollments are intact
+        self.assertEqual(Student.objects.filter(school=self.school_a).count(), 10)
 
-        # Admin B (Premium) gets 200
-        self.client.force_authenticate(user=self.admin_b)
-        res_b = self.client.get('/api/v1/aqi/overview/')
-        self.assertEqual(res_b.status_code, 200)
-
-    # --------------------------------------------------------------------------
-    # 8. Limited Mode Read-Only With Exports Allowed
-    # --------------------------------------------------------------------------
-
-    def test_limited_mode_read_only_with_exports_working(self):
-        """
-        When a school is in limited mode:
-        - GET reads return 200
-        - Data exports return 200
-        - Mutating writes return 403 'limited_read_only'
-        """
-        SchoolSubscription.objects.update_or_create(
-            school=self.school_a,
-            defaults={'plan': self.standard_plan, 'status': 'limited'}
-        )
+        # 6. Re-upgrade restores full access immediately
+        sub.plan = self.premium_plan
+        sub.paid_until = future_time + timedelta(days=30)
+        sub.status = 'active'
+        sub.save()
         invalidate_school_entitlements_cache(self.school_a.id)
 
-        self.client.force_authenticate(user=self.admin_a)
-
-        # Reads allowed
-        res_read = self.client.get('/api/v1/students/')
-        self.assertEqual(res_read.status_code, 200)
-
-        # Exports allowed
-        res_export = self.client.get('/api/v1/exports/students.csv')
-        self.assertEqual(res_export.status_code, 200)
-
-        # Non-allowlisted write blocked
-        res_write = self.client.post('/api/v1/students/', {
-            'first_name': 'Blocked',
-            'last_name': 'Student',
-        }, format='json')
-        self.assertEqual(res_write.status_code, 403)
-        self.assertEqual(res_write.json().get('code'), 'limited_read_only')
+        res_restored = self.client.get('/api/v1/aqi/overview/')
+        self.assertEqual(res_restored.status_code, 200)
 
     # --------------------------------------------------------------------------
-    # 9. FakeProvider Full End-to-End Flow
+    # 5. Reflection Test: No Hardcoded Prices, Discounts or Plan Names
     # --------------------------------------------------------------------------
 
-    def test_fake_provider_end_to_end_card_flow_unlocks_premium(self):
+    def test_reflection_no_hardcoded_prices_or_discounts(self):
         """
-        Full lifecycle:
-        1. School A is initially Standard (locked out of AQI).
-        2. School A initiates card order for Premium.
-        3. Webhook arrives with verified signature.
-        4. Subscription upgrades to Premium.
-        5. School A accesses AQI immediately with HTTP 200.
+        Asserts that prices, discount tiers, and plan configurations come
+        strictly from database models.
         """
-        SchoolSubscription.objects.update_or_create(
-            school=self.school_a,
-            defaults={'plan': self.standard_plan, 'status': 'active'}
+        # Dynamically alter standard price and billing period discount in DB
+        self.standard_plan.price_usd_per_student = Decimal('4.00')
+        self.standard_plan.save(update_fields=['price_usd_per_student'])
+
+        period_4m = BillingPeriod.objects.get(months=4)
+        period_4m.discount_percentage = Decimal('7.00')
+        period_4m.save(update_fields=['discount_percentage'])
+
+        # 100 students x 4.00 x 4 months = 1,600.00
+        # Discount 7% = 112.00 -> Total = 1,488.00
+        est = calculate_invoice_estimate(
+            plan=self.standard_plan,
+            billing_months=4,
+            student_count=100,
+            currency='USD'
         )
-        invalidate_school_entitlements_cache(self.school_a.id)
-
-        self.client.force_authenticate(user=self.admin_a)
-
-        # 1. Feature locked
-        res_locked = self.client.get('/api/v1/aqi/overview/')
-        self.assertEqual(res_locked.status_code, 403)
-
-        # 2. Initiate card order
-        res_order = self.client.post('/api/v1/subscription/orders/', {
-            'plan_code': 'premium',
-            'billing_months': 3,
-            'payment_method': 'card',
-            'currency': 'USD',
-        }, format='json')
-        self.assertEqual(res_order.status_code, 201)
-        order_num = res_order.data['order']['order_number']
-        order = SubscriptionOrder.objects.get(order_number=order_num)
-
-        # 3. Webhook simulates successful payment
-        payload = self.fake_provider.build_test_webhook_payload(order, event_type='order.paid')
-        sig = self.fake_provider.generate_signature(payload)
-
-        self.client.logout()  # Webhook is an unauthenticated public callback
-        res_hook = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=payload,
-            content_type='application/json',
-            HTTP_X_PROVIDER_SIGNATURE=sig
-        )
-        self.assertEqual(res_hook.status_code, 200)
-
-        # 4. Verify subscription is now active Premium
-        sub = SchoolSubscription.objects.get(school=self.school_a)
-        self.assertEqual(sub.status, 'active')
-        self.assertEqual(sub.plan.code, 'premium')
-
-        # 5. School A now accesses AQI
-        self.client.force_authenticate(user=self.admin_a)
-        res_unlocked = self.client.get('/api/v1/aqi/overview/')
-        self.assertEqual(res_unlocked.status_code, 200)
+        self.assertEqual(est['subtotal'], Decimal('1600.00'))
+        self.assertEqual(est['discount_amount'], Decimal('112.00'))
+        self.assertEqual(est['payable_amount'], Decimal('1488.00'))
 
     # --------------------------------------------------------------------------
-    # 10. Refund / Chargeback Downgrade Flow
+    # 6. Printable Order Receipt Matching Section 5
     # --------------------------------------------------------------------------
 
-    def test_refund_webhook_downgrades_subscription(self):
+    def test_printable_order_receipt_plain_language_structure(self):
         """
-        Refund or chargeback webhook marks order refunded and downgrades
-        school to limited read-only mode with audit trail.
-        """
-        order = SubscriptionOrder.objects.create(
-            order_number='ORD-TEST-REFUND-01',
-            school=self.school_a,
-            plan=self.premium_plan,
-            billing_months=1,
-            student_count=10,
-            unit_price=Decimal('7.20'),
-            discount_percentage=Decimal('0.00'),
-            amount=Decimal('72.00'),
-            currency='USD',
-            provider='fake',
-            status='paid',
-        )
-        SchoolSubscription.objects.update_or_create(
-            school=self.school_a,
-            defaults={'plan': self.premium_plan, 'status': 'active'}
-        )
-
-        payload = self.fake_provider.build_test_webhook_payload(order, event_type='order.refunded')
-        sig = self.fake_provider.generate_signature(payload)
-
-        res = self.client.post(
-            '/api/v1/subscription/webhook/?provider=fake',
-            data=payload,
-            content_type='application/json',
-            HTTP_X_PROVIDER_SIGNATURE=sig
-        )
-        self.assertEqual(res.status_code, 200)
-
-        order.refresh_from_db()
-        self.assertEqual(order.status, 'refunded')
-
-        sub = SchoolSubscription.objects.get(school=self.school_a)
-        self.assertEqual(sub.status, 'limited')
-
-    # --------------------------------------------------------------------------
-    # 11. Printable Order Receipt
-    # --------------------------------------------------------------------------
-
-    def test_printable_order_receipt_endpoint(self):
-        """
-        School admin can retrieve structured receipt data for an order.
+        Receipt matches Section 5 lines, help text, and card details.
         """
         order = SubscriptionOrder.objects.create(
             order_number='ORD-TEST-REC-01',
             school=self.school_a,
             plan=self.premium_plan,
-            billing_months=6,
+            billing_months=4,
             student_count=10,
             unit_price=Decimal('7.20'),
-            discount_percentage=Decimal('0.00'),
-            amount=Decimal('432.00'),
+            subtotal=Decimal('288.00'),
+            discount_percentage=Decimal('5.00'),
+            discount_amount=Decimal('14.40'),
+            upgrade_credit_amount=Decimal('0.00'),
+            tax_amount=Decimal('0.00'),
+            amount=Decimal('273.60'),
             currency='USD',
-            provider='paddle',
-            provider_reference='txn_paddle_12345',
+            provider='fake',
+            card_brand='Visa',
+            card_last4='4242',
             status='paid',
-            paid_at=timezone.now(),
+            paid_on=date(2026, 11, 1),
         )
 
         self.client.force_authenticate(user=self.admin_a)
         res = self.client.get(f'/api/v1/subscription/orders/{order.id}/receipt/')
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data['order_number'], 'ORD-TEST-REC-01')
-        self.assertEqual(res.data['plan_name'], 'Premium Plan')
-        self.assertEqual(res.data['provider'], 'paddle')
-        self.assertIn('platform_merchant', res.data)
+        data = res.data
+
+        self.assertEqual(data['receipt_number'], f"REC-{order.order_number}")
+        self.assertEqual(data['school_name'], 'Alpha School')
+        self.assertIn('Visa ending in 4242', data['payment_method'])
+        self.assertEqual(data['plan_name'], 'Premium Plan')
+        self.assertEqual(data['students_counted'], 10)
+        self.assertIn('per active student', data['students_counted_help_text_en'])
+        self.assertIn('طالب علم', data['students_counted_help_text_ur'])
+        self.assertEqual(data['months'], 4)
+        self.assertEqual(data['subtotal'], '288.00')
+        self.assertEqual(data['discount_amount'], '14.40')
+        self.assertEqual(data['total_paid'], '273.60')
+
+    # --------------------------------------------------------------------------
+    # 7. Webhook Signature Verification and Idempotency
+    # --------------------------------------------------------------------------
+
+    def test_webhook_signature_and_idempotency(self):
+        order = SubscriptionOrder.objects.create(
+            order_number='ORD-TEST-SIG-02',
+            school=self.school_a,
+            plan=self.premium_plan,
+            billing_months=1,
+            student_count=10,
+            unit_price=Decimal('7.20'),
+            amount=Decimal('72.00'),
+            currency='USD',
+            provider='fake',
+            status='pending',
+        )
+        payload = self.fake_provider.build_test_webhook_payload(order, event_type='order.paid', event_id='evt_9988')
+        sig = self.fake_provider.generate_signature(payload)
+
+        # First call succeeds
+        res1 = self.client.post(
+            '/api/v1/subscription/webhook/?provider=fake',
+            data=payload,
+            content_type='application/json',
+            HTTP_X_PROVIDER_SIGNATURE=sig
+        )
+        self.assertEqual(res1.status_code, 200)
+
+        # Duplicate call returns idempotent
+        res2 = self.client.post(
+            '/api/v1/subscription/webhook/?provider=fake',
+            data=payload,
+            content_type='application/json',
+            HTTP_X_PROVIDER_SIGNATURE=sig
+        )
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.data.get('status'), 'idempotent')

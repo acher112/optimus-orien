@@ -2,6 +2,11 @@
 Centralized Subscription Entitlements and Feature Locking Service.
 Authoritative server-side evaluation of school subscription status,
 tier capabilities, platform-admin feature overrides, and caching.
+
+Three Access Levels:
+1. no_plan: New schools start here. Basic access list only. Paid Standard and Premium features locked.
+2. standard: Unlocks Standard features. Premium-only features locked.
+3. premium: Unlocks all features.
 """
 from datetime import timedelta
 from decimal import Decimal
@@ -59,35 +64,28 @@ def get_active_enrolled_student_count(school):
     return count
 
 
-def get_or_create_school_subscription(school, default_plan_code='standard'):
+def get_or_create_school_subscription(school):
     """
     Retrieves or initializes a SchoolSubscription record for a school.
-    If none exists, sets up a 3-day trial granting full Premium access.
+    New schools start with status 'no_plan' (nothing paid yet).
     """
     sub = SchoolSubscription.objects.filter(school=school).select_related('plan').first()
     if sub:
         return sub
 
-    settings = PlatformBillingSettings.get_settings()
-    now = timezone.now()
-    plan = Plan.objects.filter(code=default_plan_code).first() or Plan.objects.filter(code='standard').first()
-    trial_days = settings.default_trial_days or 3
-
     sub = SchoolSubscription.objects.create(
         school=school,
-        plan=plan,
-        status='trial',
-        trial_started_at=now,
-        trial_ends_at=now + timedelta(days=trial_days),
+        plan=None,
+        status='no_plan',
         student_count_at_last_invoice=get_active_enrolled_student_count(school),
     )
     SubscriptionEvent.objects.create(
         school=school,
-        event_type='trial_started',
-        to_status='trial',
-        to_plan=plan.code if plan else 'standard',
-        notes=f"Initial {trial_days}-day complimentary evaluation trial started.",
-        metadata={'trial_days': trial_days}
+        event_type='status_changed',
+        from_status='',
+        to_status='no_plan',
+        notes="Subscription initialized in no_plan state.",
+        metadata={}
     )
     return sub
 
@@ -96,15 +94,14 @@ def get_effective_subscription_status(school, now=None):
     """
     Evaluates and applies just-in-time time-based state transitions for a school subscription.
     Handles transitions:
-    - trial -> pending_approval (if pending order exists) OR limited (if expired without order)
-    - pending_approval -> limited (if pending grace expired)
-    - active -> past_due (if paid period ended)
-    - past_due -> limited (if grace ended)
+    - active -> past_due (if paid period ended) with grace period
+    - active (with pending_downgrade_to_plan) -> downgrade takes effect at end of paid period
+    - past_due -> no_plan (if grace ended)
     """
     if not school:
-        return 'limited'
+        return 'no_plan'
 
-    sub = SchoolSubscription.objects.filter(school=school).select_related('plan').first()
+    sub = SchoolSubscription.objects.filter(school=school).select_related('plan', 'pending_downgrade_to_plan').first()
     if not sub:
         sub = get_or_create_school_subscription(school)
 
@@ -113,59 +110,29 @@ def get_effective_subscription_status(school, now=None):
     old_status = sub.status
     new_status = old_status
 
-    if old_status == 'trial':
-        if sub.trial_ends_at and current_time >= sub.trial_ends_at:
-            # Check if an offline order was submitted
-            has_pending_order = SubscriptionOrder.objects.filter(
-                school=school,
-                status='pending'
-            ).exists()
-            if has_pending_order:
-                new_status = 'pending_approval'
-                sub.grace_until = sub.trial_ends_at + timedelta(days=settings.pending_grace_days)
-                SubscriptionEvent.objects.create(
-                    school=school,
-                    event_type='status_changed',
-                    from_status=old_status,
-                    to_status=new_status,
-                    notes=f"Trial ended. Transitioned to pending_approval with {settings.pending_grace_days} days grace.",
-                    metadata={'grace_until': str(sub.grace_until)}
-                )
-            else:
-                new_status = 'limited'
-                sub.grace_until = None
-                SubscriptionEvent.objects.create(
-                    school=school,
-                    event_type='downgraded_to_limited',
-                    from_status=old_status,
-                    to_status=new_status,
-                    notes="Trial expired without an active payment order. Transitioned to limited read-only mode."
-                )
-                _notify_school_admins(
-                    school,
-                    title="Optimus Orien Trial Concluded",
-                    body="Your 3-day evaluation trial has ended. Your records are preserved in read-only mode. Please submit a payment order to reactivate full features."
-                )
-
-    elif old_status == 'pending_approval':
-        if sub.grace_until and current_time >= sub.grace_until:
-            new_status = 'limited'
-            sub.grace_until = None
-            SubscriptionEvent.objects.create(
-                school=school,
-                event_type='downgraded_to_limited',
-                from_status=old_status,
-                to_status=new_status,
-                notes=f"Pending approval grace period ({settings.pending_grace_days} days) elapsed without approval. Transitioned to limited."
-            )
-
-    elif old_status == 'active':
+    if old_status == 'active':
         if sub.paid_until and current_time >= sub.paid_until:
+            # Check if there is a scheduled downgrade
+            if sub.pending_downgrade_to_plan:
+                downgraded_plan = sub.pending_downgrade_to_plan
+                prev_plan_code = sub.plan.code if sub.plan else 'premium'
+                sub.plan = downgraded_plan
+                sub.pending_downgrade_to_plan = None
+                sub.save(update_fields=['plan', 'pending_downgrade_to_plan', 'updated_at'])
+                SubscriptionEvent.objects.create(
+                    school=school,
+                    event_type='downgraded',
+                    from_plan=prev_plan_code,
+                    to_plan=downgraded_plan.code,
+                    notes=f"Scheduled downgrade to {downgraded_plan.name} applied at end of paid period."
+                )
+
+            # Move to past_due
             new_status = 'past_due'
             sub.grace_until = sub.paid_until + timedelta(days=settings.past_due_grace_days)
             SubscriptionEvent.objects.create(
                 school=school,
-                event_type='status_changed',
+                event_type='past_due',
                 from_status=old_status,
                 to_status=new_status,
                 notes=f"Subscription paid term ended on {sub.paid_until.date()}. Transitioned to past_due ({settings.past_due_grace_days} days grace).",
@@ -179,19 +146,19 @@ def get_effective_subscription_status(school, now=None):
 
     elif old_status == 'past_due':
         if sub.grace_until and current_time >= sub.grace_until:
-            new_status = 'limited'
+            new_status = 'no_plan'
             sub.grace_until = None
             SubscriptionEvent.objects.create(
                 school=school,
-                event_type='downgraded_to_limited',
+                event_type='expired_to_no_plan',
                 from_status=old_status,
                 to_status=new_status,
-                notes=f"Past due grace period elapsed. School transitioned to limited read-only mode."
+                notes=f"Past due grace period elapsed. School transitioned to no_plan mode."
             )
             _notify_school_admins(
                 school,
                 title="Subscription Grace Period Concluded",
-                body="Your subscription grace period has ended. The school account is now in limited read-only mode. All existing data is safe and viewable."
+                body="Your subscription grace period has ended. The school account is now in no_plan mode. All existing data is safe and viewable."
             )
 
     if new_status != old_status:
@@ -218,51 +185,52 @@ def get_school_entitlements(school, now=None, use_cache=True):
 
     current_time = now or timezone.now()
     status = get_effective_subscription_status(school, now=current_time)
-    sub = SchoolSubscription.objects.filter(school=school).select_related('plan').first()
+    sub = SchoolSubscription.objects.filter(school=school).select_related('plan', 'pending_downgrade_to_plan').first()
     settings = PlatformBillingSettings.get_settings()
     active_students = get_active_enrolled_student_count(school)
 
-    plan_code = 'standard'
+    plan_code = None
     if sub and sub.plan:
         plan_code = sub.plan.code
 
-    is_limited = (status == 'limited')
+    is_no_plan = (status == 'no_plan')
     is_suspended = (status == 'suspended')
-    is_write_allowed = not (is_limited or is_suspended)
+    is_write_allowed = not is_suspended
 
     # Effective tier access:
-    # - trial: grants ALL Premium features
+    # - no_plan: basic access only
     # - past_due: grants full access to their prior plan during grace
-    # - pending_approval: grants Standard access
-    # - limited: grants Standard access in read-only mode
+    # - active: grants active plan tier (standard or premium)
     # - suspended: 0 features
     if is_suspended:
         effective_tier = 'none'
-    elif status == 'trial':
-        effective_tier = 'premium'
+    elif is_no_plan:
+        effective_tier = 'no_plan'
     elif status in ('active', 'past_due'):
-        effective_tier = plan_code
-    elif status in ('pending_approval', 'limited'):
-        effective_tier = 'standard'
+        effective_tier = plan_code or 'standard'
     else:
-        effective_tier = 'standard'
+        effective_tier = 'no_plan'
 
-    # Fetch catalog and base plan features
     all_catalog = list(FeatureCatalog.objects.all())
     allowed_keys = set(NEVER_LOCKED_FEATURES)
 
-    if effective_tier != 'none':
-        # Retrieve plan features for the effective tier
-        plan_obj = Plan.objects.filter(code=effective_tier).first()
+    basic_features = settings.basic_access_features or list(PlatformBillingSettings.DEFAULT_BASIC_ACCESS_FEATURES)
+    allowed_keys.update(basic_features)
+
+    if effective_tier == 'premium':
+        # Unlocks all available catalog features
+        allowed_keys.update(f.key for f in all_catalog if f.status != 'coming_soon')
+    elif effective_tier == 'standard':
+        plan_obj = Plan.objects.filter(code='standard').first()
         if plan_obj:
             included_keys = PlanFeature.objects.filter(
                 plan=plan_obj,
                 is_included=True
             ).values_list('feature_key', flat=True)
             allowed_keys.update(included_keys)
-        elif effective_tier == 'premium':
-            # Fallback if PlanFeature table isn't populated: all available features
-            allowed_keys.update(f.key for f in all_catalog if f.status != 'coming_soon')
+        else:
+            # Standard features from catalog
+            allowed_keys.update(f.key for f in all_catalog if not f.is_premium_only and f.status != 'coming_soon')
 
     # Apply per-school platform-admin overrides
     overrides = SchoolFeatureOverride.objects.filter(school=school)
@@ -274,12 +242,6 @@ def get_school_entitlements(school, now=None, use_cache=True):
         else:
             allowed_keys.discard(ov.feature_key)
 
-    # Calculate trial days remaining
-    trial_days_remaining = None
-    if status == 'trial' and sub and sub.trial_ends_at:
-        diff = sub.trial_ends_at - current_time
-        trial_days_remaining = max(0, diff.days + (1 if diff.seconds > 0 else 0))
-
     # Calculate grace days remaining
     grace_days_remaining = None
     if sub and sub.grace_until:
@@ -290,6 +252,7 @@ def get_school_entitlements(school, now=None, use_cache=True):
     features_dict = {}
     for feat in all_catalog:
         is_unlocked = (feat.key in allowed_keys) and (feat.status != 'coming_soon')
+        req_plan = 'premium' if feat.is_premium_only else 'standard'
         features_dict[feat.key] = {
             'key': feat.key,
             'name': feat.name,
@@ -298,7 +261,7 @@ def get_school_entitlements(school, now=None, use_cache=True):
             'status': feat.status,
             'is_unlocked': is_unlocked,
             'is_premium_only': feat.is_premium_only,
-            'requires_plan': 'premium' if feat.is_premium_only else 'standard'
+            'requires_plan': req_plan
         }
 
     payload = {
@@ -307,18 +270,18 @@ def get_school_entitlements(school, now=None, use_cache=True):
         'plan': plan_code,
         'effective_tier': effective_tier,
         'status': status,
-        'is_limited': is_limited,
+        'is_no_plan': is_no_plan,
+        'is_limited': is_no_plan,  # Compatibility alias
         'is_suspended': is_suspended,
         'is_write_allowed': is_write_allowed,
         'active_students': active_students,
         'student_count_at_last_invoice': sub.student_count_at_last_invoice if sub else 0,
         'has_student_growth': active_students > (sub.student_count_at_last_invoice if sub else 0),
-        'trial_started_at': sub.trial_started_at.isoformat() if (sub and sub.trial_started_at) else None,
-        'trial_ends_at': sub.trial_ends_at.isoformat() if (sub and sub.trial_ends_at) else None,
-        'trial_days_remaining': trial_days_remaining,
+        'current_period_start': sub.current_period_start.isoformat() if (sub and sub.current_period_start) else None,
         'paid_until': sub.paid_until.isoformat() if (sub and sub.paid_until) else None,
         'grace_until': sub.grace_until.isoformat() if (sub and sub.grace_until) else None,
         'grace_days_remaining': grace_days_remaining,
+        'pending_downgrade_to_plan': sub.pending_downgrade_to_plan.code if (sub and sub.pending_downgrade_to_plan) else None,
         'features': features_dict,
         'allowed_feature_keys': sorted(list(allowed_keys)),
     }
@@ -344,7 +307,6 @@ def check_feature_access(school, feature_key, now=None):
 
     feature_info = entitlements['features'].get(feature_key)
     if not feature_info:
-        # Check catalog directly
         cat = FeatureCatalog.objects.filter(key=feature_key).first()
         req_plan = 'premium' if (cat and cat.is_premium_only) else 'standard'
         return False, f"Feature '{feature_key}' is not recognized.", req_plan
@@ -359,11 +321,11 @@ def check_feature_access(school, feature_key, now=None):
 
 
 def is_limited_mode(school, now=None):
-    """Returns True if the school is currently in limited (read-only) mode."""
+    """Returns True if the school is currently in no_plan mode."""
     if not school:
         return False
     status = get_effective_subscription_status(school, now=now)
-    return status == 'limited'
+    return status == 'no_plan'
 
 
 def invalidate_school_entitlements_cache(school_id):
@@ -398,21 +360,21 @@ def _empty_entitlements():
     return {
         'school_id': None,
         'school_name': '',
-        'plan': 'standard',
-        'effective_tier': 'standard',
+        'plan': None,
+        'effective_tier': 'premium',
         'status': 'active',
+        'is_no_plan': False,
         'is_limited': False,
         'is_suspended': False,
         'is_write_allowed': True,
         'active_students': 0,
         'student_count_at_last_invoice': 0,
         'has_student_growth': False,
-        'trial_started_at': None,
-        'trial_ends_at': None,
-        'trial_days_remaining': None,
+        'current_period_start': None,
         'paid_until': None,
         'grace_until': None,
         'grace_days_remaining': None,
+        'pending_downgrade_to_plan': None,
         'features': {},
         'allowed_feature_keys': sorted(list(NEVER_LOCKED_FEATURES)),
     }
