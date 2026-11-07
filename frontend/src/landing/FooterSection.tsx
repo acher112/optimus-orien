@@ -34,6 +34,13 @@ export default function FooterSection({
       : '© 2026 Optimus Orien. All rights reserved.',
   };
 
+  const handleLinkClick = (path: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    window.history.pushState(null, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <footer className="site-footer">
       {/* Floating Vertical Nominee Badge */}
@@ -43,7 +50,7 @@ export default function FooterSection({
 
       <div className="footer-container">
         <div className="footer-grid">
-          {/* Brand Info & New Buttons */}
+          {/* Brand Info & Buttons */}
           <div>
             <h2 className="footer-brand">OPTIMUS ORIEN</h2>
             <p className="footer-desc">{t.brandTagline}</p>
@@ -70,13 +77,41 @@ export default function FooterSection({
           <div>
             <h3 className="col-title">{t.platform}</h3>
             <ul className="footer-links">
-              <li><a href="#platform">Academic Performance</a></li>
-              <li><a href="#platform">Attendance</a></li>
-              <li><a href="#platform">Skills Assessment</a></li>
-              <li><a href="#platform">Class Intelligence</a></li>
-              <li><a href="#platform">Early Intervention</a></li>
-              <li><a href="#platform">Performance Trends</a></li>
-              <li><a href="#platform">AQI</a></li>
+              <li>
+                <a href="/platform/academic-performance" onClick={(e) => handleLinkClick('/platform/academic-performance', e)}>
+                  Academic Performance
+                </a>
+              </li>
+              <li>
+                <a href="/platform/attendance" onClick={(e) => handleLinkClick('/platform/attendance', e)}>
+                  Attendance
+                </a>
+              </li>
+              <li>
+                <a href="/platform/skills-assessment" onClick={(e) => handleLinkClick('/platform/skills-assessment', e)}>
+                  Skills Assessment
+                </a>
+              </li>
+              <li>
+                <a href="/platform/class-intelligence" onClick={(e) => handleLinkClick('/platform/class-intelligence', e)}>
+                  Class Intelligence
+                </a>
+              </li>
+              <li>
+                <a href="/platform/early-intervention" onClick={(e) => handleLinkClick('/platform/early-intervention', e)}>
+                  Early Intervention
+                </a>
+              </li>
+              <li>
+                <a href="/platform/performance-trends" onClick={(e) => handleLinkClick('/platform/performance-trends', e)}>
+                  Performance Trends
+                </a>
+              </li>
+              <li>
+                <a href="/platform/aqi" onClick={(e) => handleLinkClick('/platform/aqi', e)}>
+                  AQI
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -84,10 +119,26 @@ export default function FooterSection({
           <div>
             <h3 className="col-title">{t.portals}</h3>
             <ul className="footer-links">
-              <li><a href="#platform">Owner / Admin</a></li>
-              <li><a href="#platform">Principal</a></li>
-              <li><a href="#platform">Teacher</a></li>
-              <li><a href="#platform">Student</a></li>
+              <li>
+                <a href="/portals/admin" onClick={(e) => handleLinkClick('/portals/admin', e)}>
+                  Owner / Admin
+                </a>
+              </li>
+              <li>
+                <a href="/portals/principal" onClick={(e) => handleLinkClick('/portals/principal', e)}>
+                  Principal
+                </a>
+              </li>
+              <li>
+                <a href="/portals/teacher" onClick={(e) => handleLinkClick('/portals/teacher', e)}>
+                  Teacher
+                </a>
+              </li>
+              <li>
+                <a href="/portals/student" onClick={(e) => handleLinkClick('/portals/student', e)}>
+                  Student
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -95,10 +146,26 @@ export default function FooterSection({
           <div>
             <h3 className="col-title">{t.company}</h3>
             <ul className="footer-links">
-              <li><a href="#masthead">{t.about}</a></li>
-              <li><a href="#contact" onClick={(e) => { e.preventDefault(); onOpenContact(); }}>{t.contact}</a></li>
-              <li><a href="#masthead">{t.privacy}</a></li>
-              <li><a href="#masthead">{t.terms}</a></li>
+              <li>
+                <a href="/about" onClick={(e) => handleLinkClick('/about', e)}>
+                  {t.about}
+                </a>
+              </li>
+              <li>
+                <a href="/contact" onClick={(e) => handleLinkClick('/contact', e)}>
+                  {t.contact}
+                </a>
+              </li>
+              <li>
+                <a href="/privacy" onClick={(e) => handleLinkClick('/privacy', e)}>
+                  {t.privacy}
+                </a>
+              </li>
+              <li>
+                <a href="/terms" onClick={(e) => handleLinkClick('/terms', e)}>
+                  {t.terms}
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -107,17 +174,19 @@ export default function FooterSection({
             <h3 className="col-title">{t.contact}</h3>
             <ul className="footer-links">
               <li>
-                <a href="#contact" onClick={(e) => { e.preventDefault(); onOpenContact(); }}>
+                <a href="/contact" onClick={(e) => handleLinkClick('/contact', e)}>
                   {t.requestAccess}
                 </a>
               </li>
               <li>
-                <a href="#contact" onClick={(e) => { e.preventDefault(); onOpenContact(); }}>
+                <a href="/contact" onClick={(e) => handleLinkClick('/contact', e)}>
                   {t.contactUs}
                 </a>
               </li>
               <li style={{ marginTop: '0.5rem', color: '#71717a', fontSize: '0.85rem' }}>
-                optimusorien@gmail.com
+                <a href="mailto:optimusorien@gmail.com" style={{ color: '#71717a', textDecoration: 'none' }}>
+                  optimusorien@gmail.com
+                </a>
               </li>
             </ul>
           </div>

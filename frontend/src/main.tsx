@@ -21,6 +21,7 @@ import { queryCache } from './queryCache';
 import PlanAndBilling from './PlanAndBilling';
 import FeatureLockedScreen from './FeatureLockedScreen';
 const PublicHome = React.lazy(() => import('./PublicHome'));
+const PublicInfoPage = React.lazy(() => import('./landing/PublicInfoPage'));
 const SchoolSetup = React.lazy(() => import('./SchoolSetup'));
 const Reports = React.lazy(() => import('./Reports'));
 import Staff from './Staff';
@@ -1088,9 +1089,30 @@ function App() {
 
   if (loading) return <div className="loader-screen"><div className="brand-symbol">◈</div><div>Preparing your workspace…</div></div>;
 
-  const isPublicRoute = typeof window !== 'undefined' && (window.location.pathname === '/' || window.location.pathname === '');
-  if (isPublicRoute) {
-    return <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading...</div></div>}><PublicHome authenticated={Boolean(user)} /></React.Suspense>;
+  const currentPathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isPublicHomeRoute = currentPathname === '/' || currentPathname === '';
+  const isPublicInfoRoute =
+    currentPathname.startsWith('/about') ||
+    currentPathname.startsWith('/privacy') ||
+    currentPathname.startsWith('/terms') ||
+    currentPathname.startsWith('/contact') ||
+    currentPathname.startsWith('/platform') ||
+    currentPathname.startsWith('/portals');
+
+  if (isPublicHomeRoute) {
+    return (
+      <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading...</div></div>}>
+        <PublicHome authenticated={Boolean(user)} />
+      </React.Suspense>
+    );
+  }
+
+  if (isPublicInfoRoute) {
+    return (
+      <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading...</div></div>}>
+        <PublicInfoPage initialPath={currentPathname} authenticated={Boolean(user)} />
+      </React.Suspense>
+    );
   }
 
   if (!user) return (

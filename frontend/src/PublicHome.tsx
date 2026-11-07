@@ -7,7 +7,6 @@ import HeroSection from './landing/HeroSection';
 import FeaturesSection, { CoreFeatureItem } from './landing/FeaturesSection';
 import RolesSection from './landing/RolesSection';
 import StepsSection from './landing/StepsSection';
-import ClientsSection from './landing/ClientsSection';
 import PricingCarouselSection, { PlanItem } from './landing/PricingCarouselSection';
 import PricingCalculatorSection from './landing/PricingCalculatorSection';
 import FaqSection, { FaqItem } from './landing/FaqSection';
@@ -117,10 +116,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
           subtitle={heroSlide?.subtitle}
         />
 
-        {/* Section 2: Clients Logo Infinite Loop */}
-        <ClientsSection />
-
-        {/* Section 3: Core Features (6 features dark card) */}
+        {/* Section 2: Core Features (6 features dark card) */}
         <FeaturesSection features={features} locale={locale} />
 
         {/* Section 4: Role-Based Experiences (CtaSection tabs) */}

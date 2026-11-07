@@ -32,7 +32,6 @@ export default function HeroSection({
       <VortexAnimation />
       <div className="hero-center-content">
         <h1 className="brand-logo-text">{headline || defaultHeadline}</h1>
-        <p className="hero-subtitle">{subtitle || defaultSubtitle}</p>
 
         <div className="hero-cta-group">
           {authenticated ? (
