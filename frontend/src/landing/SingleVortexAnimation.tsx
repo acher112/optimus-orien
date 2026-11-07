@@ -13,7 +13,6 @@ interface Particle {
   vx: number;
   vy: number;
   radius: number;
-  alpha: number;
 }
 
 export default function SingleVortexAnimation({
@@ -29,7 +28,8 @@ export default function SingleVortexAnimation({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animationId: number;
+    let animationId = 0;
+    let isVisible = true;
     let particles: Particle[] = [];
 
     const mouse = {
@@ -41,7 +41,9 @@ export default function SingleVortexAnimation({
     };
 
     const initParticles = (width: number, height: number, baseWidth: number, baseHeight: number) => {
-      const count = baseWidth < 768 ? 3000 : 6000;
+      // 700 particles on desktop, 220 on mobile (reduced from 6,000 / 3,000)
+      const isMobile = baseWidth < 768;
+      const count = isMobile ? 220 : 700;
       particles = [];
 
       for (let i = 0; i < count; i++) {
@@ -60,8 +62,7 @@ export default function SingleVortexAnimation({
           baseY: y,
           vx: (Math.random() - 0.5) * 1.5,
           vy: (Math.random() - 0.5) * 1.5,
-          radius: 0.8 + Math.random() * 2,
-          alpha: 0.2 + Math.random() * 0.5,
+          radius: isMobile ? 1.0 + Math.random() * 1.6 : 0.8 + Math.random() * 2,
         });
       }
     };
@@ -84,24 +85,35 @@ export default function SingleVortexAnimation({
     };
 
     const animate = () => {
+      if (!isVisible) return;
+
       const width = canvas.clientWidth || window.innerWidth;
       const height = canvas.clientHeight || window.innerHeight;
 
       ctx.clearRect(0, 0, width, height);
 
-      for (let i = 0; i < particles.length; i++) {
+      // Batched drawing: 1 single beginPath & fill call for all particles
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+
+      const pLen = particles.length;
+      const mouseRadiusSq = mouse.radius * mouse.radius;
+
+      for (let i = 0; i < pLen; i++) {
         const p = particles[i];
 
-        p.baseX += (Math.random() - 0.5) * 0.4;
-        p.baseY += (Math.random() - 0.5) * 0.4;
+        p.baseX += (Math.random() - 0.5) * 0.35;
+        p.baseY += (Math.random() - 0.5) * 0.35;
 
         const dx = p.x - mouse.x;
         const dy = p.y - mouse.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distSq = dx * dx + dy * dy;
 
-        if (distance < mouse.radius && mouse.active) {
-          p.vx += (Math.random() - 0.5) * 8;
-          p.vy += (Math.random() - 0.5) * 8;
+        if (distSq < mouseRadiusSq && mouse.active) {
+          const distance = Math.sqrt(distSq);
+          p.vx += (Math.random() - 0.5) * 6;
+          p.vy += (Math.random() - 0.5) * 6;
           const force = (1 - distance / mouse.radius) * mouse.force * 2;
           const angleToMouse = Math.atan2(dy, dx);
           p.vx += Math.cos(angleToMouse) * force;
@@ -118,21 +130,42 @@ export default function SingleVortexAnimation({
         p.x += p.vx;
         p.y += p.vy;
 
-        ctx.beginPath();
+        ctx.moveTo(p.x + p.radius, p.y);
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.globalAlpha = p.alpha;
-        ctx.fillStyle = color;
-        ctx.fill();
       }
+
+      ctx.fill();
       ctx.globalAlpha = 1;
 
       animationId = requestAnimationFrame(animate);
     };
 
+    const startAnimation = () => {
+      if (!animationId && isVisible) {
+        animationId = requestAnimationFrame(animate);
+      }
+    };
+
+    const stopAnimation = () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = 0;
+      }
+    };
+
     const handleMouseMove = (e: MouseEvent) => {
+      if (!isVisible) return;
       const rect = canvas.getBoundingClientRect();
       mouse.x = e.clientX - rect.left;
       mouse.y = e.clientY - rect.top;
+      mouse.active = true;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isVisible || !e.touches[0]) return;
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.touches[0].clientX - rect.left;
+      mouse.y = e.touches[0].clientY - rect.top;
       mouse.active = true;
     };
 
@@ -143,16 +176,48 @@ export default function SingleVortexAnimation({
     };
 
     resize();
-    window.addEventListener('resize', resize);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseleave', handleMouseLeave);
-    animationId = requestAnimationFrame(animate);
+
+    // IntersectionObserver: pauses rAF loop when Pricing section is not visible
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        isVisible = entry.isIntersecting;
+        if (isVisible) {
+          startAnimation();
+        } else {
+          stopAnimation();
+        }
+      },
+      { threshold: 0.02 }
+    );
+    observer.observe(canvas);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopAnimation();
+      } else if (isVisible) {
+        startAnimation();
+      }
+    };
+
+    window.addEventListener('resize', resize, { passive: true });
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleMouseLeave, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    startAnimation();
 
     return () => {
-      cancelAnimationFrame(animationId);
+      stopAnimation();
+      observer.disconnect();
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleMouseLeave);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [color, scale]);
 
