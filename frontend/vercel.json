@@ -1,5 +1,25 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    {
+      "source": "/proxy-health",
+      "destination": "https://optimus-orien-api.onrender.com/api/health/"
+    },
+    {
+      "source": "/api/health",
+      "destination": "https://optimus-orien-api.onrender.com/api/health/"
+    },
+    {
+      "source": "/api/health/",
+      "destination": "https://optimus-orien-api.onrender.com/api/health/"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "https://optimus-orien-api.onrender.com/api/$1"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }

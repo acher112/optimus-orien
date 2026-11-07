@@ -125,7 +125,7 @@ export default function RolesSection({ locale }: RolesSectionProps) {
     setIsHovered(false);
   };
 
-  const current = slides[currentIndex];
+  const current = slides[currentIndex] || slides[0];
 
   return (
     <section id="platform" className="roles-section">

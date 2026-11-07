@@ -20,7 +20,7 @@ import {
 import { queryCache } from './queryCache';
 import PlanAndBilling from './PlanAndBilling';
 import FeatureLockedScreen from './FeatureLockedScreen';
-const PublicHome = React.lazy(() => import('./PublicHome'));
+import PublicHome from './PublicHome';
 const PublicInfoPage = React.lazy(() => import('./landing/PublicInfoPage'));
 const SchoolSetup = React.lazy(() => import('./SchoolSetup'));
 const Reports = React.lazy(() => import('./Reports'));
@@ -1087,8 +1087,6 @@ function App() {
     }
   };
 
-  if (loading) return <div className="loader-screen"><div className="brand-symbol">◈</div><div>Preparing your workspace…</div></div>;
-
   const currentPathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const isPublicHomeRoute = currentPathname === '/' || currentPathname === '';
   const isPublicInfoRoute =
@@ -1100,11 +1098,7 @@ function App() {
     currentPathname.startsWith('/portals');
 
   if (isPublicHomeRoute) {
-    return (
-      <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading...</div></div>}>
-        <PublicHome authenticated={Boolean(user)} />
-      </React.Suspense>
-    );
+    return <PublicHome authenticated={Boolean(user)} />;
   }
 
   if (isPublicInfoRoute) {
@@ -1114,6 +1108,8 @@ function App() {
       </React.Suspense>
     );
   }
+
+  if (loading) return <div className="loader-screen"><div className="brand-symbol">◈</div><div>Preparing your workspace…</div></div>;
 
   if (!user) return (
     <Login
