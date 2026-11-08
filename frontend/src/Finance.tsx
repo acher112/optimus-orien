@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Ban, Plus, Scale, Tags, Trash2, Users } from 'lucide-react';
+import { AlertCircle, ArrowDownCircle, ArrowRight, ArrowUpCircle, Ban, Download, Lock, Plus, Scale, Sparkles, Tags, Trash2, Users } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import FilterBar from './FilterBar';
@@ -18,8 +18,74 @@ const PIE = PIE_EXPENSE;
 const money = (n: number) => `${CUR} ${Math.round(n).toLocaleString()}`;
 const tick = { fontSize: 12, fill: '#8c96a7' };
 
-export default function Finance({ user, notify }: { user: User; notify: (m: string) => void }) {
+function LockedChartCard({
+  title,
+  subtitle,
+  onUpgrade
+}: {
+  title: string;
+  subtitle: string;
+  onUpgrade?: () => void;
+}) {
+  return (
+    <div className="fx-locked-chart-card">
+      <div style={{
+        width: 44,
+        height: 44,
+        borderRadius: '50%',
+        background: '#fef3c7',
+        color: '#b45309',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10
+      }}>
+        <Lock size={20} />
+      </div>
+
+      <div className="fx-locked-badge">
+        <Sparkles size={11} /> Premium Plan Feature
+      </div>
+
+      <h4 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary, #1e293b)' }}>
+        {title} Locked
+      </h4>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--text-secondary, #64748b)', maxWidth: 320, lineHeight: 1.5 }}>
+        {subtitle}
+      </p>
+
+      {onUpgrade && (
+        <button
+          type="button"
+          onClick={onUpgrade}
+          className="primary-btn"
+          style={{
+            fontSize: 12,
+            padding: '7px 16px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6
+          }}
+        >
+          <span>Upgrade to Plan & Billing</span>
+          <ArrowRight size={13} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface FinanceProps {
+  user: User;
+  notify: (m: string) => void;
+  plan?: string;
+  isPremiumUnlocked?: boolean;
+  onUpgrade?: () => void;
+}
+
+export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgrade }: FinanceProps) {
   const isPrincipal = user.role === 'principal';
+  const hasPremium = isPremiumUnlocked !== undefined ? isPremiumUnlocked : (plan === 'premium' || plan === 'custom');
   const [tab, setTab] = useState<Tab>('overview');
   const [schools, setSchools] = useState<R[]>([]);
   const [school, setSchool] = useState(isPrincipal && user.school ? String(user.school) : '');
@@ -48,8 +114,59 @@ export default function Finance({ user, notify }: { user: User; notify: (m: stri
 
   const loadSummary = useCallback(async () => {
     setError('');
-    try { setSum(await request<R>(`finance/summary/?${qs}`)); }
-    catch (e) { setSum(null); setError(e instanceof Error ? e.message : 'Could not load finance'); }
+    try {
+      setSum(await request<R>(`finance/summary/?${qs}`));
+    } catch (e: any) {
+      // If summary is locked on standard tier, calculate totals and categories directly from entries
+      try {
+        const [incRes, expRes] = await Promise.all([
+          request<R>(`finance/entries/?kind=income&${qs}`).catch(() => ({ results: [] })),
+          request<R>(`finance/entries/?kind=expense&${qs}`).catch(() => ({ results: [] }))
+        ]);
+        const incRows = (incRes?.results || []).filter((r: R) => !r.voided);
+        const expRows = (expRes?.results || []).filter((r: R) => !r.voided);
+        const total_income = incRows.reduce((a: number, r: R) => a + Number(r.amount || 0), 0);
+        const total_expense = expRows.reduce((a: number, r: R) => a + Number(r.amount || 0), 0);
+        const net = total_income - total_expense;
+
+        const incByCat: Record<string, number> = {};
+        for (const r of incRows) {
+          const cname = r.category_name || 'General';
+          incByCat[cname] = (incByCat[cname] || 0) + Number(r.amount || 0);
+        }
+        const expByCat: Record<string, number> = {};
+        for (const r of expRows) {
+          const cname = r.category_name || 'General';
+          expByCat[cname] = (expByCat[cname] || 0) + Number(r.amount || 0);
+        }
+
+        const income_by_category = Object.entries(incByCat).map(([name, amount]) => ({
+          name,
+          amount,
+          share: total_income > 0 ? Math.round((amount / total_income) * 1000) / 10 : 0
+        }));
+        const expense_by_category = Object.entries(expByCat).map(([name, amount]) => ({
+          name,
+          amount,
+          share: total_expense > 0 ? Math.round((amount / total_expense) * 1000) / 10 : 0
+        }));
+
+        setSum({
+          total_income,
+          total_expense,
+          net,
+          entries: incRows.length + expRows.length,
+          income_by_category,
+          expense_by_category,
+          monthly: [],
+          campuses: [],
+          note: 'Standard plan: Operational ledger totals and categories active.'
+        });
+      } catch {
+        setSum(null);
+        setError(e instanceof Error ? e.message : 'Could not load finance');
+      }
+    }
   }, [qs]);
   useEffect(() => { loadSummary(); }, [loadSummary, bump]);
   const changed = (msg: string) => { notify(msg); setBump(b => b + 1); };
@@ -100,14 +217,14 @@ export default function Finance({ user, notify }: { user: User; notify: (m: stri
 
       {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
 
-      {tab === 'overview' && sum && <Overview sum={sum} isPrincipal={isPrincipal} />}
-      {(tab === 'income' || tab === 'expense') && <Entries kind={tab} school={school} schools={schools} user={user} qs={qs} bump={bump} onChanged={changed} />}
+      {tab === 'overview' && sum && <Overview sum={sum} isPrincipal={isPrincipal} hasPremium={hasPremium} onUpgrade={onUpgrade} />}
+      {(tab === 'income' || tab === 'expense') && <Entries kind={tab} school={school} schools={schools} user={user} qs={qs} bump={bump} onChanged={changed} hasPremium={hasPremium} onUpgrade={onUpgrade} />}
       {tab === 'categories' && <Categories school={school} schools={schools} user={user} onChanged={changed} />}
     </>
   );
 }
 
-function Overview({ sum, isPrincipal }: { sum: R; isPrincipal?: boolean }) {
+function Overview({ sum, isPrincipal, hasPremium, onUpgrade }: { sum: R; isPrincipal?: boolean; hasPremium?: boolean; onUpgrade?: () => void }) {
   const exp: R[] = sum.expense_by_category, inc: R[] = sum.income_by_category, months: R[] = sum.monthly;
   const [campusSortCol, setCampusSortCol] = useState<'income' | 'expense' | 'net' | 'name'>('income');
   const [campusSortDir, setCampusSortDir] = useState<'asc' | 'desc'>('desc');
@@ -185,69 +302,99 @@ function Overview({ sum, isPrincipal }: { sum: R; isPrincipal?: boolean }) {
       <div className="fx-grid">
         <section className="panel hr-panel fx-card">
           <div className="panel-head"><div><h3>Expenses by category</h3><p>Share of total operational expenses</p></div></div>
-          {exp.filter((r: R) => Number(r.amount) > 0).length ? (
+          {hasPremium ? (
+            exp.filter((r: R) => Number(r.amount) > 0).length ? (
+              <>
+                <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={exp.filter((r: R) => Number(r.amount) > 0)}
+                      dataKey="amount"
+                      nameKey="name"
+                      innerRadius={48}
+                      outerRadius={95}
+                      paddingAngle={2}
+                    >
+                      {exp.map((_, i) => <Cell key={i} fill={PIE_EXPENSE[i % PIE_EXPENSE.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => money(v)} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer></div>
+                <CatTable rows={exp} />
+              </>
+            ) : <div className="rp-empty">No expenses recorded for this selection.</div>
+          ) : (
             <>
-              <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={exp.filter((r: R) => Number(r.amount) > 0)}
-                    dataKey="amount"
-                    nameKey="name"
-                    innerRadius={48}
-                    outerRadius={95}
-                    paddingAngle={2}
-                  >
-                    {exp.map((_, i) => <Cell key={i} fill={PIE_EXPENSE[i % PIE_EXPENSE.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => money(v)} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer></div>
-              <CatTable rows={exp} />
+              <LockedChartCard
+                title="Expenses Distribution Chart"
+                subtitle="Visual category distribution charts and expense analytics require the Premium plan."
+                onUpgrade={onUpgrade}
+              />
+              {exp.length > 0 && <CatTable rows={exp} />}
             </>
-          ) : <div className="rp-empty">No expenses recorded for this selection.</div>}
+          )}
         </section>
 
         <section className="panel hr-panel fx-card">
           <div className="panel-head"><div><h3>Income by category</h3><p>Share of total revenue stream across categories</p></div></div>
-          {inc.filter((r: R) => Number(r.amount) > 0).length ? (
+          {hasPremium ? (
+            inc.filter((r: R) => Number(r.amount) > 0).length ? (
+              <>
+                <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={inc.filter((r: R) => Number(r.amount) > 0)}
+                      dataKey="amount"
+                      nameKey="name"
+                      innerRadius={48}
+                      outerRadius={95}
+                      paddingAngle={2}
+                    >
+                      {inc.map((_, i) => <Cell key={i} fill={PIE_INCOME[i % PIE_INCOME.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => money(v)} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer></div>
+                <CatTable rows={inc} />
+              </>
+            ) : <div className="rp-empty">No income recorded for this selection.</div>
+          ) : (
             <>
-              <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={inc.filter((r: R) => Number(r.amount) > 0)}
-                    dataKey="amount"
-                    nameKey="name"
-                    innerRadius={48}
-                    outerRadius={95}
-                    paddingAngle={2}
-                  >
-                    {inc.map((_, i) => <Cell key={i} fill={PIE_INCOME[i % PIE_INCOME.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => money(v)} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer></div>
-              <CatTable rows={inc} />
+              <LockedChartCard
+                title="Income Distribution Chart"
+                subtitle="Visual revenue stream charts and category analytics require the Premium plan."
+                onUpgrade={onUpgrade}
+              />
+              {inc.length > 0 && <CatTable rows={inc} />}
             </>
-          ) : <div className="rp-empty">No income recorded for this selection.</div>}
+          )}
         </section>
       </div>
 
       <section className="panel hr-panel fx-card">
         <div className="panel-head"><div><h3>Income vs expense by month</h3><p>Voided entries are excluded</p></div></div>
-        {months.length ? (
-          <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
-            <BarChart data={months} margin={{ top: 12, right: 24, bottom: 3, left: 0 }}>
-              <CartesianGrid vertical={false} stroke="#edf0f6" strokeDasharray="4 6" />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} tick={tick} />
-              <YAxis tickLine={false} axisLine={false} tick={tick} tickFormatter={v => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
-              <Tooltip formatter={(v: number) => money(v)} /><Legend />
-              <Bar dataKey="income" name="Income" fill={INCOME} radius={[7, 7, 0, 0]} maxBarSize={34} />
-              <Bar dataKey="expense" name="Expense" fill={EXPENSE} radius={[7, 7, 0, 0]} maxBarSize={34} />
-            </BarChart>
-          </ResponsiveContainer></div>
-        ) : <div className="rp-empty">No entries yet.</div>}
+        {hasPremium ? (
+          months.length ? (
+            <div className="rp-chart"><ResponsiveContainer width="100%" height="100%">
+              <BarChart data={months} margin={{ top: 12, right: 24, bottom: 3, left: 0 }}>
+                <CartesianGrid vertical={false} stroke="#edf0f6" strokeDasharray="4 6" />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={tick} />
+                <YAxis tickLine={false} axisLine={false} tick={tick} tickFormatter={v => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
+                <Tooltip formatter={(v: number) => money(v)} /><Legend />
+                <Bar dataKey="income" name="Income" fill={INCOME} radius={[7, 7, 0, 0]} maxBarSize={34} />
+                <Bar dataKey="expense" name="Expense" fill={EXPENSE} radius={[7, 7, 0, 0]} maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer></div>
+          ) : <div className="rp-empty">No entries yet.</div>
+        ) : (
+          <LockedChartCard
+            title="Monthly Cashflow Bar Chart"
+            subtitle="Interactive monthly cash-flow trend bars and comparative visualizations require the Premium plan."
+            onUpgrade={onUpgrade}
+          />
+        )}
         {!isPrincipal && sum.campuses.length > 1 && (
           <div className="table-scroll"><table className="data-table">
             <thead>
@@ -293,7 +440,7 @@ function CatTable({ rows }: { rows: R[] }) {
   );
 }
 
-function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: 'income' | 'expense'; school: string; schools: R[]; user: User; qs: string; bump: number; onChanged: (m: string) => void }) {
+function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium, onUpgrade }: { kind: 'income' | 'expense'; school: string; schools: R[]; user: User; qs: string; bump: number; onChanged: (m: string) => void; hasPremium?: boolean; onUpgrade?: () => void }) {
   const [rows, setRows] = useState<R[]>([]);
   const [cats, setCats] = useState<R[]>([]);
   const [filters, setFilters] = useState<Record<string, any>>({});
@@ -359,27 +506,81 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: '
           <strong>{kind === 'income' ? 'Income' : 'Expense'} entries</strong>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <span className="result-count">{rows.length} shown · {money(total)}</span>
-            <ExportMenu
-              title={`${kind === 'income' ? 'Income' : 'Expense'} Ledger Entries`}
-              filename={`finance-${kind}-entries`}
-              columns={[
-                { key: 'date', label: 'Date' },
-                { key: 'category_name', label: 'Category' },
-                { key: 'description', label: 'Description' },
-                { key: 'school_name', label: 'Campus' },
-                { key: 'amount', label: 'Amount (Rs)' },
-                { key: 'voided', label: 'Status' }
-              ]}
-              rows={() => rows.map(r => ({
-                date: r.date,
-                category_name: r.category_name,
-                description: r.description || '—',
-                school_name: r.school_name,
-                amount: r.amount,
-                voided: r.voided ? 'Voided' : 'Valid'
-              }))}
-              notify={onChanged}
-            />
+            {hasPremium ? (
+              <ExportMenu
+                title={`${kind === 'income' ? 'Income' : 'Expense'} Ledger Entries`}
+                filename={`finance-${kind}-entries`}
+                columns={[
+                  { key: 'date', label: 'Date' },
+                  { key: 'category_name', label: 'Category' },
+                  { key: 'description', label: 'Description' },
+                  { key: 'school_name', label: 'Campus' },
+                  { key: 'amount', label: 'Amount (Rs)' },
+                  { key: 'voided', label: 'Status' }
+                ]}
+                rows={() => rows.map(r => ({
+                  date: r.date,
+                  category_name: r.category_name,
+                  description: r.description || '—',
+                  school_name: r.school_name,
+                  amount: r.amount,
+                  voided: r.voided ? 'Voided' : 'Valid'
+                }))}
+                notify={onChanged}
+              />
+            ) : (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={onUpgrade}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    opacity: 0.95
+                  }}
+                  title="Exports require Premium plan"
+                >
+                  <Download size={14} />
+                  <span>Export</span>
+                  <span style={{
+                    background: '#fef3c7',
+                    color: '#92400e',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: 10,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3
+                  }}>
+                    <Lock size={10} /> Premium
+                  </span>
+                </button>
+                {onUpgrade && (
+                  <button
+                    type="button"
+                    onClick={onUpgrade}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#7c69e8',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      padding: 0
+                    }}
+                  >
+                    Upgrade to Plan & Billing
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div style={{ padding: '0 16px 12px' }}>
@@ -400,6 +601,14 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: '
                 key: 'to',
                 label: 'To Date',
                 type: 'date'
+              },
+              {
+                key: 'voided',
+                label: 'Status',
+                options: [
+                  { label: 'Valid Only', value: '0' },
+                  { label: 'Include Voided', value: '1' }
+                ]
               }
             ]}
             values={filters}
@@ -408,78 +617,146 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged }: { kind: '
           />
         </div>
         <div className="table-scroll"><table className="data-table">
-          <thead><tr><th>DATE</th><th>CATEGORY</th><th>DESCRIPTION</th><th>CAMPUS</th><th>AMOUNT</th><th /></tr></thead>
-          <tbody>{rows.map(r => (
-            <tr key={r.id}><td>{r.date}</td><td>{r.category_name}</td><td>{r.description || '—'}</td><td>{r.school_name}</td><td style={{ color: kind === 'income' ? INCOME : EXPENSE, fontWeight: 700 }}>{money(Number(r.amount))}</td>
-              <td>
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                  <button className="hr-mini danger" title="Delete entry" onClick={() => deleteIt(r)}><Trash2 size={13} /> Delete</button>
-                  <button className="hr-mini" title="Void entry" onClick={() => voidIt(r)}><Ban size={13} /> Void</button>
-                </div>
-              </td></tr>
-          ))}</tbody>
+          <thead>
+            <tr><th>DATE</th><th>CATEGORY</th><th>DESCRIPTION</th><th>CAMPUS</th><th>AMOUNT</th><th>ACTION</th></tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} style={{ opacity: r.voided ? 0.45 : 1 }}>
+                <td>{r.date}</td>
+                <td><span className="pill">{r.category_name}</span></td>
+                <td>{r.description || '—'}</td>
+                <td>{r.school_name}</td>
+                <td><strong style={{ color: kind === 'income' ? INCOME : EXPENSE }}>{money(Number(r.amount))}</strong> {r.voided && <em style={{ fontSize: 11, color: '#e5484d', fontWeight: 600 }}>(Voided)</em>}</td>
+                <td style={{ display: 'flex', gap: 6 }}>
+                  {!r.voided && (
+                    <button type="button" className="sm-btn danger-soft" onClick={() => voidIt(r)} title="Void this entry">
+                      <Ban size={13} /> Void
+                    </button>
+                  )}
+                  <button type="button" className="sm-btn danger-soft" onClick={() => deleteIt(r)} title="Delete entry permanently">
+                    <Trash2 size={13} /> Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#8c96a7' }}>No {kind} entries recorded yet.</td></tr>}
+          </tbody>
         </table></div>
-        {!rows.length && <div className="rp-empty">Nothing recorded yet.</div>}
       </section>
     </>
   );
 }
 
 function Categories({ school, schools, user, onChanged }: { school: string; schools: R[]; user: User; onChanged: (m: string) => void }) {
-  const [cats, setCats] = useState<R[]>([]);
-  const [kind, setKind] = useState('expense'); const [name, setName] = useState(''); const [pick, setPick] = useState('');
-  const [err, setErr] = useState('');
-  const target = school || pick || (user.role !== 'organisation_admin' ? String(user.school || '') : '') || String(schools[0]?.id || '');
+  const [rows, setRows] = useState<R[]>([]);
+  const [name, setName] = useState(''); const [kind, setKind] = useState<'income' | 'expense'>('expense');
+  const [target, setTarget] = useState(school || (user.role !== 'organisation_admin' ? String(user.school || '') : '') || String(schools[0]?.id || ''));
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+
   const load = useCallback(async () => {
-    try { setCats((await request<R>(`finance/categories/?school=${target}`)).results); } catch { setCats([]); }
-  }, [target]);
-  useEffect(() => { if (target) load(); }, [load, target]);
+    const p = new URLSearchParams();
+    if (school) p.set('school', school);
+    try { setRows((await request<R>(`finance/categories/?${p.toString()}`)).results); } catch { setRows([]); }
+  }, [school]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (school) setTarget(school); }, [school]);
 
   const add = async (e: React.FormEvent) => {
-    e.preventDefault(); setErr('');
-    try { await request('finance/categories/', { method: 'POST', body: JSON.stringify({ school: target, kind, name }) }); setName(''); onChanged('Category added'); load(); }
-    catch (x) { setErr(x instanceof Error ? x.message : 'Failed'); }
-  };
-  const patch = async (c: R, body: R, msg: string) => {
-    try { await request(`finance/categories/${c.id}/`, { method: 'PATCH', body: JSON.stringify(body) }); onChanged(msg); load(); }
-    catch (x) { setErr(x instanceof Error ? x.message : 'Failed'); }
-  };
-  const deleteCat = async (c: R) => {
-    if (!window.confirm(`Permanently delete category "${c.name}"?`)) return;
+    e.preventDefault(); setBusy(true); setErr('');
     try {
-      await request(`finance/categories/${c.id}/`, { method: 'DELETE' });
-      onChanged('Category deleted');
+      await request('finance/categories/', { method: 'POST', body: JSON.stringify({ school: target, kind, name }) });
+      setName(''); onChanged('Category added'); load();
+    } catch (x) { setErr(x instanceof Error ? x.message : 'Failed'); } finally { setBusy(false); }
+  };
+  const toggle = async (c: R) => {
+    try { await request(`finance/categories/${c.id}/`, { method: 'PATCH', body: JSON.stringify({ active: !c.active }) }); onChanged('Category updated'); load(); }
+    catch (x) { setErr(x instanceof Error ? x.message : 'Failed'); }
+  };
+  const startEdit = (c: R) => {
+    setEditingId(c.id);
+    setEditName(c.name);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName('');
+  };
+  const saveEdit = async (c: R) => {
+    if (!editName.trim()) return;
+    try {
+      await request(`finance/categories/${c.id}/`, { method: 'PATCH', body: JSON.stringify({ name: editName.trim() }) });
+      onChanged('Category renamed');
+      setEditingId(null);
       load();
     } catch (x) {
-      setErr(x instanceof Error ? x.message : 'Failed to delete category');
+      setErr(x instanceof Error ? x.message : 'Rename failed');
     }
+  };
+  const remove = async (c: R) => {
+    if (!window.confirm(`Delete category "${c.name}"? If it has entries, they will also be permanently deleted.`)) return;
+    try { await request(`finance/categories/${c.id}/`, { method: 'DELETE' }); onChanged('Category deleted'); load(); }
+    catch (x) { setErr(x instanceof Error ? x.message : 'Failed'); }
   };
 
   return (
     <>
       <section className="panel hr-panel fx-card">
-        <div className="panel-head"><div><h3>Add a category</h3><p>Examples: Annual fees, Transport, Events</p></div></div>
+        <div className="panel-head"><div><h3>Add category</h3><p>Organise income and expenses</p></div></div>
         <form className="fx-form" onSubmit={add}>
-          {!school && schools.length > 1 && <label>Campus<select className="fx-select" value={target} onChange={e => setPick(e.target.value)}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
-          <label>Type<select className="fx-select" value={kind} onChange={e => setKind(e.target.value)}><option value="income">Income</option><option value="expense">Expense</option></select></label>
-          <label className="grow">Name<input className="fx-select" required maxLength={80} value={name} onChange={e => setName(e.target.value)} /></label>
-          <button className="primary-btn"><Plus size={15} /> Add category</button>
+          {!school && schools.length > 1 && <label>Campus<select className="fx-select" required value={target} onChange={e => setTarget(e.target.value)}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
+          <label>Kind<select className="fx-select" value={kind} onChange={e => setKind(e.target.value as any)}><option value="income">Income</option><option value="expense">Expense</option></select></label>
+          <label className="grow">Name<input className="fx-select" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Lab equipment" /></label>
+          <button className="primary-btn" disabled={busy}><Plus size={15} /> {busy ? 'Saving…' : 'Add category'}</button>
         </form>
         {err && <div className="hr-error" style={{ margin: '12px 0 0' }}>{err}</div>}
       </section>
-      <div className="fx-grid">
-        {(['income', 'expense'] as const).map(k => (
-          <section key={k} className="panel hr-panel fx-card">
-            <div className="panel-head"><div><h3>{k === 'income' ? 'Income categories' : 'Expense categories'}</h3><p>Hidden categories keep their history</p></div></div>
-            <ul className="fx-cats">{cats.filter(c => c.kind === k).map(c => (
-              <li key={c.id} className={c.active ? '' : 'off'}><span>{c.name}</span>
-                <button className="hr-mini" onClick={() => { const n = window.prompt('Rename category', c.name); if (n && n.trim()) patch(c, { name: n.trim() }, 'Category renamed'); }}>Rename</button>
-                <button className="hr-mini" onClick={() => patch(c, { active: !c.active }, c.active ? 'Category hidden' : 'Category restored')}>{c.active ? 'Hide' : 'Restore'}</button>
-                <button className="hr-mini danger" title="Delete category" onClick={() => deleteCat(c)}><Trash2 size={13} /> Delete</button></li>
-            ))}</ul>
-          </section>
-        ))}
-      </div>
+
+      <section className="panel hr-panel">
+        <div className="toolbar"><strong>Categories</strong><span className="result-count">{rows.length} total</span></div>
+        <div className="table-scroll"><table className="data-table">
+          <thead><tr><th>NAME</th><th>KIND</th><th>CAMPUS</th><th>ENTRIES</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
+          <tbody>
+            {rows.map(c => (
+              <tr key={c.id}>
+                <td>
+                  {editingId === c.id ? (
+                    <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="fx-select"
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        style={{ height: 30, fontSize: 12, padding: '2px 8px' }}
+                      />
+                      <button type="button" className="sm-btn primary-btn" onClick={() => saveEdit(c)} style={{ height: 30, padding: '0 8px', fontSize: 11 }}>Save</button>
+                      <button type="button" className="sm-btn" onClick={cancelEdit} style={{ height: 30, padding: '0 8px', fontSize: 11 }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <strong>{c.name}</strong>
+                  )}
+                </td>
+                <td><span className="pill" style={{ color: c.kind === 'income' ? INCOME : EXPENSE }}>{c.kind}</span></td>
+                <td>{c.school_name}</td>
+                <td>{c.entries_count}</td>
+                <td><button type="button" className={`pill ${c.active ? 'green' : 'amber'}`} onClick={() => toggle(c)}>{c.active ? 'Active' : 'Archived'}</button></td>
+                <td>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {editingId !== c.id && (
+                      <button type="button" className="sm-btn outline-btn" onClick={() => startEdit(c)} style={{ fontSize: 11, padding: '3px 8px' }}>
+                        Edit
+                      </button>
+                    )}
+                    <button type="button" className="sm-btn danger-soft" onClick={() => remove(c)}>Delete</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#8c96a7' }}>No categories yet. Default categories will be generated automatically.</td></tr>}
+          </tbody>
+        </table></div>
+      </section>
     </>
   );
 }

@@ -252,7 +252,9 @@ def get_school_entitlements(school, now=None, use_cache=True):
     basic_features = settings.basic_access_features or list(PlatformBillingSettings.DEFAULT_BASIC_ACCESS_FEATURES)
     allowed_keys.update(basic_features)
 
-    if effective_tier == 'premium':
+    from plans.features import has_feature, FEATURE_MAP, FEATURE_ALIASES, PLAN_FREE, PLAN_STANDARD, PLAN_PREMIUM, PLAN_CUSTOM
+
+    if effective_tier in ('premium', 'custom'):
         # Unlocks all available catalog features
         allowed_keys.update(f.key for f in all_catalog if f.status != 'coming_soon')
     elif effective_tier == 'standard':
@@ -263,9 +265,15 @@ def get_school_entitlements(school, now=None, use_cache=True):
                 is_included=True
             ).values_list('feature_key', flat=True)
             allowed_keys.update(included_keys)
-        else:
-            # Standard features from catalog
-            allowed_keys.update(f.key for f in all_catalog if not f.is_premium_only and f.status != 'coming_soon')
+        # Catalog features that are not premium only
+        allowed_keys.update(f.key for f in all_catalog if not f.is_premium_only and f.status != 'coming_soon')
+        # Standard features from single source of truth (including finance and staff_salaries)
+        for key, req_plan in FEATURE_MAP.items():
+            if req_plan in (PLAN_FREE, PLAN_STANDARD):
+                allowed_keys.add(key)
+        for alias, target in FEATURE_ALIASES.items():
+            if FEATURE_MAP.get(target) in (PLAN_FREE, PLAN_STANDARD):
+                allowed_keys.add(alias)
 
     # Apply per-school platform-admin overrides
     overrides = SchoolFeatureOverride.objects.filter(school=school)
@@ -274,8 +282,12 @@ def get_school_entitlements(school, now=None, use_cache=True):
             continue
         if ov.is_granted:
             allowed_keys.add(ov.feature_key)
+            if ov.feature_key in FEATURE_ALIASES:
+                allowed_keys.add(FEATURE_ALIASES[ov.feature_key])
         else:
             allowed_keys.discard(ov.feature_key)
+            if ov.feature_key in FEATURE_ALIASES:
+                allowed_keys.discard(FEATURE_ALIASES[ov.feature_key])
 
     # Calculate grace days remaining
     grace_days_remaining = None
@@ -286,8 +298,9 @@ def get_school_entitlements(school, now=None, use_cache=True):
     # Build detailed feature dictionary
     features_dict = {}
     for feat in all_catalog:
+        canonical_key = FEATURE_ALIASES.get(feat.key, feat.key)
+        req_plan = FEATURE_MAP.get(canonical_key, FEATURE_MAP.get(feat.key, 'premium' if feat.is_premium_only else 'standard'))
         is_unlocked = (feat.key in allowed_keys) and (feat.status != 'coming_soon')
-        req_plan = 'premium' if feat.is_premium_only else 'standard'
         features_dict[feat.key] = {
             'key': feat.key,
             'name': feat.name,
@@ -295,9 +308,24 @@ def get_school_entitlements(school, now=None, use_cache=True):
             'category': feat.category,
             'status': feat.status,
             'is_unlocked': is_unlocked,
-            'is_premium_only': feat.is_premium_only,
+            'is_premium_only': (req_plan in ('premium', 'custom')),
             'requires_plan': req_plan
         }
+
+    # Ensure all canonical FEATURE_MAP keys also exist in features_dict
+    for f_key, req_plan in FEATURE_MAP.items():
+        if f_key not in features_dict:
+            is_unlocked = (f_key in allowed_keys)
+            features_dict[f_key] = {
+                'key': f_key,
+                'name': f_key.replace('_', ' ').title(),
+                'name_ur': '',
+                'category': 'core',
+                'status': 'available',
+                'is_unlocked': is_unlocked,
+                'is_premium_only': (req_plan in ('premium', 'custom')),
+                'requires_plan': req_plan
+            }
 
     payload = {
         'school_id': school.id,
@@ -340,11 +368,15 @@ def check_feature_access(school, feature_key, now=None):
     if entitlements['is_suspended']:
         return False, "School account is suspended.", "premium"
 
-    feature_info = entitlements['features'].get(feature_key)
+    from plans.features import has_feature, FEATURE_MAP, FEATURE_ALIASES
+    canonical = FEATURE_ALIASES.get(feature_key, feature_key)
+    req_plan = FEATURE_MAP.get(canonical, FEATURE_MAP.get(feature_key, 'premium'))
+
+    feature_info = entitlements['features'].get(feature_key) or entitlements['features'].get(canonical)
     if not feature_info:
-        cat = FeatureCatalog.objects.filter(key=feature_key).first()
-        req_plan = 'premium' if (cat and cat.is_premium_only) else 'standard'
-        return False, f"Feature '{feature_key}' is not recognized.", req_plan
+        if has_feature(school, feature_key):
+            return True, "", ""
+        return False, f"Feature '{feature_key}' requires an active {req_plan} plan.", req_plan
 
     if feature_info['status'] == 'coming_soon':
         return False, f"Feature '{feature_key}' is coming soon and not yet active.", feature_info['requires_plan']
@@ -352,7 +384,12 @@ def check_feature_access(school, feature_key, now=None):
     if feature_info['is_unlocked']:
         return True, "", ""
 
-    return False, f"Feature '{feature_key}' requires an active {feature_info['requires_plan']} plan.", feature_info['requires_plan']
+    needed_plan = feature_info['requires_plan']
+    if needed_plan == 'free':
+        cat = FeatureCatalog.objects.filter(key=feature_key).first()
+        needed_plan = 'premium' if (cat and cat.is_premium_only) else 'standard'
+
+    return False, f"Feature '{feature_key}' requires an active {needed_plan} plan.", needed_plan
 
 
 def is_limited_mode(school, now=None):

@@ -2521,3 +2521,76 @@ input:checked + .toggle-slider:before {
     grid-template-columns: 1fr;
   }
 }
+
+/* -------------------------------------------------------------------------
+   Sidebar Plan Lock Badges & Feature Gating
+   ------------------------------------------------------------------------- */
+.nav-plan-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.02em;
+}
+.nav-plan-badge.standard {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+.nav-plan-badge.premium {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.dark .nav-plan-badge.standard {
+  background: #1e293b;
+  color: #60a5fa;
+  border-color: #3b82f6;
+}
+.dark .nav-plan-badge.premium {
+  background: #2e2616;
+  color: #fbbf24;
+  border-color: #78350f;
+}
+
+/* Locked Chart Card within Finance Page */
+.fx-locked-chart-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.95) 100%);
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+  min-height: 220px;
+  text-align: center;
+  margin: 10px 0;
+}
+.dark .fx-locked-chart-card {
+  background: linear-gradient(135deg, rgba(30, 32, 48, 0.95) 0%, rgba(24, 26, 38, 0.95) 100%);
+  border-color: #475569;
+}
+.fx-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.dark .fx-locked-badge {
+  background: #422006;
+  color: #fde68a;
+  border: 1px solid #78350f;
+}

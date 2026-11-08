@@ -566,6 +566,16 @@ function App() {
     }
   }, [user, fetchSubscription]);
 
+  const orgPlan = useMemo<'free' | 'standard' | 'premium' | 'custom'>(() => {
+    if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) return 'custom';
+    const tier = (entitlements?.effective_tier || entitlements?.plan || subscription?.plan?.code || '').toLowerCase();
+    if (tier.includes('custom')) return 'custom';
+    if (tier.includes('premium')) return 'premium';
+    if (tier.includes('standard')) return 'standard';
+    return 'free';
+  }, [user, entitlements, subscription, activeCampusId]);
+  const isFreePlan = orgPlan === 'free';
+
   const isFeatureUnlocked = useCallback((key: string) => {
     // Only platform superadmin without any school assignment bypasses tenant feature gating
     if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) {
@@ -577,12 +587,48 @@ function App() {
       if (feat !== undefined) {
         return Boolean(feat.is_unlocked);
       }
+      const ALIASES: Record<string, string> = {
+        'finance': 'accounts_ledger',
+        'accounts_ledger': 'finance',
+        'staff_salaries': 'hr_payroll',
+        'hr_payroll': 'staff_salaries',
+      };
+      const aliasKey = ALIASES[key];
+      if (aliasKey && entitlements.features[aliasKey] !== undefined) {
+        return Boolean(entitlements.features[aliasKey].is_unlocked);
+      }
     }
+
+    const standardFeatures = [
+      'finance', 'accounts_ledger', 'staff_salaries', 'hr_payroll',
+      'homework', 'examinations', 'exams_datesheets', 'study_materials',
+      'timetable', 'student_fees', 'fees_offline', 'data_import',
+      'communication_limited', 'permissions_basic', 'reports_standard', 'basic_reports_csv'
+    ];
+    const premiumFeatures = [
+      'finance_dashboard', 'salary_exports', 'academic_quality_index',
+      'psychological_evaluation', 'students_at_risk', 'interventions',
+      'communication_full', 'audit_log', 'audit_log_viewer',
+      'permissions_custom_roles', 'reports_drilldown_exports'
+    ];
+
+    if (orgPlan === 'custom' || orgPlan === 'premium') {
+      return true;
+    }
+    if (orgPlan === 'standard') {
+      if (premiumFeatures.includes(key)) return false;
+      if (standardFeatures.includes(key)) return true;
+    }
+
     // Basic access list allowed on no_plan or before subscription loads
     const basicList = [
       'school_setup', 'people_accounts', 'authentication', 'password_change',
       'profile_view', 'subscription_management', 'order_submission',
-      'support_contact', 'compliance_export', 'english_urdu'
+      'support_contact', 'compliance_export', 'english_urdu',
+      'overview', 'campuses', 'campus_setup', 'academic_years', 'classes',
+      'subjects', 'students', 'attendance_basic', 'academics_basic',
+      'announcements', 'staff_basic', 'reports_basic', 'notifications',
+      'settings', 'plan_billing'
     ];
     // If subscription is known to be in no_plan mode or not yet active
     if (subscription?.is_no_plan || subscription?.status === 'no_plan' || !subscription?.status || subscription?.status === 'suspended') {
@@ -590,7 +636,7 @@ function App() {
     }
     // If subscription is active, standard or custom features apply
     return basicList.includes(key);
-  }, [user, entitlements, subscription, activeCampusId]);
+  }, [user, entitlements, subscription, activeCampusId, orgPlan]);
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -1604,15 +1650,22 @@ function App() {
                         );
                       }
 
+                      const isItemLocked = isFreePlan && (name === 'Finance' || name === 'Staff Salaries');
+
                       return (
                         <button
                           key={name}
                           onClick={() => switchPage(name)}
-                          className={'nav-item ' + (page === name ? 'selected' : '')}
+                          className={'nav-item ' + (page === name ? 'selected' : '') + (isItemLocked ? ' nav-item-locked' : '')}
                         >
                           <Icon size={19} strokeWidth={1.9} />
                           <span>{name}</span>
                           {name === 'Interventions' && !!dash?.counts.open_cases && <em>{dash.counts.open_cases}</em>}
+                          {isItemLocked && (
+                            <span className="nav-plan-badge standard" title="Available on Standard plan">
+                              <Lock size={10} /> Standard
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -2010,8 +2063,8 @@ function App() {
                 </section>
               </div>
 
-              {/* Operating Income vs Expense Chart (Dashboard Requirement) */}
-              {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
+              {/* Operating Income vs Expense Chart (Dashboard Requirement - Premium feature) */}
+              {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && isFeatureUnlocked('finance_dashboard') && (
                 <React.Suspense fallback={<div style={{ height: 280, background: 'var(--panel, #ffffff)', borderRadius: 12, border: '1px solid var(--border, #e2e8f0)', marginBottom: 20 }} />}>
                   <DashboardFinanceChart user={user} notify={notify} campuses={campuses} onNavigate={switchPage} />
                 </React.Suspense>
@@ -2418,15 +2471,21 @@ function App() {
           )}
           {page === 'Staff' && <Staff user={user} notify={notify} />}
           {page === 'Finance' && (
-            !isFeatureUnlocked('finance_dashboard') ? (
+            (isFreePlan || !isFeatureUnlocked('finance')) ? (
               <FeatureLockedScreen
                 featureName="Institutional Finance & Ledger"
-                description="General ledger, chart of accounts, automated reconciliation, and executive financial health dashboards."
-                requiredPlan="Premium"
+                description="General ledger, chart of accounts, income and expense entry, categories, and financial records."
+                requiredPlan="Standard"
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              <Finance user={user} notify={notify} />
+              <Finance
+                user={user}
+                notify={notify}
+                plan={orgPlan}
+                isPremiumUnlocked={isFeatureUnlocked('finance_dashboard')}
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
             )
           )}
           {page === 'Plan & Billing' && (
@@ -2491,15 +2550,21 @@ function App() {
             )
           )}
           {page === 'Staff Salaries' && (
-            !isFeatureUnlocked('hr_payroll') ? (
+            (isFreePlan || !isFeatureUnlocked('staff_salaries')) ? (
               <FeatureLockedScreen
                 featureName="Staff Salaries & HR Payroll"
                 description="Staff salary schedules, deductions, allowances, payroll generation, and payslip printing."
-                requiredPlan="Premium"
+                requiredPlan="Standard"
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              <Salaries user={user} notify={notify} />
+              <Salaries
+                user={user}
+                notify={notify}
+                plan={orgPlan}
+                isPremiumUnlocked={isFeatureUnlocked('salary_exports')}
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
             )
           )}
           {page === 'Examinations' && (

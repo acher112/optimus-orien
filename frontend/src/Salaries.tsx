@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Calendar, Check,
-  CheckCircle2, ChevronRight, Download, FileSpreadsheet, FileText, Plus,
+  CheckCircle2, ChevronRight, Download, FileSpreadsheet, FileText, Lock, Plus,
   Printer, RefreshCw, Search, ShieldCheck, Sparkles, User, Users, X
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
@@ -13,7 +13,21 @@ import './hr.css';
 type R = Record<string, any>;
 type Tab = 'overview' | 'sheet' | 'structures' | 'adjustments' | 'my_payslips';
 
-export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: string) => void }) {
+interface SalariesProps {
+  user: ApiUser;
+  notify: (m: string) => void;
+  plan?: string;
+  isPremiumUnlocked?: boolean;
+  onUpgrade?: () => void;
+}
+
+export default function Salaries({
+  user,
+  notify,
+  plan,
+  isPremiumUnlocked = true,
+  onUpgrade
+}: SalariesProps) {
   const isTeacher = user.role === 'teacher';
   const [tab, setTab] = useState<Tab>(isTeacher ? 'my_payslips' : 'sheet');
   const [schools, setSchools] = useState<R[]>([]);
@@ -304,12 +318,29 @@ export default function Salaries({ user, notify }: { user: ApiUser; notify: (m: 
               <p>Review draft salaries, prorations, bulk-approve, and mark paid</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <ExportMenu
-                title={`Payroll Sheet (${month})`}
-                filename={`payroll-sheet-${month}`}
-                endpoint={`salaries/sheet/${sheetQs()}`}
-                notify={notify}
-              />
+              {isPremiumUnlocked === false ? (
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() => {
+                    notify('Exporting payroll requires a Premium plan subscription.');
+                    if (onUpgrade) onUpgrade();
+                  }}
+                  title="Export requires Premium plan. Click to view plans."
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}
+                >
+                  <Lock size={14} style={{ color: '#d97706' }} />
+                  <span>Export</span>
+                  <span className="fx-locked-badge">Premium</span>
+                </button>
+              ) : (
+                <ExportMenu
+                  title={`Payroll Sheet (${month})`}
+                  filename={`payroll-sheet-${month}`}
+                  endpoint={`salaries/sheet/${sheetQs()}`}
+                  notify={notify}
+                />
+              )}
               {selectedIds.length > 0 && (
                 <button className="outline-btn" onClick={handleBulkApprove}>
                   <CheckCircle2 size={15} /> Approve Selected ({selectedIds.length})
