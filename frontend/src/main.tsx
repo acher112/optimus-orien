@@ -728,6 +728,20 @@ function App() {
 
   const orgPlan = useMemo<'free' | 'standard' | 'premium' | 'custom'>(() => {
     if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) return 'custom';
+    const subStatus = (subscription?.status || entitlements?.status || '').toLowerCase();
+    if (subStatus === 'expired' || subStatus === 'suspended' || subStatus === 'cancelled' || subStatus === 'no_plan') {
+      return 'free';
+    }
+    // Date-based expiry check for future trials or expired subscriptions
+    if (subscription?.trial_ends_at && new Date(subscription.trial_ends_at) < new Date()) {
+      return 'free';
+    }
+    if (subscription?.trial_until && new Date(subscription.trial_until) < new Date()) {
+      return 'free';
+    }
+    if (subscription?.paid_until && new Date(subscription.paid_until) < new Date() && subStatus !== 'past_due') {
+      return 'free';
+    }
     const tier = (entitlements?.effective_tier || entitlements?.plan || subscription?.plan?.code || '').toLowerCase();
     if (tier.includes('custom')) return 'custom';
     if (tier.includes('premium')) return 'premium';
@@ -855,6 +869,7 @@ function App() {
     setProfileMenuOpen(false);
     setCampusDropdownOpen(false);
     setOpenDropdowns({});
+    setPremiumDropdownOpen(true);
     setShowNotifications(false);
     setPage('Overview');
     setModal(false);
@@ -1108,6 +1123,111 @@ function App() {
       </button>
     );
   }, [page, getNavBadge]);
+
+  const [premiumDropdownOpen, setPremiumDropdownOpen] = useState(true);
+
+  const allCandidateNavItems = useMemo(() => {
+    const items: { name: string; icon: any; roles?: string[]; adminOnly?: boolean }[] = [];
+    const seen = new Set<string>();
+
+    WORKSPACE_NAV.forEach(item => {
+      if (!item.childOf && !seen.has(item.name)) {
+        seen.add(item.name);
+        items.push(item);
+      }
+    });
+
+    SYSTEM_NAV.forEach(item => {
+      if (!seen.has(item.name)) {
+        seen.add(item.name);
+        items.push(item);
+      }
+    });
+
+    return items;
+  }, []);
+
+  const lockedNavItems = useMemo(() => {
+    if (!user) return [];
+    return allCandidateNavItems.filter(item => {
+      if (item.roles && !item.roles.includes(user.role)) return false;
+      if (item.adminOnly && !['organisation_admin', 'school_admin'].includes(user.role)) return false;
+      return getNavBadge(item.name) !== null;
+    });
+  }, [allCandidateNavItems, user, getNavBadge]);
+
+  const hasLockedItems = lockedNavItems.length > 0;
+
+  const isPremiumChildActive = useMemo(() => {
+    return lockedNavItems.some(i => 
+      page === i.name || 
+      (i.name === 'Student fees' && ['Fees', 'Student Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page)) ||
+      (i.name === 'Students at Risk' && ['At-risk list', 'Risk criteria', 'Review cases'].includes(page))
+    );
+  }, [lockedNavItems, page]);
+
+  const isPremiumOpen = premiumDropdownOpen || isPremiumChildActive;
+
+  const renderPremiumFeaturesDropdown = () => {
+    if (!hasLockedItems) return null;
+
+    return (
+      <div className="nav-dropdown-group nav-premium-features-group">
+        <button
+          type="button"
+          onClick={() => setPremiumDropdownOpen(v => !v)}
+          className={'nav-item nav-dropdown-btn nav-premium-btn ' + (isPremiumChildActive ? 'selected ' : '') + (isPremiumOpen ? 'dropdown-open' : '')}
+          title="Premium Features"
+        >
+          <Sparkles size={18} className="nav-premium-icon" />
+          <span className="nav-item-title">Premium Features</span>
+          <span className="nav-premium-badge">
+            <Crown size={10} className="crown-icon" />
+            <span>{lockedNavItems.length}</span>
+          </span>
+          <span
+            className={'nav-chevron-wrap' + (isPremiumOpen ? ' open' : '')}
+            title={isPremiumOpen ? 'Collapse' : 'Expand'}
+          >
+            <ChevronDown size={15} strokeWidth={2.2} />
+          </span>
+        </button>
+        {isPremiumOpen && (
+          <div className="nav-dropdown-children nav-premium-children">
+            <div className="nav-premium-upgrade-callout" onClick={() => switchPage('Plan & Billing')}>
+              <div className="callout-sparkle"><Sparkles size={13} /></div>
+              <div className="callout-text">
+                <strong>{orgPlan === 'standard' ? 'Upgrade to Premium' : 'Upgrade Plan'}</strong>
+                <small>{orgPlan === 'standard' ? 'Unlock AI & Risk Analytics' : 'Unlock all institutional modules'}</small>
+              </div>
+              <ArrowRight size={12} className="callout-arrow" />
+            </div>
+            {lockedNavItems.map((item: any) => {
+              const ItemIcon = item.icon;
+              const isItemSelected = page === item.name || (item.name === 'Student fees' && ['Fees', 'Student Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page)) || (item.name === 'Students at Risk' && ['At-risk list', 'Risk criteria', 'Review cases'].includes(page));
+              const itemBadge = getNavBadge(item.name);
+              return (
+                <button
+                  key={item.name}
+                  type="button"
+                  onClick={() => switchPage(item.name)}
+                  className={'nav-item nav-child ' + (isItemSelected ? 'selected' : '') + ' nav-item-locked'}
+                >
+                  <ItemIcon size={14} strokeWidth={1.8} />
+                  <span>{item.name}</span>
+                  {itemBadge && (
+                    <span className={`nav-plan-badge ${itemBadge.tier}`} title={`Available on ${itemBadge.label} plan`}>
+                      <Crown size={10} className="crown-icon" />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
   const changeTheme = () => {
     const nextMode = dark ? 'light' : 'dark';
     setDark(!dark);
@@ -1652,22 +1772,23 @@ function App() {
           <>
             <div className="nav-label">MY TEACHING WORKSPACE</div>
             <nav>
+              {renderPremiumFeaturesDropdown()}
               <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
               {renderNavButton('Overview', 'My Home', LayoutDashboard)}
-              {renderNavButton('Psychological Evaluation', 'Psychological Evaluation', Activity)}
+              {getNavBadge('Psychological Evaluation') === null && renderNavButton('Psychological Evaluation', 'Psychological Evaluation', Activity)}
               {teacherScope?.can_view_my_class && renderNavButton('My Class', 'My Class', Users)}
               {teacherScope?.can_view_my_subjects && renderNavButton('My Subjects', 'My Subjects', BookOpen)}
               {renderNavButton('Students', 'My Students', GraduationCap)}
               {renderNavButton('Attendance', 'Attendance', ClipboardCheck)}
-              {renderNavButton('Homework', 'Homework', ClipboardList)}
-              {renderNavButton('Examinations', 'Academics / Exams', Award)}
-              {renderNavButton('Academic Quality Index', 'Academic Quality (AQI)', TrendingUp)}
-              {renderNavButton('Study materials', 'Study Materials', BookOpen)}
-              {renderNavButton('Timetable', 'Timetable', CalendarDays)}
-              {teacherScope?.can_view_my_class && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
+              {getNavBadge('Homework') === null && renderNavButton('Homework', 'Homework', ClipboardList)}
+              {getNavBadge('Examinations') === null && renderNavButton('Examinations', 'Academics / Exams', Award)}
+              {getNavBadge('Academic Quality Index') === null && renderNavButton('Academic Quality Index', 'Academic Quality (AQI)', TrendingUp)}
+              {getNavBadge('Study materials') === null && renderNavButton('Study materials', 'Study Materials', BookOpen)}
+              {getNavBadge('Timetable') === null && renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              {teacherScope?.can_view_my_class && getNavBadge('Review cases') === null && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
 
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
-              {renderNavButton('Communication', 'Communication', MessageSquare)}
+              {getNavBadge('Communication') === null && renderNavButton('Communication', 'Communication', MessageSquare)}
               {renderNavButton('Announcements', 'Announcements', Megaphone)}
             </nav>
 
@@ -1681,15 +1802,16 @@ function App() {
           <>
             <div className="nav-label">STUDENT PORTAL</div>
             <nav>
+              {renderPremiumFeaturesDropdown()}
               <div className="nav-sublabel">LEARNING & PROGRESS</div>
               {renderNavButton('Overview', 'My Dashboard', LayoutDashboard)}
               {renderNavButton('Attendance', 'My Attendance', ClipboardCheck)}
               {renderNavButton('Results & Progress', 'Results & Progress', TrendingUp)}
-              {renderNavButton('My Development Profile', 'My Development Profile', Sparkles)}
-              {renderNavButton('Homework', 'Homework', ClipboardList)}
-              {renderNavButton('Study materials', 'Study Materials', BookOpen)}
-              {renderNavButton('Examinations', 'Examinations', Award)}
-              {renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              {getNavBadge('My Development Profile') === null && renderNavButton('My Development Profile', 'My Development Profile', Sparkles)}
+              {getNavBadge('Homework') === null && renderNavButton('Homework', 'Homework', ClipboardList)}
+              {getNavBadge('Study materials') === null && renderNavButton('Study materials', 'Study Materials', BookOpen)}
+              {getNavBadge('Examinations') === null && renderNavButton('Examinations', 'Examinations', Award)}
+              {getNavBadge('Timetable') === null && renderNavButton('Timetable', 'Timetable', CalendarDays)}
               {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
             </nav>
 
@@ -1703,19 +1825,27 @@ function App() {
           <>
             <div className="nav-label">WORKSPACE</div>
             <nav>
+              {renderPremiumFeaturesDropdown()}
               {NAV_GROUPS.map(group => {
                 const isAdmin = group.adminLabel;
                 if (isAdmin && !['organisation_admin', 'school_admin'].includes(user.role)) return null;
                 const navItems = WORKSPACE_NAV.filter(item => group.items.includes(item.name) && ((item as any).roles ? (item as any).roles.includes(user.role) : (!item.adminOnly || ['organisation_admin', 'school_admin'].includes(user.role))));
-                if (!navItems.length) return null;
+                // Filter out items that are currently locked (they are moved to Premium Features dropdown)
+                const visibleNavItems = navItems.filter((item: any) => {
+                  if (item.childOf) {
+                    return getNavBadge(item.childOf) === null && getNavBadge(item.name) === null;
+                  }
+                  return getNavBadge(item.name) === null;
+                });
+                if (!visibleNavItems.length) return null;
                 return (
                   <React.Fragment key={group.sublabel}>
                     <div className={'nav-sublabel' + (isAdmin ? ' nav-sublabel-admin' : '')}>{group.sublabel}</div>
-                    {navItems.map((item: any) => {
+                    {visibleNavItems.map((item: any) => {
                       const { name, icon: Icon, childOf } = item;
                       if (childOf) return null; // rendered inside parent dropdown
 
-                      const children = navItems.filter((c: any) => c.childOf === name);
+                      const children = visibleNavItems.filter((c: any) => c.childOf === name);
                       const isDropdown = children.length > 0;
                       const isChildActive = isDropdown && children.some((c: any) => c.name === page);
                       const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page));
@@ -1798,7 +1928,9 @@ function App() {
               {SYSTEM_NAV.filter(item => {
                 if ((item as any).superuserOnly && !user.is_superuser) return false;
                 if ((item as any).roles) return (item as any).roles.includes(user.role);
-                return !item.adminOnly || ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
+                if (item.adminOnly && !['organisation_admin', 'school_admin', 'principal'].includes(user.role)) return false;
+                if (getNavBadge(item.name) !== null) return false;
+                return true;
               }).map(({ name, icon: Icon }) => renderNavButton(name, name, Icon))}
             </nav>
           </>
