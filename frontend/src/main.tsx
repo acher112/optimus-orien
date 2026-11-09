@@ -869,7 +869,7 @@ function App() {
     setProfileMenuOpen(false);
     setCampusDropdownOpen(false);
     setOpenDropdowns({});
-    setPremiumDropdownOpen(true);
+    setPaidDropdownOpen(true);
     setShowNotifications(false);
     setPage('Overview');
     setModal(false);
@@ -1103,28 +1103,33 @@ function App() {
     IconComponent: any,
     extraBadge?: React.ReactNode
   ) => {
-    const badge = getNavBadge(targetPage);
     const isSelected = page === targetPage;
     return (
       <button
         key={targetPage}
         type="button"
         onClick={() => switchPage(targetPage)}
-        className={'nav-item ' + (isSelected ? 'selected' : '') + (badge ? ' nav-item-locked' : '')}
+        className={'nav-item ' + (isSelected ? 'selected' : '')}
       >
         <IconComponent size={19} strokeWidth={1.9} />
         <span>{label}</span>
         {extraBadge}
-        {badge && (
-          <span className={`nav-plan-badge ${badge.tier}`} title={`Available on ${badge.label} plan`}>
-            <Crown size={11} className="crown-icon" />
-          </span>
-        )}
       </button>
     );
-  }, [page, getNavBadge]);
+  }, [page]);
 
-  const [premiumDropdownOpen, setPremiumDropdownOpen] = useState(true);
+  const isItemUnlocked = useCallback((name: string): boolean => {
+    if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) return true;
+    if (orgPlan === 'premium' || orgPlan === 'custom') return true;
+    const tier = NAV_ITEM_TIERS[name] || 'free';
+    if (tier === 'free') return true;
+    if (orgPlan === 'standard') {
+      return tier === 'standard';
+    }
+    return false;
+  }, [user, activeCampusId, orgPlan]);
+
+  const [paidDropdownOpen, setPaidDropdownOpen] = useState(true);
 
   const allCandidateNavItems = useMemo(() => {
     const items: { name: string; icon: any; roles?: string[]; adminOnly?: boolean }[] = [];
@@ -1152,13 +1157,13 @@ function App() {
     return allCandidateNavItems.filter(item => {
       if (item.roles && !item.roles.includes(user.role)) return false;
       if (item.adminOnly && !['organisation_admin', 'school_admin'].includes(user.role)) return false;
-      return getNavBadge(item.name) !== null;
+      return !isItemUnlocked(item.name);
     });
-  }, [allCandidateNavItems, user, getNavBadge]);
+  }, [allCandidateNavItems, user, isItemUnlocked]);
 
   const hasLockedItems = lockedNavItems.length > 0;
 
-  const isPremiumChildActive = useMemo(() => {
+  const isPaidChildActive = useMemo(() => {
     return lockedNavItems.some(i => 
       page === i.name || 
       (i.name === 'Student fees' && ['Fees', 'Student Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page)) ||
@@ -1166,35 +1171,35 @@ function App() {
     );
   }, [lockedNavItems, page]);
 
-  const isPremiumOpen = premiumDropdownOpen || isPremiumChildActive;
+  const isPaidOpen = paidDropdownOpen || isPaidChildActive;
 
-  const renderPremiumFeaturesDropdown = () => {
+  const renderPaidFeaturesDropdown = () => {
     if (!hasLockedItems) return null;
 
     return (
-      <div className="nav-dropdown-group nav-premium-features-group">
+      <div className="nav-dropdown-group nav-paid-features-group">
         <button
           type="button"
-          onClick={() => setPremiumDropdownOpen(v => !v)}
-          className={'nav-item nav-dropdown-btn nav-premium-btn ' + (isPremiumChildActive ? 'selected ' : '') + (isPremiumOpen ? 'dropdown-open' : '')}
-          title="Premium Features"
+          onClick={() => setPaidDropdownOpen(v => !v)}
+          className={'nav-item nav-dropdown-btn nav-paid-btn ' + (isPaidChildActive ? 'selected ' : '') + (isPaidOpen ? 'dropdown-open' : '')}
+          title="Paid Features"
         >
-          <Sparkles size={18} className="nav-premium-icon" />
-          <span className="nav-item-title">Premium Features</span>
-          <span className="nav-premium-badge">
+          <Sparkles size={18} className="nav-paid-icon" />
+          <span className="nav-item-title">Paid Features</span>
+          <span className="nav-paid-badge">
             <Crown size={10} className="crown-icon" />
             <span>{lockedNavItems.length}</span>
           </span>
           <span
-            className={'nav-chevron-wrap' + (isPremiumOpen ? ' open' : '')}
-            title={isPremiumOpen ? 'Collapse' : 'Expand'}
+            className={'nav-chevron-wrap' + (isPaidOpen ? ' open' : '')}
+            title={isPaidOpen ? 'Collapse' : 'Expand'}
           >
             <ChevronDown size={15} strokeWidth={2.2} />
           </span>
         </button>
-        {isPremiumOpen && (
-          <div className="nav-dropdown-children nav-premium-children">
-            <div className="nav-premium-upgrade-callout" onClick={() => switchPage('Plan & Billing')}>
+        {isPaidOpen && (
+          <div className="nav-dropdown-children nav-paid-children">
+            <div className="nav-paid-upgrade-callout" onClick={() => switchPage('Plan & Billing')}>
               <div className="callout-sparkle"><Sparkles size={13} /></div>
               <div className="callout-text">
                 <strong>{orgPlan === 'standard' ? 'Upgrade to Premium' : 'Upgrade Plan'}</strong>
@@ -1205,7 +1210,7 @@ function App() {
             {lockedNavItems.map((item: any) => {
               const ItemIcon = item.icon;
               const isItemSelected = page === item.name || (item.name === 'Student fees' && ['Fees', 'Student Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page)) || (item.name === 'Students at Risk' && ['At-risk list', 'Risk criteria', 'Review cases'].includes(page));
-              const itemBadge = getNavBadge(item.name);
+              const itemTier = NAV_ITEM_TIERS[item.name] || 'standard';
               return (
                 <button
                   key={item.name}
@@ -1215,11 +1220,9 @@ function App() {
                 >
                   <ItemIcon size={14} strokeWidth={1.8} />
                   <span>{item.name}</span>
-                  {itemBadge && (
-                    <span className={`nav-plan-badge ${itemBadge.tier}`} title={`Available on ${itemBadge.label} plan`}>
-                      <Crown size={10} className="crown-icon" />
-                    </span>
-                  )}
+                  <span className={`nav-plan-badge ${itemTier}`} title={`Requires ${itemTier === 'premium' ? 'Premium' : 'Standard'} plan`}>
+                    <Crown size={10} className="crown-icon" />
+                  </span>
                 </button>
               );
             })}
@@ -1772,23 +1775,23 @@ function App() {
           <>
             <div className="nav-label">MY TEACHING WORKSPACE</div>
             <nav>
-              {renderPremiumFeaturesDropdown()}
+              {renderPaidFeaturesDropdown()}
               <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
               {renderNavButton('Overview', 'My Home', LayoutDashboard)}
-              {getNavBadge('Psychological Evaluation') === null && renderNavButton('Psychological Evaluation', 'Psychological Evaluation', Activity)}
+              {isItemUnlocked('Psychological Evaluation') && renderNavButton('Psychological Evaluation', 'Psychological Evaluation', Activity)}
               {teacherScope?.can_view_my_class && renderNavButton('My Class', 'My Class', Users)}
               {teacherScope?.can_view_my_subjects && renderNavButton('My Subjects', 'My Subjects', BookOpen)}
               {renderNavButton('Students', 'My Students', GraduationCap)}
               {renderNavButton('Attendance', 'Attendance', ClipboardCheck)}
-              {getNavBadge('Homework') === null && renderNavButton('Homework', 'Homework', ClipboardList)}
-              {getNavBadge('Examinations') === null && renderNavButton('Examinations', 'Academics / Exams', Award)}
-              {getNavBadge('Academic Quality Index') === null && renderNavButton('Academic Quality Index', 'Academic Quality (AQI)', TrendingUp)}
-              {getNavBadge('Study materials') === null && renderNavButton('Study materials', 'Study Materials', BookOpen)}
-              {getNavBadge('Timetable') === null && renderNavButton('Timetable', 'Timetable', CalendarDays)}
-              {teacherScope?.can_view_my_class && getNavBadge('Review cases') === null && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
+              {isItemUnlocked('Homework') && renderNavButton('Homework', 'Homework', ClipboardList)}
+              {isItemUnlocked('Examinations') && renderNavButton('Examinations', 'Academics / Exams', Award)}
+              {isItemUnlocked('Academic Quality Index') && renderNavButton('Academic Quality Index', 'Academic Quality (AQI)', TrendingUp)}
+              {isItemUnlocked('Study materials') && renderNavButton('Study materials', 'Study Materials', BookOpen)}
+              {isItemUnlocked('Timetable') && renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              {teacherScope?.can_view_my_class && isItemUnlocked('Review cases') && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
 
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
-              {getNavBadge('Communication') === null && renderNavButton('Communication', 'Communication', MessageSquare)}
+              {isItemUnlocked('Communication') && renderNavButton('Communication', 'Communication', MessageSquare)}
               {renderNavButton('Announcements', 'Announcements', Megaphone)}
             </nav>
 
@@ -1802,16 +1805,16 @@ function App() {
           <>
             <div className="nav-label">STUDENT PORTAL</div>
             <nav>
-              {renderPremiumFeaturesDropdown()}
+              {renderPaidFeaturesDropdown()}
               <div className="nav-sublabel">LEARNING & PROGRESS</div>
               {renderNavButton('Overview', 'My Dashboard', LayoutDashboard)}
               {renderNavButton('Attendance', 'My Attendance', ClipboardCheck)}
               {renderNavButton('Results & Progress', 'Results & Progress', TrendingUp)}
-              {getNavBadge('My Development Profile') === null && renderNavButton('My Development Profile', 'My Development Profile', Sparkles)}
-              {getNavBadge('Homework') === null && renderNavButton('Homework', 'Homework', ClipboardList)}
-              {getNavBadge('Study materials') === null && renderNavButton('Study materials', 'Study Materials', BookOpen)}
-              {getNavBadge('Examinations') === null && renderNavButton('Examinations', 'Examinations', Award)}
-              {getNavBadge('Timetable') === null && renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              {isItemUnlocked('My Development Profile') && renderNavButton('My Development Profile', 'My Development Profile', Sparkles)}
+              {isItemUnlocked('Homework') && renderNavButton('Homework', 'Homework', ClipboardList)}
+              {isItemUnlocked('Study materials') && renderNavButton('Study materials', 'Study Materials', BookOpen)}
+              {isItemUnlocked('Examinations') && renderNavButton('Examinations', 'Examinations', Award)}
+              {isItemUnlocked('Timetable') && renderNavButton('Timetable', 'Timetable', CalendarDays)}
               {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
             </nav>
 
@@ -1825,17 +1828,17 @@ function App() {
           <>
             <div className="nav-label">WORKSPACE</div>
             <nav>
-              {renderPremiumFeaturesDropdown()}
+              {renderPaidFeaturesDropdown()}
               {NAV_GROUPS.map(group => {
                 const isAdmin = group.adminLabel;
                 if (isAdmin && !['organisation_admin', 'school_admin'].includes(user.role)) return null;
                 const navItems = WORKSPACE_NAV.filter(item => group.items.includes(item.name) && ((item as any).roles ? (item as any).roles.includes(user.role) : (!item.adminOnly || ['organisation_admin', 'school_admin'].includes(user.role))));
-                // Filter out items that are currently locked (they are moved to Premium Features dropdown)
+                // Filter out items that are currently locked (they are moved to Paid Features dropdown)
                 const visibleNavItems = navItems.filter((item: any) => {
                   if (item.childOf) {
-                    return getNavBadge(item.childOf) === null && getNavBadge(item.name) === null;
+                    return isItemUnlocked(item.childOf) && isItemUnlocked(item.name);
                   }
-                  return getNavBadge(item.name) === null;
+                  return isItemUnlocked(item.name);
                 });
                 if (!visibleNavItems.length) return null;
                 return (
@@ -1852,7 +1855,6 @@ function App() {
                       const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
 
                       if (isDropdown) {
-                        const badge = getNavBadge(name);
                         return (
                           <div key={name} className="nav-dropdown-group">
                             <button
@@ -1865,15 +1867,10 @@ function App() {
                                   switchPage(name);
                                 }
                               }}
-                              className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '') + (badge ? ' nav-item-locked' : '')}
+                              className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '')}
                             >
                               <Icon size={19} strokeWidth={1.9} />
                               <span className="nav-item-title">{name}</span>
-                              {badge && (
-                                <span className={`nav-plan-badge ${badge.tier}`} title={`Available on ${badge.label} plan`}>
-                                  <Crown size={11} className="crown-icon" />
-                                </span>
-                              )}
                               <span
                                 className={'nav-chevron-wrap' + (isOpen ? ' open' : '')}
                                 onClick={(e) => toggleDropdown(name, e)}
@@ -1887,21 +1884,15 @@ function App() {
                                 {children.map((child: any) => {
                                   const ChildIcon = child.icon;
                                   const isChildSelected = page === child.name;
-                                  const childBadge = getNavBadge(child.name);
                                   return (
                                     <button
                                       key={child.name}
                                       type="button"
                                       onClick={() => switchPage(child.name)}
-                                      className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '') + (childBadge ? ' nav-item-locked' : '')}
+                                      className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '')}
                                     >
                                       <ChildIcon size={14} strokeWidth={1.8} />
                                       <span>{child.name}</span>
-                                      {childBadge && (
-                                        <span className={`nav-plan-badge ${childBadge.tier}`} title={`Available on ${childBadge.label} plan`}>
-                                          <Crown size={10} className="crown-icon" />
-                                        </span>
-                                      )}
                                     </button>
                                   );
                                 })}
@@ -1929,8 +1920,7 @@ function App() {
                 if ((item as any).superuserOnly && !user.is_superuser) return false;
                 if ((item as any).roles) return (item as any).roles.includes(user.role);
                 if (item.adminOnly && !['organisation_admin', 'school_admin', 'principal'].includes(user.role)) return false;
-                if (getNavBadge(item.name) !== null) return false;
-                return true;
+                return isItemUnlocked(item.name);
               }).map(({ name, icon: Icon }) => renderNavButton(name, name, Icon))}
             </nav>
           </>
