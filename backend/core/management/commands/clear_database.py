@@ -38,52 +38,44 @@ class Command(BaseCommand):
         self.stdout.write('Clearing database records...')
 
         with transaction.atomic():
-            # Get core models dynamically to avoid circular import issues
-            Organisation = apps.get_model('core', 'Organisation')
-            School = apps.get_model('core', 'School')
-            User = apps.get_model('core', 'User')
-
-            # Models to wipe in safe order
+            # Child models to clear first (leaves of the dependency tree)
             models_to_clear = [
-                'SubscriptionEvent',
-                'SubscriptionOrder',
-                'SchoolFeatureOverride',
-                'SchoolSubscription',
-                'OrganisationSubscription',
-                'SupportAccessGrant',
-                'UserInvitation',
-                'AuditEvent',
-                'Notification',
-                'Announcement',
-                'StudyMaterial',
-                'HomeworkSubmission',
-                'Homework',
-                'Attendance',
+                # 1. Salary & Staff dependencies
+                'SalaryAdjustment',
+                'SalaryRecord',
+                'SalaryStructure',
                 'StaffAttendance',
                 'StaffEvent',
+                'ClassSubjectTeacher',
+                'ClassTeacherAssignment',
+                'TeachingAssignment',
                 'StaffMember',
+
+                # 2. Student fees & finance
                 'FeePaymentAllocation',
                 'FeePayment',
                 'StudentFee',
                 'Concession',
                 'FeeStructure',
                 'FeeHead',
-                'SalaryAdjustment',
-                'SalaryRecord',
-                'SalaryStructure',
                 'FinanceEntry',
                 'FinanceCategory',
+
+                # 3. Student academic records & homework
+                'HomeworkSubmission',
+                'Homework',
+                'Attendance',
                 'Grade',
                 'AssessmentExemption',
                 'Assessment',
+                'ExamStudentMark',
+                'ExamMarkCorrection',
                 'CalculatedStudentResult',
                 'CalculatedSubjectResult',
                 'SubjectResult',
                 'StudentOverallResult',
                 'PublishedResult',
                 'ResultPublicationHistory',
-                'ExamMarkCorrection',
-                'ExamStudentMark',
                 'ExamSubjectWeight',
                 'ExamComponentSubjectConfig',
                 'ExamComponent',
@@ -97,6 +89,10 @@ class Command(BaseCommand):
                 'GradeBand',
                 'AssessmentCategory',
                 'ExamConfiguration',
+                'Enrollment',
+                'Student',
+
+                # 4. Reviews, cases & guardian profiles
                 'Observation',
                 'ReviewCase',
                 'Intervention',
@@ -107,6 +103,8 @@ class Command(BaseCommand):
                 'ParentNotificationPreference',
                 'GuardianRelationship',
                 'GuardianProfile',
+
+                # 5. Evaluations & discussions
                 'EvaluationSafeguardingReferral',
                 'EvaluationAuditLog',
                 'EvaluationPublication',
@@ -120,16 +118,13 @@ class Command(BaseCommand):
                 'DiscussionMute',
                 'DiscussionPost',
                 'DiscussionThread',
+
+                # 6. School schedule & curriculum structures
                 'ClassTimetable',
                 'HolidayCalendar',
                 'RoleAssignment',
                 'OrganisationRolePolicy',
                 'RolePermission',
-                'Enrollment',
-                'Student',
-                'ClassSubjectTeacher',
-                'ClassTeacherAssignment',
-                'TeachingAssignment',
                 'ClassSubject',
                 'Section',
                 'SchoolClass',
@@ -138,8 +133,23 @@ class Command(BaseCommand):
                 'PublishedSchoolIndicator',
                 'SchoolConfigurationVersion',
                 'SchoolConfiguration',
+
+                # 7. Communications, audits & support
+                'SupportAccessGrant',
+                'UserInvitation',
+                'AuditEvent',
+                'Notification',
+                'Announcement',
+                'StudyMaterial',
                 'BackgroundJob',
                 'LandingContactMessage',
+
+                # 8. School subscriptions & orders
+                'SubscriptionEvent',
+                'SubscriptionOrder',
+                'SchoolFeatureOverride',
+                'SchoolSubscription',
+                'OrganisationSubscription',
             ]
 
             cleared_counts = {}
@@ -155,10 +165,21 @@ class Command(BaseCommand):
                 except Exception as e:
                     self.stdout.write(self.style.WARNING(f'Note on clearing {model_name}: {e}'))
 
+            # Ensure any leftover staff members are removed
+            try:
+                StaffMember = apps.get_model('core', 'StaffMember')
+                StaffMember.objects.all().delete()
+            except Exception:
+                pass
+
+            User = apps.get_model('core', 'User')
+            School = apps.get_model('core', 'School')
+            Organisation = apps.get_model('core', 'Organisation')
+
             # Detach foreign keys on User to prevent ProtectedError
             User.objects.all().update(school=None, organisation=None)
 
-            # Delete all non-admin or all users
+            # Delete all users
             user_count = User.objects.all().count()
             User.objects.all().delete()
 

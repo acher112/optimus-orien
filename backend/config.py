@@ -32,8 +32,8 @@ if os.getenv('POSTGRES_DB') or os.getenv('DATABASE_URL'):
         import urllib.parse as _up
         _url = _up.urlparse(os.environ['DATABASE_URL'])
         db_config['NAME'] = _url.path[1:]
-        db_config['USER'] = _url.username
-        db_config['PASSWORD'] = _url.password or ''
+        db_config['USER'] = _up.unquote(_url.username or '')
+        db_config['PASSWORD'] = _up.unquote(_url.password or '')
         db_config['HOST'] = _url.hostname
         db_config['PORT'] = _url.port or 5432
     else:
