@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { navigate } from '../navigation';
 import {
   ArrowLeft, ArrowRight, ShieldCheck, CheckCircle2,
   GraduationCap, CalendarCheck, ClipboardCheck, BarChart3,
@@ -64,7 +65,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
 
   const navigateTo = (path: string, e?: React.MouseEvent) => {
     if (e) e.preventDefault();
-    window.history.pushState(null, '', path);
+    navigate(path);
     setCurrentPath(path);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -721,15 +722,27 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
               {isUr ? 'English' : 'اردو'}
             </button>
             {authenticated ? (
-              <a href="/app" className="btn-nav-dashboard">
+              <a
+                href="/app"
+                className="btn-nav-dashboard"
+                onClick={(e) => navigateTo('/app', e)}
+              >
                 {isUr ? 'ڈیش بورڈ پر جائیں' : 'Go to dashboard'}
               </a>
             ) : (
               <>
-                <a href="/login" className="btn-nav-signin">
+                <a
+                  href="/login"
+                  className="btn-nav-signin"
+                  onClick={(e) => navigateTo('/login', e)}
+                >
                   {isUr ? 'لاگ ان' : 'Sign in'}
                 </a>
-                <a href="/login?tab=register" className="btn-nav-register">
+                <a
+                  href="/login?tab=register"
+                  className="btn-nav-register"
+                  onClick={(e) => navigateTo('/login?tab=register', e)}
+                >
                   {isUr ? 'اسکول رجسٹر کریں' : 'Register your school'}
                 </a>
               </>
@@ -759,7 +772,11 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
           <p className="info-page-subtitle">{page.subtitle}</p>
 
           <div className="info-hero-actions">
-            <a href="/login?tab=register" className="btn-hero-primary">
+            <a
+              href="/login?tab=register"
+              className="btn-hero-primary"
+              onClick={(e) => navigateTo('/login?tab=register', e)}
+            >
               <span>{isUr ? '3 روزہ اعزازی رسائی شروع کریں' : 'Start 3-Day Free Trial'}</span>
               <ArrowRight size={18} />
             </a>
@@ -957,7 +974,11 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
               : 'Join forward-thinking institutions using Optimus Orien to turn academic data into student growth.'}
           </p>
           <div className="banner-actions">
-            <a href="/login?tab=register" className="btn-banner-primary">
+            <a
+              href="/login?tab=register"
+              className="btn-banner-primary"
+              onClick={(e) => navigateTo('/login?tab=register', e)}
+            >
               {isUr ? 'اپنا اسکول رجسٹر کریں' : 'Register Your School Today'}
             </a>
             <button

@@ -22,6 +22,7 @@ import PlanAndBilling from './PlanAndBilling';
 import FeatureLockedScreen from './FeatureLockedScreen';
 import RegistrationPlanSelection from './RegistrationPlanSelection';
 import PublicHome from './PublicHome';
+import { navigate } from './navigation';
 const PublicInfoPage = React.lazy(() => import('./landing/PublicInfoPage'));
 const SchoolSetup = React.lazy(() => import('./SchoolSetup'));
 const Reports = React.lazy(() => import('./Reports'));
@@ -584,7 +585,34 @@ const Pill = ({ value }: { value: string | boolean | undefined }) => {
 };
 
 function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem('optimus_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [currentPathname, setCurrentPathname] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.pathname : ''
+  );
+  const [currentSearch, setCurrentSearch] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.search : ''
+  );
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentPathname(window.location.pathname);
+      setCurrentSearch(window.location.search);
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('optimus_navigate', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('optimus_navigate', handleLocationChange);
+    };
+  }, []);
+
   const [teacherScope, setTeacherScope] = useState<any>(null);
 
   useEffect(() => {
@@ -596,7 +624,23 @@ function App() {
       setTeacherScope(null);
     }
   }, [user]);
-  const [loading, setLoading] = useState(true);
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const path = window.location.pathname;
+    const search = window.location.search;
+    const isAuth = path === '/login' || path === '/register' || path === '/signin' ||
+      search.includes('tab=register') || search.includes('tab=signin') || search.includes('tab=forgot');
+    if (isAuth) return false;
+    const isPublic = path === '/' || path === '' ||
+      path.startsWith('/about') || path.startsWith('/privacy') || path.startsWith('/terms') ||
+      path.startsWith('/contact') || path.startsWith('/platform') || path.startsWith('/portals');
+    if (isPublic) return false;
+    try {
+      if (localStorage.getItem('optimus_user')) return false;
+    } catch {}
+    return true;
+  });
   const [page, setPage] = useState<string>(() => {
     try {
       const storedUserStr = localStorage.getItem('optimus_user');
@@ -956,6 +1000,9 @@ function App() {
     applyTheme(mode, color);
     request<User>('auth/me/').then(u => {
       setUser(u);
+      try {
+        localStorage.setItem('optimus_user', JSON.stringify(u));
+      } catch {}
       if (['principal', 'school_admin', 'teacher', 'student'].includes(u.role)) {
         if (u.school) {
           setActiveCampusId(u.school);
@@ -985,7 +1032,12 @@ function App() {
       ]).then(([cl, sb]) => {
         setRefData(prev => ({ ...prev, classes: cl, subjects: sb }));
       }).catch(() => {});
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => {
+      try {
+        localStorage.removeItem('optimus_user');
+      } catch {}
+      setUser(null);
+    }).finally(() => setLoading(false));
   }, []);
 
   const load = useCallback(async () => {
@@ -1317,15 +1369,22 @@ function App() {
     }
   };
 
-  const currentPathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const isPublicHomeRoute = currentPathname === '/' || currentPathname === '';
+  const isAuthRoute =
+    currentPathname === '/login' ||
+    currentPathname === '/register' ||
+    currentPathname === '/signin' ||
+    currentSearch.includes('tab=register') ||
+    currentSearch.includes('tab=signin') ||
+    currentSearch.includes('tab=forgot');
+
+  const isPublicHomeRoute = (currentPathname === '/' || currentPathname === '') && !isAuthRoute;
   const isPublicInfoRoute =
-    currentPathname.startsWith('/about') ||
+    (currentPathname.startsWith('/about') ||
     currentPathname.startsWith('/privacy') ||
     currentPathname.startsWith('/terms') ||
     currentPathname.startsWith('/contact') ||
     currentPathname.startsWith('/platform') ||
-    currentPathname.startsWith('/portals');
+    currentPathname.startsWith('/portals')) && !isAuthRoute;
 
   if (isPublicHomeRoute) {
     return <PublicHome authenticated={Boolean(user)} />;
@@ -1339,11 +1398,50 @@ function App() {
     );
   }
 
+  if (!user && (isAuthRoute || currentPathname === '/login' || currentPathname === '/register' || !loading)) {
+    return (
+      <Login
+        onLogin={(u, isNewRegistration) => {
+          try {
+            localStorage.setItem('optimus_user', JSON.stringify(u));
+          } catch {}
+          window.history.replaceState(null, '', '/app');
+          localStorage.removeItem('optimus_active_campus_id');
+          setActiveCampusId(null);
+          setCampuses([]);
+          setSubscription(null);
+          setEntitlements(null);
+          setProfileMenuOpen(false);
+          setCampusDropdownOpen(false);
+          setOpenDropdowns({});
+          setShowNotifications(false);
+          if (isNewRegistration) {
+            try {
+              localStorage.setItem(`optimus_pending_plan_${u.id}`, 'true');
+            } catch {}
+            setPage('PlanSelection');
+          } else {
+            setPage('Overview');
+          }
+          try { queryCache.clear(); } catch {}
+          const { mode, color } = getStoredTheme();
+          const isD = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          setDark(isD);
+          applyTheme(mode, color);
+          setUser(u);
+        }}
+      />
+    );
+  }
+
   if (loading) return <div className="loader-screen"><div className="brand-symbol">◈</div><div>Preparing your workspace…</div></div>;
 
   if (!user) return (
     <Login
       onLogin={(u, isNewRegistration) => {
+        try {
+          localStorage.setItem('optimus_user', JSON.stringify(u));
+        } catch {}
         window.history.replaceState(null, '', '/app');
         localStorage.removeItem('optimus_active_campus_id');
         setActiveCampusId(null);
@@ -1393,7 +1491,8 @@ function App() {
             } catch {}
             fetchSubscription();
             setPage('Overview');
-            notify(`🎉 Welcome! Your ${newPlan === 'premium' ? 'Premium' : 'Standard'} plan is now active. All corresponding institutional modules are unlocked.`);
+            const planLabel = newPlan === 'premium' ? 'Premium' : newPlan === 'custom' ? 'Custom' : 'Standard';
+            notify(`🎉 Welcome! Your ${planLabel} plan is now active. All corresponding institutional modules are unlocked.`);
           }}
         />
       </div>
@@ -3462,12 +3561,40 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
   });
   const [pending, setPending] = useState(false), [error, setError] = useState('');
 
+  useEffect(() => {
+    const syncTab = () => {
+      const isReg = window.location.search.includes('tab=register') || window.location.pathname === '/register';
+      const isForgot = window.location.search.includes('tab=forgot');
+      if (isReg) setTab('register');
+      else if (isForgot) setTab('forgot');
+      else setTab('signin');
+    };
+    window.addEventListener('popstate', syncTab);
+    window.addEventListener('optimus_navigate', syncTab);
+    return () => {
+      window.removeEventListener('popstate', syncTab);
+      window.removeEventListener('optimus_navigate', syncTab);
+    };
+  }, []);
+
+  const switchTab = (nextTab: 'signin' | 'register' | 'forgot') => {
+    setTab(nextTab);
+    setError('');
+    setForgotMsg('');
+    const targetUrl = nextTab === 'register' ? '/login?tab=register' : nextTab === 'forgot' ? '/login?tab=forgot' : '/login';
+    window.history.replaceState(null, '', targetUrl);
+  };
+
   async function submitLogin(e: React.FormEvent) {
     e.preventDefault();
     setPending(true);
     setError('');
     try {
-      onLogin(await login(name, pass));
+      const u = await login(name, pass);
+      try {
+        localStorage.setItem('optimus_user', JSON.stringify(u));
+      } catch {}
+      onLogin(u);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sign in failed');
     } finally {
@@ -3481,6 +3608,9 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
     setError('');
     try {
       const newUser = await register(regForm);
+      try {
+        localStorage.setItem('optimus_user', JSON.stringify(newUser));
+      } catch {}
       onLogin(newUser, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Registration failed');
@@ -3573,14 +3703,14 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
             <button
               type="button"
               className={`login-tab ${tab === 'signin' ? 'active' : ''}`}
-              onClick={() => { setTab('signin'); setError(''); setForgotMsg(''); }}
+              onClick={() => switchTab('signin')}
             >
               Sign In
             </button>
             <button
               type="button"
               className={`login-tab ${tab === 'register' ? 'active' : ''}`}
-              onClick={() => { setTab('register'); setError(''); setForgotMsg(''); }}
+              onClick={() => switchTab('register')}
             >
               Create Account
             </button>
@@ -3654,7 +3784,7 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
 
               <div className="login-switch-row" style={{ marginTop: 20 }}>
                 <span>Remembered your password?</span>
-                <button type="button" className="text-link-btn" onClick={() => { setTab('signin'); setError(''); setForgotMsg(''); }}>
+                <button type="button" className="text-link-btn" onClick={() => switchTab('signin')}>
                   ← Back to Sign In
                 </button>
               </div>
@@ -3690,7 +3820,7 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
                     type="button"
                     className="text-link-btn"
                     style={{ fontSize: 12, color: 'var(--brand-primary, #6366f1)', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
-                    onClick={() => { setTab('forgot'); setError(''); setForgotMsg(''); setForgotStep(1); }}
+                    onClick={() => { switchTab('forgot'); setForgotStep(1); }}
                   >
                     Forgot password?
                   </button>
@@ -3702,7 +3832,7 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
               </form>
               <div className="login-switch-row">
                 <span>New educational institution?</span>
-                <button type="button" className="text-link-btn" onClick={() => { setTab('register'); setError(''); }}>
+                <button type="button" className="text-link-btn" onClick={() => switchTab('register')}>
                   Create account & register campus →
                 </button>
               </div>
@@ -3805,7 +3935,7 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
               </form>
               <div className="login-switch-row">
                 <span>Already registered?</span>
-                <button type="button" className="text-link-btn" onClick={() => { setTab('signin'); setError(''); }}>
+                <button type="button" className="text-link-btn" onClick={() => switchTab('signin')}>
                   Sign in to existing account →
                 </button>
               </div>
@@ -3813,7 +3943,16 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
           )}
 
           <div className="login-security"><ShieldCheck size={16} /> Your data belongs to your school community.</div>
-          <a className="login-home-link" href="/"><ChevronLeft size={16} /> Back to public homepage</a>
+          <a
+            className="login-home-link"
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('/');
+            }}
+          >
+            <ChevronLeft size={16} /> Back to public homepage
+          </a>
         </div>
       </div>
     </div>

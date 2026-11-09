@@ -2692,10 +2692,10 @@ input:checked + .toggle-slider:before {
 }
 
 .plan-selection-container {
-  max-width: 1240px;
+  max-width: 1480px;
   width: 100%;
   margin: 0 auto;
-  padding: 40px 24px 60px;
+  padding: 36px 20px 60px;
   flex: 1;
 }
 
@@ -2806,14 +2806,22 @@ input:checked + .toggle-slider:before {
 
 .plan-selection-cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
   align-items: stretch;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1280px) {
   .plan-selection-cards-grid {
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+}
+
+@media (max-width: 680px) {
+  .plan-selection-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 }
 
@@ -2847,6 +2855,11 @@ input:checked + .toggle-slider:before {
   border: 2px solid #f59e0b;
   box-shadow: 0 8px 28px rgba(245, 158, 11, 0.16);
   position: relative;
+}
+
+.plan-card-custom {
+  border: 1.5px solid #c4b5fd;
+  box-shadow: 0 4px 18px rgba(124, 58, 237, 0.08);
 }
 
 .plan-card-badge-row {
@@ -2886,6 +2899,12 @@ input:checked + .toggle-slider:before {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   color: #92400e;
   border: 1px solid #fcd34d;
+}
+
+.custom-pill {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
 }
 
 .plan-card-header h2 {
@@ -2976,6 +2995,17 @@ input:checked + .toggle-slider:before {
   transform: translateY(-1px);
 }
 
+.plan-btn-custom {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+}
+
+.plan-btn-custom:hover {
+  background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
+  transform: translateY(-1px);
+}
+
 .plan-cta-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
@@ -3053,6 +3083,16 @@ input:checked + .toggle-slider:before {
   color: #0f172a;
 }
 
+.custom-highlight-ul li strong {
+  color: #0f172a;
+}
+
+.custom-unlocked-title {
+  background: #f5f3ff !important;
+  color: #6d28d9 !important;
+  border: 1px solid #ddd6fe;
+}
+
 .disabled-ul li {
   display: flex;
   align-items: center;
@@ -3070,33 +3110,6 @@ input:checked + .toggle-slider:before {
 .disabled-ul li span:first-of-type {
   text-decoration: line-through 1px #cbd5e1;
   flex: 1;
-}
-
-.plan-selection-footer-note {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: var(--card-bg, #ffffff);
-  border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: 12px;
-  padding: 18px 24px;
-  margin-top: 40px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-}
-
-.plan-selection-footer-note .note-icon {
-  color: #16a34a;
-  flex-shrink: 0;
-}
-
-.plan-selection-footer-note .note-text {
-  font-size: 13px;
-  color: var(--text-secondary, #475569);
-  line-height: 1.5;
-}
-
-.plan-selection-footer-note .note-text strong {
-  color: var(--text-primary, #0f172a);
 }
 
 /* Dark mode adjustments for plan selection */
@@ -3143,6 +3156,17 @@ input:checked + .toggle-slider:before {
   box-shadow: 0 8px 28px rgba(180, 83, 9, 0.3);
 }
 
+.dark .plan-card-custom {
+  border-color: #6d28d9;
+  box-shadow: 0 4px 18px rgba(109, 40, 217, 0.25);
+}
+
+.dark .custom-pill {
+  background: #2e1065;
+  color: #c4b5fd;
+  border-color: #6d28d9;
+}
+
 .dark .plan-card-header h2 {
   color: #f8fafc;
 }
@@ -3171,6 +3195,10 @@ input:checked + .toggle-slider:before {
   color: #ffffff;
 }
 
+.dark .custom-highlight-ul li strong {
+  color: #ffffff;
+}
+
 .dark .disabled-ul li {
   color: #64748b;
 }
@@ -3192,16 +3220,9 @@ input:checked + .toggle-slider:before {
   color: #fbbf24;
 }
 
-.dark .plan-selection-footer-note {
-  background: #111827;
-  border-color: #1f2937;
-}
-
-.dark .plan-selection-footer-note .note-text {
-  color: #94a3b8;
-}
-
-.dark .plan-selection-footer-note .note-text strong {
-  color: #f8fafc;
+.dark .custom-unlocked-title {
+  background: #2e1065 !important;
+  color: #c4b5fd !important;
+  border-color: #6d28d9 !important;
 }
 

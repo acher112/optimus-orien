@@ -1,5 +1,6 @@
 import React from 'react';
 import VortexAnimation from './VortexAnimation';
+import { navigate } from '../navigation';
 
 interface HeroSectionProps {
   authenticated: boolean;
@@ -35,15 +36,36 @@ export default function HeroSection({
 
         <div className="hero-cta-group">
           {authenticated ? (
-            <a href="/app" className="btn-hero-primary">
+            <a
+              href="/app"
+              className="btn-hero-primary"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/app');
+              }}
+            >
               {t.dashboard}
             </a>
           ) : (
             <>
-              <a href="/login?tab=register" className="btn-hero-primary">
+              <a
+                href="/login?tab=register"
+                className="btn-hero-primary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/login?tab=register');
+                }}
+              >
                 {t.register}
               </a>
-              <a href="/login" className="btn-hero-secondary">
+              <a
+                href="/login"
+                className="btn-hero-secondary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/login');
+                }}
+              >
                 {t.signIn}
               </a>
             </>

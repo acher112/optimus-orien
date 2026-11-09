@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { request } from './api';
+import { navigate } from './navigation';
 import './landing/landing.css';
 
 import LandingNavbar from './landing/LandingNavbar';
@@ -82,7 +83,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
     } catch (e) {
       // ignore
     }
-    window.location.href = `/login?tab=register&plan=${encodeURIComponent(planSlug)}`;
+    navigate(`/login?tab=register&plan=${encodeURIComponent(planSlug)}`);
   };
 
   const heroSlide = landingData?.hero_slides?.[0];

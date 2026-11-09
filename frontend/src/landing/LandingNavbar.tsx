@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { navigate } from '../navigation';
 
 interface LandingNavbarProps {
   authenticated: boolean;
@@ -111,18 +112,38 @@ export default function LandingNavbar({
 
           <div className="nav-auth-actions">
             {authenticated ? (
-              <a href="/app" className="btn-nav-dashboard" onClick={closeMenu}>
+              <a
+                href="/app"
+                className="btn-nav-dashboard"
+                onClick={(e) => {
+                  e.preventDefault();
+                  closeMenu();
+                  navigate('/app');
+                }}
+              >
                 {t.dashboard}
               </a>
             ) : (
               <>
-                <a href="/login" className="btn-nav-signin" onClick={closeMenu}>
+                <a
+                  href="/login"
+                  className="btn-nav-signin"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    closeMenu();
+                    navigate('/login');
+                  }}
+                >
                   {t.signIn}
                 </a>
                 <a
                   href="/login?tab=register"
                   className="btn-nav-register"
-                  onClick={closeMenu}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    closeMenu();
+                    navigate('/login?tab=register');
+                  }}
                 >
                   {t.register}
                 </a>

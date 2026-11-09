@@ -73,6 +73,11 @@ export async function fetchCsrfToken(force = false): Promise<string> {
   return csrfToken || cookieVal;
 }
 
+if (typeof window !== 'undefined') {
+  // Pre-warm CSRF token in the background so form submits never wait for a preliminary round-trip
+  fetchCsrfToken().catch(() => {});
+}
+
 export async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
   if (method !== 'GET') {
@@ -146,8 +151,6 @@ export const login = async (username: string, password: string) => {
   const u = await request<User & { csrfToken?: string }>('auth/login/', { method: 'POST', body: JSON.stringify({ username, password }) });
   if (u.csrfToken) {
     csrfToken = u.csrfToken;
-  } else {
-    await fetchCsrfToken(true);
   }
   return u;
 };
@@ -156,8 +159,6 @@ export const register = async (data: Record<string, unknown>) => {
   const u = await request<User & { csrfToken?: string }>('auth/register/', { method: 'POST', body: JSON.stringify(data) });
   if (u.csrfToken) {
     csrfToken = u.csrfToken;
-  } else {
-    await fetchCsrfToken(true);
   }
   return u;
 };

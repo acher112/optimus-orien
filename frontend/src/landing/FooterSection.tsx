@@ -57,15 +57,27 @@ export default function FooterSection({
 
             <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
               {authenticated ? (
-                <a href="/app" className="btn-nav-dashboard">
+                <a
+                  href="/app"
+                  className="btn-nav-dashboard"
+                  onClick={(e) => handleLinkClick('/app', e)}
+                >
                   {t.dashboard}
                 </a>
               ) : (
                 <>
-                  <a href="/login" className="btn-nav-signin">
+                  <a
+                    href="/login"
+                    className="btn-nav-signin"
+                    onClick={(e) => handleLinkClick('/login', e)}
+                  >
                     {t.signIn}
                   </a>
-                  <a href="/login?tab=register" className="btn-nav-register">
+                  <a
+                    href="/login?tab=register"
+                    className="btn-nav-register"
+                    onClick={(e) => handleLinkClick('/login?tab=register', e)}
+                  >
                     {t.register}
                   </a>
                 </>

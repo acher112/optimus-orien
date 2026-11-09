@@ -10,9 +10,7 @@ import {
   CheckCircle2,
   Building2,
   Zap,
-  Globe,
-  HelpCircle,
-  School
+  SlidersHorizontal
 } from 'lucide-react';
 import { request, type User } from './api';
 import { SandboxCheckoutModal, type CheckoutOrderInfo } from './SandboxCheckoutModal';
@@ -21,7 +19,7 @@ interface RegistrationPlanSelectionProps {
   user: User;
   activeCampusId: number | null;
   onContinueTrial: () => void;
-  onPlanUpgraded: (planCode: 'standard' | 'premium') => void;
+  onPlanUpgraded: (planCode: 'standard' | 'premium' | 'custom') => void;
   notify?: (msg: string) => void;
 }
 
@@ -34,7 +32,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
 }) => {
   const [currency, setCurrency] = useState<'USD' | 'PKR'>('USD');
   const [billingMonths, setBillingMonths] = useState<1 | 12>(1);
-  const [submittingPlan, setSubmittingPlan] = useState<'standard' | 'premium' | null>(null);
+  const [submittingPlan, setSubmittingPlan] = useState<'standard' | 'premium' | 'custom' | null>(null);
   const [activeCheckoutOrder, setActiveCheckoutOrder] = useState<CheckoutOrderInfo | null>(null);
   const [error, setError] = useState<string>('');
 
@@ -43,6 +41,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
   // Prices per student per month
   const standardMonthlyPrice = currency === 'USD' ? 3.6 : 1000;
   const premiumMonthlyPrice = currency === 'USD' ? 7.2 : 2000;
+  const customMonthlyPrice = currency === 'USD' ? 0.70 : 195;
 
   const standardDisplayPrice = (
     standardMonthlyPrice * (1 - discountRate)
@@ -52,7 +51,11 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
     premiumMonthlyPrice * (1 - discountRate)
   ).toFixed(currency === 'USD' ? 2 : 0);
 
-  const handleUpgrade = async (planCode: 'standard' | 'premium') => {
+  const customDisplayPrice = (
+    customMonthlyPrice * (1 - discountRate)
+  ).toFixed(currency === 'USD' ? 2 : 0);
+
+  const handleUpgrade = async (planCode: 'standard' | 'premium' | 'custom') => {
     try {
       setSubmittingPlan(planCode);
       setError('');
@@ -63,7 +66,23 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
         payment_method: 'card',
         currency: currency,
         custom_student_count: 50,
+        student_count: 50,
       };
+
+      if (planCode === 'custom') {
+        payload.selected_features = [
+          'attendance_daily',
+          'marks_grading',
+          'exams_datesheets',
+          'result_cards',
+          'timetable',
+          'fees_offline',
+          'accounts_ledger',
+          'hr_payroll',
+          'aqi',
+          'students_at_risk'
+        ];
+      }
 
       if (activeCampusId) {
         payload.school_id = activeCampusId;
@@ -91,7 +110,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
         setActiveCheckoutOrder({
           id: res.order.id,
           order_number: res.order.order_number,
-          plan_name: planCode === 'premium' ? 'Premium Plan' : 'Standard Plan',
+          plan_name: planCode === 'custom' ? 'Custom Package' : planCode === 'premium' ? 'Premium Plan' : 'Standard Plan',
           plan_code: planCode,
           amount: res.order.amount,
           currency: res.order.currency,
@@ -112,7 +131,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
   };
 
   const handleCheckoutSuccess = (orderNumber: string) => {
-    const plan = activeCheckoutOrder?.plan_code as 'standard' | 'premium' || 'standard';
+    const plan = (activeCheckoutOrder?.plan_code as 'standard' | 'premium' | 'custom') || 'standard';
     setActiveCheckoutOrder(null);
     if (notify) {
       notify(`🎉 Payment verified for order #${orderNumber}! Plan upgraded successfully.`);
@@ -206,7 +225,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
               </p>
               <div className="plan-card-price-box">
                 <span className="price-val">{currency === 'USD' ? '$0' : '₨ 0'}</span>
-                <span className="price-unit">/ testing</span>
+                <span className="price-unit">/ free access</span>
               </div>
             </div>
 
@@ -504,15 +523,71 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Footer Testing Note */}
-        <div className="plan-selection-footer-note">
-          <div className="note-icon"><ShieldCheck size={20} /></div>
-          <div className="note-text">
-            <strong>Testing Environment Notice:</strong> No trial day counter is currently enforced during platform testing.
-            You can test all free portal features immediately, and test Standard or Premium anytime using the sandbox card checkout.
-            You can also change your subscription at any time from <em>Plan & Billing</em> in the portal sidebar.
+          {/* 4. CUSTOM PLAN CARD */}
+          <div className="plan-card plan-card-custom">
+            <div className="plan-card-badge-row">
+              <span className="plan-pill custom-pill">
+                <SlidersHorizontal size={12} /> Custom / Modular
+              </span>
+            </div>
+
+            <div className="plan-card-header">
+              <h2>Custom</h2>
+              <p className="plan-card-tagline">
+                Tailor exact modules, multi-campus volume & institutional terms.
+              </p>
+              <div className="plan-card-price-box">
+                <span className="price-val">
+                  {currency === 'USD' ? `$${customDisplayPrice}` : `₨ ${customDisplayPrice}`}
+                </span>
+                <span className="price-unit">/ student / mo</span>
+              </div>
+            </div>
+
+            <div className="plan-card-cta">
+              <button
+                type="button"
+                className="plan-cta-btn plan-btn-custom"
+                disabled={submittingPlan === 'custom'}
+                onClick={() => handleUpgrade('custom')}
+              >
+                {submittingPlan === 'custom' ? (
+                  <span>Preparing order…</span>
+                ) : (
+                  <>
+                    <SlidersHorizontal size={16} />
+                    <span>Choose Custom Plan</span>
+                  </>
+                )}
+              </button>
+              <span className="plan-cta-subtext">
+                Modular package with flexible student seat allocation
+              </span>
+            </div>
+
+            <div className="plan-card-divider" />
+
+            <div className="plan-features-list">
+              <div className="features-group-title">
+                <CheckCircle2 size={14} className="group-icon-included" />
+                <span>Tailored Modular Inclusions:</span>
+              </div>
+              <ul className="features-ul included-ul custom-highlight-ul">
+                <li><Check size={14} /> <strong>Pick &amp; Mix Any Modules</strong> (Academics, Finance, AI)</li>
+                <li><Check size={14} /> <strong>Multi-Campus Volume Scaling</strong> &amp; Branch Pooling</li>
+                <li><Check size={14} /> <strong>Flexible Headcount</strong> (Add/remove student seats)</li>
+                <li><Check size={14} /> <strong>Double-Entry Ledger &amp; HR Payroll</strong> Add-ons</li>
+                <li><Check size={14} /> <strong>Academic Quality Index (AQI)</strong> Add-on</li>
+                <li><Check size={14} /> <strong>Custom Billing Terms</strong> (Monthly, Annual, Multi-year)</li>
+                <li><Check size={14} /> <strong>Institution Onboarding &amp; Dedicated Support</strong></li>
+              </ul>
+
+              <div className="features-group-title group-all-unlocked custom-unlocked-title">
+                <SlidersHorizontal size={14} color="#7c3aed" />
+                <span>100% Modular &amp; Customizable</span>
+              </div>
+            </div>
           </div>
         </div>
       </main>
