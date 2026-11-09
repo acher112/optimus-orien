@@ -559,7 +559,7 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium,
                     alignItems: 'center',
                     gap: 3
                   }}>
-                    <Crown size={10} style={{ color: '#d97706', fill: '#f59e0b' }} /> Premium
+                    <Crown size={10} style={{ color: '#d97706', fill: '#f59e0b' }} />
                   </span>
                 </button>
                 {onUpgrade && (

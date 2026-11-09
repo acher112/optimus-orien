@@ -332,7 +332,7 @@ export default function Salaries({
                   <Crown size={14} style={{ color: '#d97706', fill: '#f59e0b' }} />
                   <span>Export</span>
                   <span className="fx-locked-badge">
-                    <Crown size={10} style={{ color: '#d97706', fill: '#f59e0b' }} /> Premium
+                    <Crown size={10} style={{ color: '#d97706', fill: '#f59e0b' }} />
                   </span>
                 </button>
               ) : (

@@ -20,6 +20,7 @@ import {
 import { queryCache } from './queryCache';
 import PlanAndBilling from './PlanAndBilling';
 import FeatureLockedScreen from './FeatureLockedScreen';
+import RegistrationPlanSelection from './RegistrationPlanSelection';
 import PublicHome from './PublicHome';
 const PublicInfoPage = React.lazy(() => import('./landing/PublicInfoPage'));
 const SchoolSetup = React.lazy(() => import('./SchoolSetup'));
@@ -596,7 +597,18 @@ function App() {
     }
   }, [user]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState('Overview');
+  const [page, setPage] = useState<string>(() => {
+    try {
+      const storedUserStr = localStorage.getItem('optimus_user');
+      if (storedUserStr) {
+        const u = JSON.parse(storedUserStr);
+        if (u?.id && localStorage.getItem(`optimus_pending_plan_${u.id}`) === 'true') {
+          return 'PlanSelection';
+        }
+      }
+    } catch {}
+    return 'Overview';
+  });
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [records, setRecords] = useState<Resource[]>([]);
   const [resourceFilters, setResourceFilters] = useState<Record<string, any>>({});
@@ -1038,7 +1050,7 @@ function App() {
         {extraBadge}
         {badge && (
           <span className={`nav-plan-badge ${badge.tier}`} title={`Available on ${badge.label} plan`}>
-            <Crown size={11} className="crown-icon" /> {badge.label}
+            <Crown size={11} className="crown-icon" />
           </span>
         )}
       </button>
@@ -1331,7 +1343,7 @@ function App() {
 
   if (!user) return (
     <Login
-      onLogin={u => {
+      onLogin={(u, isNewRegistration) => {
         window.history.replaceState(null, '', '/app');
         localStorage.removeItem('optimus_active_campus_id');
         setActiveCampusId(null);
@@ -1342,7 +1354,14 @@ function App() {
         setCampusDropdownOpen(false);
         setOpenDropdowns({});
         setShowNotifications(false);
-        setPage('Overview');
+        if (isNewRegistration) {
+          try {
+            localStorage.setItem(`optimus_pending_plan_${u.id}`, 'true');
+          } catch {}
+          setPage('PlanSelection');
+        } else {
+          setPage('Overview');
+        }
         try { queryCache.clear(); } catch {}
         const { mode, color } = getStoredTheme();
         const isD = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -1352,6 +1371,34 @@ function App() {
       }}
     />
   );
+
+  if (user && page === 'PlanSelection') {
+    return (
+      <div className={dark ? 'dark' : ''}>
+        <RegistrationPlanSelection
+          user={user}
+          activeCampusId={activeCampusId}
+          notify={notify}
+          onContinueTrial={() => {
+            try {
+              localStorage.removeItem(`optimus_pending_plan_${user.id}`);
+            } catch {}
+            fetchSubscription();
+            setPage('Overview');
+            notify('Welcome to Optimus Orien! You are exploring with the Free Trial. Standard and Premium features are marked with lock icons.');
+          }}
+          onPlanUpgraded={(newPlan) => {
+            try {
+              localStorage.removeItem(`optimus_pending_plan_${user.id}`);
+            } catch {}
+            fetchSubscription();
+            setPage('Overview');
+            notify(`🎉 Welcome! Your ${newPlan === 'premium' ? 'Premium' : 'Standard'} plan is now active. All corresponding institutional modules are unlocked.`);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={'app ' + (dark ? 'dark' : '')}>
@@ -1595,7 +1642,7 @@ function App() {
                               <span className="nav-item-title">{name}</span>
                               {badge && (
                                 <span className={`nav-plan-badge ${badge.tier}`} title={`Available on ${badge.label} plan`}>
-                                  <Crown size={11} className="crown-icon" /> {badge.label}
+                                  <Crown size={11} className="crown-icon" />
                                 </span>
                               )}
                               <span
@@ -1623,7 +1670,7 @@ function App() {
                                       <span>{child.name}</span>
                                       {childBadge && (
                                         <span className={`nav-plan-badge ${childBadge.tier}`} title={`Available on ${childBadge.label} plan`}>
-                                          <Crown size={10} className="crown-icon" /> {childBadge.label}
+                                          <Crown size={10} className="crown-icon" />
                                         </span>
                                       )}
                                     </button>
@@ -3390,7 +3437,7 @@ function Empty({ text, small = false }: { text: string; small?: boolean }) {
   );
 }
 
-function Login({ onLogin }: { onLogin: (user: User) => void }) {
+function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean) => void }) {
   const [tab, setTab] = useState<'signin' | 'register' | 'forgot'>(() =>
     window.location.search.includes('tab=register') || window.location.pathname === '/register' ? 'register' : 'signin'
   );
@@ -3433,7 +3480,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     setPending(true);
     setError('');
     try {
-      onLogin(await register(regForm));
+      const newUser = await register(regForm);
+      onLogin(newUser, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Registration failed');
     } finally {
