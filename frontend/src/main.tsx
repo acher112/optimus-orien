@@ -9,7 +9,7 @@ import {
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle,
-  CreditCard, Lock
+  CreditCard, Lock, Crown
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -157,6 +157,110 @@ const NAV_GROUPS = [
   { sublabel: 'FINANCE & BILLING', items: ['Finance', 'Plan & Billing'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
 ];
+
+// Mapping from navigation page names to minimum required subscription tier
+const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
+  // Free tier
+  'Overview': 'free',
+  'Campuses': 'free',
+  'Campus setup': 'free',
+  'Academic years': 'free',
+  'Classes': 'free',
+  'Subjects': 'free',
+  'Students': 'free',
+  'My Students': 'free',
+  'Attendance': 'free',
+  'My Attendance': 'free',
+  'Academics': 'free',
+  'Announcements': 'free',
+  'Staff': 'free',
+  'Notifications': 'free',
+  'Settings': 'free',
+  'My Profile': 'free',
+  'Profile': 'free',
+  'Profile & Security': 'free',
+  'Plan & Billing': 'free',
+  'My performance': 'free',
+  'Platform owner': 'free',
+  'My Class': 'free',
+  'My Subjects': 'free',
+  'My Dashboard': 'free',
+  'Results & Progress': 'free',
+  'Discussion': 'free',
+
+  // Standard tier additions
+  'Homework': 'standard',
+  'Examinations': 'standard',
+  'Academics / Exams': 'standard',
+  'Study materials': 'standard',
+  'Study Materials': 'standard',
+  'Timetable': 'standard',
+  'Student fees': 'standard',
+  'Fee overview': 'standard',
+  'Fee structure': 'standard',
+  'Collect fee': 'standard',
+  'Vouchers': 'standard',
+  'Defaulters': 'standard',
+  'Concessions': 'standard',
+  'Receipts': 'standard',
+  'Fees': 'standard',
+  'Student Fees': 'standard',
+  'Data import': 'standard',
+  'Communication': 'standard',
+  'Staff Salaries': 'standard',
+  'Finance': 'standard',
+  'Reports': 'standard',
+  'Permissions': 'standard',
+
+  // Premium tier additions
+  'Academic Quality Index': 'premium',
+  'Academic Quality (AQI)': 'premium',
+  'Psychological Evaluation': 'premium',
+  'My Development Profile': 'premium',
+  'Students at Risk': 'premium',
+  'At-risk list': 'premium',
+  'Risk criteria': 'premium',
+  'Review cases': 'premium',
+  'Review Cases': 'premium',
+  'Interventions': 'premium',
+  'Audit log': 'premium',
+};
+
+const NAV_ITEM_FEATURE_KEYS: Record<string, string> = {
+  'Homework': 'homework',
+  'Examinations': 'examinations',
+  'Academics / Exams': 'examinations',
+  'Study materials': 'study_materials',
+  'Study Materials': 'study_materials',
+  'Timetable': 'timetable',
+  'Student fees': 'student_fees',
+  'Fee overview': 'student_fees',
+  'Fee structure': 'student_fees',
+  'Collect fee': 'student_fees',
+  'Vouchers': 'student_fees',
+  'Defaulters': 'student_fees',
+  'Concessions': 'student_fees',
+  'Receipts': 'student_fees',
+  'Fees': 'student_fees',
+  'Student Fees': 'student_fees',
+  'Data import': 'data_import',
+  'Communication': 'communication_limited',
+  'Staff Salaries': 'staff_salaries',
+  'Finance': 'finance',
+  'Reports': 'reports_standard',
+  'Permissions': 'permissions_basic',
+  'Academic Quality Index': 'academic_quality_index',
+  'Academic Quality (AQI)': 'academic_quality_index',
+  'Psychological Evaluation': 'psychological_evaluation',
+  'My Development Profile': 'psychological_evaluation',
+  'Students at Risk': 'students_at_risk',
+  'At-risk list': 'students_at_risk',
+  'Risk criteria': 'students_at_risk',
+  'Review cases': 'students_at_risk',
+  'Review Cases': 'students_at_risk',
+  'Interventions': 'interventions',
+  'Audit log': 'audit_log',
+};
 
 const initials = (name: string) => name.split(/\s+/).map(s => s[0]).join('').slice(0, 2).toUpperCase();
 const fmt = (n: number | null | undefined, suffix = '%') => n === null || n === undefined ? '—' : `${n}${suffix}`;
@@ -638,6 +742,47 @@ function App() {
     return basicList.includes(key);
   }, [user, entitlements, subscription, activeCampusId, orgPlan]);
 
+  const getNavBadge = useCallback((name: string): { tier: 'standard' | 'premium'; label: string } | null => {
+    // Only platform superadmin without any school assignment bypasses tenant feature gating
+    if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) {
+      return null;
+    }
+    // Custom or premium plans unlock all features across the system
+    if (orgPlan === 'custom' || orgPlan === 'premium') {
+      return null;
+    }
+
+    const featKey = NAV_ITEM_FEATURE_KEYS[name];
+    if (featKey && isFeatureUnlocked(featKey)) {
+      return null;
+    }
+
+    const requiredTier = NAV_ITEM_TIERS[name] || 'free';
+    if (requiredTier === 'free') {
+      return null;
+    }
+
+    // If user is on standard plan:
+    if (orgPlan === 'standard') {
+      // Standard features are unlocked; only premium features show paid Crown + Premium
+      if (requiredTier === 'premium') {
+        return { tier: 'premium', label: 'Premium' };
+      }
+      return null;
+    }
+
+    // If user is on free plan:
+    // Both standard and premium features show their required tier badge with paid Crown icon
+    if (requiredTier === 'premium') {
+      return { tier: 'premium', label: 'Premium' };
+    }
+    if (requiredTier === 'standard') {
+      return { tier: 'standard', label: 'Standard' };
+    }
+
+    return null;
+  }, [user, activeCampusId, orgPlan, isFeatureUnlocked]);
+
   const handleSignOut = useCallback(async () => {
     try {
       localStorage.removeItem('optimus_active_campus_id');
@@ -872,6 +1017,33 @@ function App() {
     setResourceFilters({});
     setSidebar(false);
   };
+
+  const renderNavButton = useCallback((
+    targetPage: string,
+    label: string,
+    IconComponent: any,
+    extraBadge?: React.ReactNode
+  ) => {
+    const badge = getNavBadge(targetPage);
+    const isSelected = page === targetPage;
+    return (
+      <button
+        key={targetPage}
+        type="button"
+        onClick={() => switchPage(targetPage)}
+        className={'nav-item ' + (isSelected ? 'selected' : '') + (badge ? ' nav-item-locked' : '')}
+      >
+        <IconComponent size={19} strokeWidth={1.9} />
+        <span>{label}</span>
+        {extraBadge}
+        {badge && (
+          <span className={`nav-plan-badge ${badge.tier}`} title={`Available on ${badge.label} plan`}>
+            <Crown size={11} className="crown-icon" /> {badge.label}
+          </span>
+        )}
+      </button>
+    );
+  }, [page, getNavBadge]);
   const changeTheme = () => {
     const nextMode = dark ? 'light' : 'dark';
     setDark(!dark);
@@ -1335,157 +1507,28 @@ function App() {
             <div className="nav-label">MY TEACHING WORKSPACE</div>
             <nav>
               <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
-              <button
-                type="button"
-                onClick={() => switchPage('Overview')}
-                className={'nav-item ' + (page === 'Overview' ? 'selected' : '')}
-              >
-                <LayoutDashboard size={19} strokeWidth={1.9} />
-                <span>My Home</span>
-              </button>
-
-                            <button
-                type="button"
-                onClick={() => switchPage('Psychological Evaluation')}
-                className={'nav-item ' + (page === 'Psychological Evaluation' ? 'selected' : '')}
-              >
-                <Activity size={19} strokeWidth={1.9} />
-                <span>Psychological Evaluation</span>
-              </button>
-
-              {teacherScope?.can_view_my_class && (
-                <button
-                  type="button"
-                  onClick={() => switchPage('My Class')}
-                  className={'nav-item ' + (page === 'My Class' ? 'selected' : '')}
-                >
-                  <Users size={19} strokeWidth={1.9} />
-                  <span>My Class</span>
-                </button>
-              )}
-
-              {teacherScope?.can_view_my_subjects && (
-                <button
-                  type="button"
-                  onClick={() => switchPage('My Subjects')}
-                  className={'nav-item ' + (page === 'My Subjects' ? 'selected' : '')}
-                >
-                  <BookOpen size={19} strokeWidth={1.9} />
-                  <span>My Subjects</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => switchPage('Students')}
-                className={'nav-item ' + (page === 'Students' ? 'selected' : '')}
-              >
-                <GraduationCap size={19} strokeWidth={1.9} />
-                <span>My Students</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchPage('Attendance')}
-                className={'nav-item ' + (page === 'Attendance' ? 'selected' : '')}
-              >
-                <ClipboardCheck size={19} strokeWidth={1.9} />
-                <span>Attendance</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchPage('Homework')}
-                className={'nav-item ' + (page === 'Homework' ? 'selected' : '')}
-              >
-                <ClipboardList size={19} strokeWidth={1.9} />
-                <span>Homework</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchPage('Examinations')}
-                className={'nav-item ' + (page === 'Examinations' ? 'selected' : '')}
-              >
-                <Award size={19} strokeWidth={1.9} />
-                <span>Academics / Exams</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchPage('Academic Quality Index')}
-                className={'nav-item ' + (page === 'Academic Quality Index' ? 'selected' : '')}
-              >
-                <TrendingUp size={19} strokeWidth={1.9} />
-                <span>Academic Quality (AQI)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchPage('Study materials')}
-                className={'nav-item ' + (page === 'Study materials' ? 'selected' : '')}
-              >
-                <BookOpen size={19} strokeWidth={1.9} />
-                <span>Study Materials</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchPage('Timetable')}
-                className={'nav-item ' + (page === 'Timetable' ? 'selected' : '')}
-              >
-                <CalendarDays size={19} strokeWidth={1.9} />
-                <span>Timetable</span>
-              </button>
-
-              {teacherScope?.can_view_my_class && (
-                <button
-                  type="button"
-                  onClick={() => switchPage('Review cases')}
-                  className={'nav-item ' + (page === 'Review cases' ? 'selected' : '')}
-                >
-                  <ShieldAlert size={19} strokeWidth={1.9} />
-                  <span>Review Cases</span>
-                </button>
-              )}
+              {renderNavButton('Overview', 'My Home', LayoutDashboard)}
+              {renderNavButton('Psychological Evaluation', 'Psychological Evaluation', Activity)}
+              {teacherScope?.can_view_my_class && renderNavButton('My Class', 'My Class', Users)}
+              {teacherScope?.can_view_my_subjects && renderNavButton('My Subjects', 'My Subjects', BookOpen)}
+              {renderNavButton('Students', 'My Students', GraduationCap)}
+              {renderNavButton('Attendance', 'Attendance', ClipboardCheck)}
+              {renderNavButton('Homework', 'Homework', ClipboardList)}
+              {renderNavButton('Examinations', 'Academics / Exams', Award)}
+              {renderNavButton('Academic Quality Index', 'Academic Quality (AQI)', TrendingUp)}
+              {renderNavButton('Study materials', 'Study Materials', BookOpen)}
+              {renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              {teacherScope?.can_view_my_class && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
 
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
-              <button
-                type="button"
-                onClick={() => switchPage('Communication')}
-                className={'nav-item ' + (page === 'Communication' ? 'selected' : '')}
-              >
-                <MessageSquare size={19} strokeWidth={1.9} />
-                <span>Communication</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Announcements')}
-                className={'nav-item ' + (page === 'Announcements' ? 'selected' : '')}
-              >
-                <Megaphone size={19} strokeWidth={1.9} />
-                <span>Announcements</span>
-              </button>
+              {renderNavButton('Communication', 'Communication', MessageSquare)}
+              {renderNavButton('Announcements', 'Announcements', Megaphone)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SYSTEM</div>
             <nav>
-              <button
-                type="button"
-                onClick={() => switchPage('Notifications')}
-                className={'nav-item ' + (page === 'Notifications' ? 'selected' : '')}
-              >
-                <Bell size={19} strokeWidth={1.9} />
-                <span>Notifications</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Settings')}
-                className={'nav-item ' + (page === 'Settings' ? 'selected' : '')}
-              >
-                <Settings2 size={19} strokeWidth={1.9} />
-                <span>My Profile</span>
-              </button>
+              {renderNavButton('Notifications', 'Notifications', Bell)}
+              {renderNavButton('Settings', 'My Profile', Settings2)}
             </nav>
           </>
         ) : user.role === 'student' ? (
@@ -1493,91 +1536,21 @@ function App() {
             <div className="nav-label">STUDENT PORTAL</div>
             <nav>
               <div className="nav-sublabel">LEARNING & PROGRESS</div>
-              <button
-                type="button"
-                onClick={() => switchPage('Overview')}
-                className={'nav-item ' + (page === 'Overview' ? 'selected' : '')}
-              >
-                <LayoutDashboard size={19} strokeWidth={1.9} />
-                <span>My Dashboard</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Attendance')}
-                className={'nav-item ' + (page === 'Attendance' ? 'selected' : '')}
-              >
-                <ClipboardCheck size={19} strokeWidth={1.9} />
-                <span>My Attendance</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Results & Progress')}
-                className={'nav-item ' + (page === 'Results & Progress' ? 'selected' : '')}
-              >
-                <TrendingUp size={19} strokeWidth={1.9} />
-                <span>Results & Progress</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('My Development Profile')}
-                className={'nav-item ' + (page === 'My Development Profile' ? 'selected' : '')}
-              >
-                <Sparkles size={19} strokeWidth={1.9} />
-                <span>My Development Profile</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchPage('Homework')}
-                className={'nav-item ' + (page === 'Homework' ? 'selected' : '')}
-              >
-                <ClipboardList size={19} strokeWidth={1.9} />
-                <span>Homework</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Study materials')}
-                className={'nav-item ' + (page === 'Study materials' ? 'selected' : '')}
-              >
-                <BookOpen size={19} strokeWidth={1.9} />
-                <span>Study Materials</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Timetable')}
-                className={'nav-item ' + (page === 'Timetable' ? 'selected' : '')}
-              >
-                <CalendarDays size={19} strokeWidth={1.9} />
-                <span>Timetable</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Discussion')}
-                className={'nav-item ' + (page === 'Discussion' ? 'selected' : '')}
-              >
-                <MessageSquare size={19} strokeWidth={1.9} />
-                <span>Class Discussion</span>
-              </button>
+              {renderNavButton('Overview', 'My Dashboard', LayoutDashboard)}
+              {renderNavButton('Attendance', 'My Attendance', ClipboardCheck)}
+              {renderNavButton('Results & Progress', 'Results & Progress', TrendingUp)}
+              {renderNavButton('My Development Profile', 'My Development Profile', Sparkles)}
+              {renderNavButton('Homework', 'Homework', ClipboardList)}
+              {renderNavButton('Study materials', 'Study Materials', BookOpen)}
+              {renderNavButton('Examinations', 'Examinations', Award)}
+              {renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SECURITY</div>
             <nav>
-              <button
-                type="button"
-                onClick={() => switchPage('Notifications')}
-                className={'nav-item ' + (page === 'Notifications' ? 'selected' : '')}
-              >
-                <Bell size={19} strokeWidth={1.9} />
-                <span>Notifications</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchPage('Profile')}
-                className={'nav-item ' + (page === 'Profile' ? 'selected' : '')}
-              >
-                <Settings2 size={19} strokeWidth={1.9} />
-                <span>Profile & Security</span>
-              </button>
+              {renderNavButton('Notifications', 'Notifications', Bell)}
+              {renderNavButton('Profile', 'Profile & Security', Settings2)}
             </nav>
           </>
         ) : (
@@ -1603,6 +1576,7 @@ function App() {
                       const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
 
                       if (isDropdown) {
+                        const badge = getNavBadge(name);
                         return (
                           <div key={name} className="nav-dropdown-group">
                             <button
@@ -1615,10 +1589,15 @@ function App() {
                                   switchPage(name);
                                 }
                               }}
-                              className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '')}
+                              className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '') + (badge ? ' nav-item-locked' : '')}
                             >
                               <Icon size={19} strokeWidth={1.9} />
                               <span className="nav-item-title">{name}</span>
+                              {badge && (
+                                <span className={`nav-plan-badge ${badge.tier}`} title={`Available on ${badge.label} plan`}>
+                                  <Crown size={11} className="crown-icon" /> {badge.label}
+                                </span>
+                              )}
                               <span
                                 className={'nav-chevron-wrap' + (isOpen ? ' open' : '')}
                                 onClick={(e) => toggleDropdown(name, e)}
@@ -1632,15 +1611,21 @@ function App() {
                                 {children.map((child: any) => {
                                   const ChildIcon = child.icon;
                                   const isChildSelected = page === child.name;
+                                  const childBadge = getNavBadge(child.name);
                                   return (
                                     <button
                                       key={child.name}
                                       type="button"
                                       onClick={() => switchPage(child.name)}
-                                      className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '')}
+                                      className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '') + (childBadge ? ' nav-item-locked' : '')}
                                     >
                                       <ChildIcon size={14} strokeWidth={1.8} />
                                       <span>{child.name}</span>
+                                      {childBadge && (
+                                        <span className={`nav-plan-badge ${childBadge.tier}`} title={`Available on ${childBadge.label} plan`}>
+                                          <Crown size={10} className="crown-icon" /> {childBadge.label}
+                                        </span>
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -1650,23 +1635,11 @@ function App() {
                         );
                       }
 
-                      const isItemLocked = isFreePlan && (name === 'Finance' || name === 'Staff Salaries');
-
-                      return (
-                        <button
-                          key={name}
-                          onClick={() => switchPage(name)}
-                          className={'nav-item ' + (page === name ? 'selected' : '') + (isItemLocked ? ' nav-item-locked' : '')}
-                        >
-                          <Icon size={19} strokeWidth={1.9} />
-                          <span>{name}</span>
-                          {name === 'Interventions' && !!dash?.counts.open_cases && <em>{dash.counts.open_cases}</em>}
-                          {isItemLocked && (
-                            <span className="nav-plan-badge standard" title="Available on Standard plan">
-                              <Lock size={10} /> Standard
-                            </span>
-                          )}
-                        </button>
+                      return renderNavButton(
+                        name,
+                        name,
+                        Icon,
+                        name === 'Interventions' && !!dash?.counts.open_cases ? <em>{dash.counts.open_cases}</em> : null
                       );
                     })}
                   </React.Fragment>
@@ -1680,12 +1653,7 @@ function App() {
                 if ((item as any).superuserOnly && !user.is_superuser) return false;
                 if ((item as any).roles) return (item as any).roles.includes(user.role);
                 return !item.adminOnly || ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
-              }).map(({ name, icon: Icon }) => (
-                <button key={name} onClick={() => switchPage(name)} className={'nav-item ' + (page === name ? 'selected' : '')}>
-                  <Icon size={19} strokeWidth={1.9} />
-                  <span>{name}</span>
-                </button>
-              ))}
+              }).map(({ name, icon: Icon }) => renderNavButton(name, name, Icon))}
             </nav>
           </>
         )}
@@ -2210,6 +2178,14 @@ function App() {
           )}
 
           {config && (
+            (page === 'Homework' && !isFeatureUnlocked('homework')) ? (
+              <FeatureLockedScreen
+                featureName="Homework & Tasks"
+                description="Keep assignments, submissions, and completion reviews in one place across all subjects and classes."
+                requiredPlan="Standard"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
             <>
               <div className="page-header">
                 <div>
@@ -2439,6 +2415,7 @@ function App() {
                 </div>
               </section>
             </>
+            )
           )}
 
           <React.Suspense fallback={<ViewLoadingSkeleton />}>

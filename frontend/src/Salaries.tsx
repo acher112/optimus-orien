@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Calendar, Check,
-  CheckCircle2, ChevronRight, Download, FileSpreadsheet, FileText, Lock, Plus,
+  CheckCircle2, ChevronRight, Crown, Download, FileSpreadsheet, FileText, Lock, Plus,
   Printer, RefreshCw, Search, ShieldCheck, Sparkles, User, Users, X
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
@@ -329,9 +329,11 @@ export default function Salaries({
                   title="Export requires Premium plan. Click to view plans."
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}
                 >
-                  <Lock size={14} style={{ color: '#d97706' }} />
+                  <Crown size={14} style={{ color: '#d97706', fill: '#f59e0b' }} />
                   <span>Export</span>
-                  <span className="fx-locked-badge">Premium</span>
+                  <span className="fx-locked-badge">
+                    <Crown size={10} style={{ color: '#d97706', fill: '#f59e0b' }} /> Premium
+                  </span>
                 </button>
               ) : (
                 <ExportMenu

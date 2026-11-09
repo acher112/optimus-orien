@@ -2523,7 +2523,7 @@ input:checked + .toggle-slider:before {
 }
 
 /* -------------------------------------------------------------------------
-   Sidebar Plan Lock Badges & Feature Gating
+   Sidebar Plan Lock Badges & Feature Gating (Canva Crown Style)
    ------------------------------------------------------------------------- */
 .nav-plan-badge {
   margin-left: auto;
@@ -2535,26 +2535,57 @@ input:checked + .toggle-slider:before {
   align-items: center;
   gap: 4px;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.nav-dropdown-btn .nav-plan-badge {
+  margin-left: auto;
+  margin-right: 6px;
+}
+.nav-plan-badge .crown-icon {
+  flex-shrink: 0;
 }
 .nav-plan-badge.standard {
   background: #eff6ff;
-  color: #2563eb;
+  color: #1d4ed8;
   border: 1px solid #bfdbfe;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.06);
+}
+.nav-plan-badge.standard .crown-icon {
+  color: #2563eb;
+  fill: #93c5fd;
 }
 .nav-plan-badge.premium {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   color: #92400e;
-  border: 1px solid #fde68a;
+  border: 1px solid #fcd34d;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.18);
 }
+.nav-plan-badge.premium .crown-icon {
+  color: #d97706;
+  fill: #f59e0b;
+}
+
 .dark .nav-plan-badge.standard {
   background: #1e293b;
   color: #60a5fa;
   border-color: #3b82f6;
+  box-shadow: none;
+}
+.dark .nav-plan-badge.standard .crown-icon {
+  color: #60a5fa;
+  fill: #1e3a8a;
 }
 .dark .nav-plan-badge.premium {
-  background: #2e2616;
+  background: linear-gradient(135deg, #2e2616 0%, #3d3013 100%);
   color: #fbbf24;
   border-color: #78350f;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.dark .nav-plan-badge.premium .crown-icon {
+  color: #fbbf24;
+  fill: #f59e0b;
 }
 
 /* Locked Chart Card within Finance Page */

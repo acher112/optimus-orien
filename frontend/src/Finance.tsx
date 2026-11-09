@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { AlertCircle, ArrowDownCircle, ArrowRight, ArrowUpCircle, Ban, Download, Lock, Plus, Scale, Sparkles, Tags, Trash2, Users } from 'lucide-react';
+import { AlertCircle, ArrowDownCircle, ArrowRight, ArrowUpCircle, Ban, Crown, Download, Lock, Plus, Scale, Sparkles, Tags, Trash2, Users } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import FilterBar from './FilterBar';
@@ -34,17 +34,18 @@ function LockedChartCard({
         height: 44,
         borderRadius: '50%',
         background: '#fef3c7',
-        color: '#b45309',
+        color: '#d97706',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 10
+        marginBottom: 10,
+        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.2)'
       }}>
-        <Lock size={20} />
+        <Crown size={22} style={{ fill: '#f59e0b' }} />
       </div>
 
       <div className="fx-locked-badge">
-        <Sparkles size={11} /> Premium Plan Feature
+        <Crown size={11} style={{ fill: '#f59e0b' }} /> Premium Plan Feature
       </div>
 
       <h4 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary, #1e293b)' }}>
@@ -558,7 +559,7 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium,
                     alignItems: 'center',
                     gap: 3
                   }}>
-                    <Lock size={10} /> Premium
+                    <Crown size={10} style={{ color: '#d97706', fill: '#f59e0b' }} /> Premium
                   </span>
                 </button>
                 {onUpgrade && (

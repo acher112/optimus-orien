@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Crown, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
 
 interface FeatureLockedScreenProps {
   featureName: string;
@@ -23,6 +23,8 @@ export const FeatureLockedScreen: React.FC<FeatureLockedScreenProps> = ({
     'Audit Trail Viewer & Compliance Activity Logs'
   ]
 }) => {
+  const isStandard = requiredPlan?.toLowerCase() === 'standard';
+
   return (
     <div style={{
       display: 'flex',
@@ -41,19 +43,20 @@ export const FeatureLockedScreen: React.FC<FeatureLockedScreenProps> = ({
         border: '1px solid var(--border-color, #e2e8f0)',
         textAlign: 'center'
       }}>
-        {/* Lock Icon Badge */}
+        {/* Crown Icon Badge */}
         <div style={{
           width: 72,
           height: 72,
           borderRadius: '50%',
-          backgroundColor: '#eff6ff',
-          color: '#2563eb',
+          backgroundColor: isStandard ? '#eff6ff' : '#fef3c7',
+          color: isStandard ? '#2563eb' : '#d97706',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          margin: '0 auto 20px auto'
+          margin: '0 auto 20px auto',
+          boxShadow: isStandard ? '0 4px 14px rgba(37,99,235,0.12)' : '0 4px 14px rgba(217,119,6,0.18)'
         }}>
-          <Lock size={36} />
+          <Crown size={36} style={{ fill: isStandard ? '#93c5fd' : '#f59e0b' }} />
         </div>
 
         {/* Plan Pill */}
@@ -61,9 +64,9 @@ export const FeatureLockedScreen: React.FC<FeatureLockedScreenProps> = ({
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
-          backgroundColor: requiredPlan?.toLowerCase() === 'standard' ? '#eff6ff' : '#fef3c7',
-          color: requiredPlan?.toLowerCase() === 'standard' ? '#2563eb' : '#92400e',
-          border: requiredPlan?.toLowerCase() === 'standard' ? '1px solid #bfdbfe' : '1px solid #fde68a',
+          backgroundColor: isStandard ? '#eff6ff' : '#fef3c7',
+          color: isStandard ? '#2563eb' : '#92400e',
+          border: isStandard ? '1px solid #bfdbfe' : '1px solid #fde68a',
           padding: '4px 14px',
           borderRadius: 20,
           fontSize: 12,
@@ -72,7 +75,7 @@ export const FeatureLockedScreen: React.FC<FeatureLockedScreenProps> = ({
           letterSpacing: '0.05em',
           marginBottom: 16
         }}>
-          <Sparkles size={14} />
+          <Crown size={14} style={{ color: isStandard ? '#2563eb' : '#d97706', fill: isStandard ? '#93c5fd' : '#f59e0b' }} />
           {requiredPlan} Plan Feature
         </div>
 
