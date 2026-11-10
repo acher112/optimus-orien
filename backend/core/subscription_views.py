@@ -53,7 +53,7 @@ logger = logging.getLogger('core.subscription_views')
 def _is_platform_admin(user):
     """Checks whether the user holds platform administrator authority."""
     return bool(user and user.is_authenticated and (
-        user.is_superuser or user.role in ('platform_admin', 'owner') or (user.is_staff and not user.school_id)
+        user.is_superuser or user.role in ('platform_admin', 'owner', 'super_admin', 'organisation_admin') or (user.is_staff and not user.school_id)
     ))
 
 

@@ -1422,7 +1422,7 @@ function App() {
 
     const isPlatformAdmin = Boolean(
       user.is_superuser ||
-      ['platform_admin', 'owner', 'super_admin'].includes(user.role) ||
+      ['platform_admin', 'owner', 'super_admin', 'organisation_admin'].includes(user.role) ||
       (user.is_staff && !user.school)
     );
 

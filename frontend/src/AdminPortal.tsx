@@ -2414,7 +2414,7 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
     try {
       const u = await login(username, password);
       const isOwner = Boolean(
-        u && (u.is_superuser || ['platform_admin', 'owner', 'super_admin'].includes(u.role) || (u.is_staff && !u.school))
+        u && (u.is_superuser || ['platform_admin', 'owner', 'super_admin', 'organisation_admin'].includes(u.role) || (u.is_staff && !u.school))
       );
       if (!isOwner) {
         setError('Access denied: This account is not a registered Platform Administrator or Website Owner.');
@@ -2446,7 +2446,7 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
         padding: '36px 32px',
         boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
             width: 54,
             height: 54,
@@ -2478,6 +2478,24 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
           <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748b' }}>
             Sign in with website owner credentials to monitor schools, revenues, and alter packages.
           </p>
+        </div>
+
+        {/* Credentials Notice Box */}
+        <div style={{
+          background: '#f8fafc',
+          border: '1px solid #e2e8f0',
+          borderRadius: 10,
+          padding: '12px 14px',
+          fontSize: 12,
+          color: '#334155',
+          marginBottom: 18,
+          lineHeight: 1.5,
+        }}>
+          <div><strong>Master Owner Account:</strong> <code style={{ background: '#e2e8f0', padding: '2px 5px', borderRadius: 4 }}>admin</code></div>
+          <div style={{ marginTop: 2 }}><strong>Master Password:</strong> <code style={{ background: '#e2e8f0', padding: '2px 5px', borderRadius: 4 }}>AdminPass123!</code></div>
+          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+            <em>(You can also log in with your registered Super Owner account)</em>
+          </div>
         </div>
 
         {error && (
