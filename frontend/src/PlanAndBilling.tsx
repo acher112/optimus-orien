@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  CreditCard, Check, Sparkles, ShieldCheck, FileText, CheckCircle2,
-  Clock, ArrowRight, RefreshCw, Lock, Building2,
-  Calendar, Layers, Users, Zap, AlertCircle, Sliders, ChevronRight,
-  ChevronDown, ChevronUp, CheckCircle, BookOpen, TrendingUp, DollarSign,
-  Minus, Plus, Shield, Award
+  CreditCard, Check, Sparkles, ShieldCheck, FileText,
+  Clock, ArrowRight, RefreshCw, Lock,
+  Calendar, Users, Zap, BookOpen, Crown,
+  X, AlertTriangle, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { request, type User } from './api';
-import { SandboxCheckoutModal, type CheckoutOrderInfo } from './SandboxCheckoutModal';
+import { UpgradeCheckoutModal } from './UpgradeCheckoutModal';
 import { ReceiptModal, type ReceiptData } from './ReceiptModal';
 
 interface PlanAndBillingProps {
@@ -60,84 +59,30 @@ interface OrderHistoryItem {
   payment_reference?: string;
 }
 
-interface CatalogFeature {
-  key: string;
-  name: string;
-  name_ur?: string;
-  category: 'core' | 'academics' | 'analytics' | 'finance' | 'operations';
-  is_premium_only: boolean;
-  rate_usd: number;
-  rate_pkr: number;
-}
-
-const CUSTOM_CATALOG_FEATURES: CatalogFeature[] = [
-  // Academics & Portals
-  { key: 'attendance_daily', name: 'Daily Attendance Tracking', category: 'academics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'marks_grading', name: 'Marks Entry & Grading Criteria', category: 'academics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'exams_datesheets', name: 'Exam Datesheets & Timetables', category: 'academics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'result_cards', name: 'Result Cards & Term Slips', category: 'academics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'timetable', name: 'Class Timetable Scheduling', category: 'academics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'tasks_homework', name: 'Tasks & Homework Assignments', category: 'academics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'participation_skills_entry', name: 'Skills & Participation Entry', category: 'academics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-
-  // Analytics & Intelligence
-  { key: 'aqi', name: 'Academic Quality Index (AQI)', category: 'analytics', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'aqi_history', name: 'Longitudinal AQI Trends', category: 'analytics', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'early_intervention', name: 'Early Intervention & Support Cases', category: 'analytics', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'attention_indicators', name: 'Student Attention Indicators', category: 'analytics', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'longitudinal_5y', name: '5-Year Longitudinal Student Progress', category: 'analytics', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'class_subject_performance', name: 'Class & Subject Academic Performance', category: 'analytics', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'teacher_insights', name: 'Teacher Instructional Insights', category: 'analytics', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-
-  // Finance & HR
-  { key: 'fees_offline', name: 'Offline Fees & Counter Receipts', category: 'finance', is_premium_only: false, rate_usd: 0.02, rate_pkr: 5 },
-  { key: 'accounts_ledger', name: 'Double-Entry Financial Accounts Ledger', category: 'finance', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'finance_dashboard', name: 'Executive Finance & Cashflow Dashboard', category: 'finance', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'hr_payroll', name: 'HR Staff Payroll & Salary Management', category: 'finance', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-
-  // Operations & Governance
-  { key: 'psych_eval', name: 'Psychological Evaluation Module', category: 'operations', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'multi_campus', name: 'Multi-Campus Network Governance', category: 'operations', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'admissions_online', name: 'Online Admissions & Applicant Funnel', category: 'operations', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'id_cards', name: 'Bulk Student & Staff ID Card Printing', category: 'operations', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'audit_log_viewer', name: 'Security Audit Log Viewer & Export', category: 'operations', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'advanced_reports_export', name: 'Formatted PDF & Excel Export Suite', category: 'operations', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-  { key: 'priority_support', name: 'Priority SLA Technical Support', category: 'operations', is_premium_only: true, rate_usd: 0.05, rate_pkr: 15 },
-];
-
-const BILLING_PERIOD_OPTIONS = [
-  { months: 1, label: '1 Month', discount: 0, tag: 'Standard' },
-  { months: 4, label: '4 Months', discount: 5, tag: '5% OFF' },
-  { months: 8, label: '8 Months', discount: 10, tag: '10% OFF' },
-  { months: 12, label: '12 Months (1 Year)', discount: 15, tag: '15% OFF - Best Value' },
-  { months: 24, label: '24 Months (2 Years)', discount: 20, tag: '20% OFF' },
-  { months: 36, label: '36 Months (3 Years)', discount: 25, tag: '25% OFF' },
-  { months: 60, label: '60 Months (5 Years)', discount: 30, tag: '30% OFF' },
-];
-
-export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCampusId, notify, onPlanChanged }) => {
+export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
+  user,
+  activeCampusId,
+  notify,
+  onPlanChanged
+}) => {
   const [currentSub, setCurrentSub] = useState<CurrentSubscriptionData | null>(null);
   const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [submittingOrder, setSubmittingOrder] = useState(false);
-
-  // Active Tier Choice: 'standard', 'premium', or 'custom'
-  const [selectedPlan, setSelectedPlan] = useState<'standard' | 'premium' | 'custom'>('premium');
   const [currency, setCurrency] = useState<'USD' | 'PKR'>('USD');
-  const [billingMonths, setBillingMonths] = useState<number>(12);
+  const [expandedCard, setExpandedCard] = useState<'standard' | 'premium' | null>(null);
 
-  // Card details expandable states
-  const [expandedCard, setExpandedCard] = useState<'standard' | 'premium' | 'custom' | null>(null);
+  // Upgrade Checkout Modal State
+  const [upgradeModal, setUpgradeModal] = useState<{
+    isOpen: boolean;
+    planCode: 'standard' | 'premium';
+    students?: number;
+  }>({
+    isOpen: false,
+    planCode: 'standard'
+  });
 
-  // Custom Package Builder State (Base rate 0.70$ / 195 PKR per student)
-  const [customStudents, setCustomStudents] = useState<number>(100);
-  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([
-    'attendance_daily', 'marks_grading', 'exams_datesheets', 'result_cards', 'timetable', 'fees_offline'
-  ]);
-
-  // Modals
-  const [activeCheckoutOrder, setActiveCheckoutOrder] = useState<CheckoutOrderInfo | null>(null);
+  // Printable Receipt Modal State
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
 
   const loadData = useCallback(async () => {
@@ -152,258 +97,61 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
 
       if (subData) {
         setCurrentSub(subData);
-        if (subData.active_students > 0) {
-          setCustomStudents(subData.active_students);
-        }
       }
       setOrders(ordersData?.results || []);
-    } catch (err: any) {
-      setLoadError(err?.message || 'Failed to load subscription details.');
-      if (notify) notify(err?.message || 'Failed to load subscription details.', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load subscription details.';
+      setLoadError(msg);
+      if (notify) notify(msg, 'error');
     } finally {
       setLoading(false);
     }
-  }, [activeCampusId]);
+  }, [activeCampusId, notify]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Handle Feature Toggle for Custom Package
-  const toggleFeature = (key: string) => {
-    setSelectedFeatures(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
-
-  const selectCategory = (category: string, selectAll: boolean) => {
-    const catKeys = CUSTOM_CATALOG_FEATURES.filter(f => f.category === category).map(f => f.key);
-    setSelectedFeatures(prev => {
-      if (selectAll) {
-        return Array.from(new Set([...prev, ...catKeys]));
-      } else {
-        return prev.filter(k => !catKeys.includes(k));
-      }
+  const handleOpenUpgrade = (planCode: 'standard' | 'premium', customCount?: number) => {
+    const studentCount = customCount || Math.max(1, currentSub?.active_students || 200);
+    setUpgradeModal({
+      isOpen: true,
+      planCode,
+      students: studentCount
     });
   };
 
-  const applyPresetBundle = (bundle: 'all' | 'academics' | 'finance_academic' | 'clear') => {
-    if (bundle === 'all') {
-      setSelectedFeatures(CUSTOM_CATALOG_FEATURES.map(f => f.key));
-    } else if (bundle === 'academics') {
-      setSelectedFeatures(CUSTOM_CATALOG_FEATURES.filter(f => f.category === 'academics').map(f => f.key));
-    } else if (bundle === 'finance_academic') {
-      setSelectedFeatures(CUSTOM_CATALOG_FEATURES.filter(f => f.category === 'academics' || f.category === 'finance').map(f => f.key));
-    } else {
-      setSelectedFeatures([]);
+  const handleUpgradeSuccess = async (orderNumber: string, planCode: 'standard' | 'premium') => {
+    setUpgradeModal(prev => ({ ...prev, isOpen: false }));
+    const planDisplayName = planCode === 'premium' ? 'Premium Plan' : 'Standard Plan';
+
+    if (notify) {
+      notify(`🎉 Payment verified! Order #${orderNumber} approved. ${planDisplayName} is now active and all modules are unlocked!`, 'success');
     }
-  };
 
-  // Pricing calculations
-  const currentPeriod = useMemo(() => {
-    return BILLING_PERIOD_OPTIONS.find(p => p.months === billingMonths) || BILLING_PERIOD_OPTIONS[3];
-  }, [billingMonths]);
-
-  const discountRate = currentPeriod.discount / 100.0;
-
-  const pricing = useMemo(() => {
-    const studentCount = selectedPlan === 'custom' ? Math.max(1, customStudents) : Math.max(1, currentSub?.active_students || 1);
-
-    if (selectedPlan === 'standard') {
-      const unit = currency === 'USD' ? 3.60 : 1000;
-      const gross = studentCount * unit * billingMonths;
-      const discount = gross * discountRate;
-      const net = gross - discount;
-      return { unitPrice: unit, gross, discount, net, studentCount };
-    } else if (selectedPlan === 'premium') {
-      const unit = currency === 'USD' ? 7.20 : 2000;
-      const gross = studentCount * unit * billingMonths;
-      const discount = gross * discountRate;
-      const net = gross - discount;
-      return { unitPrice: unit, gross, discount, net, studentCount };
-    } else {
-      // Custom Plan: Base $0.70 USD / Rs 195 PKR + selected micro-addons
-      const baseUnit = currency === 'USD' ? 0.70 : 195;
-      let addonTotal = 0;
-      selectedFeatures.forEach(k => {
-        const feat = CUSTOM_CATALOG_FEATURES.find(f => f.key === k);
-        if (feat) {
-          addonTotal += currency === 'USD' ? feat.rate_usd : feat.rate_pkr;
-        }
-      });
-      const unit = Number((baseUnit + addonTotal).toFixed(2));
-      const gross = studentCount * unit * billingMonths;
-      const discount = gross * discountRate;
-      const net = gross - discount;
-      return { unitPrice: unit, gross, discount, net, studentCount };
-    }
-  }, [selectedPlan, customStudents, currentSub?.active_students, currency, billingMonths, discountRate, selectedFeatures]);
-
-  // Per-card calculations for instant visual clarity
-  const calculateCardEstimate = (planKey: 'standard' | 'premium' | 'custom') => {
-    const count = planKey === 'custom' ? Math.max(1, customStudents) : Math.max(1, currentSub?.active_students || 1);
-    let unit = 0;
-    if (planKey === 'standard') unit = currency === 'USD' ? 3.60 : 1000;
-    else if (planKey === 'premium') unit = currency === 'USD' ? 7.20 : 2000;
-    else {
-      const base = currency === 'USD' ? 0.70 : 195;
-      let add = 0;
-      selectedFeatures.forEach(k => {
-        const feat = CUSTOM_CATALOG_FEATURES.find(f => f.key === k);
-        if (feat) add += currency === 'USD' ? feat.rate_usd : feat.rate_pkr;
-      });
-      unit = Number((base + add).toFixed(2));
-    }
-    const gross = count * unit * billingMonths;
-    const disc = gross * discountRate;
-    const net = gross - disc;
-    return { unit, gross, disc, net, count };
-  };
-
-  // Direct Institutional Plan Activation (Applies plan for real in the database)
-  const handleDirectActivation = async () => {
-    try {
-      setSubmittingOrder(true);
-      const payload: any = {
-        plan_code: selectedPlan,
-        billing_months: billingMonths,
-        payment_method: 'direct',
-        currency: currency,
-        ...(activeCampusId ? { school_id: activeCampusId } : {})
-      };
-
-      if (selectedPlan === 'custom') {
-        payload.features = selectedFeatures;
-        payload.student_count = customStudents;
-      }
-
-      const res = await request<{
-        message: string;
-        activated?: boolean;
-        order: {
-          id: number;
-          order_number: string;
-          status: string;
-          amount: string;
-          currency: string;
-          billing_months: number;
-          student_count: number;
-          provider: string;
-        };
-      }>('subscription/orders/', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-
-      if (res && res.order) {
-        let planDisplayName = 'Standard Plan';
-        if (selectedPlan === 'premium') planDisplayName = 'Premium Plan';
-        if (selectedPlan === 'custom') planDisplayName = 'Custom Package';
-
-        if (notify) {
-          notify(`🎉 Success! ${planDisplayName} is now officially active for ${currentSub?.school_name || 'your institution'}. All features unlocked!`, 'success');
-        }
-
-        await loadData();
-        if (onPlanChanged) onPlanChanged();
-
-        // Load and present receipt modal
-        try {
-          const receipt = await request<ReceiptData>(`subscription/orders/${res.order.id}/receipt/`);
-          if (receipt) setSelectedReceipt(receipt);
-        } catch {}
-      }
-    } catch (err: any) {
-      if (notify) notify(err.message || 'Failed to activate plan.', 'error');
-    } finally {
-      setSubmittingOrder(false);
-    }
-  };
-
-  // Start Card Checkout (Secure checkout modal)
-  const handleStartCardPayment = async () => {
-    try {
-      setSubmittingOrder(true);
-      const payload: any = {
-        plan_code: selectedPlan,
-        billing_months: billingMonths,
-        payment_method: 'card',
-        currency: currency,
-        ...(activeCampusId ? { school_id: activeCampusId } : {})
-      };
-
-      if (selectedPlan === 'custom') {
-        payload.features = selectedFeatures;
-        payload.student_count = customStudents;
-      }
-
-      const res = await request<{
-        message: string;
-        order: {
-          id: number;
-          order_number: string;
-          status: string;
-          amount: string;
-          currency: string;
-          billing_months: number;
-          student_count: number;
-          provider: string;
-          checkout_url: string;
-        };
-      }>('subscription/orders/', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-
-      if (res && res.order) {
-        let planDisplayName = 'Standard Plan';
-        if (selectedPlan === 'premium') planDisplayName = 'Premium Plan';
-        if (selectedPlan === 'custom') planDisplayName = 'Custom Package';
-
-        setActiveCheckoutOrder({
-          id: res.order.id,
-          order_number: res.order.order_number,
-          plan_name: planDisplayName,
-          plan_code: selectedPlan,
-          amount: res.order.amount,
-          currency: res.order.currency,
-          billing_months: res.order.billing_months,
-          student_count: res.order.student_count,
-          school_name: currentSub?.school_name
-        });
-      }
-    } catch (err: any) {
-      if (notify) notify(err.message || 'Failed to initiate card checkout.', 'error');
-    } finally {
-      setSubmittingOrder(false);
-    }
-  };
-
-  const handleCheckoutSuccess = async (orderNumber: string) => {
-    setActiveCheckoutOrder(null);
-    let planDisplayName = 'Standard Plan';
-    if (selectedPlan === 'premium') planDisplayName = 'Premium Plan';
-    if (selectedPlan === 'custom') planDisplayName = 'Custom Package';
-
-    if (notify) notify(`🎉 Payment Verified! ${planDisplayName} activated successfully. All institutional modules are unlocked.`, 'success');
     await loadData();
-    if (onPlanChanged) onPlanChanged();
+    if (onPlanChanged) {
+      onPlanChanged();
+    }
 
-    // Fetch and show receipt
+    // Try to auto-open the receipt
     try {
-      const matchOrder = orders.find(o => o.order_number === orderNumber) || (await request<{ results: OrderHistoryItem[] }>('subscription/orders/')).results.find(o => o.order_number === orderNumber);
-      if (matchOrder) {
-        const receipt = await request<ReceiptData>(`subscription/orders/${matchOrder.id}/receipt/`);
-        setSelectedReceipt(receipt);
+      const res = await request<{ results: OrderHistoryItem[] }>('subscription/orders/');
+      const match = res?.results?.find(o => o.order_number === orderNumber);
+      if (match) {
+        const receipt = await request<ReceiptData>(`subscription/orders/${match.id}/receipt/`);
+        if (receipt) setSelectedReceipt(receipt);
       }
-    } catch {}
+    } catch {
+      // Non-blocking
+    }
   };
 
   const handleViewReceipt = async (orderId: number) => {
     try {
       const receipt = await request<ReceiptData>(`subscription/orders/${orderId}/receipt/`);
       setSelectedReceipt(receipt);
-    } catch (err: any) {
+    } catch {
       if (notify) notify('Failed to load invoice receipt.', 'error');
     }
   };
@@ -412,7 +160,9 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
     if (!isoStr) return 'N/A';
     try {
       return new Date(isoStr).toLocaleDateString('en-US', {
-        year: 'numeric', month: 'short', day: 'numeric'
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
       });
     } catch {
       return isoStr;
@@ -431,20 +181,41 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
   const isNoPlan = !currentSub || currentSub.status === 'no_plan' || currentSub.is_no_plan;
   const isActive = currentSub?.status === 'active';
   const isPastDue = currentSub?.status === 'past_due';
+  const enrolledStudents = currentSub?.active_students || 0;
+
+  // Standard: $3.60 USD / PKR 1,000 per student per month
+  // Premium: $7.20 USD / PKR 2,000 per student per month
+  const standardUnitUSD = 3.60;
+  const standardUnitPKR = 1000;
+  const premiumUnitUSD = 7.20;
+  const premiumUnitPKR = 2000;
+
+  // Budget calculations for the school's actual enrolled student count
+  const budgetStudents = Math.max(1, enrolledStudents);
+  const standardBudgetUSD = (budgetStudents * standardUnitUSD).toFixed(2);
+  const standardBudgetPKR = (budgetStudents * standardUnitPKR).toLocaleString();
+  const premiumBudgetUSD = (budgetStudents * premiumUnitUSD).toFixed(2);
+  const premiumBudgetPKR = (budgetStudents * premiumUnitPKR).toLocaleString();
 
   return (
-    <div style={{ maxWidth: 1160, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 26 }}>
-      {/* 1. Header & Live Subscription Status Banner */}
+    <div style={{ maxWidth: 1120, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 26 }}>
+      {/* 1. Header & Description */}
       <div>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 4px 0', color: 'var(--text-primary, #0f172a)', letterSpacing: '-0.02em' }}>
-          Subscription & Billing
+          Subscription & Plans
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-secondary, #64748b)', margin: 0 }}>
-          Manage your institution's tier, choose custom term lengths with volume discounts, and activate instantly.
+          Simple per-student pricing for your institution. Upgrade to Standard or Premium anytime with instant card activation.
         </p>
       </div>
 
-      {/* Modern Executive Status Card */}
+      {loadError && (
+        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: 12, color: '#991b1b', fontSize: 13 }}>
+          {loadError}
+        </div>
+      )}
+
+      {/* 2. Modern Executive Status Card */}
       <div style={{
         background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
         borderRadius: 16,
@@ -462,18 +233,18 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
             width: 48,
             height: 48,
             borderRadius: 12,
-            backgroundColor: isActive ? '#ecfdf5' : isPastDue ? '#fef3c7' : '#f1f5f9',
-            color: isActive ? '#059669' : isPastDue ? '#d97706' : '#64748b',
+            backgroundColor: isActive ? '#ecfdf5' : isPastDue ? '#fef3c7' : '#eff6ff',
+            color: isActive ? '#059669' : isPastDue ? '#d97706' : '#2563eb',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            {isActive ? <ShieldCheck size={26} /> : isPastDue ? <Clock size={26} /> : <Lock size={26} />}
+            {isActive ? <ShieldCheck size={26} /> : isPastDue ? <Clock size={26} /> : <Zap size={26} />}
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                {currentSub?.plan?.name || (isNoPlan ? 'Basic Account (No Active Plan)' : 'Active Plan')}
+                {currentSub?.plan?.name || (isNoPlan ? '30-Day Free Trial Account' : 'Active Plan')}
               </h2>
               <span style={{
                 fontSize: 11,
@@ -481,10 +252,10 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
                 textTransform: 'uppercase',
                 padding: '2px 8px',
                 borderRadius: 10,
-                backgroundColor: isActive ? '#dcfce7' : isPastDue ? '#fef3c7' : '#fee2e2',
-                color: isActive ? '#15803d' : isPastDue ? '#b45309' : '#b91c1c'
+                backgroundColor: isActive ? '#dcfce7' : isPastDue ? '#fef3c7' : '#dbeafe',
+                color: isActive ? '#15803d' : isPastDue ? '#b45309' : '#1e40af'
               }}>
-                {isNoPlan ? 'UNPAID / FREE' : currentSub?.status}
+                {isNoPlan ? '30-DAY TRIAL' : currentSub?.status}
               </span>
             </div>
             <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
@@ -507,8 +278,8 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
           }}>
             <Users size={16} color="#64748b" />
             <div>
-              <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Students</div>
-              <strong style={{ color: '#0f172a' }}>{currentSub?.active_students || 0} Enrolled</strong>
+              <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Enrolled Students</div>
+              <strong style={{ color: '#0f172a' }}>{enrolledStudents} Students</strong>
             </div>
           </div>
 
@@ -526,7 +297,7 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
             <div>
               <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Paid Term</div>
               <strong style={{ color: '#0f172a' }}>
-                {currentSub?.paid_until ? formatDate(currentSub.paid_until) : 'No active term'}
+                {currentSub?.paid_until ? formatDate(currentSub.paid_until) : '30-Day Free Trial'}
               </strong>
             </div>
           </div>
@@ -541,24 +312,180 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
             gap: 8,
             fontSize: 12
           }}>
-            <Zap size={16} color="#64748b" />
+            <Crown size={16} color="#64748b" />
             <div>
-              <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Access Tier</div>
-              <strong style={{ color: '#0f172a', textTransform: 'uppercase' }}>{currentSub?.effective_tier || 'None'}</strong>
+              <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Active Tier</div>
+              <strong style={{ color: '#0f172a', textTransform: 'uppercase' }}>{currentSub?.effective_tier || 'Trial'}</strong>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Choose Subscription Package Section */}
+      {/* 3. POST-TRIAL / STUDENT HEADCOUNT BUDGET NOTICE (As Requested) */}
+      {(isNoPlan || isPastDue || enrolledStudents > 0) && (
+        <div style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 16,
+          padding: '20px 24px',
+          border: '2px solid #e0e7ff',
+          boxShadow: '0 4px 16px -2px rgba(99, 102, 241, 0.08)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#eef2ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={19} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1e1b4b' }}>
+                  {isNoPlan ? '30-Day Free Trial • Student Headcount Budget' : 'Institutional Headcount Budget'}
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: 13, color: '#64748b' }}>
+                  {isNoPlan
+                    ? `You can enroll unlimited students during your 30-day trial. Currently you have ${enrolledStudents} enrolled students. Here is your budget to continue:`
+                    : `Based on your ${enrolledStudents} actively enrolled students, here is your calculated plan budget:`}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 3 }}>
+              <button
+                type="button"
+                onClick={() => setCurrency('USD')}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  backgroundColor: currency === 'USD' ? '#ffffff' : 'transparent',
+                  color: currency === 'USD' ? '#2563eb' : '#64748b',
+                  cursor: 'pointer'
+                }}
+              >
+                USD ($)
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrency('PKR')}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  backgroundColor: currency === 'PKR' ? '#ffffff' : 'transparent',
+                  color: currency === 'PKR' ? '#2563eb' : '#64748b',
+                  cursor: 'pointer'
+                }}
+              >
+                PKR (Rs)
+              </button>
+            </div>
+          </div>
+
+          {/* Budget Comparison Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+            {/* Standard Budget */}
+            <div style={{
+              backgroundColor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 12,
+              padding: '14px 16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#2563eb' }}>
+                  Standard Plan Budget
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {budgetStudents} students × {currency === 'USD' ? `$${standardUnitUSD.toFixed(2)}` : `Rs ${standardUnitPKR}`} / mo
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', marginTop: 4 }}>
+                  {currency === 'USD' ? `$${standardBudgetUSD}` : `Rs ${standardBudgetPKR}`} <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>/ month</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenUpgrade('standard', budgetStudents)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+              >
+                <span>Upgrade</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+
+            {/* Premium Budget */}
+            <div style={{
+              backgroundColor: '#faf5ff',
+              border: '1px solid #ddd6fe',
+              borderRadius: 12,
+              padding: '14px 16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#7c3aed' }}>
+                  Premium Plan Budget
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {budgetStudents} students × {currency === 'USD' ? `$${premiumUnitUSD.toFixed(2)}` : `Rs ${premiumUnitPKR}`} / mo
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: '#6d28d9', marginTop: 4 }}>
+                  {currency === 'USD' ? `$${premiumBudgetUSD}` : `Rs ${premiumBudgetPKR}`} <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>/ month</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenUpgrade('premium', budgetStudents)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  backgroundColor: '#7c3aed',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+              >
+                <span>Upgrade</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Choose Between Standard & Premium (Clean 2-Plan Cards as Requested) */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, marginBottom: 18 }}>
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 3px 0', color: '#0f172a' }}>
-              Choose or Customize Your Plan
+              Select an Institutional Plan
             </h2>
             <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-              Select duration directly on each plan card below. Extended terms qualify for up to 30% savings.
+              Click <strong>Upgrade</strong> on any plan to configure exact student headcount and choose duration with savings (5% for 6 mo, 10% for 1 yr).
             </p>
           </div>
 
@@ -609,923 +536,280 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
           </div>
         </div>
 
-        {/* 3 Tier Selection Cards (Clean, Scannable & Dropdown directly on each card) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-          
+        {/* 2 Clean Cards (Standard & Premium) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
+
           {/* 1. STANDARD PLAN CARD */}
-          {(() => {
-            const isSelected = selectedPlan === 'standard';
-            const cardCalc = calculateCardEstimate('standard');
-            const isExpanded = expandedCard === 'standard';
-
-            return (
-              <div
-                onClick={() => setSelectedPlan('standard')}
-                style={{
-                  backgroundColor: '#ffffff',
-                  borderRadius: 16,
-                  padding: '24px 20px',
-                  border: `2px solid ${isSelected ? '#2563eb' : '#e2e8f0'}`,
-                  cursor: 'pointer',
-                  position: 'relative',
-                  boxShadow: isSelected ? '0 10px 28px -4px rgba(37, 99, 235, 0.16)' : '0 2px 8px rgba(0, 0, 0, 0.03)',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <BookOpen size={18} />
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: '#0f172a' }}>Standard Plan</h3>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>Core academic operations</div>
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
-                      SELECTED
-                    </span>
-                  )}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 18,
+              padding: '28px 24px',
+              border: currentSub?.plan?.code === 'standard' ? '2px solid #2563eb' : '1px solid #e2e8f0',
+              boxShadow: currentSub?.plan?.code === 'standard' ? '0 12px 30px -4px rgba(37, 99, 235, 0.15)' : '0 2px 10px rgba(0, 0, 0, 0.04)',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <BookOpen size={20} />
                 </div>
-
-                {/* Price Display */}
-                <div style={{ margin: '10px 0 14px 0' }}>
-                  <span style={{ fontSize: 32, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.03em' }}>
-                    {currency === 'USD' ? '$3.60' : 'Rs 1,000'}
-                  </span>
-                  <span style={{ fontSize: 13, color: '#64748b' }}> / student / mo</span>
-                </div>
-
-                {/* MONTH SELECTOR DROPDOWN ON CARD */}
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    backgroundColor: isSelected ? '#f8fafc' : '#f8fafc',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    border: '1px solid #e2e8f0',
-                    marginBottom: 16
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Select Months
-                    </span>
-                    {currentPeriod.discount > 0 && (
-                      <span style={{ fontSize: 11, fontWeight: 800, color: '#16a34a', backgroundColor: '#dcfce7', padding: '1px 6px', borderRadius: 4 }}>
-                        Save {currentPeriod.discount}%
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <select
-                      value={billingMonths}
-                      onChange={(e) => {
-                        setBillingMonths(Number(e.target.value));
-                        setSelectedPlan('standard');
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '8px 28px 8px 10px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: '#ffffff',
-                        color: '#0f172a',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        appearance: 'none',
-                        outline: 'none'
-                      }}
-                    >
-                      {BILLING_PERIOD_OPTIONS.map((p) => (
-                        <option key={p.months} value={p.months}>
-                          {p.label} {p.discount > 0 ? `(-${p.discount}%)` : '(Standard)'}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={15} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b' }} />
-                  </div>
-                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                    <span>Estimated For {cardCalc.count} Students:</span>
-                    <strong style={{ color: '#0f172a' }}>
-                      {currency === 'USD' ? `$${cardCalc.net.toFixed(2)}` : `Rs ${Math.round(cardCalc.net).toLocaleString()}`}
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Key Highlights (Decluttered - top 4 items) */}
-                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, flex: 1 }}>
-                  {[
-                    'Daily Class & Subject Attendance Tracking',
-                    'Examinations, Grading Criteria & Result Cards',
-                    'Master Timetables & Homework Assignments',
-                    'Offline Fee Challans & Counter Receipts'
-                  ].map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Check size={16} color="#059669" />
-                      <span style={{ color: '#334155' }}>{item}</span>
-                    </div>
-                  ))}
-
-                  {/* Expandable full list */}
-                  {isExpanded && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 4, paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
-                      {[
-                        'Student, Parent, Teacher & Principal Portals',
-                        'CSV Directory Bulk Data Import',
-                        'Standard Notice Circulars & Alerts'
-                      ].map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Check size={15} color="#059669" />
-                          <span style={{ color: '#64748b', fontSize: 12 }}>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandedCard(isExpanded ? null : 'standard');
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#2563eb',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      padding: '4px 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4
-                    }}
-                  >
-                    {isExpanded ? 'Hide additional features' : 'View all 7 included features'}
-                    {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  </button>
-                </div>
-
-                {/* Selection Action Button */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan('standard')}
-                  style={{
-                    marginTop: 16,
-                    padding: '10px 16px',
-                    borderRadius: 10,
-                    border: 'none',
-                    backgroundColor: isSelected ? '#2563eb' : '#f1f5f9',
-                    color: isSelected ? '#ffffff' : '#475569',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6
-                  }}
-                >
-                  {isSelected ? <CheckCircle size={15} /> : null}
-                  {isSelected ? 'Standard Plan Selected' : 'Choose Standard'}
-                </button>
-              </div>
-            );
-          })()}
-
-          {/* 2. PREMIUM PLAN CARD */}
-          {(() => {
-            const isSelected = selectedPlan === 'premium';
-            const cardCalc = calculateCardEstimate('premium');
-            const isExpanded = expandedCard === 'premium';
-
-            return (
-              <div
-                onClick={() => setSelectedPlan('premium')}
-                style={{
-                  backgroundColor: '#ffffff',
-                  borderRadius: 16,
-                  padding: '24px 20px',
-                  border: `2px solid ${isSelected ? '#2563eb' : '#bfdbfe'}`,
-                  cursor: 'pointer',
-                  position: 'relative',
-                  boxShadow: isSelected ? '0 12px 30px -4px rgba(37, 99, 235, 0.2)' : '0 4px 12px rgba(37, 99, 235, 0.06)',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
-                {/* Most Popular Badge */}
-                <div style={{
-                  position: 'absolute',
-                  top: -11,
-                  right: 20,
-                  backgroundColor: '#2563eb',
-                  color: '#ffffff',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  padding: '3px 12px',
-                  borderRadius: 12,
-                  letterSpacing: '0.04em'
-                }}>
-                  MOST POPULAR
-                </div>
-
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Sparkles size={18} />
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: '#0f172a' }}>Premium Plan</h3>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>Full intelligence & governance</div>
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
-                      SELECTED
-                    </span>
-                  )}
-                </div>
-
-                {/* Price Display */}
-                <div style={{ margin: '10px 0 14px 0' }}>
-                  <span style={{ fontSize: 32, fontWeight: 900, color: '#2563eb', letterSpacing: '-0.03em' }}>
-                    {currency === 'USD' ? '$7.20' : 'Rs 2,000'}
-                  </span>
-                  <span style={{ fontSize: 13, color: '#64748b' }}> / student / mo</span>
-                </div>
-
-                {/* MONTH SELECTOR DROPDOWN ON CARD */}
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    backgroundColor: '#eff6ff',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    border: '1px solid #bfdbfe',
-                    marginBottom: 16
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Select Months
-                    </span>
-                    {currentPeriod.discount > 0 && (
-                      <span style={{ fontSize: 11, fontWeight: 800, color: '#15803d', backgroundColor: '#dcfce7', padding: '1px 6px', borderRadius: 4 }}>
-                        Save {currentPeriod.discount}%
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <select
-                      value={billingMonths}
-                      onChange={(e) => {
-                        setBillingMonths(Number(e.target.value));
-                        setSelectedPlan('premium');
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '8px 28px 8px 10px',
-                        borderRadius: 8,
-                        border: '1px solid #93c5fd',
-                        backgroundColor: '#ffffff',
-                        color: '#0f172a',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        appearance: 'none',
-                        outline: 'none'
-                      }}
-                    >
-                      {BILLING_PERIOD_OPTIONS.map((p) => (
-                        <option key={p.months} value={p.months}>
-                          {p.label} {p.discount > 0 ? `(-${p.discount}%)` : '(Standard)'}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={15} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#2563eb' }} />
-                  </div>
-                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#1e3a8a' }}>
-                    <span>Estimated For {cardCalc.count} Students:</span>
-                    <strong style={{ color: '#1e40af' }}>
-                      {currency === 'USD' ? `$${cardCalc.net.toFixed(2)}` : `Rs ${Math.round(cardCalc.net).toLocaleString()}`}
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Key Highlights (Decluttered - top 4 items) */}
-                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, flex: 1 }}>
-                  {[
-                    'Everything in Standard Plan, plus:',
-                    'Academic Quality Index (AQI) 5-Level Engine',
-                    'Early Risk Detection & Student Attention Alerts',
-                    'Double-Entry Financial Accounts Ledger & HR Payroll'
-                  ].map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Check size={16} color={idx === 0 ? '#2563eb' : '#059669'} />
-                      <span style={{ color: idx === 0 ? '#1d4ed8' : '#334155', fontWeight: idx === 0 ? 700 : 400 }}>
-                        {item}
-                      </span>
-                    </div>
-                  ))}
-
-                  {/* Expandable full list */}
-                  {isExpanded && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 4, paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
-                      {[
-                        'Multi-Campus Governance & Benchmark Rankings',
-                        'Psychological Evaluation & Development Profiles',
-                        'Executive Cashflow & Financial Reporting Dashboard',
-                        'Priority SLA Technical Support & Advanced PDF Exports'
-                      ].map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Check size={15} color="#059669" />
-                          <span style={{ color: '#64748b', fontSize: 12 }}>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandedCard(isExpanded ? null : 'premium');
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#2563eb',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      padding: '4px 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4
-                    }}
-                  >
-                    {isExpanded ? 'Hide additional features' : 'View all 8 included features'}
-                    {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  </button>
-                </div>
-
-                {/* Selection Action Button */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan('premium')}
-                  style={{
-                    marginTop: 16,
-                    padding: '10px 16px',
-                    borderRadius: 10,
-                    border: 'none',
-                    backgroundColor: isSelected ? '#2563eb' : '#eff6ff',
-                    color: isSelected ? '#ffffff' : '#2563eb',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6
-                  }}
-                >
-                  {isSelected ? <CheckCircle size={15} /> : null}
-                  {isSelected ? 'Premium Plan Selected' : 'Choose Premium'}
-                </button>
-              </div>
-            );
-          })()}
-
-          {/* 3. CUSTOM PACKAGE BUILDER CARD (Per student price: 0.7$) */}
-          {(() => {
-            const isSelected = selectedPlan === 'custom';
-            const cardCalc = calculateCardEstimate('custom');
-            const isExpanded = expandedCard === 'custom';
-
-            return (
-              <div
-                onClick={() => setSelectedPlan('custom')}
-                style={{
-                  backgroundColor: '#ffffff',
-                  borderRadius: 16,
-                  padding: '24px 20px',
-                  border: `2px solid ${isSelected ? '#7c3aed' : '#e2e8f0'}`,
-                  cursor: 'pointer',
-                  position: 'relative',
-                  boxShadow: isSelected ? '0 12px 30px -4px rgba(124, 58, 237, 0.2)' : '0 2px 8px rgba(0, 0, 0, 0.03)',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
-                {/* Modular Badge */}
-                <div style={{
-                  position: 'absolute',
-                  top: -11,
-                  right: 20,
-                  backgroundColor: '#7c3aed',
-                  color: '#ffffff',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  padding: '3px 12px',
-                  borderRadius: 12,
-                  letterSpacing: '0.04em'
-                }}>
-                  FLEXIBLE
-                </div>
-
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#f5f3ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Sliders size={18} />
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: '#0f172a' }}>Custom Package</h3>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>Tailored modular suite</div>
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <span style={{ backgroundColor: '#f5f3ff', color: '#7c3aed', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
-                      SELECTED
-                    </span>
-                  )}
-                </div>
-
-                {/* Price Display (0.7$ / student / mo) */}
-                <div style={{ margin: '10px 0 14px 0' }}>
-                  <span style={{ fontSize: 32, fontWeight: 900, color: '#7c3aed', letterSpacing: '-0.03em' }}>
-                    {currency === 'USD' ? `$${cardCalc.unit.toFixed(2)}` : `Rs ${cardCalc.unit}`}
-                  </span>
-                  <span style={{ fontSize: 13, color: '#64748b' }}> / student / mo</span>
-                </div>
-
-                {/* MONTH SELECTOR DROPDOWN ON CARD */}
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    backgroundColor: '#f5f3ff',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    border: '1px solid #ddd6fe',
-                    marginBottom: 16
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Select Months
-                    </span>
-                    {currentPeriod.discount > 0 && (
-                      <span style={{ fontSize: 11, fontWeight: 800, color: '#15803d', backgroundColor: '#dcfce7', padding: '1px 6px', borderRadius: 4 }}>
-                        Save {currentPeriod.discount}%
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <select
-                      value={billingMonths}
-                      onChange={(e) => {
-                        setBillingMonths(Number(e.target.value));
-                        setSelectedPlan('custom');
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '8px 28px 8px 10px',
-                        borderRadius: 8,
-                        border: '1px solid #c4b5fd',
-                        backgroundColor: '#ffffff',
-                        color: '#0f172a',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        appearance: 'none',
-                        outline: 'none'
-                      }}
-                    >
-                      {BILLING_PERIOD_OPTIONS.map((p) => (
-                        <option key={p.months} value={p.months}>
-                          {p.label} {p.discount > 0 ? `(-${p.discount}%)` : '(Standard)'}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={15} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#7c3aed' }} />
-                  </div>
-                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5b21b6' }}>
-                    <span>Estimated For {customStudents} Students:</span>
-                    <strong style={{ color: '#6d28d9' }}>
-                      {currency === 'USD' ? `$${cardCalc.net.toFixed(2)}` : `Rs ${Math.round(cardCalc.net).toLocaleString()}`}
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Key Highlights (Decluttered - top 4 items) */}
-                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, flex: 1 }}>
-                  {[
-                    `Base student price starting at ${currency === 'USD' ? '$0.70' : 'Rs 195'}/mo`,
-                    `Custom headcount (${customStudents} students configured)`,
-                    `${selectedFeatures.length} specific operational modules selected`,
-                    `Volume savings up to 30% on multi-year terms`
-                  ].map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Check size={16} color="#7c3aed" />
-                      <span style={{ color: '#334155' }}>{item}</span>
-                    </div>
-                  ))}
-
-                  {/* Expandable info */}
-                  {isExpanded && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 4, paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
-                      {[
-                        'Fine-grained module access governance',
-                        'Real-time immediate DB activation',
-                        'Official printable payment receipt'
-                      ].map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Check size={15} color="#7c3aed" />
-                          <span style={{ color: '#64748b', fontSize: 12 }}>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandedCard(isExpanded ? null : 'custom');
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#7c3aed',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      padding: '4px 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4
-                    }}
-                  >
-                    {isExpanded ? 'Hide configuration info' : 'View custom package details'}
-                    {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  </button>
-                </div>
-
-                {/* Selection Action Button */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan('custom')}
-                  style={{
-                    marginTop: 16,
-                    padding: '10px 16px',
-                    borderRadius: 10,
-                    border: 'none',
-                    backgroundColor: isSelected ? '#7c3aed' : '#f5f3ff',
-                    color: isSelected ? '#ffffff' : '#7c3aed',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6
-                  }}
-                >
-                  {isSelected ? <CheckCircle size={15} /> : null}
-                  {isSelected ? 'Configure Below' : 'Choose Custom'}
-                </button>
-              </div>
-            );
-          })()}
-
-        </div>
-
-        {/* 3. CUSTOM PACKAGE CONFIGURATOR (Rendered sleekly when 'custom' is selected) */}
-        {selectedPlan === 'custom' && (
-          <div style={{
-            marginTop: 22,
-            backgroundColor: '#ffffff',
-            borderRadius: 16,
-            padding: '24px 24px',
-            border: '2px solid #ddd6fe',
-            boxShadow: '0 4px 18px rgba(124, 58, 237, 0.08)'
-          }}>
-            {/* Configurator Header & Headcount Stepper */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
-              <div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 4px 0', color: '#5b21b6' }}>
-                  Custom Package Builder
-                </h3>
-                <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-                  Base price is <strong>{currency === 'USD' ? '$0.70' : 'Rs 195'}</strong> per student. Adjust headcount and pick modules.
-                </p>
-              </div>
-
-              {/* Headcount Stepper & Presets */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Students:</span>
-                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCustomStudents(Math.max(10, customStudents - 25))}
-                    style={{ padding: '6px 10px', background: '#f8fafc', border: 'none', cursor: 'pointer', color: '#475569' }}
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={25000}
-                    value={customStudents}
-                    onChange={(e) => setCustomStudents(Math.max(1, parseInt(e.target.value) || 1))}
-                    style={{
-                      width: 75,
-                      padding: '6px 4px',
-                      border: 'none',
-                      fontSize: 14,
-                      fontWeight: 700,
-                      textAlign: 'center',
-                      outline: 'none'
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setCustomStudents(customStudents + 25)}
-                    style={{ padding: '6px 10px', background: '#f8fafc', border: 'none', cursor: 'pointer', color: '#475569' }}
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-
-                {/* Preset Headcount Chips */}
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[50, 100, 250, 500, 1000].map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => setCustomStudents(count)}
-                      style={{
-                        padding: '5px 10px',
-                        borderRadius: 6,
-                        border: `1px solid ${customStudents === count ? '#7c3aed' : '#e2e8f0'}`,
-                        backgroundColor: customStudents === count ? '#7c3aed' : '#ffffff',
-                        color: customStudents === count ? '#ffffff' : '#475569',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {count}
-                    </button>
-                  ))}
+                <div>
+                  <h3 style={{ fontSize: 19, fontWeight: 800, margin: 0, color: '#0f172a' }}>Standard Plan</h3>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Core teaching & operational automation</div>
                 </div>
               </div>
-            </div>
-
-            {/* Quick Bundle Selection Bar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>
-                Included Modules ({selectedFeatures.length} selected):
-              </span>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => applyPresetBundle('all')}
-                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #ddd6fe', backgroundColor: '#f5f3ff', color: '#6d28d9', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Select All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPresetBundle('academics')}
-                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#475569', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Core Academics Only
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPresetBundle('finance_academic')}
-                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#475569', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Academics + Finance
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPresetBundle('clear')}
-                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#94a3b8', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Clear All
-                </button>
-              </div>
-            </div>
-
-            {/* 4 Categorized Module Selection Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-              {[
-                { cat: 'academics', title: '📚 Academics & Portals' },
-                { cat: 'analytics', title: '📈 Analytics & AQI' },
-                { cat: 'finance', title: '💰 Finance & HR Payroll' },
-                { cat: 'operations', title: '⚙️ Operations & Governance' },
-              ].map(({ cat, title }) => {
-                const catFeatures = CUSTOM_CATALOG_FEATURES.filter(f => f.category === cat);
-                const allSelected = catFeatures.length > 0 && catFeatures.every(f => selectedFeatures.includes(f.key));
-                const countSelected = catFeatures.filter(f => selectedFeatures.includes(f.key)).length;
-
-                return (
-                  <div
-                    key={cat}
-                    style={{
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 12,
-                      padding: '14px',
-                      backgroundColor: '#f8fafc'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>{title}</span>
-                        <div style={{ fontSize: 10, color: '#64748b' }}>{countSelected} of {catFeatures.length} active</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => selectCategory(cat, !allSelected)}
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: '#7c3aed',
-                          backgroundColor: 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          textDecoration: 'underline'
-                        }}
-                      >
-                        {allSelected ? 'Clear' : 'Select All'}
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {catFeatures.map(feat => {
-                        const isChecked = selectedFeatures.includes(feat.key);
-                        return (
-                          <label
-                            key={feat.key}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 8,
-                              fontSize: 12,
-                              padding: '6px 8px',
-                              borderRadius: 6,
-                              backgroundColor: isChecked ? '#ede9fe' : '#ffffff',
-                              border: `1px solid ${isChecked ? '#c4b5fd' : '#e2e8f0'}`,
-                              cursor: 'pointer',
-                              transition: 'all 0.1s ease'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => toggleFeature(feat.key)}
-                                style={{ accentColor: '#7c3aed' }}
-                              />
-                              <span style={{ fontWeight: isChecked ? 700 : 400, color: isChecked ? '#4c1d95' : '#334155' }}>
-                                {feat.name}
-                              </span>
-                            </div>
-                            <span style={{ fontSize: 10, color: isChecked ? '#7c3aed' : '#94a3b8', fontWeight: 600 }}>
-                              +{currency === 'USD' ? `$${feat.rate_usd.toFixed(2)}` : `Rs ${feat.rate_pkr}`}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* 4. Live Calculation & Instant Real Activation / Checkout Bar */}
-        <div style={{
-          backgroundColor: '#0f172a',
-          color: '#ffffff',
-          borderRadius: 16,
-          padding: '22px 26px',
-          marginTop: 22,
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 20,
-          boxShadow: '0 8px 24px -4px rgba(15, 23, 42, 0.25)'
-        }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              <span style={{ color: '#38bdf8' }}>
-                {selectedPlan === 'standard' ? 'Standard Plan' : selectedPlan === 'premium' ? 'Premium Plan' : 'Custom Package'}
-              </span>
-              <span>•</span>
-              <span style={{ color: '#ffffff' }}>{pricing.studentCount} Students</span>
-              <span>•</span>
-              <span style={{ color: '#a78bfa' }}>{currentPeriod.label}</span>
-            </div>
-
-            <div style={{ fontSize: 13, marginTop: 4, color: '#cbd5e1' }}>
-              {pricing.studentCount} students × {currency === 'USD' ? `$${pricing.unitPrice.toFixed(2)}` : `Rs ${pricing.unitPrice}`} / mo × {billingMonths} months
-              {currentPeriod.discount > 0 && (
-                <span style={{ color: '#4ade80', marginLeft: 6, fontWeight: 600 }}>
-                  ({currentPeriod.discount}% term discount: -{currency === 'USD' ? `$${pricing.discount.toFixed(2)}` : `Rs ${pricing.discount.toLocaleString()}`})
+              {currentSub?.plan?.code === 'standard' && (
+                <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 800 }}>
+                  CURRENT PLAN
                 </span>
               )}
             </div>
 
-            <div style={{ fontSize: 24, fontWeight: 900, marginTop: 4, color: '#ffffff' }}>
-              Total Payable: {currency === 'USD' ? `$${pricing.net.toFixed(2)}` : `Rs ${pricing.net.toLocaleString()}`} {currency}
+            {/* Price Display */}
+            <div style={{ margin: '14px 0' }}>
+              <span style={{ fontSize: 36, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.03em' }}>
+                {currency === 'USD' ? `$${standardUnitUSD.toFixed(2)}` : `Rs ${standardUnitPKR.toLocaleString()}`}
+              </span>
+              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}> / student / month</span>
+            </div>
+
+            {/* Term Discounts Callout */}
+            <div style={{
+              backgroundColor: '#f8fafc',
+              borderRadius: 10,
+              padding: '8px 12px',
+              fontSize: 11,
+              color: '#475569',
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 18,
+              border: '1px solid #f1f5f9'
+            }}>
+              <span>Duration terms:</span>
+              <strong style={{ color: '#0f172a' }}>1 Mo (0%) · 6 Mo (5% OFF) · 1 Yr (10% OFF)</strong>
+            </div>
+
+            {/* Upgrade Button on Card (Opens dedicated modal) */}
+            <button
+              type="button"
+              onClick={() => handleOpenUpgrade('standard')}
+              style={{
+                width: '100%',
+                padding: '13px',
+                borderRadius: 12,
+                border: 'none',
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                fontSize: 14,
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                marginBottom: 22,
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Zap size={16} />
+              <span>Upgrade to Standard</span>
+              <ArrowRight size={15} />
+            </button>
+
+            {/* Features Checklist */}
+            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                Included in Standard:
+              </div>
+              {[
+                'Daily Class & Subject Attendance Tracking',
+                'Examinations, Datesheets & Term Result Cards',
+                'Master Timetables & Homework Assignments',
+                'Study Materials & Student / Parent Portals',
+                'Offline Fee Challans, Collection & Receipts',
+                'Staff Payroll & Monthly Salary Management',
+                'Double-Entry Financial Accounts Ledger',
+                'Bulk CSV Data Import & Broadcast Announcements',
+                'Standard Formatted PDF & CSV Reports'
+              ].map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <Check size={16} color="#059669" />
+                  <span style={{ color: '#334155' }}>{item}</span>
+                </div>
+              ))}
+
+              {/* Locked Features Notice */}
+              <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 10, paddingTop: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>
+                  Disabled in Standard (Requires Premium):
+                </div>
+                {[
+                  'Academic Quality Index (AQI) Engine',
+                  'Psychological Evaluation & Wellbeing Profiles',
+                  'Students at Risk AI & Early Warning Indicators',
+                  'Security Audit Log Viewer & Compliance Trails'
+                ].map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 12, marginBottom: 4 }}>
+                    <Lock size={12} color="#94a3b8" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Action Buttons: Apply Real Activation + Card Checkout */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {/* Real Instant Institutional Activation */}
-            <button
-              type="button"
-              disabled={submittingOrder}
-              onClick={handleDirectActivation}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                backgroundColor: '#059669',
-                color: '#ffffff',
-                padding: '13px 22px',
-                borderRadius: 10,
-                border: 'none',
-                fontSize: 14,
-                fontWeight: 800,
-                cursor: submittingOrder ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 14px rgba(5, 150, 105, 0.4)',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              {submittingOrder ? (
-                <>
-                  <RefreshCw size={16} className="animate-spin" />
-                  <span>Activating...</span>
-                </>
-              ) : (
-                <>
-                  <Zap size={16} />
-                  <span>Apply & Activate Plan Now</span>
-                </>
-              )}
-            </button>
+          {/* 2. PREMIUM PLAN CARD */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 18,
+              padding: '28px 24px',
+              border: currentSub?.plan?.code === 'premium' ? '2px solid #7c3aed' : '2px solid #ddd6fe',
+              boxShadow: currentSub?.plan?.code === 'premium' ? '0 12px 30px -4px rgba(124, 58, 237, 0.2)' : '0 4px 18px rgba(124, 58, 237, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative'
+            }}
+          >
+            {/* Recommended Badge */}
+            <div style={{
+              position: 'absolute',
+              top: -12,
+              right: 24,
+              backgroundColor: '#7c3aed',
+              color: '#ffffff',
+              fontSize: 10,
+              fontWeight: 800,
+              padding: '3px 12px',
+              borderRadius: 12,
+              letterSpacing: '0.04em',
+              boxShadow: '0 2px 8px rgba(124, 58, 237, 0.35)'
+            }}>
+              RECOMMENDED • ALL FEATURES
+            </div>
 
-            {/* Pay via Paddle Sandbox Checkout */}
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#f5f3ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Crown size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 19, fontWeight: 800, margin: 0, color: '#0f172a' }}>Premium Plan</h3>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Full intelligence, AQI analytics & governance</div>
+                </div>
+              </div>
+              {currentSub?.plan?.code === 'premium' && (
+                <span style={{ backgroundColor: '#fef3c7', color: '#92400e', padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 800 }}>
+                  CURRENT PLAN
+                </span>
+              )}
+            </div>
+
+            {/* Price Display */}
+            <div style={{ margin: '14px 0' }}>
+              <span style={{ fontSize: 36, fontWeight: 900, color: '#7c3aed', letterSpacing: '-0.03em' }}>
+                {currency === 'USD' ? `$${premiumUnitUSD.toFixed(2)}` : `Rs ${premiumUnitPKR.toLocaleString()}`}
+              </span>
+              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}> / student / month</span>
+            </div>
+
+            {/* Term Discounts Callout */}
+            <div style={{
+              backgroundColor: '#faf5ff',
+              borderRadius: 10,
+              padding: '8px 12px',
+              fontSize: 11,
+              color: '#6d28d9',
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 18,
+              border: '1px solid #ede9fe'
+            }}>
+              <span>Duration terms:</span>
+              <strong style={{ color: '#5b21b6' }}>1 Mo (0%) · 6 Mo (5% OFF) · 1 Yr (10% OFF)</strong>
+            </div>
+
+            {/* Upgrade Button on Card (Opens dedicated modal) */}
             <button
               type="button"
-              disabled={submittingOrder}
-              onClick={handleStartCardPayment}
+              onClick={() => handleOpenUpgrade('premium')}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                backgroundColor: selectedPlan === 'custom' ? '#7c3aed' : '#0f172a',
-                color: '#ffffff',
-                padding: '13px 22px',
-                borderRadius: 10,
+                width: '100%',
+                padding: '13px',
+                borderRadius: 12,
                 border: 'none',
+                backgroundColor: '#7c3aed',
+                color: '#ffffff',
                 fontSize: 14,
                 fontWeight: 800,
-                cursor: submittingOrder ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 14px rgba(15, 23, 42, 0.35)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                boxShadow: '0 4px 14px rgba(124, 58, 237, 0.35)',
+                marginBottom: 22,
                 transition: 'all 0.15s ease'
               }}
             >
-              <CreditCard size={16} />
-              <span>Pay via Paddle Sandbox</span>
+              <Sparkles size={16} />
+              <span>Upgrade to Premium</span>
               <ArrowRight size={15} />
             </button>
+
+            {/* Features Checklist */}
+            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                Everything in Standard, plus:
+              </div>
+              {[
+                'Academic Quality Index (AQI) 5-Level Engine',
+                'Psychological Evaluation & Wellbeing Profiles',
+                'Students at Risk AI & Early Warning Indicators',
+                'Case Review Workflows & Intervention Tracking',
+                'Longitudinal 5-Year Academic Progress',
+                'Multi-Campus Governance & Cross-Branch Comparisons',
+                'Instructional Insights & Teacher Evaluations',
+                'Security Audit Log Viewer & Compliance Trails',
+                'Interactive Cashflow Analytics & Salary Exports',
+                'Custom Role Permissions & Security Policies',
+                'Priority 24/7 SLA Technical Support'
+              ].map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <Check size={16} color="#7c3aed" />
+                  <span style={{ color: '#1e1b4b', fontWeight: 600 }}>{item}</span>
+                </div>
+              ))}
+
+              <div style={{
+                marginTop: 12,
+                padding: '10px 12px',
+                borderRadius: 10,
+                backgroundColor: '#fef3c7',
+                color: '#92400e',
+                fontSize: 12,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <Sparkles size={16} />
+                <span>Zero Locked Features • 100% Unlocked</span>
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
 
-      {/* 5. Order & Invoice History */}
+      {/* 5. Order & Invoice History Table */}
       <div style={{
         backgroundColor: '#ffffff',
         borderRadius: 16,
@@ -1612,16 +896,19 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({ user, activeCamp
         )}
       </div>
 
-      {/* Interactive Card Payment Modal */}
-      {activeCheckoutOrder && (
-        <SandboxCheckoutModal
-          order={activeCheckoutOrder}
-          onSuccess={handleCheckoutSuccess}
-          onClose={() => setActiveCheckoutOrder(null)}
-        />
-      )}
+      {/* 6. Upgrade Checkout Modal (Card input, duration 1/6/12 mo discounts, dummy test card) */}
+      <UpgradeCheckoutModal
+        isOpen={upgradeModal.isOpen}
+        planCode={upgradeModal.planCode}
+        initialStudents={upgradeModal.students || Math.max(1, enrolledStudents || 200)}
+        initialCurrency={currency}
+        schoolId={currentSub?.school_id || activeCampusId}
+        schoolName={currentSub?.school_name}
+        onSuccess={handleUpgradeSuccess}
+        onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}
+      />
 
-      {/* Printable Invoice & Receipt Modal */}
+      {/* Printable Receipt Modal */}
       {selectedReceipt && (
         <ReceiptModal
           receipt={selectedReceipt}

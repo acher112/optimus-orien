@@ -2373,9 +2373,8 @@ class BillingPeriod(models.Model):
         if not periods:
             defaults = [
                 (1, Decimal('0.00'), 1),
-                (4, Decimal('5.00'), 2),
-                (8, Decimal('10.00'), 3),
-                (12, Decimal('15.00'), 4),
+                (6, Decimal('5.00'), 2),
+                (12, Decimal('10.00'), 3),
             ]
             for m, disc, order in defaults:
                 p, _ = cls.objects.get_or_create(

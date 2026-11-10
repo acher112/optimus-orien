@@ -6,14 +6,13 @@ import {
   Crown,
   Sparkles,
   ArrowRight,
-  ShieldCheck,
   CheckCircle2,
   Building2,
   Zap,
-  SlidersHorizontal
+  Users
 } from 'lucide-react';
-import { request, type User } from './api';
-import { SandboxCheckoutModal, type CheckoutOrderInfo } from './SandboxCheckoutModal';
+import { type User } from './api';
+import { UpgradeCheckoutModal } from './UpgradeCheckoutModal';
 
 interface RegistrationPlanSelectionProps {
   user: User;
@@ -31,112 +30,31 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
   notify
 }) => {
   const [currency, setCurrency] = useState<'USD' | 'PKR'>('USD');
-  const [billingMonths, setBillingMonths] = useState<1 | 12>(1);
-  const [submittingPlan, setSubmittingPlan] = useState<'standard' | 'premium' | 'custom' | null>(null);
-  const [activeCheckoutOrder, setActiveCheckoutOrder] = useState<CheckoutOrderInfo | null>(null);
-  const [error, setError] = useState<string>('');
+  const [upgradeModal, setUpgradeModal] = useState<{
+    isOpen: boolean;
+    planCode: 'standard' | 'premium';
+  }>({
+    isOpen: false,
+    planCode: 'standard'
+  });
 
-  const discountRate = billingMonths === 12 ? 0.15 : 0;
+  // Rates per student per month
+  const standardRate = currency === 'USD' ? '$3.60' : '₨ 1,000';
+  const premiumRate = currency === 'USD' ? '$7.20' : '₨ 2,000';
 
-  // Prices per student per month
-  const standardMonthlyPrice = currency === 'USD' ? 3.6 : 1000;
-  const premiumMonthlyPrice = currency === 'USD' ? 7.2 : 2000;
-  const customMonthlyPrice = currency === 'USD' ? 0.70 : 195;
-
-  const standardDisplayPrice = (
-    standardMonthlyPrice * (1 - discountRate)
-  ).toFixed(currency === 'USD' ? 2 : 0);
-
-  const premiumDisplayPrice = (
-    premiumMonthlyPrice * (1 - discountRate)
-  ).toFixed(currency === 'USD' ? 2 : 0);
-
-  const customDisplayPrice = (
-    customMonthlyPrice * (1 - discountRate)
-  ).toFixed(currency === 'USD' ? 2 : 0);
-
-  const handleUpgrade = async (planCode: 'standard' | 'premium' | 'custom') => {
-    try {
-      setSubmittingPlan(planCode);
-      setError('');
-
-      const payload: Record<string, unknown> = {
-        plan_code: planCode,
-        billing_months: billingMonths,
-        payment_method: 'card',
-        currency: currency,
-        custom_student_count: 50,
-        student_count: 50,
-      };
-
-      if (planCode === 'custom') {
-        payload.selected_features = [
-          'attendance_daily',
-          'marks_grading',
-          'exams_datesheets',
-          'result_cards',
-          'timetable',
-          'fees_offline',
-          'accounts_ledger',
-          'hr_payroll',
-          'aqi',
-          'students_at_risk'
-        ];
-      }
-
-      if (activeCampusId) {
-        payload.school_id = activeCampusId;
-      }
-
-      const res = await request<{
-        message?: string;
-        order?: {
-          id: number;
-          order_number: string;
-          status: string;
-          amount: string;
-          currency: string;
-          billing_months: number;
-          student_count: number;
-          provider: string;
-          checkout_url: string;
-        };
-      }>('subscription/orders/', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-
-      if (res && res.order) {
-        setActiveCheckoutOrder({
-          id: res.order.id,
-          order_number: res.order.order_number,
-          plan_name: planCode === 'custom' ? 'Custom Package' : planCode === 'premium' ? 'Premium Plan' : 'Standard Plan',
-          plan_code: planCode,
-          amount: res.order.amount,
-          currency: res.order.currency,
-          billing_months: res.order.billing_months,
-          student_count: res.order.student_count,
-          school_name: user?.school_name || user?.organisation_name || 'Main Campus'
-        });
-      } else {
-        throw new Error('Order creation did not return checkout details.');
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not initialize upgrade order';
-      setError(msg);
-      if (notify) notify(msg);
-    } finally {
-      setSubmittingPlan(null);
-    }
+  const handleOpenUpgrade = (planCode: 'standard' | 'premium') => {
+    setUpgradeModal({
+      isOpen: true,
+      planCode
+    });
   };
 
-  const handleCheckoutSuccess = (orderNumber: string) => {
-    const plan = (activeCheckoutOrder?.plan_code as 'standard' | 'premium' | 'custom') || 'standard';
-    setActiveCheckoutOrder(null);
+  const handleCheckoutSuccess = (orderNumber: string, planCode: 'standard' | 'premium') => {
+    setUpgradeModal(prev => ({ ...prev, isOpen: false }));
     if (notify) {
-      notify(`🎉 Payment verified for order #${orderNumber}! Plan upgraded successfully.`);
+      notify(`🎉 Payment verified for order #${orderNumber}! ${planCode === 'premium' ? 'Premium' : 'Standard'} plan activated successfully.`);
     }
-    onPlanUpgraded(plan);
+    onPlanUpgraded(planCode);
   };
 
   return (
@@ -162,11 +80,11 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
           </div>
           <h1>Welcome to Optimus Orien, {user.first_name || 'Administrator'}!</h1>
           <p className="plan-selection-desc">
-            Choose your subscription tier below. You can start directly with the <strong>Free Trial</strong> to
-            test the portal with core features, or upgrade now to unlock Standard or Premium intelligence.
+            Choose your subscription tier below. You can start directly with the <strong>30-Day Free Trial</strong> to
+            enroll unlimited students and configure your institution, or upgrade now to unlock Standard or Premium modules.
           </p>
 
-          {/* Currency and Billing Period Controls */}
+          {/* Currency Controls */}
           <div className="plan-selection-controls">
             <div className="plan-toggle-group" role="group" aria-label="Currency Selection">
               <button
@@ -184,48 +102,25 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
                 PKR (₨)
               </button>
             </div>
-
-            <div className="plan-toggle-group" role="group" aria-label="Billing Interval">
-              <button
-                type="button"
-                className={`plan-toggle-btn ${billingMonths === 1 ? 'active' : ''}`}
-                onClick={() => setBillingMonths(1)}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                className={`plan-toggle-btn ${billingMonths === 12 ? 'active' : ''}`}
-                onClick={() => setBillingMonths(12)}
-              >
-                Annual <span className="discount-pill">Save 15%</span>
-              </button>
-            </div>
           </div>
-
-          {error && (
-            <div className="plan-selection-error-banner">
-              {error}
-            </div>
-          )}
         </div>
 
-        {/* 3 Plans Grid */}
+        {/* 3 Plans Grid: 30-Day Free Trial, Standard, Premium */}
         <div className="plan-selection-cards-grid">
-          {/* 1. FREE TRIAL CARD */}
+          {/* 1. 30-DAY FREE TRIAL CARD */}
           <div className="plan-card plan-card-trial">
             <div className="plan-card-badge-row">
-              <span className="plan-pill trial-pill">Free Trial</span>
+              <span className="plan-pill trial-pill">30-Day Free Trial</span>
             </div>
 
             <div className="plan-card-header">
-              <h2>Free Trial</h2>
+              <h2>30-Day Trial</h2>
               <p className="plan-card-tagline">
-                Direct access to portal. Standard & Premium features are marked with lock icons.
+                Enroll unlimited students for 30 days. No credit card required.
               </p>
               <div className="plan-card-price-box">
                 <span className="price-val">{currency === 'USD' ? '$0' : '₨ 0'}</span>
-                <span className="price-unit">/ free access</span>
+                <span className="price-unit">/ 30-day free access</span>
               </div>
             </div>
 
@@ -235,11 +130,11 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
                 className="plan-cta-btn plan-btn-trial"
                 onClick={onContinueTrial}
               >
-                <span>Continue with Free Trial</span>
+                <span>Start 30-Day Free Trial</span>
                 <ArrowRight size={17} />
               </button>
               <span className="plan-cta-subtext">
-                Direct access to portal • No credit card required
+                Direct access • Add unlimited students during trial
               </span>
             </div>
 
@@ -248,14 +143,15 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
             <div className="plan-features-list">
               <div className="features-group-title">
                 <CheckCircle2 size={14} className="group-icon-included" />
-                <span>Included in Free Trial</span>
+                <span>Included in 30-Day Trial</span>
               </div>
               <ul className="features-ul included-ul">
+                <li><Check size={14} /> <strong>Unlimited Student Enrollment (30 Days)</strong></li>
                 <li><Check size={14} /> Multi-Campus & Campus Setup</li>
                 <li><Check size={14} /> Academic Years & Session Calendars</li>
                 <li><Check size={14} /> Classroom Cohorts & Sections</li>
                 <li><Check size={14} /> Subjects & Teacher Master</li>
-                <li><Check size={14} /> Student Directory & Profiles</li>
+                <li><Check size={14} /> Student Profiles & Directories</li>
                 <li><Check size={14} /> Daily Classroom Attendance</li>
                 <li><Check size={14} /> Campus Notices & Announcements</li>
                 <li><Check size={14} /> Staff & Teacher Directory</li>
@@ -264,7 +160,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
 
               <div className="features-group-title group-disabled">
                 <Lock size={14} className="group-icon-disabled" />
-                <span>Disabled in Free Trial (Locked)</span>
+                <span>Disabled in Free Trial (Requires Upgrade)</span>
               </div>
               <ul className="features-ul disabled-ul">
                 <li>
@@ -363,7 +259,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
               </p>
               <div className="plan-card-price-box">
                 <span className="price-val">
-                  {currency === 'USD' ? `$${standardDisplayPrice}` : `₨ ${standardDisplayPrice}`}
+                  {standardRate}
                 </span>
                 <span className="price-unit">/ student / mo</span>
               </div>
@@ -373,20 +269,13 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
               <button
                 type="button"
                 className="plan-cta-btn plan-btn-standard"
-                disabled={submittingPlan === 'standard'}
-                onClick={() => handleUpgrade('standard')}
+                onClick={() => handleOpenUpgrade('standard')}
               >
-                {submittingPlan === 'standard' ? (
-                  <span>Preparing order…</span>
-                ) : (
-                  <>
-                    <Zap size={16} />
-                    <span>Upgrade to Standard</span>
-                  </>
-                )}
+                <Zap size={16} />
+                <span>Upgrade to Standard</span>
               </button>
               <span className="plan-cta-subtext">
-                Instant activation via secure card checkout
+                Term discounts: 6 mo (5% OFF) · 1 yr (10% OFF)
               </span>
             </div>
 
@@ -469,7 +358,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
               </p>
               <div className="plan-card-price-box">
                 <span className="price-val">
-                  {currency === 'USD' ? `$${premiumDisplayPrice}` : `₨ ${premiumDisplayPrice}`}
+                  {premiumRate}
                 </span>
                 <span className="price-unit">/ student / mo</span>
               </div>
@@ -479,20 +368,13 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
               <button
                 type="button"
                 className="plan-cta-btn plan-btn-premium"
-                disabled={submittingPlan === 'premium'}
-                onClick={() => handleUpgrade('premium')}
+                onClick={() => handleOpenUpgrade('premium')}
               >
-                {submittingPlan === 'premium' ? (
-                  <span>Preparing order…</span>
-                ) : (
-                  <>
-                    <Crown size={16} />
-                    <span>Upgrade to Premium</span>
-                  </>
-                )}
+                <Crown size={16} />
+                <span>Upgrade to Premium</span>
               </button>
               <span className="plan-cta-subtext">
-                Full access to every AI and administrative module
+                Term discounts: 6 mo (5% OFF) · 1 yr (10% OFF)
               </span>
             </div>
 
@@ -523,83 +405,20 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
               </div>
             </div>
           </div>
-
-          {/* 4. CUSTOM PLAN CARD */}
-          <div className="plan-card plan-card-custom">
-            <div className="plan-card-badge-row">
-              <span className="plan-pill custom-pill">
-                <SlidersHorizontal size={12} /> Custom / Modular
-              </span>
-            </div>
-
-            <div className="plan-card-header">
-              <h2>Custom</h2>
-              <p className="plan-card-tagline">
-                Tailor exact modules, multi-campus volume & institutional terms.
-              </p>
-              <div className="plan-card-price-box">
-                <span className="price-val">
-                  {currency === 'USD' ? `$${customDisplayPrice}` : `₨ ${customDisplayPrice}`}
-                </span>
-                <span className="price-unit">/ student / mo</span>
-              </div>
-            </div>
-
-            <div className="plan-card-cta">
-              <button
-                type="button"
-                className="plan-cta-btn plan-btn-custom"
-                disabled={submittingPlan === 'custom'}
-                onClick={() => handleUpgrade('custom')}
-              >
-                {submittingPlan === 'custom' ? (
-                  <span>Preparing order…</span>
-                ) : (
-                  <>
-                    <SlidersHorizontal size={16} />
-                    <span>Choose Custom Plan</span>
-                  </>
-                )}
-              </button>
-              <span className="plan-cta-subtext">
-                Modular package with flexible student seat allocation
-              </span>
-            </div>
-
-            <div className="plan-card-divider" />
-
-            <div className="plan-features-list">
-              <div className="features-group-title">
-                <CheckCircle2 size={14} className="group-icon-included" />
-                <span>Tailored Modular Inclusions:</span>
-              </div>
-              <ul className="features-ul included-ul custom-highlight-ul">
-                <li><Check size={14} /> <strong>Pick &amp; Mix Any Modules</strong> (Academics, Finance, AI)</li>
-                <li><Check size={14} /> <strong>Multi-Campus Volume Scaling</strong> &amp; Branch Pooling</li>
-                <li><Check size={14} /> <strong>Flexible Headcount</strong> (Add/remove student seats)</li>
-                <li><Check size={14} /> <strong>Double-Entry Ledger &amp; HR Payroll</strong> Add-ons</li>
-                <li><Check size={14} /> <strong>Academic Quality Index (AQI)</strong> Add-on</li>
-                <li><Check size={14} /> <strong>Custom Billing Terms</strong> (Monthly, Annual, Multi-year)</li>
-                <li><Check size={14} /> <strong>Institution Onboarding &amp; Dedicated Support</strong></li>
-              </ul>
-
-              <div className="features-group-title group-all-unlocked custom-unlocked-title">
-                <SlidersHorizontal size={14} color="#7c3aed" />
-                <span>100% Modular &amp; Customizable</span>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
 
-      {/* Sandbox Checkout Modal for Instant Upgrade */}
-      {activeCheckoutOrder && (
-        <SandboxCheckoutModal
-          order={activeCheckoutOrder}
-          onSuccess={handleCheckoutSuccess}
-          onClose={() => setActiveCheckoutOrder(null)}
-        />
-      )}
+      {/* Upgrade Checkout Modal */}
+      <UpgradeCheckoutModal
+        isOpen={upgradeModal.isOpen}
+        planCode={upgradeModal.planCode}
+        initialStudents={200}
+        initialCurrency={currency}
+        schoolId={activeCampusId}
+        schoolName={user?.school_name || user?.organisation_name || 'Main Campus'}
+        onSuccess={handleCheckoutSuccess}
+        onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };
