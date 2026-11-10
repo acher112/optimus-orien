@@ -749,11 +749,32 @@ function App() {
   const isFreePlan = orgPlan === 'free';
 
   const isFeatureUnlocked = useCallback((key: string) => {
-    // Only platform superadmin without any school assignment bypasses tenant feature gating
+    // 1. Platform superadmin without school assignment bypasses tenant feature gating
     if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) {
       return true;
     }
-    // Entitlements from server
+
+    // 2. CRITICAL HIERARCHY RULE: Premium and Custom plans have 100% UNRESTRICTED access to ALL features (Standard + Premium + Free)
+    if (orgPlan === 'custom' || orgPlan === 'premium') {
+      return true;
+    }
+
+    // 3. Standard plan has access to all standard and free features, but NOT premium-only features
+    const premiumOnlyKeys = [
+      'finance_dashboard', 'salary_exports', 'academic_quality_index', 'aqi', 'aqi_history',
+      'psychological_evaluation', 'psych_eval', 'students_at_risk', 'interventions', 'early_intervention',
+      'communication_full', 'audit_log', 'audit_log_viewer',
+      'permissions_custom_roles', 'reports_drilldown_exports'
+    ];
+
+    if (orgPlan === 'standard') {
+      if (premiumOnlyKeys.includes(key)) {
+        return false;
+      }
+      return true;
+    }
+
+    // 4. Server-provided entitlements check (for free/trial accounts)
     if (entitlements && entitlements.features) {
       const feat = entitlements.features[key];
       if (feat !== undefined) {
@@ -771,28 +792,7 @@ function App() {
       }
     }
 
-    const standardFeatures = [
-      'finance', 'accounts_ledger', 'staff_salaries', 'hr_payroll',
-      'homework', 'examinations', 'exams_datesheets', 'study_materials',
-      'timetable', 'student_fees', 'fees_offline', 'data_import',
-      'communication_limited', 'permissions_basic', 'reports_standard', 'basic_reports_csv'
-    ];
-    const premiumFeatures = [
-      'finance_dashboard', 'salary_exports', 'academic_quality_index',
-      'psychological_evaluation', 'students_at_risk', 'interventions',
-      'communication_full', 'audit_log', 'audit_log_viewer',
-      'permissions_custom_roles', 'reports_drilldown_exports'
-    ];
-
-    if (orgPlan === 'custom' || orgPlan === 'premium') {
-      return true;
-    }
-    if (orgPlan === 'standard') {
-      if (premiumFeatures.includes(key)) return false;
-      if (standardFeatures.includes(key)) return true;
-    }
-
-    // Basic access list allowed on no_plan or before subscription loads
+    // 5. Basic access list allowed on no_plan or free trial
     const basicList = [
       'school_setup', 'people_accounts', 'authentication', 'password_change',
       'profile_view', 'subscription_management', 'order_submission',
@@ -802,11 +802,6 @@ function App() {
       'announcements', 'staff_basic', 'reports_basic', 'notifications',
       'settings', 'plan_billing'
     ];
-    // If subscription is known to be in no_plan mode or not yet active
-    if (subscription?.is_no_plan || subscription?.status === 'no_plan' || !subscription?.status || subscription?.status === 'suspended') {
-      return basicList.includes(key);
-    }
-    // If subscription is active, standard or custom features apply
     return basicList.includes(key);
   }, [user, entitlements, subscription, activeCampusId, orgPlan]);
 

@@ -325,6 +325,21 @@ def approve_subscription_order(order, reviewer, review_note=''):
         }
     )
 
+    # Also synchronize organisation-level subscription if present
+    if getattr(school, 'organisation', None):
+        try:
+            from core.models import OrganisationSubscription, PlatformPlan
+            org_sub = OrganisationSubscription.objects.filter(organisation=school.organisation).first()
+            if org_sub:
+                org_sub.status = 'active'
+                plat_plan = PlatformPlan.objects.filter(name__icontains=order.plan.code).first()
+                if plat_plan:
+                    org_sub.plan = plat_plan
+                org_sub.renewal_date = new_paid_until.date()
+                org_sub.save()
+        except Exception:
+            pass
+
     admins = User.objects.filter(
         school=school,
         role__in=['owner', 'organisation_admin', 'school_admin'],

@@ -267,18 +267,7 @@ def get_org_plan(org: Any) -> str:
     elif isinstance(org, str):
         org_obj = Organisation.objects.filter(code=org).first() or Organisation.objects.filter(name=org).first()
 
-    # 1. Check OrganisationSubscription if present
-    if org_obj:
-        try:
-            org_sub = getattr(org_obj, 'subscription', None)
-            if not org_sub:
-                org_sub = OrganisationSubscription.objects.filter(organisation=org_obj).select_related('plan').first()
-            if org_sub and getattr(org_sub, 'status', None) in ('active', 'trial') and org_sub.plan:
-                return normalize_plan_name(getattr(org_sub.plan, 'name', ''))
-        except Exception:
-            pass
-
-    # 2. Check SchoolSubscription for schools in organisation
+    # 1. Check SchoolSubscription for schools in organisation (authoritative for campus-level upgrades)
     try:
         sub_qs = None
         if school_obj:
@@ -293,6 +282,17 @@ def get_org_plan(org: Any) -> str:
                 return normalize_plan_name(sub.plan.code)
     except Exception:
         pass
+
+    # 2. Check OrganisationSubscription if present
+    if org_obj:
+        try:
+            org_sub = getattr(org_obj, 'subscription', None)
+            if not org_sub:
+                org_sub = OrganisationSubscription.objects.filter(organisation=org_obj).select_related('plan').first()
+            if org_sub and getattr(org_sub, 'status', None) in ('active', 'trial') and org_sub.plan:
+                return normalize_plan_name(getattr(org_sub.plan, 'name', ''))
+        except Exception:
+            pass
 
     return PLAN_FREE
 

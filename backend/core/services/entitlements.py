@@ -255,8 +255,17 @@ def get_school_entitlements(school, now=None, use_cache=True):
     from plans.features import has_feature, FEATURE_MAP, FEATURE_ALIASES, PLAN_FREE, PLAN_STANDARD, PLAN_PREMIUM, PLAN_CUSTOM
 
     if effective_tier in ('premium', 'custom'):
-        # Unlocks all available catalog features
+        # Premium/Custom unlocks ALL catalog features
         allowed_keys.update(f.key for f in all_catalog if f.status != 'coming_soon')
+        # Premium/Custom tier unlocks ALL features and aliases (Free + Standard + Premium)
+        allowed_keys.update(FEATURE_MAP.keys())
+        allowed_keys.update(FEATURE_ALIASES.keys())
+        for plan_obj in Plan.objects.filter(code__in=['standard', 'premium']):
+            included_keys = PlanFeature.objects.filter(
+                plan=plan_obj,
+                is_included=True
+            ).values_list('feature_key', flat=True)
+            allowed_keys.update(included_keys)
     elif effective_tier == 'standard':
         plan_obj = Plan.objects.filter(code='standard').first()
         if plan_obj:
