@@ -144,6 +144,8 @@ urlpatterns = [
     path('platform-admin/billing/plans/<int:pk>/', subscription_views.platform_admin_plan_detail_view),
     path('platform-admin/billing/features/', subscription_views.platform_admin_features_view),
     path('platform-admin/billing/schools/', subscription_views.platform_admin_schools_view),
+    path('platform-admin/billing/schools/<int:school_id>/alter/', subscription_views.platform_admin_alter_school_subscription_view),
+    path('platform-admin/billing/finance-analytics/', subscription_views.platform_admin_finance_analytics_view),
     path('platform-admin/billing/orders/', subscription_views.platform_admin_orders_view),
     path('platform-admin/billing/orders/<int:order_id>/approve/', subscription_views.platform_admin_order_approve_view),
     path('platform-admin/billing/orders/<int:order_id>/reject/', subscription_views.platform_admin_order_reject_view),

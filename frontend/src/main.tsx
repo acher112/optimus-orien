@@ -33,6 +33,7 @@ const Salaries = React.lazy(() => import('./Salaries'));
 const Examinations = React.lazy(() => import('./Examinations'));
 const AcademicQualityIndex = React.lazy(() => import('./AcademicQualityIndex'));
 const PlatformOwner = React.lazy(() => import('./PlatformOwner'));
+import AdminPortal, { AdminLogin, AdminUnauthorized } from './AdminPortal';
 const DataImport = React.lazy(() => import('./DataImport'));
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
@@ -630,6 +631,8 @@ function App() {
     const isAuth = path === '/login' || path === '/register' || path === '/signin' ||
       search.includes('tab=register') || search.includes('tab=signin') || search.includes('tab=forgot');
     if (isAuth) return false;
+    const isAdmin = path === '/admin' || path.startsWith('/admin');
+    if (isAdmin) return false;
     const isPublic = path === '/' || path === '' ||
       path.startsWith('/about') || path.startsWith('/privacy') || path.startsWith('/terms') ||
       path.startsWith('/contact') || path.startsWith('/platform') || path.startsWith('/portals');
@@ -1398,6 +1401,66 @@ function App() {
     currentPathname.startsWith('/contact') ||
     currentPathname.startsWith('/platform') ||
     currentPathname.startsWith('/portals')) && !isAuthRoute;
+
+  const isAdminRoute = currentPathname === '/admin' || currentPathname.startsWith('/admin');
+
+  if (isAdminRoute) {
+    if (!user) {
+      return (
+        <AdminLogin
+          onLogin={(u) => {
+            try {
+              localStorage.setItem('optimus_user', JSON.stringify(u));
+            } catch {}
+            setUser(u);
+            window.history.replaceState(null, '', '/admin');
+            setCurrentPathname('/admin');
+          }}
+        />
+      );
+    }
+
+    const isPlatformAdmin = Boolean(
+      user.is_superuser ||
+      ['platform_admin', 'owner', 'super_admin'].includes(user.role) ||
+      (user.is_staff && !user.school)
+    );
+
+    if (!isPlatformAdmin) {
+      return (
+        <AdminUnauthorized
+          user={user}
+          onSignOut={async () => {
+            await handleSignOut();
+            window.history.replaceState(null, '', '/admin');
+            setCurrentPathname('/admin');
+          }}
+          onGoToApp={() => {
+            window.history.pushState(null, '', '/app');
+            setCurrentPathname('/app');
+          }}
+        />
+      );
+    }
+
+    return (
+      <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading Website Owner Console…</div></div>}>
+        <AdminPortal
+          user={user}
+          notify={notify}
+          onSignOut={async () => {
+            await handleSignOut();
+            window.history.replaceState(null, '', '/admin');
+            setCurrentPathname('/admin');
+          }}
+          onGoToApp={() => {
+            window.history.pushState(null, '', '/app');
+            setCurrentPathname('/app');
+          }}
+        />
+      </React.Suspense>
+    );
+  }
 
   if (isPublicHomeRoute) {
     return <PublicHome authenticated={Boolean(user)} />;
@@ -2779,7 +2842,11 @@ function App() {
               <Timetable user={user} notify={notify} />
             )
           )}
-          {page === 'Platform owner' && <PlatformOwner user={user} notify={notify} />}
+          {page === 'Platform owner' && (
+            <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading Website Owner Console…</div></div>}>
+              <AdminPortal user={user} notify={notify} onGoToApp={() => setPage('Overview')} />
+            </React.Suspense>
+          )}
           {page === 'Data import' && (
             !isFeatureUnlocked('csv_import') ? (
               <FeatureLockedScreen

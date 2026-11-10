@@ -25,6 +25,10 @@ from core.models import (
     SubscriptionOrder,
     SchoolFeatureOverride,
     SubscriptionEvent,
+    OrganisationSubscription,
+    PlatformPlan,
+    SchoolClass,
+    StaffMember,
 )
 from core.services.entitlements import (
     get_school_entitlements,
@@ -912,36 +916,385 @@ def platform_admin_features_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def platform_admin_schools_view(request):
-    """Platform admin directory of institutional subscribers, statuses, and counts."""
+    """Platform admin comprehensive directory of institutional subscribers, statuses, counts, and financial performance."""
     if not _is_platform_admin(request.user):
         raise PermissionDenied("Platform administration access required.")
 
+    from django.db.models import Sum
+    now = timezone.now()
     schools = School.objects.select_related('subscription', 'subscription__plan', 'organisation').all().order_by('name')
     results = []
+
     for s in schools:
         sub = getattr(s, 'subscription', None)
         active_count = get_active_enrolled_student_count(s)
         invoiced_count = sub.student_count_at_last_invoice if sub else 0
         has_growth = active_count > invoiced_count
 
+        plan_code = (sub.plan.code if (sub and sub.plan) else 'free').lower()
+        sub_status = (sub.status if sub else 'trial').lower()
+
+        # Resolve display names and trial status
+        if plan_code == 'standard':
+            plan_name = 'Standard Plan'
+            monthly_rate_usd = Decimal('3.60')
+            monthly_rate_pkr = Decimal('1000.00')
+        elif plan_code == 'premium':
+            plan_name = 'Premium Plan'
+            monthly_rate_usd = Decimal('7.20')
+            monthly_rate_pkr = Decimal('2000.00')
+        elif plan_code == 'custom':
+            plan_name = sub.plan.name if (sub and sub.plan) else 'Custom Package'
+            monthly_rate_usd = sub.plan.price_usd_per_student if (sub and sub.plan) else Decimal('0.00')
+            monthly_rate_pkr = sub.plan.price_pkr_per_student if (sub and sub.plan) else Decimal('0.00')
+        else:
+            plan_name = '30-Day Free Trial'
+            monthly_rate_usd = Decimal('0.00')
+            monthly_rate_pkr = Decimal('0.00')
+
+        is_trial = plan_code in ('free', 'no_plan') or sub_status in ('trial', 'no_plan')
+
+        # Status display
+        if is_trial:
+            status_display = '30-Day Trial'
+        elif sub_status == 'active':
+            status_display = 'Active'
+        elif sub_status == 'past_due':
+            status_display = 'Past Due'
+        elif sub_status == 'suspended':
+            status_display = 'Suspended'
+        else:
+            status_display = sub_status.capitalize()
+
+        # Dates & Day tracking
+        start_dt = (sub.current_period_start if sub and sub.current_period_start else (sub.created_at if sub else None))
+        days_passed = max(0, (now - start_dt).days) if start_dt else 0
+
+        paid_until = sub.paid_until if (sub and sub.paid_until) else None
+        if paid_until:
+            diff_days = (paid_until - now).days
+            days_remaining = max(0, diff_days)
+            is_expired = paid_until < now
+        else:
+            days_remaining = 0
+            is_expired = True
+
+        # Monthly income calculation
+        monthly_usd = round(Decimal(str(active_count)) * monthly_rate_usd, 2)
+        monthly_pkr = round(Decimal(str(active_count)) * monthly_rate_pkr, 2)
+
+        # Historical earnings from approved/paid orders
+        sch_orders = SubscriptionOrder.objects.filter(school=s, status__in=['approved', 'paid'])
+        total_paid_usd = sch_orders.filter(currency='USD').aggregate(t=Sum('amount'))['t'] or Decimal('0.00')
+        total_paid_pkr = sch_orders.filter(currency='PKR').aggregate(t=Sum('amount'))['t'] or Decimal('0.00')
+        all_orders_count = SubscriptionOrder.objects.filter(school=s).count()
+
+        # Primary admin contact
+        admin_user = User.objects.filter(school=s).order_by('id').first()
+        if not admin_user and s.organisation_id:
+            admin_user = User.objects.filter(organisation_id=s.organisation_id).order_by('id').first()
+
         results.append({
             'school_id': s.id,
             'school_name': s.name,
             'school_code': s.code,
+            'city': s.city or '',
+            'organisation_id': s.organisation_id,
             'organisation_name': s.organisation.name if s.organisation else None,
-            'plan_code': sub.plan.code if (sub and sub.plan) else 'no_plan',
-            'plan_name': sub.plan.name if (sub and sub.plan) else 'No Plan',
-            'status': sub.status if sub else 'no_plan',
-            'paid_until': sub.paid_until.isoformat() if (sub and sub.paid_until) else None,
+            'campuses_count': s.organisation.schools.count() if s.organisation else 1,
+            'classes_count': s.schoolclass_set.count(),
+            'staff_count': s.staff.count(),
+            'admin_email': admin_user.email if admin_user else '',
+            'admin_name': (admin_user.get_full_name() or admin_user.username) if admin_user else '',
+            'plan_code': plan_code,
+            'plan_name': plan_name,
+            'status': sub_status,
+            'status_display': status_display,
+            'is_trial': is_trial,
+            'is_expired': is_expired,
+            'start_date': start_dt.isoformat() if start_dt else None,
+            'paid_until': paid_until.isoformat() if paid_until else None,
             'grace_until': sub.grace_until.isoformat() if (sub and sub.grace_until) else None,
-            'pending_downgrade_to_plan': sub.pending_downgrade_to_plan.code if (sub and sub.pending_downgrade_to_plan) else None,
+            'days_passed': days_passed,
+            'days_remaining': days_remaining,
             'active_students': active_count,
             'student_count_at_last_invoice': invoiced_count,
             'has_student_growth': has_growth,
             'growth_count': max(0, active_count - invoiced_count),
+            'monthly_rate_usd': str(monthly_rate_usd),
+            'monthly_rate_pkr': str(monthly_rate_pkr),
+            'monthly_revenue_usd': str(monthly_usd),
+            'monthly_revenue_pkr': str(monthly_pkr),
+            'total_paid_usd': str(total_paid_usd),
+            'total_paid_pkr': str(total_paid_pkr),
+            'orders_count': all_orders_count,
         })
 
     return Response({'results': results})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def platform_admin_alter_school_subscription_view(request, school_id):
+    """
+    Platform admin action: alters a school's package tier, subscription status, expiration date, or seats.
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    school = get_object_or_404(School, id=school_id)
+    sub, _ = SchoolSubscription.objects.get_or_create(school=school)
+
+    data = request.data or {}
+    plan_code = str(data.get('plan_code', '')).strip().lower()
+    new_status = str(data.get('status', '')).strip().lower()
+    extend_days = data.get('extend_days')
+    paid_until_str = data.get('paid_until')
+    student_count_override = data.get('active_students_override')
+    notes = str(data.get('notes', '')).strip()
+
+    if plan_code:
+        if plan_code in ('free', 'trial', 'no_plan'):
+            free_plan = Plan.objects.filter(code='free').first()
+            sub.plan = free_plan
+            if not new_status:
+                sub.status = 'no_plan'
+        else:
+            plan = Plan.objects.filter(code=plan_code).first() or Plan.objects.filter(code__iexact=plan_code).first()
+            if plan:
+                sub.plan = plan
+
+    if new_status:
+        valid_map = {'active': 'active', 'past_due': 'past_due', 'suspended': 'suspended', 'no_plan': 'no_plan', 'trial': 'no_plan'}
+        sub.status = valid_map.get(new_status, sub.status)
+
+    if extend_days:
+        try:
+            days = int(extend_days)
+            base_time = sub.paid_until if (sub.paid_until and sub.paid_until > timezone.now()) else timezone.now()
+            sub.paid_until = base_time + timezone.timedelta(days=days)
+            if sub.status in ('past_due', 'suspended', 'no_plan'):
+                sub.status = 'active'
+        except (ValueError, TypeError):
+            pass
+    elif paid_until_str is not None:
+        if str(paid_until_str).strip() in ('', 'null', 'None'):
+            sub.paid_until = None
+        else:
+            from django.utils.dateparse import parse_datetime, parse_date
+            dt = parse_datetime(str(paid_until_str).strip())
+            if not dt:
+                d = parse_date(str(paid_until_str).strip())
+                if d:
+                    from datetime import datetime, time
+                    dt = timezone.make_aware(datetime.combine(d, time(23, 59, 59)))
+            if dt:
+                sub.paid_until = dt
+
+    if student_count_override is not None:
+        try:
+            sub.student_count_at_last_invoice = max(0, int(student_count_override))
+        except (ValueError, TypeError):
+            pass
+
+    if not sub.current_period_start:
+        sub.current_period_start = timezone.now()
+
+    sub.save()
+
+    # Synchronize OrganisationSubscription if organisation exists
+    if school.organisation:
+        org_sub = OrganisationSubscription.objects.filter(organisation=school.organisation).first()
+        if org_sub:
+            if sub.plan:
+                platform_plan = PlatformPlan.objects.filter(name__icontains=sub.plan.code).first()
+                if platform_plan:
+                    org_sub.plan = platform_plan
+            org_sub.status = 'active' if sub.status == 'active' else sub.status
+            if sub.paid_until:
+                org_sub.renewal_date = sub.paid_until.date()
+            org_sub.save()
+
+    invalidate_school_entitlements_cache(school.id)
+
+    SubscriptionEvent.objects.create(
+        school=school,
+        event_type='admin_altered',
+        actor=request.user,
+        notes=f"Owner altered package: Plan={sub.plan.code if sub.plan else 'none'}, Status={sub.status}, PaidUntil={sub.paid_until}. {notes}",
+        metadata={
+            'plan_code': plan_code,
+            'status': new_status,
+            'extend_days': extend_days,
+            'paid_until': str(sub.paid_until),
+            'notes': notes,
+        }
+    )
+
+    return Response({
+        'message': f"Subscription for '{school.name}' altered successfully.",
+        'school_id': school.id,
+        'school_name': school.name,
+        'plan_code': sub.plan.code if sub.plan else 'no_plan',
+        'plan_name': sub.plan.name if sub.plan else '30-Day Free Trial',
+        'status': sub.status,
+        'paid_until': sub.paid_until.isoformat() if sub.paid_until else None,
+        'student_count_at_last_invoice': sub.student_count_at_last_invoice,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def platform_admin_finance_analytics_view(request):
+    """
+    Platform admin comprehensive finance and revenue analytics endpoint.
+    Aggregates total earnings (USD & PKR), MRR run rate, plan distribution, monthly revenue trend, and top earning schools.
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    from django.db.models import Sum, Count
+
+    approved_orders = SubscriptionOrder.objects.filter(status__in=['approved', 'paid'])
+    total_revenue_usd = approved_orders.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    total_revenue_pkr = approved_orders.filter(currency='PKR').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    pending_orders = SubscriptionOrder.objects.filter(status='pending')
+    pending_revenue_usd = pending_orders.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    pending_revenue_pkr = pending_orders.filter(currency='PKR').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    schools = School.objects.select_related('subscription', 'subscription__plan', 'organisation').all()
+    total_schools = len(schools)
+
+    total_students = 0
+    active_schools_count = 0
+    trial_schools_count = 0
+    past_due_schools_count = 0
+    suspended_schools_count = 0
+
+    free_trial_count = 0
+    standard_count = 0
+    premium_count = 0
+    custom_count = 0
+
+    monthly_run_rate_usd = Decimal('0.00')
+    monthly_run_rate_pkr = Decimal('0.00')
+
+    per_school_stats = []
+
+    for s in schools:
+        sub = getattr(s, 'subscription', None)
+        active_count = get_active_enrolled_student_count(s)
+        total_students += active_count
+
+        plan_code = (sub.plan.code if (sub and sub.plan) else 'free').lower()
+        sub_status = (sub.status if sub else 'trial').lower()
+
+        is_trial = plan_code in ('free', 'no_plan') or sub_status in ('trial', 'no_plan')
+        if is_trial:
+            trial_schools_count += 1
+            free_trial_count += 1
+        elif plan_code == 'standard':
+            standard_count += 1
+        elif plan_code == 'premium':
+            premium_count += 1
+        else:
+            custom_count += 1
+
+        if sub_status == 'active':
+            active_schools_count += 1
+        elif sub_status == 'past_due':
+            past_due_schools_count += 1
+        elif sub_status == 'suspended':
+            suspended_schools_count += 1
+
+        rate_usd = Decimal('3.60') if plan_code == 'standard' else (Decimal('7.20') if plan_code == 'premium' else Decimal('0.00'))
+        rate_pkr = Decimal('1000.00') if plan_code == 'standard' else (Decimal('2000.00') if plan_code == 'premium' else Decimal('0.00'))
+
+        m_usd = round(Decimal(str(active_count)) * rate_usd, 2)
+        m_pkr = round(Decimal(str(active_count)) * rate_pkr, 2)
+
+        if sub_status == 'active' and not is_trial:
+            monthly_run_rate_usd += m_usd
+            monthly_run_rate_pkr += m_pkr
+
+        sch_orders = approved_orders.filter(school=s)
+        sch_paid_usd = sch_orders.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        sch_paid_pkr = sch_orders.filter(currency='PKR').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+        per_school_stats.append({
+            'school_id': s.id,
+            'school_name': s.name,
+            'school_code': s.code,
+            'city': s.city or '',
+            'plan_code': plan_code,
+            'plan_name': 'Standard Plan' if plan_code == 'standard' else ('Premium Plan' if plan_code == 'premium' else '30-Day Free Trial'),
+            'status': sub_status,
+            'active_students': active_count,
+            'monthly_revenue_usd': str(m_usd),
+            'monthly_revenue_pkr': str(m_pkr),
+            'total_paid_usd': str(sch_paid_usd),
+            'total_paid_pkr': str(sch_paid_pkr),
+        })
+
+    per_school_stats.sort(key=lambda x: (float(x['total_paid_usd']) + float(x['monthly_revenue_usd'])), reverse=True)
+
+    # Monthly Revenue Trend (Last 6 months)
+    revenue_by_month = []
+    now = timezone.now()
+    for i in range(5, -1, -1):
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+
+        month_label = f"{timezone.datetime(year, month, 1).strftime('%b %Y')}"
+        month_key = f"{year}-{month:02d}"
+
+        month_orders = approved_orders.filter(
+            created_at__year=year,
+            created_at__month=month
+        )
+        m_usd = month_orders.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        m_pkr = month_orders.filter(currency='PKR').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        order_count = month_orders.count()
+
+        revenue_by_month.append({
+            'month': month_label,
+            'month_key': month_key,
+            'usd': str(m_usd),
+            'pkr': str(m_pkr),
+            'orders_count': order_count,
+        })
+
+    return Response({
+        'kpis': {
+            'total_revenue_usd': str(total_revenue_usd),
+            'total_revenue_pkr': str(total_revenue_pkr),
+            'monthly_run_rate_usd': str(monthly_run_rate_usd),
+            'monthly_run_rate_pkr': str(monthly_run_rate_pkr),
+            'total_schools': total_schools,
+            'total_students': total_students,
+            'active_schools_count': active_schools_count,
+            'trial_schools_count': trial_schools_count,
+            'past_due_schools_count': past_due_schools_count,
+            'suspended_schools_count': suspended_schools_count,
+            'pending_orders_count': pending_orders.count(),
+            'pending_orders_usd': str(pending_revenue_usd),
+            'pending_orders_pkr': str(pending_revenue_pkr),
+            'approved_orders_count': approved_orders.count(),
+        },
+        'plan_distribution': {
+            'free_trial': free_trial_count,
+            'standard': standard_count,
+            'premium': premium_count,
+            'custom': custom_count,
+            'total': total_schools,
+        },
+        'revenue_by_month': revenue_by_month,
+        'per_school_ranking': per_school_stats[:10],
+    })
 
 
 @api_view(['GET'])
