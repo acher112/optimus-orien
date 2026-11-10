@@ -111,7 +111,6 @@ const WORKSPACE_NAV = [
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Plan & Billing', icon: CreditCard, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
 ];
@@ -122,7 +121,6 @@ function BriefcaseIcon(props: any) {
 
 const SYSTEM_NAV = [
   { name: 'Reports', icon: BarChart3, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
-  { name: 'Plan & Billing', icon: CreditCard, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'My performance', icon: TrendingUp, roles: ['student'] },
   { name: 'Platform owner', icon: ShieldCheck, superuserOnly: true },
   { name: 'Permissions', icon: KeyRound, roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -156,7 +154,7 @@ const NAV_GROUPS = [
   { sublabel: 'STUDENT SUPPORT', items: ['Psychological Evaluation', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
-  { sublabel: 'FINANCE & BILLING', items: ['Finance', 'Plan & Billing'] },
+  { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
 ];
 
@@ -869,7 +867,6 @@ function App() {
     setProfileMenuOpen(false);
     setCampusDropdownOpen(false);
     setOpenDropdowns({});
-    setPaidDropdownOpen(true);
     setShowNotifications(false);
     setPage('Overview');
     setModal(false);
@@ -1129,108 +1126,6 @@ function App() {
     return false;
   }, [user, activeCampusId, orgPlan]);
 
-  const [paidDropdownOpen, setPaidDropdownOpen] = useState(true);
-
-  const allCandidateNavItems = useMemo(() => {
-    const items: { name: string; icon: any; roles?: string[]; adminOnly?: boolean }[] = [];
-    const seen = new Set<string>();
-
-    WORKSPACE_NAV.forEach(item => {
-      if (!item.childOf && !seen.has(item.name)) {
-        seen.add(item.name);
-        items.push(item);
-      }
-    });
-
-    SYSTEM_NAV.forEach(item => {
-      if (!seen.has(item.name)) {
-        seen.add(item.name);
-        items.push(item);
-      }
-    });
-
-    return items;
-  }, []);
-
-  const lockedNavItems = useMemo(() => {
-    if (!user) return [];
-    return allCandidateNavItems.filter(item => {
-      if (item.roles && !item.roles.includes(user.role)) return false;
-      if (item.adminOnly && !['organisation_admin', 'school_admin'].includes(user.role)) return false;
-      return !isItemUnlocked(item.name);
-    });
-  }, [allCandidateNavItems, user, isItemUnlocked]);
-
-  const hasLockedItems = lockedNavItems.length > 0;
-
-  const isPaidChildActive = useMemo(() => {
-    return lockedNavItems.some(i => 
-      page === i.name || 
-      (i.name === 'Student fees' && ['Fees', 'Student Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page)) ||
-      (i.name === 'Students at Risk' && ['At-risk list', 'Risk criteria', 'Review cases'].includes(page))
-    );
-  }, [lockedNavItems, page]);
-
-  const isPaidOpen = paidDropdownOpen || isPaidChildActive;
-
-  const renderPaidFeaturesDropdown = () => {
-    if (!hasLockedItems) return null;
-
-    return (
-      <div className="nav-dropdown-group nav-paid-features-group">
-        <button
-          type="button"
-          onClick={() => setPaidDropdownOpen(v => !v)}
-          className={'nav-item nav-dropdown-btn nav-paid-btn ' + (isPaidChildActive ? 'selected ' : '') + (isPaidOpen ? 'dropdown-open' : '')}
-          title="Paid Features"
-        >
-          <Sparkles size={18} className="nav-paid-icon" />
-          <span className="nav-item-title">Paid Features</span>
-          <span className="nav-paid-badge">
-            <Crown size={10} className="crown-icon" />
-            <span>{lockedNavItems.length}</span>
-          </span>
-          <span
-            className={'nav-chevron-wrap' + (isPaidOpen ? ' open' : '')}
-            title={isPaidOpen ? 'Collapse' : 'Expand'}
-          >
-            <ChevronDown size={15} strokeWidth={2.2} />
-          </span>
-        </button>
-        {isPaidOpen && (
-          <div className="nav-dropdown-children nav-paid-children">
-            <div className="nav-paid-upgrade-callout" onClick={() => switchPage('Plan & Billing')}>
-              <div className="callout-sparkle"><Sparkles size={13} /></div>
-              <div className="callout-text">
-                <strong>{orgPlan === 'standard' ? 'Upgrade to Premium' : 'Upgrade Plan'}</strong>
-                <small>{orgPlan === 'standard' ? 'Unlock AI & Risk Analytics' : 'Unlock all institutional modules'}</small>
-              </div>
-              <ArrowRight size={12} className="callout-arrow" />
-            </div>
-            {lockedNavItems.map((item: any) => {
-              const ItemIcon = item.icon;
-              const isItemSelected = page === item.name || (item.name === 'Student fees' && ['Fees', 'Student Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page)) || (item.name === 'Students at Risk' && ['At-risk list', 'Risk criteria', 'Review cases'].includes(page));
-              const itemTier = NAV_ITEM_TIERS[item.name] || 'standard';
-              return (
-                <button
-                  key={item.name}
-                  type="button"
-                  onClick={() => switchPage(item.name)}
-                  className={'nav-item nav-child ' + (isItemSelected ? 'selected' : '') + ' nav-item-locked'}
-                >
-                  <ItemIcon size={14} strokeWidth={1.8} />
-                  <span>{item.name}</span>
-                  <span className={`nav-plan-badge ${itemTier}`} title={`Requires ${itemTier === 'premium' ? 'Premium' : 'Standard'} plan`}>
-                    <Crown size={10} className="crown-icon" />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
   const changeTheme = () => {
     const nextMode = dark ? 'light' : 'dark';
     setDark(!dark);
@@ -1775,7 +1670,6 @@ function App() {
           <>
             <div className="nav-label">MY TEACHING WORKSPACE</div>
             <nav>
-              {renderPaidFeaturesDropdown()}
               <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
               {renderNavButton('Overview', 'My Home', LayoutDashboard)}
               {isItemUnlocked('Psychological Evaluation') && renderNavButton('Psychological Evaluation', 'Psychological Evaluation', Activity)}
@@ -1805,7 +1699,6 @@ function App() {
           <>
             <div className="nav-label">STUDENT PORTAL</div>
             <nav>
-              {renderPaidFeaturesDropdown()}
               <div className="nav-sublabel">LEARNING & PROGRESS</div>
               {renderNavButton('Overview', 'My Dashboard', LayoutDashboard)}
               {renderNavButton('Attendance', 'My Attendance', ClipboardCheck)}
@@ -1828,7 +1721,6 @@ function App() {
           <>
             <div className="nav-label">WORKSPACE</div>
             <nav>
-              {renderPaidFeaturesDropdown()}
               {NAV_GROUPS.map(group => {
                 const isAdmin = group.adminLabel;
                 if (isAdmin && !['organisation_admin', 'school_admin'].includes(user.role)) return null;
@@ -1927,17 +1819,31 @@ function App() {
         )}
 
         <div className="sidebar-bottom">
-          <div className="help-card">
-            <div className="help-icon"><Sparkles size={17} /></div>
-            <b>More clarity. Better outcomes.</b>
-            <p>Use insights to make every campus day count.</p>
-            {user.role === 'teacher' ? (
-              <button onClick={() => switchPage('Examinations')}>Explore exams & marks <ArrowRight size={14} /></button>
-            ) : (
-              <button onClick={() => switchPage('Reports')}>Explore reports <ArrowRight size={14} /></button>
-            )}
-            <a className="public-sidebar-link" href="/">Public homepage <ArrowUpRight size={13} /></a>
-          </div>
+          {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
+            <div className="sidebar-upgrade-wrap">
+              <button
+                type="button"
+                onClick={() => switchPage('Plan & Billing')}
+                className={'sidebar-upgrade-btn ' + (page === 'Plan & Billing' ? 'selected' : '')}
+                title="View Plans & Billing"
+              >
+                <div className="upgrade-btn-icon-wrap">
+                  <Sparkles size={17} />
+                </div>
+                <div className="upgrade-btn-text">
+                  <strong>Upgrade Plans</strong>
+                  <small>
+                    {orgPlan === 'premium' || orgPlan === 'custom'
+                      ? 'Premium Active'
+                      : orgPlan === 'standard'
+                        ? 'Standard Active'
+                        : 'Choose Plan'}
+                  </small>
+                </div>
+                <ArrowRight size={15} className="upgrade-btn-arrow" />
+              </button>
+            </div>
+          )}
 
           <div className="account">
             <div className="avatar" style={{ overflow: 'hidden', background: user.avatar_color ? `${user.avatar_color}22` : '#e9e1ff', color: user.avatar_color || '#7862d7' }}>
@@ -1963,7 +1869,7 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu" onClick={() => setSidebar(true)} aria-label="Open menu"><Menu size={21} /></button>
             <div className="breadcrumb">
-              Workspace <ChevronRight size={14} /> <strong>{page === 'Overview' && user.role === 'teacher' ? 'My Home' : page}</strong>
+              Workspace <ChevronRight size={14} /> <strong>{page === 'Overview' && user.role === 'teacher' ? 'My Home' : page === 'Plan & Billing' ? 'Upgrade Plans' : page}</strong>
               {activeCampus && <span style={{ marginLeft: 8, padding: '2px 8px', background: '#eeeaff', color: '#6353d8', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{activeCampus.name}</span>}
               {user.role === 'teacher' && teacherScope?.badges && teacherScope.badges.map((b: any, idx: number) => (
                 <span key={idx} style={{

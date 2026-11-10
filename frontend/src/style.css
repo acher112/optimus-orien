@@ -520,7 +520,111 @@
   left: 18px;
 }
 
-/* Sidebar Help Card */
+/* Sidebar Help Card & Upgrade Button */
+.sidebar-upgrade-wrap {
+  margin: 0 4px 16px;
+}
+
+.sidebar-upgrade-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4f46e5 100%);
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.22);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-upgrade-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  transition: left 0.6s ease;
+}
+
+.sidebar-upgrade-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.35);
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 50%, #4338ca 100%);
+}
+
+.sidebar-upgrade-btn:hover::before {
+  left: 100%;
+}
+
+.sidebar-upgrade-btn.selected {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3), 0 8px 24px rgba(124, 58, 237, 0.35);
+}
+
+.upgrade-btn-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #ffffff;
+}
+
+.upgrade-btn-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.upgrade-btn-text strong {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+  color: #ffffff !important;
+}
+
+.upgrade-btn-text small {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.88) !important;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upgrade-btn-arrow {
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.sidebar-upgrade-btn:hover .upgrade-btn-arrow {
+  transform: translateX(3px);
+  color: #ffffff;
+}
+
+/* Dark mode adjustments */
+.dark .sidebar-upgrade-btn {
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
 .help-card {
   background: var(--brand-primary-light) !important;
   border: 1px solid var(--brand-primary-border) !important;
