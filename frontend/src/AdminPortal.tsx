@@ -34,15 +34,6 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
   const [planFilter, setPlanFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Modals
-  const [alterModalSchool, setAlterModalSchool] = useState<any | null>(null);
-  const [alterPlanCode, setAlterPlanCode] = useState('free');
-  const [alterStatus, setAlterStatus] = useState('active');
-  const [alterPaidUntil, setAlterPaidUntil] = useState('');
-  const [alterStudentOverride, setAlterStudentOverride] = useState<number | ''>('');
-  const [alterNotes, setAlterNotes] = useState('');
-  const [savingAlter, setSavingAlter] = useState(false);
-
   // School Inspection / Detail
   const [detailsModalSchool, setDetailsModalSchool] = useState<any | null>(null);
   const [schoolDetailData, setSchoolDetailData] = useState<any | null>(null);
@@ -57,9 +48,6 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
   const [editAdminName, setEditAdminName] = useState('');
   const [editAdminEmail, setEditAdminEmail] = useState('');
   const [editAdminUsername, setEditAdminUsername] = useState('');
-  const [editPlanCode, setEditPlanCode] = useState('free');
-  const [editStatus, setEditStatus] = useState('active');
-  const [editPaidUntil, setEditPaidUntil] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Delete School Modal
@@ -147,68 +135,14 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
     refreshAll();
   }, [refreshAll]);
 
-  // Open Alter Modal
-  const handleOpenAlterModal = (school: any) => {
-    setAlterModalSchool(school);
-    setAlterPlanCode(school.plan_code || 'free');
-    setAlterStatus(school.status || 'active');
-    setAlterPaidUntil(school.paid_until ? school.paid_until.substring(0, 10) : '');
-    setAlterStudentOverride(school.active_students || 0);
-    setAlterNotes('');
-  };
-
-  // Submit Alter Subscription
-  const handleSaveAlteration = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!alterModalSchool) return;
-
-    setSavingAlter(true);
-    try {
-      const payload: any = {
-        plan_code: alterPlanCode,
-        status: alterStatus,
-        notes: alterNotes || 'Package alteration by website owner',
-      };
-      if (alterPaidUntil) {
-        payload.paid_until = alterPaidUntil;
-      } else {
-        payload.paid_until = null;
-      }
-      if (alterStudentOverride !== '') {
-        payload.active_students_override = Number(alterStudentOverride);
-      }
-
-      await request(`platform-admin/billing/schools/${alterModalSchool.school_id}/alter/`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      sendNotification(`Plan for ${alterModalSchool.school_name} successfully updated to ${alterPlanCode.toUpperCase()} (${alterStatus.toUpperCase()})!`, 'success');
-      setAlterModalSchool(null);
-      loadSchools();
-      loadAnalytics();
-    } catch (err) {
-      sendNotification(err instanceof Error ? err.message : 'Failed to alter subscription', 'error');
-    } finally {
-      setSavingAlter(false);
-    }
-  };
-
-  // Quick Extend Helper
-  const handleQuickExtend = (days: number) => {
-    const base = alterPaidUntil ? new Date(alterPaidUntil) : new Date();
-    base.setDate(base.getDate() + days);
-    setAlterPaidUntil(base.toISOString().substring(0, 10));
-    setAlterStatus('active');
-  };
-
   // Open Full School Details & Timeline
   const handleOpenSchoolDetails = async (school: any) => {
     setDetailsModalSchool(school);
     setSchoolDetailData(null);
     setLoadingSchoolDetail(true);
     try {
-      const res = await request<any>(`platform-admin/billing/schools/${school.school_id}/`);
+      const schId = school.school_id || school.id;
+      const res = await request<any>(`platform-admin/billing/schools/${schId}/`);
       setSchoolDetailData(res);
     } catch (err) {
       // Fallback: keep basic table data in detailsModalSchool
@@ -227,9 +161,6 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
     setEditAdminName(school.admin_name || '');
     setEditAdminEmail(school.admin_email || '');
     setEditAdminUsername(school.admin_username || '');
-    setEditPlanCode(school.plan_code || 'free');
-    setEditStatus(school.status || 'active');
-    setEditPaidUntil(school.paid_until ? school.paid_until.substring(0, 10) : '');
   };
 
   // Save School Edit
@@ -246,11 +177,9 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
         admin_name: editAdminName,
         admin_email: editAdminEmail,
         admin_username: editAdminUsername,
-        plan_code: editPlanCode,
-        status: editStatus,
-        paid_until: editPaidUntil || null,
       };
-      await request(`platform-admin/billing/schools/${editModalSchool.school_id}/update/`, {
+      const schId = editModalSchool.school_id || editModalSchool.id;
+      await request(`platform-admin/billing/schools/${schId}/update/`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -258,8 +187,8 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
       setEditModalSchool(null);
       loadSchools();
       loadAnalytics();
-      if (detailsModalSchool && detailsModalSchool.school_id === editModalSchool.school_id) {
-        handleOpenSchoolDetails({ ...detailsModalSchool, school_name: editName, school_code: editCode, city: editCity, plan_code: editPlanCode, status: editStatus });
+      if (detailsModalSchool && (detailsModalSchool.school_id === schId || detailsModalSchool.id === schId)) {
+        handleOpenSchoolDetails({ ...detailsModalSchool, school_name: editName, school_code: editCode, city: editCity });
       }
     } catch (err) {
       sendNotification(err instanceof Error ? err.message : 'Failed to update school', 'error');
@@ -273,11 +202,12 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
     if (!deleteModalSchool) return;
     setDeletingSchool(true);
     try {
-      await request(`platform-admin/billing/schools/${deleteModalSchool.school_id}/delete/`, {
+      const schId = deleteModalSchool.school_id || deleteModalSchool.id;
+      await request(`platform-admin/billing/schools/${schId}/delete/`, {
         method: 'POST',
       });
       sendNotification(`School '${deleteModalSchool.school_name}' deleted successfully.`, 'success');
-      if (detailsModalSchool && detailsModalSchool.school_id === deleteModalSchool.school_id) {
+      if (detailsModalSchool && (detailsModalSchool.school_id === schId || detailsModalSchool.id === schId)) {
         setDetailsModalSchool(null);
       }
       setDeleteModalSchool(null);
@@ -444,7 +374,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                 </span>
               </div>
               <p style={{ margin: '3px 0 0', fontSize: 13, color: '#c7d2fe' }}>
-                Master Institution Oversight • Package Alterations • Revenue Analytics • Financial Management
+                Master Institution Oversight • Revenue Analytics • Financial Management
               </p>
             </div>
           </div>
@@ -702,7 +632,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
         </div>
 
         {/* ============================================================== */}
-        {/* TAB 1: CAMPUSES & SCHOOLS DIRECTORY (TRACKING & ALTERATIONS) */}
+        {/* TAB 1: CAMPUSES & SCHOOLS DIRECTORY (TRACKING & MANAGEMENT) */}
         {/* ============================================================== */}
         {activeTab === 'directory' && (
           <div>
@@ -1019,26 +949,6 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                                 }}
                               >
                                 <Pencil size={12} /> Edit
-                              </button>
-                              <button
-                                type="button"
-                                title="Alter Subscription Package"
-                                onClick={() => handleOpenAlterModal(s)}
-                                style={{
-                                  background: '#4338ca',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  padding: '6px 11px',
-                                  borderRadius: 6,
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                }}
-                              >
-                                <SlidersHorizontal size={12} /> Alter Pkg
                               </button>
                               <button
                                 type="button"
@@ -1448,13 +1358,13 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                           <button
                             type="button"
                             onClick={() => {
-                              const target = schools.find(x => x.school_id === s.school_id);
-                              if (target) handleOpenAlterModal(target);
+                              const target = schools.find(x => (x.school_id || x.id) === s.school_id);
+                              if (target) handleOpenSchoolDetails(target);
                             }}
                             style={{
-                              background: '#4338ca',
-                              color: '#ffffff',
-                              border: 'none',
+                              background: '#f1f5f9',
+                              color: '#334155',
+                              border: '1px solid #cbd5e1',
                               padding: '5px 10px',
                               borderRadius: 6,
                               fontSize: 11,
@@ -1462,7 +1372,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                               cursor: 'pointer',
                             }}
                           >
-                            Alter Plan
+                            View Details
                           </button>
                         </td>
                       </tr>
@@ -1779,292 +1689,6 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
           </div>
         )}
       </main>
-
-      {/* ============================================================== */}
-      {/* MODAL 1: ALTER PACKAGE / SUBSCRIPTION MODAL */}
-      {/* ============================================================== */}
-      {alterModalSchool && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          background: 'rgba(15, 23, 42, 0.65)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: 16,
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: 16,
-            width: '100%',
-            maxWidth: 620,
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid #e2e8f0',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              padding: '18px 24px',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: '#f8fafc',
-            }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                  Alter Subscription & Package Tier
-                </h3>
-                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
-                  School: <strong>{alterModalSchool.school_name}</strong> ({alterModalSchool.school_code})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAlterModalSchool(null)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveAlteration} style={{ padding: '20px 24px' }}>
-              {/* Plan Choice Cards */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-                  Assign Target Plan Tier:
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                  <div
-                    onClick={() => setAlterPlanCode('free')}
-                    style={{
-                      border: alterPlanCode === 'free' ? '2px solid #f59e0b' : '1px solid #e2e8f0',
-                      background: alterPlanCode === 'free' ? '#fffbeb' : '#ffffff',
-                      borderRadius: 10,
-                      padding: '12px 10px',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <Calendar size={18} color="#d97706" style={{ margin: '0 auto 6px' }} />
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>30-Day Free Trial</div>
-                    <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>$0 / student</div>
-                  </div>
-
-                  <div
-                    onClick={() => setAlterPlanCode('standard')}
-                    style={{
-                      border: alterPlanCode === 'standard' ? '2px solid #0284c7' : '1px solid #e2e8f0',
-                      background: alterPlanCode === 'standard' ? '#f0f9ff' : '#ffffff',
-                      borderRadius: 10,
-                      padding: '12px 10px',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <BookOpen size={18} color="#0284c7" style={{ margin: '0 auto 6px' }} />
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Standard Plan</div>
-                    <div style={{ fontSize: 11, color: '#0284c7', marginTop: 2 }}>$3.60 / student</div>
-                  </div>
-
-                  <div
-                    onClick={() => setAlterPlanCode('premium')}
-                    style={{
-                      border: alterPlanCode === 'premium' ? '2px solid #7c3aed' : '1px solid #e2e8f0',
-                      background: alterPlanCode === 'premium' ? '#f5f3ff' : '#ffffff',
-                      borderRadius: 10,
-                      padding: '12px 10px',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <Crown size={18} color="#7c3aed" style={{ margin: '0 auto 6px' }} />
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Premium Plan</div>
-                    <div style={{ fontSize: 11, color: '#7c3aed', marginTop: 2 }}>$7.20 / student</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status and Student Count Override */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Subscription Status:
-                  </label>
-                  <select
-                    value={alterStatus}
-                    onChange={e => setAlterStatus(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                      background: '#ffffff',
-                    }}
-                  >
-                    <option value="active">Active (Full Access)</option>
-                    <option value="trial">30-Day Free Trial</option>
-                    <option value="past_due">Past Due (Grace Notice)</option>
-                    <option value="suspended">Suspended (Locked)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Invoiced / Authorized Students:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={alterStudentOverride}
-                    onChange={e => setAlterStudentOverride(e.target.value === '' ? '' : Number(e.target.value))}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Expiration Date / Extension */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Paid Until / Expiration Date:
-                </label>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-                  <input
-                    type="date"
-                    value={alterPaidUntil}
-                    onChange={e => setAlterPaidUntil(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setAlterPaidUntil('')}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      background: '#f8fafc',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Clear Expiry
-                  </button>
-                </div>
-
-                {/* Quick Extend Buttons */}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickExtend(30)}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f1f5f9', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    +30 Days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickExtend(60)}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f1f5f9', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    +60 Days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickExtend(180)}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f1f5f9', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    +6 Months (180d)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickExtend(365)}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f1f5f9', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    +1 Year (365d)
-                  </button>
-                </div>
-              </div>
-
-              {/* Owner Note / Audit Reason */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Audit Trail Reason / Owner Notes:
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Extended promo courtesy, payment verified via direct bank deposit..."
-                  value={alterNotes}
-                  onChange={e => setAlterNotes(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    fontSize: 13,
-                  }}
-                />
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
-                <button
-                  type="button"
-                  onClick={() => setAlterModalSchool(null)}
-                  style={{
-                    padding: '9px 16px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingAlter}
-                  style={{
-                    padding: '9px 20px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: '#4338ca',
-                    color: '#ffffff',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  {savingAlter ? <RefreshCw size={14} className="spin" /> : <Check size={14} />} Save & Apply Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ============================================================== */}
       {/* MODAL 2: VIEW SCHOOL DETAILS & ACTIVITY TIMELINE MODAL */}
@@ -2451,30 +2075,6 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
 
                 <button
                   type="button"
-                  onClick={() => {
-                    const s = detailsModalSchool;
-                    setDetailsModalSchool(null);
-                    handleOpenAlterModal(s);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 16px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: '#4338ca',
-                    color: '#ffffff',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <SlidersHorizontal size={13} /> Alter Package
-                </button>
-
-                <button
-                  type="button"
                   onClick={() => setDetailsModalSchool(null)}
                   style={{
                     padding: '8px 14px',
@@ -2645,55 +2245,6 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                       placeholder="admin@school.edu"
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                     />
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 10 }}>
-                    Package & Subscription Status
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                        Plan Tier
-                      </label>
-                      <select
-                        value={editPlanCode}
-                        onChange={e => setEditPlanCode(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
-                      >
-                        <option value="free">30-Day Free Trial</option>
-                        <option value="standard">Standard Plan</option>
-                        <option value="premium">Premium Plan</option>
-                        <option value="custom">Custom Enterprise</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                        Status
-                      </label>
-                      <select
-                        value={editStatus}
-                        onChange={e => setEditStatus(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
-                      >
-                        <option value="active">Active</option>
-                        <option value="trial">Trial</option>
-                        <option value="past_due">Past Due</option>
-                        <option value="suspended">Suspended</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                        Paid Until Date
-                      </label>
-                      <input
-                        type="date"
-                        value={editPaidUntil}
-                        onChange={e => setEditPaidUntil(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
-                      />
-                    </div>
                   </div>
                 </div>
               </div>
@@ -3299,7 +2850,7 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
           </div>
           <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: '#0f172a' }}>Platform Administration</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748b' }}>
-            Sign in with website owner credentials to monitor schools, revenues, and alter packages.
+            Sign in with website owner credentials to monitor schools, revenues, and manage institutions.
           </p>
         </div>
 

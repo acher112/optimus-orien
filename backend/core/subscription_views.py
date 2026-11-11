@@ -1555,12 +1555,19 @@ def platform_admin_delete_school_view(request, school_id):
             Attendance, Grade, Assessment, HomeworkSubmission, Homework,
             Enrollment, Student, Subject, SchoolClass, AcademicYear,
             StaffMember, StaffAttendance, RoleAssignment, HolidayCalendar, ClassTimetable,
-            AuditEvent, Notification, TeachingAssignment, ReviewCase,
+            AuditEvent, Notification, TeachingAssignment, ReviewCase, Intervention,
             SchoolConfiguration, SchoolConfigurationVersion, PublishedSchoolIndicator,
-            FinanceCategory, FinanceEntry, FeeHead, FeeStructure, FeePayment,
-            SalaryRecord, ExamSession, AssessmentCategory, GradingScale, PublishedResult,
-            ClassTeacherAssignment, ClassSubject
+            FinanceCategory, FinanceEntry, FeeHead, FeeStructure, FeePayment, StudentFee, Concession, FeePaymentAllocation,
+            SalaryRecord, SalaryStructure, SalaryAdjustment, ExamSession, ExamPaper, AssessmentCategory, GradingScale, PublishedResult,
+            ClassTeacherAssignment, ClassSubject, Observation, EvaluationSafeguardingReferral, SupportAccessGrant
         )
+
+        # Pre-delete dependent allocations & papers that PROTECT parent records
+        FeePaymentAllocation.objects.filter(payment__school=school).delete()
+        FeePaymentAllocation.objects.filter(student_fee__student__school=school).delete()
+        ExamPaper.objects.filter(session__school=school).delete()
+        ExamPaper.objects.filter(school_class__school=school).delete()
+        Intervention.objects.filter(case__school=school).delete()
 
         # Class level relationships
         Attendance.objects.filter(school_class__school=school).delete()
@@ -1573,19 +1580,28 @@ def platform_admin_delete_school_view(request, school_id):
         ClassTeacherAssignment.objects.filter(school_class__school=school).delete()
         ClassSubject.objects.filter(school_class__school=school).delete()
 
-        # Direct school PROTECT models
+        # Direct school and student/staff PROTECT models
+        StudentFee.objects.filter(student__school=school).delete()
+        Concession.objects.filter(student__school=school).delete()
+        Observation.objects.filter(student__school=school).delete()
+        Observation.objects.filter(teacher__school=school).delete()
+        EvaluationSafeguardingReferral.objects.filter(school=school).delete()
+        SupportAccessGrant.objects.filter(school=school).delete()
         StaffAttendance.objects.filter(school=school).delete()
         TeachingAssignment.objects.filter(school=school).delete()
         ReviewCase.objects.filter(school=school).delete()
         AuditEvent.objects.filter(school=school).delete()
+        Notification.objects.filter(user__school=school).delete()
         PublishedSchoolIndicator.objects.filter(school=school).delete()
         SchoolConfigurationVersion.objects.filter(configuration__school=school).delete()
         SchoolConfiguration.objects.filter(school=school).delete()
-        FinanceEntry.objects.filter(school=school).delete()
-        FinanceCategory.objects.filter(school=school).delete()
         FeePayment.objects.filter(school=school).delete()
         FeeStructure.objects.filter(school=school).delete()
         FeeHead.objects.filter(school=school).delete()
+        FinanceEntry.objects.filter(school=school).delete()
+        FinanceCategory.objects.filter(school=school).delete()
+        SalaryAdjustment.objects.filter(staff__school=school).delete()
+        SalaryStructure.objects.filter(staff__school=school).delete()
         SalaryRecord.objects.filter(school=school).delete()
         PublishedResult.objects.filter(school=school).delete()
         ExamSession.objects.filter(school=school).delete()
@@ -1627,6 +1643,9 @@ def platform_admin_delete_school_view(request, school_id):
 
         # If organisation has no more schools, clean up the empty organisation
         if org and org.schools.count() == 0:
+            AuditEvent.objects.filter(organisation=org).delete()
+            SupportAccessGrant.objects.filter(organisation=org).delete()
+            Notification.objects.filter(user__organisation=org).delete()
             User.objects.filter(organisation=org).exclude(is_superuser=True).exclude(role='platform_admin').delete()
             OrganisationSubscription.objects.filter(organisation=org).delete()
             org.delete()
