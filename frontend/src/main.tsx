@@ -4037,64 +4037,6 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
                   </label>
                 </div>
 
-                <div style={{ marginTop: 12, marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Subscription Package (30-Day Free Trial)
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => setRegForm({ ...regForm, plan: 'trial' })}
-                      style={{
-                        padding: '10px 6px',
-                        borderRadius: 8,
-                        border: regForm.plan === 'trial' ? '2px solid #6366f1' : '1px solid #cbd5e1',
-                        background: regForm.plan === 'trial' ? '#eef2ff' : '#ffffff',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ fontSize: 12, fontWeight: 700, color: regForm.plan === 'trial' ? '#4338ca' : '#0f172a' }}>Free Trial</div>
-                      <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>$0 / 30 Days</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRegForm({ ...regForm, plan: 'standard' })}
-                      style={{
-                        padding: '10px 6px',
-                        borderRadius: 8,
-                        border: regForm.plan === 'standard' ? '2px solid #0284c7' : '1px solid #cbd5e1',
-                        background: regForm.plan === 'standard' ? '#f0f9ff' : '#ffffff',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ fontSize: 12, fontWeight: 700, color: regForm.plan === 'standard' ? '#0369a1' : '#0f172a' }}>Standard</div>
-                      <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>$3.60 / student</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRegForm({ ...regForm, plan: 'premium' })}
-                      style={{
-                        padding: '10px 6px',
-                        borderRadius: 8,
-                        border: regForm.plan === 'premium' ? '2px solid #7c3aed' : '1px solid #cbd5e1',
-                        background: regForm.plan === 'premium' ? '#f5f3ff' : '#ffffff',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ fontSize: 12, fontWeight: 700, color: regForm.plan === 'premium' ? '#6d28d9' : '#0f172a' }}>Premium</div>
-                      <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>$7.20 / student</div>
-                    </button>
-                  </div>
-                </div>
-
                 {error && <div className="login-error"><AlertCircle size={16} />{error}</div>}
                 <button type="submit" className="login-submit" disabled={pending}>
                   {pending ? 'Creating workspace…' : 'Create workspace & sign in'} <ArrowRight size={18} />
