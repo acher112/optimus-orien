@@ -29,7 +29,7 @@ def register_model(model):
   def has_view_permission(self,request,obj=None):return request.user.is_superuser
   def has_add_permission(self,request):return request.user.is_superuser
   def has_change_permission(self,request,obj=None):return request.user.is_superuser
-  def has_delete_permission(self,request,obj=None):return False # archival policy required
+  def has_delete_permission(self,request,obj=None):return request.user.is_superuser
  return GuardedAdmin
 
 @admin.register(SchoolConfiguration)
@@ -71,5 +71,12 @@ class PublishedSchoolIndicatorAdmin(admin.ModelAdmin):
   super().save_model(request,obj,form,change)
   record_event(actor=request.user,action='public_indicator_publication' if obj.approved_for_publication else 'public_indicator_unpublished',obj=obj.school,changed_fields=['approved_for_publication'])
 
-for model in [Organisation,School,AcademicYear,SchoolClass,Subject,Student,Enrollment,Assessment,Grade,Attendance,Homework,HomeworkSubmission,Observation,ReviewCase,Intervention,Notification]:
- register_model(model)
+for model in [
+    Organisation, School, AcademicYear, SchoolClass, Subject, Student, Enrollment,
+    Assessment, Grade, Attendance, Homework, HomeworkSubmission, Observation,
+    ReviewCase, Intervention, Notification, SchoolSubscription, SubscriptionOrder,
+    SubscriptionEvent, Plan, BillingPeriod, PlatformBillingSettings, FeatureCatalog,
+    SchoolFeatureOverride
+]:
+    register_model(model)
+

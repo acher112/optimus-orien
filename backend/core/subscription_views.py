@@ -3,10 +3,12 @@ Views and API Endpoints for Subscriptions, Invoicing, Card Payments,
 Entitlements Inspection, Upgrades/Downgrades, and Platform Admin Management.
 """
 import logging
+from datetime import timedelta
 from decimal import Decimal
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.conf import settings
+from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -15,6 +17,8 @@ from rest_framework.exceptions import PermissionDenied, NotFound
 
 from core.models import (
     School,
+    Organisation,
+    CURRENCIES,
     User,
     Plan,
     PlanFeature,
@@ -29,6 +33,10 @@ from core.models import (
     PlatformPlan,
     SchoolClass,
     StaffMember,
+    Student,
+    PublishedSchoolIndicator,
+    SchoolConfiguration,
+    SchoolConfigurationVersion,
 )
 from core.services.entitlements import (
     get_school_entitlements,
@@ -976,8 +984,12 @@ def platform_admin_schools_view(request):
             days_remaining = max(0, diff_days)
             is_expired = paid_until < now
         else:
-            days_remaining = 0
-            is_expired = True
+            if is_trial or sub_status == 'active':
+                days_remaining = max(0, 30 - days_passed)
+                is_expired = False
+            else:
+                days_remaining = 0
+                is_expired = True
 
         # Monthly income calculation
         monthly_usd = round(Decimal(str(active_count)) * monthly_rate_usd, 2)
@@ -994,18 +1006,48 @@ def platform_admin_schools_view(request):
         if not admin_user and s.organisation_id:
             admin_user = User.objects.filter(organisation_id=s.organisation_id).order_by('id').first()
 
+        # Recent subscription and package events
+        recent_evs = SubscriptionEvent.objects.filter(school=s).order_by('-created_at')[:4]
+        events_list = [
+            {
+                'id': ev.id,
+                'event_type': ev.event_type,
+                'event_type_display': ev.get_event_type_display(),
+                'to_plan': ev.to_plan,
+                'to_status': ev.to_status,
+                'actor_name': (ev.actor.get_full_name() or ev.actor.username) if ev.actor else 'System',
+                'notes': ev.notes,
+                'created_at': ev.created_at.isoformat(),
+            }
+            for ev in recent_evs
+        ]
+
+        registered_at_dt = admin_user.date_joined if admin_user else (sub.created_at if sub else start_dt)
+
         results.append({
             'school_id': s.id,
             'school_name': s.name,
             'school_code': s.code,
             'city': s.city or '',
+            'currency': getattr(s, 'currency', 'PKR'),
             'organisation_id': s.organisation_id,
             'organisation_name': s.organisation.name if s.organisation else None,
             'campuses_count': s.organisation.schools.count() if s.organisation else 1,
             'classes_count': s.schoolclass_set.count(),
             'staff_count': s.staff.count(),
+            'admin_id': admin_user.id if admin_user else None,
             'admin_email': admin_user.email if admin_user else '',
+            'admin_username': admin_user.username if admin_user else '',
             'admin_name': (admin_user.get_full_name() or admin_user.username) if admin_user else '',
+            'registered_by': {
+                'id': admin_user.id if admin_user else None,
+                'name': (admin_user.get_full_name() or admin_user.username) if admin_user else 'Unknown',
+                'username': admin_user.username if admin_user else '',
+                'email': admin_user.email if admin_user else '',
+                'role': admin_user.role if admin_user else '',
+                'date_joined': admin_user.date_joined.isoformat() if admin_user else None,
+            },
+            'registered_at': registered_at_dt.isoformat() if registered_at_dt else None,
             'plan_code': plan_code,
             'plan_name': plan_name,
             'status': sub_status,
@@ -1028,6 +1070,8 @@ def platform_admin_schools_view(request):
             'total_paid_usd': str(total_paid_usd),
             'total_paid_pkr': str(total_paid_pkr),
             'orders_count': all_orders_count,
+            'recent_events': events_list,
+            'events_count': SubscriptionEvent.objects.filter(school=s).count(),
         })
 
     return Response({'results': results})
@@ -1140,6 +1184,456 @@ def platform_admin_alter_school_subscription_view(request, school_id):
         'status': sub.status,
         'paid_until': sub.paid_until.isoformat() if sub.paid_until else None,
         'student_count_at_last_invoice': sub.student_count_at_last_invoice,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def platform_admin_school_detail_view(request, school_id):
+    """
+    Platform admin action: fetches comprehensive details of a school including
+    who registered it, organisation details, package information, and full activity history.
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    school = get_object_or_404(School.objects.select_related('organisation', 'subscription', 'subscription__plan'), id=school_id)
+    sub = getattr(school, 'subscription', None)
+    admin_user = User.objects.filter(school=school).order_by('id').first()
+    if not admin_user and school.organisation_id:
+        admin_user = User.objects.filter(organisation_id=school.organisation_id).order_by('id').first()
+
+    now = timezone.now()
+    plan_code = (sub.plan.code if (sub and sub.plan) else 'free').lower()
+    sub_status = (sub.status if sub else 'trial').lower()
+    is_trial = plan_code in ('free', 'no_plan') or sub_status in ('trial', 'no_plan')
+
+    paid_until = sub.paid_until if (sub and sub.paid_until) else None
+    if paid_until:
+        diff_days = (paid_until - now).days
+        days_remaining = max(0, diff_days)
+        is_expired = paid_until < now
+    else:
+        days_remaining = 30 if (is_trial or sub_status == 'active') else 0
+        is_expired = False if (is_trial or sub_status == 'active') else True
+
+    events = SubscriptionEvent.objects.filter(school=school).order_by('-created_at')[:50]
+    orders = SubscriptionOrder.objects.filter(school=school).order_by('-created_at')[:50]
+
+    return Response({
+        'school': {
+            'id': school.id,
+            'name': school.name,
+            'code': school.code,
+            'city': school.city or '',
+            'currency': getattr(school, 'currency', 'PKR'),
+            'active_students': get_active_enrolled_student_count(school),
+            'classes_count': school.schoolclass_set.count(),
+            'staff_count': school.staff.count(),
+            'organisation_id': school.organisation_id,
+            'organisation_name': school.organisation.name if school.organisation else None,
+        },
+        'registered_by': {
+            'id': admin_user.id if admin_user else None,
+            'first_name': admin_user.first_name if admin_user else '',
+            'last_name': admin_user.last_name if admin_user else '',
+            'name': (admin_user.get_full_name() or admin_user.username) if admin_user else 'Unknown',
+            'username': admin_user.username if admin_user else '',
+            'email': admin_user.email if admin_user else '',
+            'role': admin_user.role if admin_user else '',
+            'date_joined': admin_user.date_joined.isoformat() if admin_user else None,
+        },
+        'subscription': {
+            'plan_code': plan_code,
+            'plan_name': sub.plan.name if (sub and sub.plan) else '30-Day Free Trial',
+            'status': sub_status,
+            'is_trial': is_trial,
+            'is_expired': is_expired,
+            'days_remaining': days_remaining,
+            'current_period_start': sub.current_period_start.isoformat() if (sub and sub.current_period_start) else None,
+            'paid_until': paid_until.isoformat() if paid_until else None,
+            'student_count_at_last_invoice': sub.student_count_at_last_invoice if sub else 0,
+        },
+        'events': [
+            {
+                'id': ev.id,
+                'event_type': ev.event_type,
+                'event_type_display': ev.get_event_type_display(),
+                'from_status': ev.from_status,
+                'to_status': ev.to_status,
+                'from_plan': ev.from_plan,
+                'to_plan': ev.to_plan,
+                'actor_name': (ev.actor.get_full_name() or ev.actor.username) if ev.actor else 'System',
+                'actor_email': ev.actor.email if ev.actor else '',
+                'notes': ev.notes,
+                'metadata': ev.metadata,
+                'created_at': ev.created_at.isoformat(),
+            }
+            for ev in events
+        ],
+        'orders': [
+            {
+                'id': o.id,
+                'order_number': o.order_number,
+                'plan_name': o.plan.name if o.plan else 'Plan',
+                'billing_months': o.billing_months,
+                'student_count': o.student_count,
+                'amount': str(o.amount),
+                'currency': o.currency,
+                'status': o.status,
+                'paid_on': o.paid_on.isoformat() if o.paid_on else None,
+                'created_at': o.created_at.isoformat(),
+            }
+            for o in orders
+        ]
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def platform_admin_create_school_view(request):
+    """
+    Platform admin action: directly registers a new institution campus,
+    administrator credentials, and assigns the chosen subscription package.
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    data = request.data or {}
+    org_name = str(data.get('organisation_name') or '').strip()
+    school_name = str(data.get('school_name') or '').strip()
+    city = str(data.get('city') or '').strip()
+    admin_first_name = str(data.get('admin_first_name') or '').strip()
+    admin_last_name = str(data.get('admin_last_name') or '').strip()
+    admin_email = str(data.get('admin_email') or '').strip().lower()
+    admin_username = str(data.get('admin_username') or '').strip()
+    admin_password = str(data.get('admin_password') or '').strip()
+    plan_code = str(data.get('plan_code') or 'trial').strip().lower()
+    status = str(data.get('status') or ('active' if plan_code in ('standard', 'premium', 'custom') else 'trial')).strip().lower()
+    paid_until_str = data.get('paid_until')
+
+    if not org_name:
+        return Response({'detail': 'Organisation name is required.'}, status=400)
+    if not admin_email or not admin_username:
+        return Response({'detail': 'Administrator username and email are required.'}, status=400)
+    if User.objects.filter(username__iexact=admin_username).exists():
+        return Response({'detail': f"Username '{admin_username}' is already in use. Please choose another."}, status=400)
+    if User.objects.filter(email__iexact=admin_email).exists():
+        return Response({'detail': f"Email '{admin_email}' is already registered with an account."}, status=400)
+
+    from django.utils.text import slugify
+    from django.utils.crypto import get_random_string
+
+    with transaction.atomic():
+        base_slug = slugify(org_name)[:40] or 'edu-org'
+        slug = base_slug
+        c = 1
+        while Organisation.objects.filter(code=slug).exists():
+            slug = f"{base_slug}-{c}"
+            c += 1
+
+        org = Organisation.objects.create(name=org_name, code=slug, allow_org_admin_student_access=True)
+
+        campus_display = school_name or f"{org_name} - Main Campus"
+        campus_code = f"CAMPUS-{get_random_string(4).upper()}"
+        school = School.objects.create(
+            organisation=org,
+            name=campus_display,
+            code=campus_code,
+            city=city,
+            attendance_alert_threshold=80.0,
+            grade_alert_threshold=60.0
+        )
+
+        SchoolConfiguration.objects.get_or_create(school=school, defaults={'status': 'draft'})
+
+        new_user = User(
+            username=admin_username,
+            email=admin_email,
+            first_name=admin_first_name,
+            last_name=admin_last_name,
+            role='organisation_admin',
+            organisation=org,
+            school=school,
+            is_active=True,
+        )
+        if admin_password:
+            new_user.set_password(admin_password)
+        else:
+            new_user.set_password(get_random_string(12))
+        new_user.full_clean()
+        new_user.save()
+
+        # Subscription setup
+        target_plan = None
+        if plan_code in ('standard', 'premium', 'custom'):
+            target_plan = Plan.objects.filter(code=plan_code).first()
+
+        now = timezone.now()
+        paid_until = None
+        if paid_until_str:
+            from django.utils.dateparse import parse_datetime, parse_date
+            dt = parse_datetime(str(paid_until_str).strip())
+            if not dt:
+                d = parse_date(str(paid_until_str).strip())
+                if d:
+                    from datetime import datetime, time
+                    dt = timezone.make_aware(datetime.combine(d, time(23, 59, 59)))
+            paid_until = dt
+        else:
+            paid_until = now + timedelta(days=30)
+
+        sub = SchoolSubscription.objects.create(
+            school=school,
+            plan=target_plan,
+            status=status,
+            current_period_start=now,
+            paid_until=paid_until,
+            student_count_at_last_invoice=0,
+        )
+
+        plan_display = target_plan.name if target_plan else '30-Day Free Trial'
+        SubscriptionEvent.objects.create(
+            school=school,
+            event_type='status_changed',
+            to_status=status,
+            to_plan=plan_display,
+            actor=request.user,
+            notes=f"Created by platform owner ({request.user.username}) for {admin_first_name} {admin_last_name} ({admin_email}) on {plan_display}.",
+            metadata={'created_by_platform_admin': True, 'admin_username': admin_username, 'plan_code': plan_code}
+        )
+
+        invalidate_school_entitlements_cache(school.id)
+
+    return Response({
+        'ok': True,
+        'message': f"School '{school.name}' registered successfully.",
+        'school_id': school.id,
+        'school_name': school.name,
+        'school_code': school.code,
+        'admin_username': admin_username,
+        'admin_email': admin_email,
+        'plan_code': target_plan.code if target_plan else 'free',
+        'plan_name': plan_display,
+        'status': status,
+    }, status=201)
+
+
+@api_view(['PATCH', 'PUT', 'POST'])
+@permission_classes([IsAuthenticated])
+def platform_admin_update_school_view(request, school_id):
+    """
+    Platform admin action: updates a school's core details (name, code, city, organisation,
+    admin contact, and subscription tier/dates).
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    school = get_object_or_404(School, id=school_id)
+    sub, _ = SchoolSubscription.objects.get_or_create(school=school)
+    data = request.data or {}
+
+    with transaction.atomic():
+        if 'name' in data and data['name']:
+            school.name = str(data['name']).strip()[:160]
+        if 'code' in data and data['code']:
+            school.code = str(data['code']).strip()[:32]
+        if 'city' in data:
+            school.city = str(data['city']).strip()[:120]
+        if 'currency' in data and data['currency']:
+            curr = str(data['currency']).strip().upper()[:8]
+            if curr in CURRENCIES:
+                school.currency = curr
+        school.save()
+
+        # Update organisation name if provided
+        if school.organisation and 'organisation_name' in data and data['organisation_name']:
+            school.organisation.name = str(data['organisation_name']).strip()[:160]
+            school.organisation.save()
+
+        # Update primary admin user if provided
+        admin_user = User.objects.filter(school=school).order_by('id').first()
+        if not admin_user and school.organisation_id:
+            admin_user = User.objects.filter(organisation_id=school.organisation_id).order_by('id').first()
+
+        if admin_user:
+            if 'admin_first_name' in data and data['admin_first_name']:
+                admin_user.first_name = str(data['admin_first_name']).strip()[:150]
+            if 'admin_last_name' in data and data['admin_last_name']:
+                admin_user.last_name = str(data['admin_last_name']).strip()[:150]
+            if 'admin_name' in data and data['admin_name']:
+                parts = str(data['admin_name']).strip().split(' ', 1)
+                admin_user.first_name = parts[0]
+                admin_user.last_name = parts[1] if len(parts) > 1 else ''
+            if 'admin_email' in data and data['admin_email']:
+                email_val = str(data['admin_email']).strip().lower()[:254]
+                if email_val != admin_user.email:
+                    if not User.objects.filter(email__iexact=email_val).exclude(id=admin_user.id).exists():
+                        admin_user.email = email_val
+            if 'admin_username' in data and data['admin_username']:
+                uname = str(data['admin_username']).strip()[:150]
+                if uname != admin_user.username:
+                    if not User.objects.filter(username__iexact=uname).exclude(id=admin_user.id).exists():
+                        admin_user.username = uname
+            admin_user.save()
+
+        # Update plan/package if provided
+        plan_code = str(data.get('plan_code', '')).strip().lower()
+        if plan_code:
+            if plan_code in ('free', 'trial', 'no_plan'):
+                sub.plan = None
+                sub.status = 'trial' if plan_code != 'no_plan' else 'no_plan'
+            else:
+                p = Plan.objects.filter(code=plan_code).first() or Plan.objects.filter(code__iexact=plan_code).first()
+                if p:
+                    sub.plan = p
+
+        # Update status if provided
+        if 'status' in data and data['status']:
+            st = str(data['status']).strip().lower()
+            valid_statuses = ['active', 'trial', 'past_due', 'suspended', 'no_plan']
+            if st in valid_statuses:
+                sub.status = st
+
+        # Update paid_until if provided
+        if 'paid_until' in data:
+            val = data['paid_until']
+            if str(val).strip() in ('', 'null', 'None'):
+                sub.paid_until = None
+            else:
+                from django.utils.dateparse import parse_datetime, parse_date
+                dt = parse_datetime(str(val).strip())
+                if not dt:
+                    d = parse_date(str(val).strip())
+                    if d:
+                        from datetime import datetime, time
+                        dt = timezone.make_aware(datetime.combine(d, time(23, 59, 59)))
+                if dt:
+                    sub.paid_until = dt
+
+        sub.save()
+        invalidate_school_entitlements_cache(school.id)
+
+        SubscriptionEvent.objects.create(
+            school=school,
+            event_type='admin_altered',
+            actor=request.user,
+            notes=f"School profile updated by {request.user.username}. Plan: {sub.plan.name if sub.plan else 'Free Trial'} ({sub.status})",
+            metadata={'updated_fields': list(data.keys()), 'updated_by': request.user.username}
+        )
+
+    return Response({
+        'ok': True,
+        'message': f"School '{school.name}' updated successfully.",
+        'school_id': school.id,
+        'school_name': school.name,
+        'school_code': school.code,
+        'city': school.city,
+        'plan_code': sub.plan.code if sub.plan else 'free',
+        'plan_name': sub.plan.name if sub.plan else '30-Day Free Trial',
+        'status': sub.status,
+        'paid_until': sub.paid_until.isoformat() if sub.paid_until else None,
+    })
+
+
+@api_view(['DELETE', 'POST'])
+@permission_classes([IsAuthenticated])
+def platform_admin_delete_school_view(request, school_id):
+    """
+    Platform admin action: safely and completely deletes a school and all associated
+    tenant records, preventing foreign key ProtectedError exceptions.
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    school = get_object_or_404(School, id=school_id)
+    school_name = school.name
+    org = school.organisation
+
+    with transaction.atomic():
+        from core.models import (
+            Attendance, Grade, Assessment, HomeworkSubmission, Homework,
+            Enrollment, Student, Subject, SchoolClass, AcademicYear,
+            StaffMember, StaffAttendance, RoleAssignment, HolidayCalendar, ClassTimetable,
+            AuditEvent, Notification, TeachingAssignment, ReviewCase,
+            SchoolConfiguration, SchoolConfigurationVersion, PublishedSchoolIndicator,
+            FinanceCategory, FinanceEntry, FeeHead, FeeStructure, FeePayment,
+            SalaryRecord, ExamSession, AssessmentCategory, GradingScale, PublishedResult,
+            ClassTeacherAssignment, ClassSubject
+        )
+
+        # Class level relationships
+        Attendance.objects.filter(school_class__school=school).delete()
+        Grade.objects.filter(student__school=school).delete()
+        Assessment.objects.filter(school_class__school=school).delete()
+        HomeworkSubmission.objects.filter(homework__school_class__school=school).delete()
+        Homework.objects.filter(school_class__school=school).delete()
+        Enrollment.objects.filter(school_class__school=school).delete()
+        ClassTimetable.objects.filter(school_class__school=school).delete()
+        ClassTeacherAssignment.objects.filter(school_class__school=school).delete()
+        ClassSubject.objects.filter(school_class__school=school).delete()
+
+        # Direct school PROTECT models
+        StaffAttendance.objects.filter(school=school).delete()
+        TeachingAssignment.objects.filter(school=school).delete()
+        ReviewCase.objects.filter(school=school).delete()
+        AuditEvent.objects.filter(school=school).delete()
+        PublishedSchoolIndicator.objects.filter(school=school).delete()
+        SchoolConfigurationVersion.objects.filter(configuration__school=school).delete()
+        SchoolConfiguration.objects.filter(school=school).delete()
+        FinanceEntry.objects.filter(school=school).delete()
+        FinanceCategory.objects.filter(school=school).delete()
+        FeePayment.objects.filter(school=school).delete()
+        FeeStructure.objects.filter(school=school).delete()
+        FeeHead.objects.filter(school=school).delete()
+        SalaryRecord.objects.filter(school=school).delete()
+        PublishedResult.objects.filter(school=school).delete()
+        ExamSession.objects.filter(school=school).delete()
+        AssessmentCategory.objects.filter(school=school).delete()
+        GradingScale.objects.filter(school=school).delete()
+        HolidayCalendar.objects.filter(school=school).delete()
+
+        # Students & staff
+        students = list(Student.objects.filter(school=school))
+        for st in students:
+            u = st.user
+            st.delete()
+            if u and u.role == 'student':
+                u.delete()
+
+        staff_members = list(StaffMember.objects.filter(school=school))
+        for sm in staff_members:
+            u = sm.user
+            sm.delete()
+            if u and u.role == 'teacher' and not u.is_superuser:
+                u.delete()
+
+        # Classes, subjects, years
+        SchoolClass.objects.filter(school=school).delete()
+        Subject.objects.filter(school=school).delete()
+        AcademicYear.objects.filter(school=school).delete()
+
+        # Clean users assigned to this school
+        users = list(User.objects.filter(school=school))
+        for u in users:
+            if not u.is_superuser and u.role != 'platform_admin':
+                u.delete()
+            else:
+                u.school = None
+                u.save(update_fields=['school'])
+
+        # Now school can be safely deleted (cascading subscriptions, orders, events, overrides)
+        school.delete()
+
+        # If organisation has no more schools, clean up the empty organisation
+        if org and org.schools.count() == 0:
+            User.objects.filter(organisation=org).exclude(is_superuser=True).exclude(role='platform_admin').delete()
+            OrganisationSubscription.objects.filter(organisation=org).delete()
+            org.delete()
+
+    return Response({
+        'ok': True,
+        'message': f"School '{school_name}' and all associated records deleted successfully."
     })
 
 

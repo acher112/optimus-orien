@@ -4,7 +4,8 @@ import {
   ShieldCheck, CheckCircle2, AlertCircle, XCircle, Search, RefreshCw,
   X, ChevronRight, BarChart3, TrendingUp, Layers, Check, FileText,
   ArrowRight, Eye, ShieldAlert, Key, Mail, Lock, LogOut, ExternalLink,
-  SlidersHorizontal, Percent, CreditCard, Sparkles, AlertTriangle
+  SlidersHorizontal, Percent, CreditCard, Sparkles, AlertTriangle,
+  Pencil, Trash2, Plus, UserPlus, History, Info, UserCheck
 } from 'lucide-react';
 import { request, login, type User } from './api';
 
@@ -42,7 +43,44 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
   const [alterNotes, setAlterNotes] = useState('');
   const [savingAlter, setSavingAlter] = useState(false);
 
+  // School Inspection / Detail
   const [detailsModalSchool, setDetailsModalSchool] = useState<any | null>(null);
+  const [schoolDetailData, setSchoolDetailData] = useState<any | null>(null);
+  const [loadingSchoolDetail, setLoadingSchoolDetail] = useState(false);
+
+  // Edit School Modal
+  const [editModalSchool, setEditModalSchool] = useState<any | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editOrgName, setEditOrgName] = useState('');
+  const [editAdminName, setEditAdminName] = useState('');
+  const [editAdminEmail, setEditAdminEmail] = useState('');
+  const [editAdminUsername, setEditAdminUsername] = useState('');
+  const [editPlanCode, setEditPlanCode] = useState('free');
+  const [editStatus, setEditStatus] = useState('active');
+  const [editPaidUntil, setEditPaidUntil] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Delete School Modal
+  const [deleteModalSchool, setDeleteModalSchool] = useState<any | null>(null);
+  const [deletingSchool, setDeletingSchool] = useState(false);
+
+  // Create / Register School Modal
+  const [createSchoolModal, setCreateSchoolModal] = useState(false);
+  const [createOrgName, setCreateOrgName] = useState('');
+  const [createSchoolName, setCreateSchoolName] = useState('');
+  const [createCity, setCreateCity] = useState('');
+  const [createAdminFirstName, setCreateAdminFirstName] = useState('');
+  const [createAdminLastName, setCreateAdminLastName] = useState('');
+  const [createAdminEmail, setCreateAdminEmail] = useState('');
+  const [createAdminUsername, setCreateAdminUsername] = useState('');
+  const [createAdminPassword, setCreateAdminPassword] = useState('');
+  const [createPlanCode, setCreatePlanCode] = useState('trial');
+  const [createStatus, setCreateStatus] = useState('active');
+  const [createPaidUntil, setCreatePaidUntil] = useState('');
+  const [savingCreate, setSavingCreate] = useState(false);
+
   const [receiptModalOrder, setReceiptModalOrder] = useState<any | null>(null);
   const [orderActionModal, setOrderActionModal] = useState<{ order: any; type: 'approve' | 'reject' } | null>(null);
   const [orderActionNote, setOrderActionNote] = useState('');
@@ -177,6 +215,142 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
     base.setDate(base.getDate() + days);
     setAlterPaidUntil(base.toISOString().substring(0, 10));
     setAlterStatus('active');
+  };
+
+  // Open Full School Details & Timeline
+  const handleOpenSchoolDetails = async (school: any) => {
+    setDetailsModalSchool(school);
+    setSchoolDetailData(null);
+    setLoadingSchoolDetail(true);
+    try {
+      const res = await request<any>(`platform-admin/billing/schools/${school.school_id}/`);
+      setSchoolDetailData(res);
+    } catch (err) {
+      // Fallback: keep basic table data in detailsModalSchool
+    } finally {
+      setLoadingSchoolDetail(false);
+    }
+  };
+
+  // Open Edit School Modal
+  const handleOpenEditModal = (school: any) => {
+    setEditModalSchool(school);
+    setEditName(school.school_name || '');
+    setEditCode(school.school_code || '');
+    setEditCity(school.city || '');
+    setEditOrgName(school.organisation_name || '');
+    setEditAdminName(school.admin_name || '');
+    setEditAdminEmail(school.admin_email || '');
+    setEditAdminUsername(school.admin_username || '');
+    setEditPlanCode(school.plan_code || 'free');
+    setEditStatus(school.status || 'active');
+    setEditPaidUntil(school.paid_until ? school.paid_until.substring(0, 10) : '');
+  };
+
+  // Save School Edit
+  const handleSaveEditSchool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalSchool) return;
+    setSavingEdit(true);
+    try {
+      const payload: any = {
+        name: editName,
+        code: editCode,
+        city: editCity,
+        organisation_name: editOrgName,
+        admin_name: editAdminName,
+        admin_email: editAdminEmail,
+        admin_username: editAdminUsername,
+        plan_code: editPlanCode,
+        status: editStatus,
+        paid_until: editPaidUntil || null,
+      };
+      await request(`platform-admin/billing/schools/${editModalSchool.school_id}/update/`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      sendNotification(`School '${editName}' updated successfully!`, 'success');
+      setEditModalSchool(null);
+      loadSchools();
+      loadAnalytics();
+      if (detailsModalSchool && detailsModalSchool.school_id === editModalSchool.school_id) {
+        handleOpenSchoolDetails({ ...detailsModalSchool, school_name: editName, school_code: editCode, city: editCity, plan_code: editPlanCode, status: editStatus });
+      }
+    } catch (err) {
+      sendNotification(err instanceof Error ? err.message : 'Failed to update school', 'error');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Delete School
+  const handleConfirmDeleteSchool = async () => {
+    if (!deleteModalSchool) return;
+    setDeletingSchool(true);
+    try {
+      await request(`platform-admin/billing/schools/${deleteModalSchool.school_id}/delete/`, {
+        method: 'POST',
+      });
+      sendNotification(`School '${deleteModalSchool.school_name}' deleted successfully.`, 'success');
+      if (detailsModalSchool && detailsModalSchool.school_id === deleteModalSchool.school_id) {
+        setDetailsModalSchool(null);
+      }
+      setDeleteModalSchool(null);
+      loadSchools();
+      loadAnalytics();
+    } catch (err) {
+      sendNotification(err instanceof Error ? err.message : 'Failed to delete school', 'error');
+    } finally {
+      setDeletingSchool(false);
+    }
+  };
+
+  // Register New School from Admin Portal
+  const handleCreateSchool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createOrgName.trim() || !createAdminUsername.trim() || !createAdminEmail.trim()) {
+      sendNotification('Organisation name, admin username, and official email are required.', 'error');
+      return;
+    }
+    setSavingCreate(true);
+    try {
+      const payload: any = {
+        organisation_name: createOrgName.trim(),
+        school_name: createSchoolName.trim(),
+        city: createCity.trim(),
+        admin_first_name: createAdminFirstName.trim(),
+        admin_last_name: createAdminLastName.trim(),
+        admin_email: createAdminEmail.trim().toLowerCase(),
+        admin_username: createAdminUsername.trim(),
+        admin_password: createAdminPassword || undefined,
+        plan_code: createPlanCode,
+        status: createStatus,
+        paid_until: createPaidUntil || null,
+      };
+      const res = await request<any>('platform-admin/billing/schools/create/', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      sendNotification(res.message || `School '${createSchoolName || createOrgName}' registered successfully!`, 'success');
+      setCreateSchoolModal(false);
+      // Reset form
+      setCreateOrgName('');
+      setCreateSchoolName('');
+      setCreateCity('');
+      setCreateAdminFirstName('');
+      setCreateAdminLastName('');
+      setCreateAdminEmail('');
+      setCreateAdminUsername('');
+      setCreateAdminPassword('');
+      setCreatePlanCode('trial');
+      setCreatePaidUntil('');
+      loadSchools();
+      loadAnalytics();
+    } catch (err) {
+      sendNotification(err instanceof Error ? err.message : 'Failed to register school', 'error');
+    } finally {
+      setSavingCreate(false);
+    }
   };
 
   // Approve or Reject Order
@@ -673,6 +847,27 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                     <option value="suspended">Suspended</option>
                   </select>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCreateSchoolModal(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#4338ca',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(67, 56, 202, 0.2)',
+                  }}
+                >
+                  <Plus size={15} /> Register School
+                </button>
               </div>
             </div>
 
@@ -689,7 +884,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                   <thead>
                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       <th style={{ padding: '14px 16px', fontWeight: 600 }}>School / Campus</th>
-                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Organisation</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Organisation & Registrant</th>
                       <th style={{ padding: '14px 16px', fontWeight: 600 }}>Students</th>
                       <th style={{ padding: '14px 16px', fontWeight: 600 }}>Current Plan</th>
                       <th style={{ padding: '14px 16px', fontWeight: 600 }}>Status</th>
@@ -742,8 +937,18 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                           </td>
 
                           <td style={{ padding: '14px 16px' }}>
-                            <div style={{ fontWeight: 500, color: '#1e293b' }}>{s.organisation_name || 'Independent'}</div>
-                            <div style={{ fontSize: 11, color: '#64748b' }}>{s.campuses_count} {s.campuses_count === 1 ? 'Campus' : 'Campuses'}</div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{s.organisation_name || 'Independent'}</div>
+                            <div style={{ fontSize: 11, color: '#4338ca', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <UserCheck size={11} /> {s.admin_name || s.registered_by?.name || 'Administrator'}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>
+                              {s.admin_email || s.registered_by?.email || 'No email on file'}
+                            </div>
+                            {s.registered_at && (
+                              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                                Reg: {s.registered_at.substring(0, 10)}
+                              </div>
+                            )}
                           </td>
 
                           <td style={{ padding: '14px 16px' }}>
@@ -861,12 +1066,53 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                               <button
                                 type="button"
+                                title="View School Details & Full Activity Timeline"
+                                onClick={() => handleOpenSchoolDetails(s)}
+                                style={{
+                                  background: '#f8fafc',
+                                  color: '#334155',
+                                  border: '1px solid #cbd5e1',
+                                  padding: '6px 10px',
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                              >
+                                <Eye size={13} /> View
+                              </button>
+                              <button
+                                type="button"
+                                title="Edit School & Admin Profile"
+                                onClick={() => handleOpenEditModal(s)}
+                                style={{
+                                  background: '#f0f9ff',
+                                  color: '#0284c7',
+                                  border: '1px solid #bae6fd',
+                                  padding: '6px 10px',
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                              >
+                                <Pencil size={12} /> Edit
+                              </button>
+                              <button
+                                type="button"
+                                title="Alter Subscription Package"
                                 onClick={() => handleOpenAlterModal(s)}
                                 style={{
                                   background: '#4338ca',
                                   color: '#ffffff',
                                   border: 'none',
-                                  padding: '6px 12px',
+                                  padding: '6px 11px',
                                   borderRadius: 6,
                                   fontSize: 12,
                                   fontWeight: 600,
@@ -880,19 +1126,22 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setDetailsModalSchool(s)}
+                                title="Delete School and Associated Records"
+                                onClick={() => setDeleteModalSchool(s)}
                                 style={{
-                                  background: '#f1f5f9',
-                                  color: '#334155',
-                                  border: '1px solid #cbd5e1',
-                                  padding: '6px 10px',
+                                  background: '#fef2f2',
+                                  color: '#dc2626',
+                                  border: '1px solid #fecaca',
+                                  padding: '6px 9px',
                                   borderRadius: 6,
                                   fontSize: 12,
                                   fontWeight: 500,
                                   cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
                                 }}
                               >
-                                <Eye size={13} />
+                                <Trash2 size={13} />
                               </button>
                             </div>
                           </td>
@@ -1902,7 +2151,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
       )}
 
       {/* ============================================================== */}
-      {/* MODAL 2: CAMPUS DETAILS MODAL */}
+      {/* MODAL 2: VIEW SCHOOL DETAILS & ACTIVITY TIMELINE MODAL */}
       {/* ============================================================== */}
       {detailsModalSchool && (
         <div style={{
@@ -1923,9 +2172,441 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
             background: '#ffffff',
             borderRadius: 16,
             width: '100%',
-            maxWidth: 580,
+            maxWidth: 720,
+            maxHeight: '90vh',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             border: '1px solid #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#f8fafc',
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+                    {detailsModalSchool.school_name}
+                  </h3>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: 10,
+                    background: '#e0e7ff',
+                    color: '#4338ca',
+                  }}>
+                    {detailsModalSchool.school_code}
+                  </span>
+                </div>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
+                  {detailsModalSchool.organisation_name || 'Independent'} • {detailsModalSchool.city || 'No Location Specified'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailsModalSchool(null)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {loadingSchoolDetail ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 10px' }} />
+                  <div>Loading full school inspection and audit events...</div>
+                </div>
+              ) : (
+                <>
+                  {/* KPI Quick Badges */}
+                  <div style={{
+                    background: '#f8fafc',
+                    borderRadius: 12,
+                    padding: '14px 18px',
+                    border: '1px solid #e2e8f0',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: 12,
+                    textAlign: 'center',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Enrolled Students</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                        {schoolDetailData?.school?.active_students ?? detailsModalSchool.active_students ?? 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Classes</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                        {schoolDetailData?.school?.classes_count ?? detailsModalSchool.classes_count ?? 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Staff</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                        {schoolDetailData?.school?.staff_count ?? detailsModalSchool.staff_count ?? 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Plan Tier</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#4338ca', marginTop: 6 }}>
+                        {schoolDetailData?.subscription?.plan_name ?? detailsModalSchool.plan_name}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Registrant & Account Contact Card */}
+                  <div style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '16px 18px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Users size={16} color="#4338ca" />
+                      <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Registrant & Administrator Details
+                      </h4>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Registered By (Name)</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                          {schoolDetailData?.registered_by?.name || detailsModalSchool.admin_name || 'Not Available'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Admin Username</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                          @{schoolDetailData?.registered_by?.username || detailsModalSchool.admin_username || 'N/A'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Official Contact Email</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                          {schoolDetailData?.registered_by?.email || detailsModalSchool.admin_email || 'No email on record'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Account Role & Date Registered</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                          {schoolDetailData?.registered_by?.role || 'Administrator'} • {
+                            (schoolDetailData?.registered_by?.date_joined || detailsModalSchool.registered_at)
+                              ? new Date(schoolDetailData?.registered_by?.date_joined || detailsModalSchool.registered_at).toLocaleDateString()
+                              : 'Recent'
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Subscription & Term Status */}
+                  <div style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '16px 18px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Crown size={16} color="#7c3aed" />
+                      <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Package & Subscription Details
+                      </h4>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Assigned Package</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca', marginTop: 2 }}>
+                          {schoolDetailData?.subscription?.plan_name || detailsModalSchool.plan_name}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Subscription Status</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            background: detailsModalSchool.status === 'active' ? '#ecfdf5' : '#fffbeb',
+                            color: detailsModalSchool.status === 'active' ? '#059669' : '#d97706',
+                          }}>
+                            {schoolDetailData?.subscription?.status || detailsModalSchool.status_display}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Paid Until / Expiry</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                          {detailsModalSchool.paid_until ? detailsModalSchool.paid_until.substring(0, 10) : 'Open Trial Term'}
+                          {detailsModalSchool.days_remaining !== undefined && !detailsModalSchool.is_expired && (
+                            <span style={{ fontSize: 11, color: '#059669', marginLeft: 4 }}>
+                              ({detailsModalSchool.days_remaining}d remaining)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Activity Timeline ("What he did like pkg etc") */}
+                  <div style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '16px 18px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <History size={16} color="#0284c7" />
+                        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Activity History & Package Timeline ({schoolDetailData?.events?.length || detailsModalSchool.events_count || 0} Events)
+                        </h4>
+                      </div>
+                    </div>
+
+                    {(!schoolDetailData?.events || schoolDetailData.events.length === 0) ? (
+                      <div style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic', padding: '10px 0' }}>
+                        No audit events recorded for this campus yet.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {schoolDetailData.events.map((ev: any) => (
+                          <div key={ev.id} style={{
+                            display: 'flex',
+                            gap: 12,
+                            padding: '10px 12px',
+                            background: '#f8fafc',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            fontSize: 12,
+                          }}>
+                            <div style={{ flexShrink: 0, marginTop: 2 }}>
+                              <CheckCircle2 size={15} color="#4338ca" />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                  {ev.event_type_display || ev.event_type}
+                                </span>
+                                <span style={{ fontSize: 11, color: '#64748b' }}>
+                                  {new Date(ev.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                              <div style={{ color: '#334155', marginTop: 3 }}>
+                                {ev.notes || 'Event recorded'}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                                Actor: <strong>{ev.actor_name || 'System'}</strong> {ev.actor_email && `(${ev.actor_email})`}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Offline Subscription Orders (if any) */}
+                  {schoolDetailData?.orders && schoolDetailData.orders.length > 0 && (
+                    <div style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 12,
+                      padding: '16px 18px',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <CreditCard size={16} color="#059669" />
+                        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Subscription Orders & Invoices ({schoolDetailData.orders.length})
+                        </h4>
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', textAlign: 'left' }}>
+                              <th style={{ padding: '6px 8px' }}>Order #</th>
+                              <th style={{ padding: '6px 8px' }}>Plan</th>
+                              <th style={{ padding: '6px 8px' }}>Duration</th>
+                              <th style={{ padding: '6px 8px' }}>Amount</th>
+                              <th style={{ padding: '6px 8px' }}>Status</th>
+                              <th style={{ padding: '6px 8px' }}>Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {schoolDetailData.orders.map((o: any) => (
+                              <tr key={o.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '8px', fontWeight: 600 }}>#{o.order_number}</td>
+                                <td style={{ padding: '8px' }}>{o.plan_name}</td>
+                                <td style={{ padding: '8px' }}>{o.billing_months} mos</td>
+                                <td style={{ padding: '8px', fontWeight: 600, color: '#059669' }}>{o.currency} {o.amount}</td>
+                                <td style={{ padding: '8px' }}>
+                                  <span style={{
+                                    padding: '2px 6px',
+                                    borderRadius: 6,
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    textTransform: 'uppercase',
+                                    background: o.status === 'approved' ? '#ecfdf5' : (o.status === 'pending' ? '#fffbeb' : '#fef2f2'),
+                                    color: o.status === 'approved' ? '#059669' : (o.status === 'pending' ? '#d97706' : '#dc2626'),
+                                  }}>
+                                    {o.status}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '8px', color: '#64748b' }}>{new Date(o.created_at).toLocaleDateString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Modal Action Buttons Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #e2e8f0',
+              background: '#f8fafc',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const s = detailsModalSchool;
+                  setDetailsModalSchool(null);
+                  setDeleteModalSchool(s);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #fecaca',
+                  background: '#fef2f2',
+                  color: '#dc2626',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Trash2 size={13} /> Delete School
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const s = detailsModalSchool;
+                    setDetailsModalSchool(null);
+                    handleOpenEditModal(s);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#334155',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Pencil size={13} /> Edit Details
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const s = detailsModalSchool;
+                    setDetailsModalSchool(null);
+                    handleOpenAlterModal(s);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#4338ca',
+                    color: '#ffffff',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <SlidersHorizontal size={13} /> Alter Package
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDetailsModalSchool(null)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#64748b',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 2B: EDIT SCHOOL & ADMIN MODAL */}
+      {/* ============================================================== */}
+      {editModalSchool && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 16,
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 640,
+            maxHeight: '90vh',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
             overflow: 'hidden',
           }}>
             <div style={{
@@ -1938,89 +2619,196 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
             }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                  {detailsModalSchool.school_name}
+                  Edit School & Admin Profile
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
-                  Campus Details & Contact Information
+                  Update details for {editModalSchool.school_name}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setDetailsModalSchool(null)}
+                onClick={() => setEditModalSchool(null)}
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Campus Code</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{detailsModalSchool.school_code}</div>
+            <form onSubmit={handleSaveEditSchool} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      School / Campus Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      Campus Code *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editCode}
+                      onChange={e => setEditCode(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>City / Region</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{detailsModalSchool.city || 'Not Specified'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Organisation</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{detailsModalSchool.organisation_name || 'Independent'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Primary Admin Contact</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{detailsModalSchool.admin_email || 'No email on record'}</div>
-                </div>
-              </div>
 
-              <div style={{
-                background: '#f8fafc',
-                borderRadius: 10,
-                padding: '14px 16px',
-                border: '1px solid #e2e8f0',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 10,
-                textAlign: 'center',
-                marginBottom: 16,
-              }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Enrolled Students</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>{detailsModalSchool.active_students}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      City / Region
+                    </label>
+                    <input
+                      type="text"
+                      value={editCity}
+                      onChange={e => setEditCity(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      Organisation Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editOrgName}
+                      onChange={e => setEditOrgName(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Academic Classes</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>{detailsModalSchool.classes_count}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Staff Members</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>{detailsModalSchool.staff_count}</div>
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Current Plan</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#4338ca', marginTop: 2 }}>{detailsModalSchool.plan_name}</div>
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', textTransform: 'uppercase', marginBottom: 10 }}>
+                    Primary Administrator Credentials
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Admin Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={editAdminName}
+                        onChange={e => setEditAdminName(e.target.value)}
+                        placeholder="John Doe"
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Admin Username
+                      </label>
+                      <input
+                        type="text"
+                        value={editAdminUsername}
+                        onChange={e => setEditAdminUsername(e.target.value)}
+                        placeholder="admin_john"
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      Admin Official Email
+                    </label>
+                    <input
+                      type="email"
+                      value={editAdminEmail}
+                      onChange={e => setEditAdminEmail(e.target.value)}
+                      placeholder="admin@school.edu"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Status & Paid Until</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
-                    {detailsModalSchool.status_display} ({detailsModalSchool.paid_until ? detailsModalSchool.paid_until.substring(0, 10) : 'Open Trial'})
+
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 10 }}>
+                    Package & Subscription Status
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Plan Tier
+                      </label>
+                      <select
+                        value={editPlanCode}
+                        onChange={e => setEditPlanCode(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                      >
+                        <option value="free">30-Day Free Trial</option>
+                        <option value="standard">Standard Plan</option>
+                        <option value="premium">Premium Plan</option>
+                        <option value="custom">Custom Enterprise</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Status
+                      </label>
+                      <select
+                        value={editStatus}
+                        onChange={e => setEditStatus(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                      >
+                        <option value="active">Active</option>
+                        <option value="trial">Trial</option>
+                        <option value="past_due">Past Due</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Paid Until Date
+                      </label>
+                      <input
+                        type="date"
+                        value={editPaidUntil}
+                        onChange={e => setEditPaidUntil(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <div style={{
+                padding: '16px 24px',
+                borderTop: '1px solid #e2e8f0',
+                background: '#f8fafc',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 10,
+              }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    const s = detailsModalSchool;
-                    setDetailsModalSchool(null);
-                    handleOpenAlterModal(s);
-                  }}
+                  onClick={() => setEditModalSchool(null)}
                   style={{
                     padding: '8px 16px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  style={{
+                    padding: '8px 20px',
                     borderRadius: 8,
                     border: 'none',
                     background: '#4338ca',
@@ -2028,12 +2816,402 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                     fontSize: 13,
                     fontWeight: 600,
                     cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  Alter Subscription for this Campus
+                  {savingEdit ? <RefreshCw size={14} className="spin" /> : <Check size={14} />} Save School Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 2C: DELETE SCHOOL CONFIRMATION MODAL */}
+      {/* ============================================================== */}
+      {deleteModalSchool && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 16,
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 500,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #fee2e2',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #fecaca',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#fef2f2',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={18} color="#dc2626" />
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
+                  Delete Institution & Campus
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteModalSchool(null)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#991b1b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px 24px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#334155', lineHeight: 1.5 }}>
+                Are you sure you want to permanently delete <strong>{deleteModalSchool.school_name}</strong> ({deleteModalSchool.school_code})?
+              </p>
+
+              <div style={{
+                background: '#fff1f2',
+                borderRadius: 8,
+                padding: '12px 14px',
+                border: '1px solid #fecdd3',
+                fontSize: 12,
+                color: '#9f1239',
+                marginBottom: 16,
+                lineHeight: 1.5,
+              }}>
+                <strong>Warning:</strong> This action will permanently remove:
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                  <li>All classes, subjects, timetables, and academic enrollments</li>
+                  <li>All student & staff profiles and user accounts</li>
+                  <li>Attendance logs, exams, and grade history</li>
+                  <li>Subscription orders, receipts, and feature configurations</li>
+                </ul>
+                <div style={{ marginTop: 8, fontWeight: 700 }}>This action is immediate and cannot be undone.</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setDeleteModalSchool(null)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingSchool}
+                  onClick={handleConfirmDeleteSchool}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  {deletingSchool ? <RefreshCw size={14} className="spin" /> : <Trash2 size={14} />} Confirm Permanent Delete
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 2D: REGISTER / CREATE NEW SCHOOL MODAL */}
+      {/* ============================================================== */}
+      {createSchoolModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 16,
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 640,
+            maxHeight: '90vh',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#f8fafc',
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                  Register New Institution & Campus
+                </h3>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
+                  Directly onboard an educational organisation with package & admin credentials
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateSchoolModal(false)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSchool} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', textTransform: 'uppercase' }}>
+                  1. Organisation & Campus Information
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      Organisation Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Beaconhouse Schools Network"
+                      value={createOrgName}
+                      onChange={e => setCreateOrgName(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      Campus / Branch Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Main Campus (optional)"
+                      value={createSchoolName}
+                      onChange={e => setCreateSchoolName(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    City / Region
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Lahore / Islamabad"
+                    value={createCity}
+                    onChange={e => setCreateCity(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                  />
+                </div>
+
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', textTransform: 'uppercase', marginBottom: 10 }}>
+                    2. Primary Administrator Account
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        First Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="John"
+                        value={createAdminFirstName}
+                        onChange={e => setCreateAdminFirstName(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Last Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Doe"
+                        value={createAdminLastName}
+                        onChange={e => setCreateAdminLastName(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Admin Username *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="admin_john"
+                        value={createAdminUsername}
+                        onChange={e => setCreateAdminUsername(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Official Email *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="admin@school.edu"
+                        value={createAdminEmail}
+                        onChange={e => setCreateAdminEmail(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                      Initial Password (Optional - leave blank for auto-generated password)
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="Optional strong password"
+                      value={createAdminPassword}
+                      onChange={e => setCreateAdminPassword(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 10 }}>
+                    3. Subscription Package & Initial Status
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Select Package Plan *
+                      </label>
+                      <select
+                        value={createPlanCode}
+                        onChange={e => setCreatePlanCode(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                      >
+                        <option value="trial">30-Day Free Trial</option>
+                        <option value="standard">Standard Plan ($3.60 / Rs 1,000)</option>
+                        <option value="premium">Premium Plan ($7.20 / Rs 2,000)</option>
+                        <option value="custom">Custom Enterprise Plan</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Initial Status
+                      </label>
+                      <select
+                        value={createStatus}
+                        onChange={e => setCreateStatus(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff' }}
+                      >
+                        <option value="active">Active</option>
+                        <option value="trial">Trial</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                        Paid Until Date (Optional)
+                      </label>
+                      <input
+                        type="date"
+                        value={createPaidUntil}
+                        onChange={e => setCreatePaidUntil(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                padding: '16px 24px',
+                borderTop: '1px solid #e2e8f0',
+                background: '#f8fafc',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 10,
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setCreateSchoolModal(false)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingCreate}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#4338ca',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  {savingCreate ? <RefreshCw size={14} className="spin" /> : <Plus size={14} />} Register Institution
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

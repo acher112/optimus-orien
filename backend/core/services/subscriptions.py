@@ -144,30 +144,56 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
 def provision_school_registration_subscription(school, admin_user, plan_slug=None):
     """
     Initializes a new school's subscription upon institution registration.
-    New schools start with status 'no_plan' (nothing paid yet, basic access only).
+    If a plan is selected (e.g. standard or premium), provisions a 30-day trial period
+    for that plan; otherwise defaults to a 30-Day Free Trial.
     """
+    now = timezone.now()
+    trial_period_end = now + timedelta(days=30)
+
+    target_plan = None
+    plan_code = (plan_slug or '').strip().lower()
+    if plan_code in ('standard', 'premium', 'custom'):
+        target_plan = Plan.objects.filter(code=plan_code).first()
+
+    status = 'active' if target_plan else 'trial'
+    plan_display = target_plan.name if target_plan else '30-Day Free Trial'
+
     sub, _ = SchoolSubscription.objects.update_or_create(
         school=school,
         defaults={
-            'plan': None,
-            'status': 'no_plan',
-            'current_period_start': None,
-            'paid_until': None,
+            'plan': target_plan,
+            'status': status,
+            'current_period_start': now,
+            'paid_until': trial_period_end,
             'grace_until': None,
             'student_count_at_last_invoice': get_active_enrolled_student_count(school),
         }
     )
+
+    admin_name = (admin_user.get_full_name() or admin_user.username) if admin_user else 'Administrator'
+    admin_email = admin_user.email if admin_user else ''
+
     SubscriptionEvent.objects.create(
         school=school,
         event_type='status_changed',
         from_status='',
-        to_status='no_plan',
+        to_status=status,
+        from_plan='',
+        to_plan=plan_display,
         actor=admin_user,
-        notes="School registered. Subscription initialized in no_plan mode. Basic access only until subscription plan is activated.",
-        metadata={'admin_email': admin_user.email if admin_user else ''}
+        notes=f"Institution registered by {admin_name} ({admin_email}) on {plan_display}.",
+        metadata={
+            'admin_id': admin_user.id if admin_user else None,
+            'admin_username': admin_user.username if admin_user else '',
+            'admin_email': admin_email,
+            'plan_code': target_plan.code if target_plan else 'trial',
+            'plan_name': plan_display,
+            'trial_days': 30,
+        }
     )
     invalidate_school_entitlements_cache(school.id)
     return sub
+
 
 
 def create_subscription_order(school, plan, billing_months, payment_reference, paid_on,
