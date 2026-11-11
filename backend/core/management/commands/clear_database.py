@@ -190,20 +190,16 @@ class Command(BaseCommand):
             org_count = Organisation.objects.all().count()
             Organisation.objects.all().delete()
 
-            # Recreate default initial administrator so portal is immediately accessible
+            # Recreate default master platform administrator so portal is immediately accessible
             admin_user = os.getenv('INITIAL_ADMIN_USERNAME', 'admin')
             admin_pass = os.getenv('INITIAL_ADMIN_PASSWORD', 'AdminPass123!')
             admin_email = os.getenv('INITIAL_ADMIN_EMAIL', 'admin@optimusorien.com')
-            admin_org = os.getenv('INITIAL_ADMIN_ORG', 'Northstar Education Group')
-            admin_school = os.getenv('INITIAL_ADMIN_SCHOOL', 'Northstar Academy')
 
             from core.services.bootstrap import ensure_admin
             admin = ensure_admin(
                 username=admin_user,
                 password=admin_pass,
-                email=admin_email,
-                org_name=admin_org,
-                school_name=admin_school
+                email=admin_email
             )
 
         self.stdout.write(self.style.SUCCESS('Successfully cleared database:'))

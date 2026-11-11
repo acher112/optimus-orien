@@ -310,15 +310,15 @@ class IntegrityAuditTransferTests(AccessFixture):
   self.assertEqual(r.status_code,403)
 
  def test_ensure_admin_bootstrap_creates_valid_admin(self):
-  """ensure_admin must create an organisation_admin superuser with valid tenant scoping."""
+  """ensure_admin must create a standalone platform_admin superuser without dummy schools."""
   from core.services.bootstrap import ensure_admin
   admin=ensure_admin('auto_admin','SuperPass123!','admin@example.com')
   self.assertIsNotNone(admin)
   self.assertEqual(admin.username,'auto_admin')
   self.assertTrue(admin.is_superuser)
-  self.assertEqual(admin.role,'organisation_admin')
-  self.assertIsNotNone(admin.organisation)
-  self.assertIsNotNone(admin.school)
+  self.assertEqual(admin.role,'platform_admin')
+  self.assertIsNone(admin.organisation)
+  self.assertIsNone(admin.school)
   # Subsequent call is idempotent
   again=ensure_admin('auto_admin','DifferentPass!')
   self.assertEqual(again.pk,admin.pk)
@@ -333,4 +333,4 @@ class IntegrityAuditTransferTests(AccessFixture):
    r=client.post('/api/v1/auth/login/',data='{"username":"env_admin","password":"EnvPassword999!"}',content_type='application/json',HTTP_X_CSRFTOKEN=token)
    self.assertEqual(r.status_code,200)
    self.assertEqual(r.json()['username'],'env_admin')
-   self.assertEqual(r.json()['role'],'organisation_admin')
+   self.assertEqual(r.json()['role'],'platform_admin')

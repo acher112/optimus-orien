@@ -8,17 +8,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         username = os.getenv('INITIAL_ADMIN_USERNAME')
         password = os.getenv('INITIAL_ADMIN_PASSWORD')
-        email = os.getenv('INITIAL_ADMIN_EMAIL', '')
-        org_name = os.getenv('INITIAL_ADMIN_ORG', 'Northstar Education Group')
-        school_name = os.getenv('INITIAL_ADMIN_SCHOOL', 'Northstar Academy')
-
-        if not username or not password:
-            self.stdout.write(self.style.WARNING(
-                'INITIAL_ADMIN_USERNAME or INITIAL_ADMIN_PASSWORD not set. Skipping initial admin creation.'
-            ))
-            return
-
-        user = ensure_admin(username, password, email=email, org_name=org_name, school_name=school_name)
+        user = ensure_admin(username, password, email=email)
         if user:
             self.stdout.write(self.style.SUCCESS(f'Admin user "{username}" is ready (role: {user.role}).'))
         else:

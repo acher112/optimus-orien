@@ -68,7 +68,7 @@ def ensure_action(user, model, action):
  if (action!='read' and user.role=='organisation_admin' and model in SENSITIVE_MODELS and
      not getattr(user.organisation,'allow_org_admin_student_access',False)):
   raise PermissionDenied('Identifiable student writes require explicit organisation policy')
- if user.is_superuser:
+ if user.is_superuser or user.role == 'platform_admin':
   return
  if user.role == 'teacher' and model is AuditEvent:
   raise PermissionDenied('Teachers may not access the audit log.')
@@ -87,7 +87,7 @@ def ensure_action(user, model, action):
 
 def schools_scope(user):
  if not user.is_authenticated or not user.is_active: return School.objects.none()
- if user.is_superuser:return School.objects.all()
+ if user.is_superuser or user.role == 'platform_admin':return School.objects.all()
  if user.role == 'student':return School.objects.filter(student__user=user).distinct()
  if user.role == 'parent':
   today = timezone.localdate()

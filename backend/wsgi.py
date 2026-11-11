@@ -20,9 +20,7 @@ if _admin_user and _admin_pass:
         ensure_admin(
             username=_admin_user,
             password=_admin_pass,
-            email=os.getenv('INITIAL_ADMIN_EMAIL', ''),
-            org_name=os.getenv('INITIAL_ADMIN_ORG', 'Northstar Education Group'),
-            school_name=os.getenv('INITIAL_ADMIN_SCHOOL', 'Northstar Academy')
+            email=os.getenv('INITIAL_ADMIN_EMAIL', 'admin@optimusorien.com')
         )
     except Exception as _e:
         import logging

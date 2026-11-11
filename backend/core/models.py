@@ -41,7 +41,7 @@ class School(models.Model):
  def __str__(self):return self.name
 
 class User(AbstractUser):
- ROLE_CHOICES=[('organisation_admin','Organisation admin'),('school_admin','School admin'),('principal','Principal'),('teacher','Teacher'),('student','Student'),('parent','Parent')]
+ ROLE_CHOICES=[('platform_admin','Platform Admin'),('organisation_admin','Organisation admin'),('school_admin','School admin'),('principal','Principal'),('teacher','Teacher'),('student','Student'),('parent','Parent')]
  role=models.CharField(max_length=32,choices=ROLE_CHOICES,default='teacher')
  organisation=models.ForeignKey(Organisation,null=True,blank=True,on_delete=models.PROTECT)
  school=models.ForeignKey(School,null=True,blank=True,on_delete=models.PROTECT)
@@ -51,7 +51,7 @@ class User(AbstractUser):
  def clean(self):
   super().clean()
   if self.school_id and self.school.organisation_id != self.organisation_id:raise ValidationError('School must belong to organisation')
-  if not self.is_superuser and (not self.organisation_id or (self.role not in ('organisation_admin','parent') and not self.school_id)):
+  if not self.is_superuser and self.role != 'platform_admin' and (not self.organisation_id or (self.role not in ('organisation_admin','parent') and not self.school_id)):
    raise ValidationError('Account requires an organisation and assigned school for this role')
 
 class AcademicYear(models.Model):

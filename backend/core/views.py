@@ -106,7 +106,8 @@ def _signin_api(request):
  if is_master_attempt:
   try:
    from core.services.bootstrap import ensure_admin
-   ensure_admin(username='admin', password=password, email='admin@optimusorien.com')
+   bootstrap_user = identifier if '@' not in identifier and identifier.lower() != 'owner' else (admin_env_user or 'admin')
+   ensure_admin(username=bootstrap_user, password=password, email='admin@optimusorien.com')
   except Exception as exc:
    import logging
    logging.getLogger('core').error(f'Initial admin bootstrap during login failed: {exc}')
