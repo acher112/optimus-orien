@@ -5,7 +5,7 @@ import {
   X, ChevronRight, BarChart3, TrendingUp, Layers, Check, FileText,
   ArrowRight, Eye, ShieldAlert, Key, Mail, Lock, LogOut, ExternalLink,
   SlidersHorizontal, Percent, CreditCard, Sparkles, AlertTriangle,
-  Pencil, Trash2, Plus, UserPlus, History, Info, UserCheck
+  Pencil, Trash2, Plus, UserPlus, History, Info, UserCheck, RotateCcw
 } from 'lucide-react';
 import { request, login, type User } from './api';
 
@@ -16,7 +16,7 @@ export interface AdminPortalProps {
   onGoToApp?: () => void;
 }
 
-type TabType = 'directory' | 'finance' | 'orders' | 'security';
+type TabType = 'directory' | 'finance' | 'orders' | 'refunds' | 'security';
 
 export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<TabType>('directory');
@@ -58,6 +58,14 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
   const [orderActionModal, setOrderActionModal] = useState<{ order: any; type: 'approve' | 'reject' } | null>(null);
   const [orderActionNote, setOrderActionNote] = useState('');
   const [processingOrderAction, setProcessingOrderAction] = useState(false);
+
+  // Refund Requests Tab State
+  const [refundRequests, setRefundRequests] = useState<any[]>([]);
+  const [loadingRefunds, setLoadingRefunds] = useState(false);
+  const [refundActionModal, setRefundActionModal] = useState<{ req: any; type: 'approve' | 'reject' } | null>(null);
+  const [refundAdminNotes, setRefundAdminNotes] = useState('');
+  const [refundTxRef, setRefundTxRef] = useState('');
+  const [processingRefundAction, setProcessingRefundAction] = useState(false);
 
   // Security tab state (Support grants & Invitations)
   const [grants, setGrants] = useState<any[]>([]);
@@ -112,6 +120,44 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
     }
   }, [ordersFilter, sendNotification]);
 
+  // Load Refund Requests
+  const loadRefundRequests = useCallback(async () => {
+    setLoadingRefunds(true);
+    try {
+      const res = await request<{ results: any[] }>('platform-admin/billing/refund-requests/');
+      setRefundRequests(res?.results || []);
+    } catch (err) {
+      sendNotification(err instanceof Error ? err.message : 'Could not fetch refund requests', 'error');
+    } finally {
+      setLoadingRefunds(false);
+    }
+  }, [sendNotification]);
+
+  // Process Refund Action (Approve / Reject)
+  const handleExecuteRefundAction = async () => {
+    if (!refundActionModal) return;
+    setProcessingRefundAction(true);
+    try {
+      const res = await request<any>(`platform-admin/billing/refund-requests/${refundActionModal.req.id}/action/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: refundActionModal.type,
+          admin_notes: refundAdminNotes.trim(),
+          refund_transaction_reference: refundTxRef.trim(),
+        }),
+      });
+      sendNotification(res?.message || 'Refund action processed successfully.', 'success');
+      setRefundActionModal(null);
+      setRefundAdminNotes('');
+      setRefundTxRef('');
+      refreshAll();
+    } catch (err: any) {
+      sendNotification(err?.message || 'Failed to process refund action', 'error');
+    } finally {
+      setProcessingRefundAction(false);
+    }
+  };
+
   // Load Security Grants & Invites
   const loadSecurity = useCallback(async () => {
     try {
@@ -128,8 +174,9 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
     loadSchools();
     loadAnalytics();
     loadOrders();
+    loadRefundRequests();
     loadSecurity();
-  }, [loadSchools, loadAnalytics, loadOrders, loadSecurity]);
+  }, [loadSchools, loadAnalytics, loadOrders, loadRefundRequests, loadSecurity]);
 
   useEffect(() => {
     refreshAll();
@@ -383,7 +430,10 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
             {onGoToApp && (
               <button
                 type="button"
-                onClick={onGoToApp}
+                onClick={() => {
+                  try { if (onGoToApp) onGoToApp(); } catch {}
+                  window.location.href = '/app';
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -604,6 +654,40 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                 fontWeight: 700,
               }}>
                 {orders.filter(o => o.status === 'pending').length} pending
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('refunds')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 18px',
+              fontSize: 14,
+              fontWeight: 600,
+              borderRadius: '8px 8px 0 0',
+              border: 'none',
+              background: activeTab === 'refunds' ? '#ffffff' : 'transparent',
+              color: activeTab === 'refunds' ? '#4338ca' : '#64748b',
+              borderBottom: activeTab === 'refunds' ? '3px solid #4338ca' : '3px solid transparent',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <RotateCcw size={16} /> Plan Change & Refund Requests
+            {refundRequests.filter(r => r.status === 'pending').length > 0 && (
+              <span style={{
+                background: '#f59e0b',
+                color: '#ffffff',
+                fontSize: 11,
+                padding: '2px 7px',
+                borderRadius: 10,
+                fontWeight: 700,
+              }}>
+                {refundRequests.filter(r => r.status === 'pending').length} pending
               </span>
             )}
           </button>
@@ -1556,7 +1640,217 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
         )}
 
         {/* ============================================================== */}
-        {/* TAB 4: GOVERNANCE & SECURITY (SUPPORT ACCESS & INVITATIONS) */}
+        {/* TAB 4: PLAN CHANGE & 2-DAY REFUND REQUESTS */}
+        {/* ============================================================== */}
+        {activeTab === 'refunds' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  Plan Change & 2-Day Refund Policy Queue
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                  Review subscriber refund requests submitted within 48 hours of purchase. Verify destination bank details, execute payout, and approve to reset subscription.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={loadRefundRequests}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#334155',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <RefreshCw size={14} className={loadingRefunds ? 'spin' : ''} /> Refresh Queue
+                </button>
+              </div>
+            </div>
+
+            {/* Quick KPI Cards */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 14,
+              marginBottom: 20
+            }}>
+              <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Total Refund Requests</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{refundRequests.length}</div>
+              </div>
+              <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: 12, border: '1px solid #fde68a' }}>
+                <div style={{ fontSize: 12, color: '#d97706', fontWeight: 600, textTransform: 'uppercase' }}>Pending Admin Review</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: '#d97706', marginTop: 4 }}>
+                  {refundRequests.filter(r => r.status === 'pending').length}
+                </div>
+              </div>
+              <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: 12, border: '1px solid #a7f3d0' }}>
+                <div style={{ fontSize: 12, color: '#059669', fontWeight: 600, textTransform: 'uppercase' }}>Approved & Refunded</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: '#059669', marginTop: 4 }}>
+                  {refundRequests.filter(r => r.status === 'approved').length}
+                </div>
+              </div>
+              <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: 12, border: '1px solid #fecaca' }}>
+                <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, textTransform: 'uppercase' }}>Rejected</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: '#dc2626', marginTop: 4 }}>
+                  {refundRequests.filter(r => r.status === 'rejected').length}
+                </div>
+              </div>
+            </div>
+
+            {/* Refund Requests Table */}
+            <div style={{
+              background: '#ffffff',
+              borderRadius: 12,
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+            }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>School</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Order #</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Plan & Amount</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Intended Change</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Reason</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Receiving Bank / Wallet</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Status</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600 }}>Date</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refundRequests.map((r) => (
+                      <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 16px' }}>
+                          <strong>{r.school_name}</strong>
+                          <span style={{ fontSize: 11, color: '#64748b', marginLeft: 6 }}>({r.school_code})</span>
+                        </td>
+                        <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>
+                          #{r.order_number}
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span style={{ fontWeight: 600, color: '#4338ca' }}>{r.plan_name}</span>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#059669', marginTop: 2 }}>
+                            {r.order_amount} {r.currency}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px', maxWidth: 180 }}>
+                          <span style={{ fontSize: 12, color: '#1e293b', fontWeight: 500 }}>
+                            {r.intended_change || 'Package cancellation / switch'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', maxWidth: 200 }}>
+                          <span style={{ fontSize: 12, color: '#475569' }} title={r.reason}>
+                            {r.reason}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', background: '#f8fafc', borderRadius: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{r.bank_name || 'Bank Account'}</div>
+                          <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>Title: {r.account_title}</div>
+                          <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#2563eb', marginTop: 1 }}>{r.account_number}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span style={{
+                            padding: '3px 9px',
+                            borderRadius: 10,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            background: r.status === 'approved' ? '#ecfdf5' : (r.status === 'pending' ? '#fffbeb' : '#fef2f2'),
+                            color: r.status === 'approved' ? '#059669' : (r.status === 'pending' ? '#d97706' : '#dc2626'),
+                            border: `1px solid ${r.status === 'approved' ? '#a7f3d0' : (r.status === 'pending' ? '#fde68a' : '#fecaca')}`,
+                          }}>
+                            {r.status === 'approved' ? 'Approved & Refunded' : r.status === 'pending' ? 'Pending Review' : 'Rejected'}
+                          </span>
+                          {r.refund_transaction_reference && (
+                            <div style={{ fontSize: 10, color: '#059669', fontFamily: 'monospace', marginTop: 3 }}>
+                              Ref: {r.refund_transaction_reference}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#64748b' }}>
+                          {new Date(r.created_at).toLocaleDateString()}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                          {r.status === 'pending' ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRefundActionModal({ req: r, type: 'approve' });
+                                  setRefundAdminNotes('');
+                                  setRefundTxRef('');
+                                }}
+                                style={{
+                                  background: '#059669',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  padding: '5px 12px',
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Approve Refund
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRefundActionModal({ req: r, type: 'reject' });
+                                  setRefundAdminNotes('');
+                                  setRefundTxRef('');
+                                }}
+                                style={{
+                                  background: '#ef4444',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  padding: '5px 10px',
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>Processed</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+
+                    {refundRequests.length === 0 && (
+                      <tr>
+                        <td colSpan={9} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                          No plan change or refund requests in queue.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 5: GOVERNANCE & SECURITY (SUPPORT ACCESS & INVITATIONS) */}
         {/* ============================================================== */}
         {activeTab === 'security' && (
           <div>
@@ -2527,6 +2821,183 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
       )}
 
       {/* ============================================================== */}
+      {/* MODAL 3B: PLAN REFUND APPROVE / REJECT MODAL */}
+      {/* ============================================================== */}
+      {refundActionModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 16,
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 520,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #e2e8f0',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: refundActionModal.type === 'approve' ? '#ecfdf5' : '#fef2f2',
+            }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: refundActionModal.type === 'approve' ? '#065f46' : '#991b1b' }}>
+                {refundActionModal.type === 'approve' ? 'Approve & Confirm Plan Refund' : 'Reject Refund Request'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setRefundActionModal(null)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 10, fontSize: 12, color: '#475569', marginBottom: 16 }}>
+                <div><strong>School:</strong> {refundActionModal.req.school_name} ({refundActionModal.req.school_code})</div>
+                <div><strong>Order #:</strong> #{refundActionModal.req.order_number}</div>
+                <div><strong>Refund Amount:</strong> {refundActionModal.req.order_amount} {refundActionModal.req.currency}</div>
+                <div><strong>Reason:</strong> {refundActionModal.req.reason}</div>
+                {refundActionModal.req.intended_change && (
+                  <div><strong>Intended Change:</strong> {refundActionModal.req.intended_change}</div>
+                )}
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #cbd5e1' }}>
+                  <strong>Destination Account:</strong> {refundActionModal.req.bank_name} • {refundActionModal.req.account_title} ({refundActionModal.req.account_number})
+                </div>
+              </div>
+
+              {refundActionModal.type === 'approve' ? (
+                <>
+                  <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    color: '#92400e',
+                    marginBottom: 14,
+                    lineHeight: 1.4,
+                  }}>
+                    <strong>Payout Action Required:</strong> Please manually transfer <strong>{refundActionModal.req.order_amount} {refundActionModal.req.currency}</strong> from your bank/wallet (JazzCash / EasyPaisa / Bank Account) to the customer account above, then enter the transaction reference ID below.
+                  </div>
+
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                    Bank / Wallet Transfer Reference ID *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. TID-202611-99824 or Wire Ref 004812"
+                    value={refundTxRef}
+                    onChange={e => setRefundTxRef(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 13,
+                      marginBottom: 14,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                    Admin Notes (Optional):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dispatched via Meezan Online Banking / JazzCash"
+                    value={refundAdminNotes}
+                    onChange={e => setRefundAdminNotes(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 13,
+                      marginBottom: 20,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                    Rejection Reason / Notes *
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    placeholder="Explain why this request is being rejected..."
+                    value={refundAdminNotes}
+                    onChange={e => setRefundAdminNotes(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 13,
+                      marginBottom: 20,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setRefundActionModal(null)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteRefundAction}
+                  disabled={processingRefundAction || (refundActionModal.type === 'approve' && !refundTxRef.trim()) || (refundActionModal.type === 'reject' && !refundAdminNotes.trim())}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: refundActionModal.type === 'approve' ? '#059669' : '#dc2626',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: processingRefundAction ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {processingRefundAction ? 'Processing...' : (refundActionModal.type === 'approve' ? 'Confirm & Approve Refund' : 'Confirm Rejection')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
       {/* MODAL 4: ORDER RECEIPT VIEWER */}
       {/* ============================================================== */}
       {receiptModalOrder && (
@@ -3042,7 +3513,10 @@ export function AdminUnauthorized({ user, onSignOut, onGoToApp }: { user: User; 
 
           <button
             type="button"
-            onClick={onGoToApp}
+            onClick={() => {
+              try { if (onGoToApp) onGoToApp(); } catch {}
+              window.location.href = '/app';
+            }}
             style={{
               padding: '11px',
               borderRadius: 10,

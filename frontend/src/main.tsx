@@ -120,6 +120,44 @@ function BriefcaseIcon(props: any) {
   return <Users {...props} />;
 }
 
+export function formatCleanDateTime(val: any): string {
+  if (val === null || val === undefined || val === '') return '—';
+  if (typeof val === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(val)) {
+      try {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          }) + ', ' + d.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+        }
+      } catch {
+        return val;
+      }
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      try {
+        const d = new Date(val + 'T00:00:00');
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+        }
+      } catch {
+        return val;
+      }
+    }
+  }
+  return String(val);
+}
+
 const SYSTEM_NAV = [
   { name: 'Reports', icon: BarChart3, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'My performance', icon: TrendingUp, roles: ['student'] },
@@ -1440,6 +1478,8 @@ function App() {
           onGoToApp={() => {
             window.history.pushState(null, '', '/app');
             setCurrentPathname('/app');
+            setPage('Overview');
+            window.location.href = '/app';
           }}
         />
       );
@@ -1458,6 +1498,8 @@ function App() {
           onGoToApp={() => {
             window.history.pushState(null, '', '/app');
             setCurrentPathname('/app');
+            setPage('Overview');
+            window.location.href = '/app';
           }}
         />
       </React.Suspense>
@@ -2658,7 +2700,9 @@ function App() {
                                   : c.key === 'school_class' ? String(r.class_name || (refData.classes.find(cl => cl.id === r.school_class)?.name) || ((r.school_class as any)?.name) || r.school_class || '—')
                                   : c.key === 'subject' ? String(r.subject_name || (refData.subjects.find(sb => sb.id === r.subject)?.name) || ((r.subject as any)?.name) || r.subject || '—')
                                   : c.key === 'school' || c.key === 'school_name' ? String(r.school_name || (refData.schools.find(sc => sc.id === r.school)?.name) || (campuses.find(cp => cp.id === r.school)?.name) || ((r.school as any)?.name) || '—')
-                                  : String(r[c.key] ?? '—')}
+                                  : ['created_at', 'created', 'updated_at', 'timestamp', 'date', 'paid_on', 'paid_at'].includes(c.key) || (typeof r[c.key] === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(r[c.key] as string))
+                                    ? formatCleanDateTime(r[c.key])
+                                    : String(r[c.key] ?? '—')}
                                 </span>
                               )}
                             </td>
@@ -4885,7 +4929,7 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
                   { key: 'changes', label: 'Changes Summary' },
                 ]}
                 rows={() => filtered.map(l => ({
-                  created_at: l.created_at ? new Date(String(l.created_at)).toLocaleString() : '—',
+                  created_at: l.created_at ? formatCleanDateTime(l.created_at) : '—',
                   action: String(l.action || '—'),
                   resource: String(l.resource || '—'),
                   resource_id: String(l.resource_id || '—'),
@@ -4914,7 +4958,7 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
 
                 return (
                   <tr key={l.id}>
-                    <td><Clock size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />{l.created_at ? new Date(String(l.created_at)).toLocaleString() : '—'}</td>
+                    <td><Clock size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />{l.created_at ? formatCleanDateTime(l.created_at) : '—'}</td>
                     <td><span className={'action-pill ' + aClass}>{act.replace('_', ' ')}</span></td>
                     <td><strong>{String(l.resource || '—')}</strong></td>
                     <td>#{String(l.resource_id || '—')}</td>

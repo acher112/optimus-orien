@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Shield, ShieldCheck, KeyRound, Search, X, RotateCcw, Check, CheckCircle2,
   AlertCircle, Building2, Users, Award, GraduationCap, HeartHandshake, BookOpen,
   ClipboardCheck, ClipboardList, FileBarChart, Receipt, Briefcase, Wallet,
-  MessageSquare, Settings2, RefreshCw, Filter, Sparkles, HelpCircle, Save, CheckCheck
+  MessageSquare, Settings2, RefreshCw, Filter, Sparkles, HelpCircle, Save, CheckCheck,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { list, request, type User } from './api';
 
@@ -67,6 +68,13 @@ export default function Permissions({ user, notify }: PermissionsProps) {
   const [search, setSearch] = useState('');
   const [activeModuleFilter, setActiveModuleFilter] = useState<string>('all');
   const [resetModalOpen, setResetModalOpen] = useState(false);
+
+  const roleTabsRef = useRef<HTMLDivElement>(null);
+  const scrollRoleTabs = (direction: 'left' | 'right') => {
+    if (roleTabsRef.current) {
+      roleTabsRef.current.scrollBy({ left: direction === 'left' ? -220 : 220, behavior: 'smooth' });
+    }
+  };
 
   const visibleRoles = useMemo(() => {
     if (isPrincipal) {
@@ -354,7 +362,17 @@ export default function Permissions({ user, notify }: PermissionsProps) {
 
       {/* Role Selector Tabs (Segmented Navigation) */}
       <div className="role-selector-bar">
-        <div className="role-tabs-scroll">
+        <button
+          type="button"
+          className="role-scroll-arrow left"
+          onClick={() => scrollRoleTabs('left')}
+          title="Scroll Left"
+          aria-label="Scroll roles left"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <div className="role-tabs-scroll" ref={roleTabsRef}>
           {visibleRoles.map(r => {
             const isSelected = r.key === selectedRole;
             const grantedForThisRole = Object.values(permissionsState[r.key] || {}).filter(Boolean).length;
@@ -378,6 +396,16 @@ export default function Permissions({ user, notify }: PermissionsProps) {
             );
           })}
         </div>
+
+        <button
+          type="button"
+          className="role-scroll-arrow right"
+          onClick={() => scrollRoleTabs('right')}
+          title="Scroll Right"
+          aria-label="Scroll roles right"
+        >
+          <ChevronRight size={16} />
+        </button>
       </div>
 
       {/* Role Overview & Toolbar Card */}

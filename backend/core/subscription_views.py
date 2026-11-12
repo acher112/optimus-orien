@@ -37,6 +37,7 @@ from core.models import (
     PublishedSchoolIndicator,
     SchoolConfiguration,
     SchoolConfigurationVersion,
+    PlanRefundRequest,
 )
 from core.services.entitlements import (
     get_school_entitlements,
@@ -391,34 +392,60 @@ def school_subscription_orders_view(request):
 
     if request.method == 'GET':
         orders = SubscriptionOrder.objects.filter(school=school).select_related('plan', 'reviewed_by').order_by('-created_at')
-        results = [{
-            'id': o.id,
-            'order_number': o.order_number,
-            'plan_code': o.plan.code if o.plan else 'custom',
-            'plan_name': o.plan.name if o.plan else 'Custom Package',
-            'billing_months': o.billing_months,
-            'student_count': o.student_count,
-            'unit_price': str(o.unit_price),
-            'subtotal': str(o.subtotal),
-            'discount_percentage': str(o.discount_percentage),
-            'discount_amount': str(o.discount_amount),
-            'upgrade_credit_amount': str(o.upgrade_credit_amount),
-            'tax_amount': str(o.tax_amount),
-            'amount': str(o.amount),
-            'currency': o.currency,
-            'period_start': o.period_start.isoformat() if o.period_start else None,
-            'period_end': o.period_end.isoformat() if o.period_end else None,
-            'card_brand': o.card_brand,
-            'card_last4': o.card_last4,
-            'payment_reference': o.payment_reference,
-            'paid_on': o.paid_on.isoformat() if (o.paid_on and hasattr(o.paid_on, 'isoformat')) else (str(o.paid_on) if o.paid_on else None),
-            'payment_notes': o.payment_notes,
-            'metadata': o.metadata,
-            'status': o.status,
-            'reviewed_at': o.reviewed_at.isoformat() if o.reviewed_at else None,
-            'review_note': o.review_note,
-            'created_at': o.created_at.isoformat(),
-        } for o in orders]
+        now = timezone.now()
+        refunds_by_order = {
+            r.order_id: r for r in PlanRefundRequest.objects.filter(school=school).order_by('created_at')
+        }
+
+        results = []
+        for o in orders:
+            ref = refunds_by_order.get(o.id)
+            is_within_48h = (now - o.created_at).total_seconds() <= 48 * 3600
+            can_request_refund = (o.status in ('paid', 'approved')) and is_within_48h and (not ref or ref.status == 'rejected')
+
+            results.append({
+                'id': o.id,
+                'order_number': o.order_number,
+                'plan_code': o.plan.code if o.plan else 'custom',
+                'plan_name': o.plan.name if o.plan else 'Custom Package',
+                'billing_months': o.billing_months,
+                'student_count': o.student_count,
+                'unit_price': str(o.unit_price),
+                'subtotal': str(o.subtotal),
+                'discount_percentage': str(o.discount_percentage),
+                'discount_amount': str(o.discount_amount),
+                'upgrade_credit_amount': str(o.upgrade_credit_amount),
+                'tax_amount': str(o.tax_amount),
+                'amount': str(o.amount),
+                'currency': o.currency,
+                'period_start': o.period_start.isoformat() if o.period_start else None,
+                'period_end': o.period_end.isoformat() if o.period_end else None,
+                'card_brand': o.card_brand,
+                'card_last4': o.card_last4,
+                'payment_reference': o.payment_reference,
+                'paid_on': o.paid_on.isoformat() if (o.paid_on and hasattr(o.paid_on, 'isoformat')) else (str(o.paid_on) if o.paid_on else None),
+                'payment_notes': o.payment_notes,
+                'metadata': o.metadata,
+                'status': o.status,
+                'reviewed_at': o.reviewed_at.isoformat() if o.reviewed_at else None,
+                'review_note': o.review_note,
+                'created_at': o.created_at.isoformat(),
+                'is_within_48h': is_within_48h,
+                'can_request_refund': can_request_refund,
+                'refund_request': {
+                    'id': ref.id,
+                    'status': ref.status,
+                    'reason': ref.reason,
+                    'intended_change': ref.intended_change,
+                    'bank_name': ref.bank_name,
+                    'account_title': ref.account_title,
+                    'account_number': ref.account_number,
+                    'admin_notes': ref.admin_notes,
+                    'refund_transaction_reference': ref.refund_transaction_reference,
+                    'created_at': ref.created_at.isoformat(),
+                    'reviewed_at': ref.reviewed_at.isoformat() if ref.reviewed_at else None,
+                } if ref else None,
+            })
         return Response({'results': results})
 
     # POST: Submit new order
@@ -1979,3 +2006,242 @@ def platform_admin_feature_override_delete_view(request, school_id, override_id)
     override.delete()
     invalidate_school_entitlements_cache(school_id)
     return Response({'message': f"Feature override for '{key}' deleted."})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def school_refund_requests_view(request):
+    """
+    GET: Returns refund and package change requests submitted by this school.
+    POST: Submits a new refund/plan change request within the 2-day policy window.
+    """
+    school = _resolve_school_for_user(request)
+    if not school:
+        raise PermissionDenied("An educational institution affiliation is required.")
+
+    if request.method == 'GET':
+        requests = PlanRefundRequest.objects.filter(school=school).select_related('order', 'reviewed_by').order_by('-created_at')
+        results = [{
+            'id': r.id,
+            'order_id': r.order.id,
+            'order_number': r.order.order_number,
+            'plan_name': r.order.plan.name if r.order.plan else 'Custom Plan',
+            'amount': str(r.order.amount),
+            'currency': r.order.currency,
+            'reason': r.reason,
+            'intended_change': r.intended_change,
+            'bank_name': r.bank_name,
+            'account_title': r.account_title,
+            'account_number': r.account_number,
+            'status': r.status,
+            'admin_notes': r.admin_notes,
+            'refund_transaction_reference': r.refund_transaction_reference,
+            'created_at': r.created_at.isoformat(),
+            'reviewed_at': r.reviewed_at.isoformat() if r.reviewed_at else None,
+        } for r in requests]
+        return Response({'results': results})
+
+    # POST: Submit new request
+    if request.user.role not in ('owner', 'organisation_admin', 'school_admin'):
+        raise PermissionDenied("Only institutional administrators can request plan changes or refunds.")
+
+    data = request.data or {}
+    order_id = data.get('order_id')
+    reason = str(data.get('reason', '')).strip()
+    intended_change = str(data.get('intended_change', '')).strip()
+    bank_name = str(data.get('bank_name', '')).strip()
+    account_title = str(data.get('account_title', '')).strip()
+    account_number = str(data.get('account_number', '')).strip()
+
+    if not order_id:
+        return Response({'detail': 'order_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not reason:
+        return Response({'detail': 'Please provide a reason for the plan change / refund request.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    order = SubscriptionOrder.objects.filter(school=school, id=order_id).first()
+    if not order:
+        return Response({'detail': 'Order not found for this school.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if order.status not in ('paid', 'approved'):
+        return Response({'detail': f"Orders with status '{order.status}' cannot be refunded."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 2-day policy check: 48 hours from order creation
+    now = timezone.now()
+    elapsed_seconds = (now - order.created_at).total_seconds()
+    if elapsed_seconds > (48 * 3600):
+        return Response({
+            'detail': "Under our 2-day package change and refund policy, refund requests must be submitted within 48 hours of purchase."
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check for active request
+    existing = PlanRefundRequest.objects.filter(order=order, status__in=['pending', 'approved']).first()
+    if existing:
+        return Response({
+            'detail': f"A refund request (Status: {existing.status}) is already on file for Order #{order.order_number}."
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    refund_req = PlanRefundRequest.objects.create(
+        order=order,
+        school=school,
+        requested_by=request.user,
+        reason=reason,
+        intended_change=intended_change,
+        bank_name=bank_name,
+        account_title=account_title,
+        account_number=account_number,
+        status='pending'
+    )
+
+    SubscriptionEvent.objects.create(
+        school=school,
+        event_type='refund_requested',
+        from_status=order.status,
+        to_status=order.status,
+        from_plan=order.plan.code if order.plan else '',
+        to_plan=order.plan.code if order.plan else '',
+        actor=request.user,
+        notes=f"Refund / Plan Change requested for Order #{order.order_number}. Reason: {reason[:120]}",
+        metadata={
+            'refund_request_id': refund_req.id,
+            'order_id': order.id,
+            'order_number': order.order_number,
+            'amount': str(order.amount),
+            'currency': order.currency,
+            'intended_change': intended_change,
+        }
+    )
+
+    return Response({
+        'message': f"Plan change & refund request for Order #{order.order_number} submitted successfully. Platform administrators will review your request.",
+        'refund_request_id': refund_req.id,
+        'status': refund_req.status,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def platform_admin_refund_requests_view(request):
+    """
+    Platform admin endpoint: lists all plan change & refund requests across the entire system.
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    qs = PlanRefundRequest.objects.select_related('school', 'order', 'order__plan', 'requested_by', 'reviewed_by').order_by('-created_at')
+    results = [{
+        'id': r.id,
+        'school_id': r.school.id,
+        'school_name': r.school.name,
+        'school_code': r.school.code,
+        'order_id': r.order.id,
+        'order_number': r.order.order_number,
+        'plan_name': r.order.plan.name if r.order.plan else 'Custom Plan',
+        'order_amount': str(r.order.amount),
+        'currency': r.order.currency,
+        'order_created_at': r.order.created_at.isoformat(),
+        'reason': r.reason,
+        'intended_change': r.intended_change,
+        'bank_name': r.bank_name,
+        'account_title': r.account_title,
+        'account_number': r.account_number,
+        'status': r.status,
+        'admin_notes': r.admin_notes,
+        'refund_transaction_reference': r.refund_transaction_reference,
+        'requested_by_name': r.requested_by.get_full_name() if r.requested_by else (r.requested_by.username if r.requested_by else 'Admin'),
+        'reviewed_by_name': r.reviewed_by.get_full_name() if r.reviewed_by else None,
+        'created_at': r.created_at.isoformat(),
+        'reviewed_at': r.reviewed_at.isoformat() if r.reviewed_at else None,
+    } for r in qs]
+
+    return Response({'results': results})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def platform_admin_refund_action_view(request, pk):
+    """
+    Platform admin endpoint: Approves or Rejects a refund request.
+    If Approved:
+      - Sets order status to 'refunded'
+      - Records admin transfer reference and notes
+      - Resets the school's active subscription to trial so customer can re-subscribe cleanly
+      - Invalidates entitlements cache
+      - Logs audit event
+    """
+    if not _is_platform_admin(request.user):
+        raise PermissionDenied("Platform administration access required.")
+
+    refund_req = get_object_or_404(PlanRefundRequest, pk=pk)
+    data = request.data or {}
+    action = data.get('action') # 'approve' or 'reject'
+    admin_notes = str(data.get('admin_notes', '')).strip()
+    refund_ref = str(data.get('refund_transaction_reference', '')).strip()
+
+    if action not in ('approve', 'reject'):
+        return Response({'detail': "action must be 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    now = timezone.now()
+    if action == 'approve':
+        refund_req.status = 'approved'
+        refund_req.reviewed_by = request.user
+        refund_req.reviewed_at = now
+        refund_req.admin_notes = admin_notes
+        refund_req.refund_transaction_reference = refund_ref
+        refund_req.save()
+
+        # Update order
+        order = refund_req.order
+        order.status = 'refunded'
+        order.refunded_at = now
+        order.review_note = f"Refund approved by {request.user.get_full_name() or request.user.username}. Ref: {refund_ref}. Notes: {admin_notes}".strip()
+        order.save(update_fields=['status', 'refunded_at', 'review_note', 'updated_at'])
+
+        # Reset school's active subscription so user can subscribe to new package cleanly
+        school = refund_req.school
+        sub = getattr(school, 'subscription', None)
+        if sub:
+            old_plan = sub.plan.code if sub.plan else 'none'
+            old_status = sub.status
+            sub.status = 'trial'
+            sub.plan = None
+            # Give 7-day grace/trial buffer so school is not locked while picking new package
+            sub.paid_until = now + timedelta(days=7)
+            sub.grace_until = None
+            sub.save()
+
+            SubscriptionEvent.objects.create(
+                school=school,
+                event_type='refund_approved',
+                from_status=old_status,
+                to_status='trial',
+                from_plan=old_plan,
+                to_plan='trial',
+                actor=request.user,
+                notes=f"Order #{order.order_number} refunded ({order.amount} {order.currency}). Ref: {refund_ref}. School subscription reset to trial for new package selection.",
+                metadata={
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'refund_transaction_reference': refund_ref,
+                    'admin_notes': admin_notes,
+                }
+            )
+            invalidate_school_entitlements_cache(school.id)
+
+        return Response({
+            'message': f"Refund request #{refund_req.id} approved. Order #{order.order_number} marked as refunded and subscription reset.",
+            'status': 'approved',
+            'order_id': order.id,
+        })
+
+    else: # reject
+        refund_req.status = 'rejected'
+        refund_req.reviewed_by = request.user
+        refund_req.reviewed_at = now
+        refund_req.admin_notes = admin_notes
+        refund_req.save()
+
+        return Response({
+            'message': f"Refund request #{refund_req.id} rejected.",
+            'status': 'rejected',
+        })
+

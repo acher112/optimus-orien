@@ -2585,6 +2585,8 @@ class SubscriptionEvent(models.Model):
         ('suspended', 'Suspended'),
         ('reinstated', 'Reinstated'),
         ('override_applied', 'Override Applied'),
+        ('refund_requested', 'Refund Requested'),
+        ('refund_approved', 'Refund Approved'),
     ]
     school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='subscription_events')
     event_type = models.CharField(max_length=40, choices=EVENT_CHOICES, db_index=True)
@@ -2606,3 +2608,42 @@ class SubscriptionEvent(models.Model):
 
     def __str__(self):
         return f"[{self.event_type}] {self.school.name} ({self.from_status} -> {self.to_status}) at {self.created_at}"
+
+
+class PlanRefundRequest(models.Model):
+    """
+    Customer request to change or refund their subscription order within the 2-day policy window.
+    Platform Administrator reviews, executes the refund, and resets the subscription.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved & Refunded'),
+        ('rejected', 'Rejected'),
+    ]
+
+    order = models.ForeignKey(SubscriptionOrder, on_delete=models.CASCADE, related_name='refund_requests')
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='plan_refund_requests')
+    requested_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    reason = models.TextField()
+    intended_change = models.TextField(blank=True, default='')
+    bank_name = models.CharField(max_length=120, blank=True, default='')
+    account_title = models.CharField(max_length=150, blank=True, default='')
+    account_number = models.CharField(max_length=100, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    admin_notes = models.TextField(blank=True, default='')
+    refund_transaction_reference = models.CharField(max_length=150, blank=True, default='')
+    reviewed_by = models.ForeignKey('User', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['school', 'status'], name='refund_school_status_idx'),
+            models.Index(fields=['status', 'created_at'], name='refund_status_created_idx'),
+        ]
+
+    def __str__(self):
+        return f"Refund Request #{self.id} for Order #{self.order.order_number} ({self.school.name}) [{self.status}]"
+

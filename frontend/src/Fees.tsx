@@ -3,7 +3,7 @@ import {
   AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, Receipt,
   RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye,
-  Clock, CheckCheck, Bell, ChevronDown, ChevronUp, Mail, Send
+  Clock, CheckCheck, Bell, ChevronDown, ChevronUp, Mail, Send, Check
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User } from './api';
@@ -1246,9 +1246,43 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                   </select>
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" className="outline-btn" onClick={() => setVoucherModal(false)}>Cancel</button>
-                <button type="submit" className="primary-btn">Generate Vouchers</button>
+              <div style={{
+                marginTop: 24,
+                paddingTop: 16,
+                borderTop: '1px solid #f1f5f9',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() => setVoucherModal(false)}
+                  style={{ padding: '10px 18px', borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '10px 24px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Check size={16} /> Generate Vouchers
+                </button>
               </div>
             </form>
           </div>
@@ -1269,9 +1303,43 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                   <input type="text" placeholder="e.g. Tuition Fee, Admission Fee, Transport" required value={headName} onChange={e => setHeadName(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" className="outline-btn" onClick={() => setHeadModal(false)}>Cancel</button>
-                <button type="submit" className="primary-btn">Save Head</button>
+              <div style={{
+                marginTop: 24,
+                paddingTop: 16,
+                borderTop: '1px solid #f1f5f9',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() => setHeadModal(false)}
+                  style={{ padding: '10px 18px', borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '10px 24px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Check size={16} /> Save Head
+                </button>
               </div>
             </form>
           </div>
@@ -1315,9 +1383,50 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                   <input type="number" min="1" max="31" value={structDueDay} onChange={e => setStructDueDay(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" className="outline-btn" onClick={() => setStructureModal(false)}>Cancel</button>
-                <button type="submit" className="primary-btn">{editingStructureId ? 'Update Rate' : 'Save Rate'}</button>
+              <div style={{
+                marginTop: 24,
+                paddingTop: 16,
+                borderTop: '1px solid #f1f5f9',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() => setStructureModal(false)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: 10,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '10px 24px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Check size={16} />
+                  {editingStructureId ? 'Update Rate' : 'Save Rate'}
+                </button>
               </div>
             </form>
           </div>
@@ -1356,9 +1465,43 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                   <input type="text" placeholder="e.g. Sibling discount (Brother in Gr 7) or Staff child" required value={concReason} onChange={e => setConcReason(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" className="outline-btn" onClick={() => setConcessionModal(false)}>Cancel</button>
-                <button type="submit" className="primary-btn">Grant Concession</button>
+              <div style={{
+                marginTop: 24,
+                paddingTop: 16,
+                borderTop: '1px solid #f1f5f9',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() => setConcessionModal(false)}
+                  style={{ padding: '10px 18px', borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '10px 24px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Check size={16} /> Grant Concession
+                </button>
               </div>
             </form>
           </div>
@@ -1457,15 +1600,42 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                 <strong>Notice:</strong> Reminder notices use polite communication without restricting student access to classes, examinations, or reports, and are limited to one per student daily.
               </p>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" className="outline-btn" onClick={() => setReminderModal(null)}>
+              <div style={{
+                marginTop: 24,
+                paddingTop: 16,
+                borderTop: '1px solid #f1f5f9',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() => setReminderModal(null)}
+                  style={{ padding: '10px 18px', borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+                >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="primary-btn"
                   disabled={reminderSending}
                   onClick={() => handleSendReminder(reminderModal.student_id, reminderModal.student_name)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '10px 24px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    cursor: reminderSending ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                    transition: 'all 0.15s ease'
+                  }}
                 >
                   <Send size={14} /> {reminderSending ? 'Sending…' : 'Send Reminder'}
                 </button>

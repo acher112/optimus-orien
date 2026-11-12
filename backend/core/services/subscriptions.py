@@ -102,26 +102,11 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
     discount_percentage = period.discount_percentage
     discount_amount = (subtotal * (discount_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
 
-    # Upgrade credit calculation:
-    # If currently active on Standard and upgrading to Premium during paid period:
-    # credit remaining days x daily price of Standard
+    # Package charges are calculated on full payable price.
+    # Package changes / refunds are handled via the 2-day plan adjustment policy.
     upgrade_credit_amount = Decimal('0.00')
-    if school and plan.code == 'premium':
-        sub = getattr(school, 'subscription', None)
-        if sub and sub.status in ('active', 'past_due') and sub.plan and sub.plan.code == 'standard':
-            now = timezone.now()
-            if sub.paid_until and sub.paid_until > now:
-                remaining_days = Decimal(max(0, (sub.paid_until.date() - now.date()).days))
-                # Standard daily rate based on student count
-                std_plan = sub.plan
-                std_unit_price = std_plan.price_usd_per_student if currency == 'USD' else std_plan.price_pkr_per_student
-                std_monthly_cost = std_unit_price * Decimal(student_count)
-                daily_rate = std_monthly_cost / Decimal('30.00')
-                unused_credit = (daily_rate * remaining_days).quantize(Decimal('0.01'))
-                upgrade_credit_amount = min(unused_credit, subtotal - discount_amount)
-
     tax_amount = Decimal('0.00')
-    payable_amount = max(Decimal('0.00'), subtotal - discount_amount - upgrade_credit_amount).quantize(Decimal('0.01'))
+    payable_amount = max(Decimal('0.00'), subtotal - discount_amount).quantize(Decimal('0.01'))
 
     return {
         'plan_code': plan.code,

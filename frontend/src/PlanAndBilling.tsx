@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CreditCard, Check, Sparkles, FileText,
   ArrowRight, RefreshCw, Lock,
-  Users, Zap, BookOpen, Crown
+  Users, Zap, BookOpen, Crown,
+  RotateCcw, Clock, AlertTriangle, Building2, X
 } from 'lucide-react';
 import { request, type User } from './api';
 import { UpgradeCheckoutModal } from './UpgradeCheckoutModal';
@@ -56,6 +57,20 @@ interface OrderHistoryItem {
   created_at: string;
   paid_on?: string | null;
   payment_reference?: string;
+  is_within_48h?: boolean;
+  can_request_refund?: boolean;
+  refund_request?: {
+    id: number;
+    status: 'pending' | 'approved' | 'rejected';
+    reason: string;
+    intended_change: string;
+    bank_name: string;
+    account_title: string;
+    account_number: string;
+    admin_notes: string;
+    refund_transaction_reference?: string;
+    created_at: string;
+  } | null;
 }
 
 export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
@@ -82,6 +97,15 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
 
   // Printable Receipt Modal State
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
+
+  // 2-Day Refund / Plan Change Modal State
+  const [refundModalOrder, setRefundModalOrder] = useState<OrderHistoryItem | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundIntendedChange, setRefundIntendedChange] = useState('');
+  const [refundBankName, setRefundBankName] = useState('');
+  const [refundAccountTitle, setRefundAccountTitle] = useState('');
+  const [refundAccountNumber, setRefundAccountNumber] = useState('');
+  const [submittingRefund, setSubmittingRefund] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -151,6 +175,40 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
       setSelectedReceipt(receipt);
     } catch {
       if (notify) notify('Failed to load invoice receipt.', 'error');
+    }
+  };
+
+  const handleRefundSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refundModalOrder) return;
+    if (!refundReason.trim()) {
+      if (notify) notify('Please describe the reason for your refund / plan change request.', 'error');
+      return;
+    }
+    if (!refundAccountTitle.trim() || !refundAccountNumber.trim()) {
+      if (notify) notify('Please provide complete account title and account/wallet number for receiving your refund.', 'error');
+      return;
+    }
+    try {
+      setSubmittingRefund(true);
+      const res = await request<{ message: string }>('subscription/refund-requests/', {
+        method: 'POST',
+        body: JSON.stringify({
+          order_id: refundModalOrder.id,
+          reason: refundReason.trim(),
+          intended_change: refundIntendedChange.trim(),
+          bank_name: refundBankName.trim(),
+          account_title: refundAccountTitle.trim(),
+          account_number: refundAccountNumber.trim(),
+        }),
+      });
+      if (notify) notify(res?.message || 'Refund & plan change request submitted successfully.', 'success');
+      setRefundModalOrder(null);
+      await loadData();
+    } catch (err: any) {
+      if (notify) notify(err?.message || 'Could not submit refund request.', 'error');
+    } finally {
+      setSubmittingRefund(false);
     }
   };
 
@@ -532,9 +590,37 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
           border: '1px solid #e2e8f0',
           boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)'
         }}>
-          <h3 style={{ fontSize: 17, fontWeight: 800, margin: '0 0 16px 0', color: '#0f172a' }}>
-            Order & Payment History
-          </h3>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginBottom: 16
+          }}>
+            <div>
+              <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                Order & Payment History
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
+                Track active orders, invoices, and receipts. Plan adjustments or refunds can be requested within <strong>2 days (48 hours)</strong> of purchase.
+              </p>
+            </div>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              color: '#166534',
+              padding: '6px 12px',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600
+            }}>
+              <Clock size={14} /> 2-Day Package Adjustment Policy Active
+            </div>
+          </div>
 
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -547,6 +633,7 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
                   <th style={{ padding: '10px 12px' }}>Students</th>
                   <th style={{ padding: '10px 12px' }}>Amount</th>
                   <th style={{ padding: '10px 12px' }}>Status</th>
+                  <th style={{ padding: '10px 12px' }}>Plan Change / Refund</th>
                   <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -568,14 +655,123 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
                         fontSize: 11,
                         fontWeight: 700,
                         textTransform: 'uppercase',
-                        backgroundColor: (o.status === 'paid' || o.status === 'approved') ? '#dcfce7' : o.status === 'failed' ? '#fee2e2' : '#fef3c7',
-                        color: (o.status === 'paid' || o.status === 'approved') ? '#15803d' : o.status === 'failed' ? '#b91c1c' : '#92400e'
+                        backgroundColor: o.status === 'refunded' ? '#f1f5f9' : (o.status === 'paid' || o.status === 'approved') ? '#dcfce7' : o.status === 'failed' ? '#fee2e2' : '#fef3c7',
+                        color: o.status === 'refunded' ? '#475569' : (o.status === 'paid' || o.status === 'approved') ? '#15803d' : o.status === 'failed' ? '#b91c1c' : '#92400e',
+                        border: `1px solid ${o.status === 'refunded' ? '#cbd5e1' : (o.status === 'paid' || o.status === 'approved') ? '#a7f3d0' : '#fde68a'}`
                       }}>
                         {o.status === 'approved' ? 'PAID' : o.status}
                       </span>
                     </td>
+                    <td style={{ padding: '12px' }}>
+                      {o.refund_request ? (
+                        o.refund_request.status === 'pending' ? (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            background: '#fef3c7',
+                            color: '#b45309',
+                            border: '1px solid #fde68a',
+                            fontSize: 11,
+                            fontWeight: 700
+                          }}>
+                            <Clock size={11} /> Refund Under Review
+                          </span>
+                        ) : o.refund_request.status === 'approved' ? (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            background: '#ecfdf5',
+                            color: '#047857',
+                            border: '1px solid #a7f3d0',
+                            fontSize: 11,
+                            fontWeight: 700
+                          }}>
+                            <Check size={11} /> Refund Approved
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '3px 8px',
+                              borderRadius: 6,
+                              background: '#fef2f2',
+                              color: '#b91c1c',
+                              border: '1px solid #fecaca',
+                              fontSize: 11,
+                              fontWeight: 700
+                            }}>
+                              <X size={11} /> Request Rejected
+                            </span>
+                            {o.can_request_refund && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRefundModalOrder(o);
+                                  setRefundReason('');
+                                  setRefundIntendedChange('');
+                                  setRefundBankName('');
+                                  setRefundAccountTitle('');
+                                  setRefundAccountNumber('');
+                                }}
+                                style={{
+                                  padding: '4px 8px',
+                                  borderRadius: 5,
+                                  border: '1px solid #cbd5e1',
+                                  background: '#ffffff',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Re-apply
+                              </button>
+                            )}
+                          </div>
+                        )
+                      ) : o.can_request_refund ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRefundModalOrder(o);
+                            setRefundReason('');
+                            setRefundIntendedChange('');
+                            setRefundBankName('');
+                            setRefundAccountTitle('');
+                            setRefundAccountNumber('');
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '5px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #c7d2fe',
+                            backgroundColor: '#eef2ff',
+                            color: '#4338ca',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                          title="Eligible for plan change or refund (under 48 hours)"
+                        >
+                          <RotateCcw size={12} />
+                          Change Plan / Refund
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
-                      {(o.status === 'paid' || o.status === 'approved') && (
+                      {(o.status === 'paid' || o.status === 'approved' || o.status === 'refunded') && (
                         <button
                           type="button"
                           onClick={() => handleViewReceipt(o.id)}
@@ -624,6 +820,257 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
           receipt={selectedReceipt}
           onClose={() => setSelectedReceipt(null)}
         />
+      )}
+
+      {/* 2-Day Plan Change & Refund Request Modal */}
+      {refundModalOrder && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: 16,
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            maxWidth: 540,
+            width: '100%',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
+            border: '1px solid #e2e8f0',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #f1f5f9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#fafafa',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: '#eef2ff',
+                  color: '#4f46e5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <RotateCcw size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                    Request Plan Change & Refund
+                  </h3>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>
+                    Order #{refundModalOrder.order_number} • {refundModalOrder.plan_name} ({refundModalOrder.amount} {refundModalOrder.currency})
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRefundModalOrder(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRefundSubmit} style={{ padding: '20px 24px' }}>
+              <div style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: 10,
+                padding: '12px 14px',
+                marginBottom: 16,
+                fontSize: 12,
+                color: '#1e40af',
+                lineHeight: 1.5,
+              }}>
+                <strong>2-Day Policy:</strong> You may change or refund your package within 48 hours of purchase. Once approved by our platform billing administrators, your prior payment is refunded directly to your bank account, and your institution is unlocked to select your new package cleanly at standard pricing.
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                    Reason for Plan Change / Refund *
+                  </label>
+                  <textarea
+                    required
+                    rows={2}
+                    value={refundReason}
+                    onChange={e => setRefundReason(e.target.value)}
+                    placeholder="e.g. Bought Standard but decided to upgrade to Premium 500 students..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 13,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                    Intended New Package / Goal (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={refundIntendedChange}
+                    onChange={e => setRefundIntendedChange(e.target.value)}
+                    placeholder="e.g. Premium Plan with 500 students, or Standard 1000 students"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 13,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ borderTop: '1px dashed #e2e8f0', paddingTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Building2 size={14} color="#6366f1" /> Bank / Mobile Wallet Details for Receiving Refund
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                        Bank / Provider Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={refundBankName}
+                        onChange={e => setRefundBankName(e.target.value)}
+                        placeholder="e.g. Meezan Bank / JazzCash / HBL"
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px',
+                          borderRadius: 7,
+                          border: '1px solid #cbd5e1',
+                          fontSize: 12,
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                        Account Title *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={refundAccountTitle}
+                        onChange={e => setRefundAccountTitle(e.target.value)}
+                        placeholder="e.g. Muhammad Ali"
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px',
+                          borderRadius: 7,
+                          border: '1px solid #cbd5e1',
+                          fontSize: 12,
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                      Account / IBAN / Mobile Wallet Number *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={refundAccountNumber}
+                      onChange={e => setRefundAccountNumber(e.target.value)}
+                      placeholder="e.g. PK36MEZN000... or 03001234567"
+                      style={{
+                        width: '100%',
+                        padding: '7px 10px',
+                        borderRadius: 7,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 12,
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                marginTop: 20,
+                borderTop: '1px solid #f1f5f9',
+                paddingTop: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 10,
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setRefundModalOrder(null)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#475569',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingRefund}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: submittingRefund ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  {submittingRefund ? 'Submitting Request...' : 'Submit Refund Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
