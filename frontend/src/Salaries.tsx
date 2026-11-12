@@ -104,10 +104,12 @@ export default function Salaries({
         setMyPayslips(myRes.results || []);
       } else {
         const [sheetRes, sumRes, structRes, adjRes] = await Promise.all([
-          request<R>(`salaries/sheet/${sheetQs()}`),
-          request<R>(`salaries/summary/${qs}`),
-          request<R>(`salaries/structures/${school ? `?school=${school}` : ''}`),
-          request<R>(`salaries/adjustments/${qs}`)
+          request<R>(`salaries/sheet/${sheetQs()}`).catch(err => {
+            throw err;
+          }),
+          request<R>(`salaries/summary/${qs}`).catch(() => ({})),
+          request<R>(`salaries/structures/${school ? `?school=${school}` : ''}`).catch(() => ({ results: [] })),
+          request<R>(`salaries/adjustments/${qs}`).catch(() => ({ results: [] }))
         ]);
         setRecords(sheetRes.results || []);
         setSummary(sumRes);
@@ -307,7 +309,34 @@ export default function Salaries({
         </nav>
       )}
 
-      {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
+      {error && (
+        <div className="error-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={17} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {error.toLowerCase().includes('plan') && onUpgrade && (
+              <button
+                type="button"
+                className="primary-btn"
+                style={{ padding: '5px 12px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                onClick={onUpgrade}
+              >
+                <Crown size={13} style={{ marginRight: 4 }} /> Upgrade Plan
+              </button>
+            )}
+            <button
+              type="button"
+              className="outline-btn"
+              style={{ padding: '5px 10px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+              onClick={() => loadData()}
+            >
+              <RefreshCw size={13} style={{ marginRight: 4 }} /> Retry
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MONTHLY SALARY SHEET */}
       {tab === 'sheet' && !isTeacher && (
