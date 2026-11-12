@@ -139,7 +139,7 @@ def reset_student_password(request, pk):
                 role='student',
                 school=student.school,
                 organisation=student.school.organisation,
-                must_change_password=True,
+                must_change_password=False,
                 is_active=True
             )
             student_user.set_password(temp_password)
@@ -149,7 +149,7 @@ def reset_student_password(request, pk):
             student.save(update_fields=['user'])
         else:
             student.user.set_password(temp_password)
-            student.user.must_change_password = True
+            student.user.must_change_password = False
             student.user.save(update_fields=['password', 'must_change_password'])
 
         # Revoke active sessions for that student

@@ -1349,7 +1349,7 @@ class Students(ScopedViewSet):
    role='student',
    school=school,
    organisation=school.organisation,
-   must_change_password=True,
+   must_change_password=False,
    is_active=True
   )
   student_user.set_password(temp_password)

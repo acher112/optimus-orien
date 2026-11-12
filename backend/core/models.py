@@ -1038,6 +1038,7 @@ class Announcement(models.Model):
         ('staff', 'Staff'),
         ('teachers', 'Teachers'),
         ('principals', 'Principals'),
+        ('admins', 'Administrators'),
         ('parents', 'Parents'),
     ]
     PRIORITIES = [

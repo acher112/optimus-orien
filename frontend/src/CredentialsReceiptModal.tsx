@@ -29,7 +29,7 @@ export const CredentialsReceiptModal: React.FC<Props> = ({ receipt, onClose }) =
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(`Username: ${receipt.username}\nTemporary Password: ${receipt.temporary_password}\nLogin: ${window.location.origin}${receipt.login_url || '/app'}`);
+    navigator.clipboard.writeText(`Username: ${receipt.username}\nPassword: ${receipt.temporary_password}\nLogin: ${window.location.origin}${receipt.login_url || '/app'}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -219,7 +219,7 @@ export const CredentialsReceiptModal: React.FC<Props> = ({ receipt, onClose }) =
 
           {/* Simple Note & Date */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#64748b', paddingTop: 2 }}>
-            <span>Sign in and set a personal password upon first login.</span>
+            <span>Official login password. Keep safe. Contact school administration if reset is needed.</span>
             <span>Date: <b>{receipt.issued_date || new Date().toISOString().split('T')[0]}</b></span>
           </div>
         </div>

@@ -21,7 +21,7 @@ from core.services.access import schools_scope
 from core.services.audit import record_event
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
-VALID_TARGETS = ['all', 'students', 'staff', 'teachers', 'principals', 'parents']
+VALID_TARGETS = ['all', 'students', 'staff', 'teachers', 'principals', 'admins', 'parents']
 VALID_PRIORITIES = ['normal', 'important', 'urgent']
 
 
@@ -71,15 +71,18 @@ def announcements_list(request):
         if request.query_params.get('include_expired') != '1':
             qs = qs.filter(Q(expires_at__gte=today) | Q(expires_at__isnull=True))
 
-        if not user.is_superuser and user.role not in MANAGERS:
-            if user.role == 'student':
-                qs = qs.filter(target_role__in=['all', 'students'])
-            elif user.role == 'teacher':
-                qs = qs.filter(target_role__in=['all', 'teachers', 'staff'])
-            elif user.role == 'parent':
-                qs = qs.filter(target_role__in=['all', 'parents'])
-            else:
-                qs = qs.filter(target_role__in=['all', 'staff'])
+        if not user.is_superuser:
+            if user.role not in MANAGERS:
+                if user.role == 'student':
+                    qs = qs.filter(target_role__in=['all', 'students'])
+                elif user.role == 'teacher':
+                    qs = qs.filter(target_role__in=['all', 'teachers', 'staff'])
+                elif user.role == 'parent':
+                    qs = qs.filter(target_role__in=['all', 'parents'])
+                else:
+                    qs = qs.filter(target_role__in=['all', 'staff'])
+            elif user.role == 'principal':
+                qs = qs.exclude(~Q(created_by=user) & Q(target_role='admins'))
 
         target = request.query_params.get('target')
         if target and target in VALID_TARGETS:
@@ -173,6 +176,8 @@ def announcements_list(request):
             notif_users = notif_users.filter(role='teacher')
         elif target_role == 'principals':
             notif_users = notif_users.filter(role='principal')
+        elif target_role == 'admins':
+            notif_users = notif_users.filter(role__in=['organisation_admin', 'school_admin'])
         elif target_role == 'parents':
             notif_users = notif_users.filter(role='parent')
         elif target_role == 'staff':
@@ -184,12 +189,16 @@ def announcements_list(request):
         recipient_users = User.objects.filter(id__in=all_recipient_ids)
 
         badge = f"[{priority.upper()}] " if priority in ('important', 'urgent') else ""
-        notif_title = f"{badge}Announcement: {title}"[:180]
+        sender_name = (user.get_full_name() or user.username).strip()
+        sender_role_label = user.role.replace('_', ' ').title() if hasattr(user, 'role') and user.role else 'Administrator'
+        sender_tag = f"[From: {sender_name} ({sender_role_label})]"
+        notif_title = f"{badge}{sender_tag} Announcement: {title}"[:180]
+        notif_body = f"{content}\n\n— Sent by {sender_name} ({sender_role_label})"[:395]
         notifications = [
             Notification(
                 user=u,
                 title=notif_title,
-                body=content[:380]
+                body=notif_body
             )
             for u in recipient_users
         ]

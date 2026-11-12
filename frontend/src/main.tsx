@@ -661,11 +661,13 @@ function App() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [receiptData, setReceiptData] = useState<CredentialsReceiptData | null>(null);
-  const [mustChangePassword, setMustChangePassword] = useState<boolean>(Boolean(user?.must_change_password));
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(Boolean(user?.must_change_password && user?.role !== 'student'));
 
   useEffect(() => {
-    if (user?.must_change_password) {
+    if (user?.must_change_password && user?.role !== 'student') {
       setMustChangePassword(true);
+    } else {
+      setMustChangePassword(false);
     }
   }, [user]);
   const [modal, setModal] = useState(false);
@@ -2517,11 +2519,15 @@ function App() {
                               {j === 0 ? (
                                 <div className="student-label">
                                   <span className="student-avatar" style={{ background: dynColor[i % dynColor.length] + '18', color: dynColor[i % dynColor.length] }}>
-                                    {initials(
-                                      String(
-                                        page === 'Students'
-                                          ? (r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || 'OO')
-                                          : (r[c.key] || r.name || r.title || r.full_name || 'OO')
+                                    {page === 'Notifications' ? (
+                                      <Bell size={15} />
+                                    ) : (
+                                      initials(
+                                        String(
+                                          page === 'Students'
+                                            ? (r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || 'OO')
+                                            : (r[c.key] || r.name || r.title || r.full_name || 'OO')
+                                        )
                                       )
                                     )}
                                   </span>
@@ -2549,6 +2555,81 @@ function App() {
                                     >
                                       {String(r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || '—')}
                                     </button>
+                                  ) : page === 'Notifications' ? (
+                                    (() => {
+                                      let rawTitle = String(r[c.key] ?? r.name ?? r.title ?? '—');
+                                      let priority = '';
+                                      let sender = '';
+                                      if (rawTitle.startsWith('[URGENT]')) {
+                                        priority = 'URGENT';
+                                        rawTitle = rawTitle.replace(/^\[URGENT\]\s*/i, '');
+                                      } else if (rawTitle.startsWith('[IMPORTANT]')) {
+                                        priority = 'IMPORTANT';
+                                        rawTitle = rawTitle.replace(/^\[IMPORTANT\]\s*/i, '');
+                                      }
+                                      const fromMatch = rawTitle.match(/^\[From:\s*([^\]]+)\]\s*/i);
+                                      if (fromMatch) {
+                                        sender = fromMatch[1].trim();
+                                        rawTitle = rawTitle.replace(/^\[From:\s*[^\]]+\]\s*/i, '');
+                                      }
+                                      const isAnnouncement = /^Announcement:\s*/i.test(rawTitle);
+                                      if (isAnnouncement) {
+                                        rawTitle = rawTitle.replace(/^Announcement:\s*/i, '');
+                                      }
+                                      return (
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                          {priority && (
+                                            <span style={{
+                                              fontSize: 10,
+                                              fontWeight: 800,
+                                              padding: '2px 7px',
+                                              borderRadius: 6,
+                                              background: priority === 'URGENT' ? '#fee2e2' : '#fef3c7',
+                                              color: priority === 'URGENT' ? '#dc2626' : '#d97706',
+                                              border: `1px solid ${priority === 'URGENT' ? '#fca5a5' : '#fcd34d'}`,
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.4px'
+                                            }}>
+                                              {priority}
+                                            </span>
+                                          )}
+                                          {sender ? (
+                                            <span style={{
+                                              fontSize: 11,
+                                              fontWeight: 700,
+                                              padding: '2px 8px',
+                                              borderRadius: 6,
+                                              background: '#ede9fe',
+                                              color: '#6d28d9',
+                                              border: '1px solid #ddd6fe',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: 4
+                                            }}>
+                                              <UserRound size={11} /> {sender}
+                                            </span>
+                                          ) : isAnnouncement ? (
+                                            <span style={{
+                                              fontSize: 11,
+                                              fontWeight: 700,
+                                              padding: '2px 8px',
+                                              borderRadius: 6,
+                                              background: '#f1f5f9',
+                                              color: '#475569',
+                                              border: '1px solid #e2e8f0',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: 4
+                                            }}>
+                                              <Megaphone size={11} /> School Broadcast
+                                            </span>
+                                          ) : null}
+                                          <strong style={{ color: '#1e293b', fontWeight: 700, fontSize: 13 }}>
+                                            {rawTitle}
+                                          </strong>
+                                        </div>
+                                      );
+                                    })()
                                   ) : (
                                     <strong>
                                       {String(r[c.key] ?? r.name ?? r.title ?? '—')}
@@ -3577,7 +3658,7 @@ function App() {
         />
       )}
 
-      {mustChangePassword && (
+      {mustChangePassword && user?.role !== 'student' && (
         <FirstPasswordChangeModal
           onSuccess={() => {
             setMustChangePassword(false);

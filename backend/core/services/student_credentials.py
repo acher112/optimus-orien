@@ -86,6 +86,6 @@ def make_credentials_receipt(student, school_class, username, temporary_password
         'login_url': '/login',
         'issued_date': timezone.localdate().isoformat(),
         'issued_by': issued_by,
-        'instructions': 'Sign in with your username and temporary password, then choose a new password — keep it private.',
-        'warning': 'This temporary password is shown only once and cannot be retrieved again.'
+        'instructions': 'Sign in with your official username and password. If you ever misplace your password, your Class Teacher, Principal, or School Administrator can reset it.',
+        'warning': 'Keep this credentials slip safe and private. This is your official account password.'
     }

@@ -12,6 +12,7 @@ import {
   LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis
 } from 'recharts';
 import { request, type User } from './api';
+import './psychological-evaluation.css';
 
 interface Props {
   user: User;
@@ -450,39 +451,39 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
   }, [template, evalFormResponses]);
 
   return (
-    <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="psych-eval-root">
       {/* ==================================================================== */}
       {/* 1. MODULE BANNER & NOTICE */}
       {/* ==================================================================== */}
-      <div className="bg-gradient-to-r from-indigo-900/90 via-slate-900 to-indigo-950 border border-indigo-700/40 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-          <Activity size={180} />
+      <div className="psych-banner">
+        <div className="psych-banner-watermark">
+          <Activity size={170} />
         </div>
-        <div className="relative z-10 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-indigo-600/30 border border-indigo-400/40 rounded-xl">
-                <Activity className="h-6 w-6 text-indigo-300" />
+        <div className="psych-banner-content">
+          <div className="psych-banner-top">
+            <div className="psych-banner-brand">
+              <div className="psych-banner-icon">
+                <Activity size={24} />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                <h1 className="psych-banner-title">
                   Psychological Evaluation
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  <span className="psych-status-pill">
                     Validation in progress
                   </span>
                 </h1>
-                <p className="text-sm text-indigo-200/80">
-                  School-based weekly teacher observations & 6D developmental profiling.
+                <p className="psych-banner-sub">
+                  School-based weekly teacher observations &amp; 6D developmental profiling.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="psych-banner-actions">
               {!isStudent && (
                 <button
                   type="button"
                   onClick={handleExportCsv}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg bg-white/10 hover:bg-white/20 text-white transition border border-white/20"
+                  className="psych-btn-glass"
                   title="Export weekly records as CSV"
                 >
                   <Download size={14} />
@@ -497,7 +498,7 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
                   else if (mode === 'workspace') fetchTeacherWorkspace();
                   else if (mode === 'student') fetchMyProfile(myProfileWeek);
                 }}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-200 transition border border-indigo-500/30"
+                className="psych-btn-glass"
               >
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                 <span>Refresh</span>
@@ -505,10 +506,10 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
             </div>
           </div>
 
-          <div className="bg-indigo-950/60 border border-indigo-800/40 rounded-xl p-3.5 text-xs text-indigo-200/90 leading-relaxed flex items-start gap-2.5">
-            <Info size={16} className="text-amber-400 shrink-0 mt-0.5" />
+          <div className="psych-notice-box">
+            <Info size={16} />
             <div>
-              <span className="font-semibold text-white">Important Notice: </span>
+              <strong>Important Notice: </strong>
               This module is a school-based behavioural observation and student development system. It is <strong>not</strong> a clinical psychological assessment, diagnostic instrument, or personality test.
               Scores reflect observed classroom interactions and must not be used to label students, assign clinical categories, or make high-stakes disciplinary decisions.
             </div>
@@ -519,19 +520,15 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
       {/* ==================================================================== */}
       {/* 2. NAVIGATION TABS & FILTER BAR */}
       {/* ==================================================================== */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border-b border-border pb-4">
+      <div className="psych-nav-bar">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        <div className="psych-tabs-strip">
           {!isStudent && (
             <>
               <button
                 type="button"
                 onClick={() => setMode('dashboard')}
-                className={`px-3.5 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2 ${
-                  mode === 'dashboard'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
+                className={`psych-tab-btn ${mode === 'dashboard' ? 'active' : ''}`}
               >
                 <Activity size={15} />
                 <span>Institutional Overview</span>
@@ -540,14 +537,10 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
               <button
                 type="button"
                 onClick={() => setMode('class')}
-                className={`px-3.5 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2 ${
-                  mode === 'class'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
+                className={`psych-tab-btn ${mode === 'class' ? 'active' : ''}`}
               >
                 <Users size={15} />
-                <span>Class Roster & Scores</span>
+                <span>Class Roster &amp; Scores</span>
               </button>
             </>
           )}
@@ -556,11 +549,7 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
             <button
               type="button"
               onClick={() => setMode('workspace')}
-              className={`px-3.5 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2 ${
-                mode === 'workspace'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-              }`}
+              className={`psych-tab-btn ${mode === 'workspace' ? 'active' : ''}`}
             >
               <Edit3 size={15} />
               <span>Observation Workspace</span>
@@ -571,11 +560,7 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
             <button
               type="button"
               onClick={() => setMode('gender')}
-              className={`px-3.5 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2 ${
-                mode === 'gender'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-              }`}
+              className={`psych-tab-btn ${mode === 'gender' ? 'active' : ''}`}
             >
               <BookOpen size={15} />
               <span>Gender Analytics</span>
@@ -587,11 +572,7 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
               <button
                 type="button"
                 onClick={() => setMode('safeguarding')}
-                className={`px-3.5 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2 ${
-                  mode === 'safeguarding'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
+                className={`psych-tab-btn ${mode === 'safeguarding' ? 'active' : ''}`}
               >
                 <HeartHandshake size={15} />
                 <span>Safeguarding Referrals</span>
@@ -600,11 +581,7 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
               <button
                 type="button"
                 onClick={() => setMode('audit')}
-                className={`px-3.5 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2 ${
-                  mode === 'audit'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
+                className={`psych-tab-btn ${mode === 'audit' ? 'active' : ''}`}
               >
                 <ShieldCheck size={15} />
                 <span>Audit Trail</span>
@@ -616,11 +593,7 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
             <button
               type="button"
               onClick={() => setMode('student')}
-              className={`px-3.5 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2 ${
-                mode === 'student'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-              }`}
+              className={`psych-tab-btn ${mode === 'student' ? 'active' : ''}`}
             >
               <Sparkles size={15} />
               <span>My Development Profile</span>
@@ -630,12 +603,12 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
 
         {/* Global Controls: Campus, Class, Week */}
         {!isStudent && (
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="psych-filters-strip">
             {availableSchools.length > 1 && (
               <select
                 value={selectedSchoolId}
                 onChange={(e) => setSelectedSchoolId(e.target.value)}
-                className="text-xs bg-card border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                className="psych-select"
               >
                 <option value="">All Campuses</option>
                 {availableSchools.map((s) => (
@@ -653,7 +626,7 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
                     fetchClassSummary(e.target.value);
                   }
                 }}
-                className="text-xs bg-card border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                className="psych-select"
               >
                 <option value="">Select Class...</option>
                 {availableClasses.map((c) => (
@@ -662,14 +635,13 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
               </select>
             )}
 
-            <div className="flex items-center gap-1.5 bg-card border border-border rounded-lg px-2 py-1">
-              <Calendar size={13} className="text-muted-foreground" />
+            <div className="psych-week-input">
+              <Calendar size={13} style={{ color: '#94a3b8' }} />
               <input
                 type="text"
                 placeholder="2026-W44"
                 value={selectedWeek}
                 onChange={(e) => setSelectedWeek(e.target.value)}
-                className="text-xs bg-transparent w-24 focus:outline-none"
                 title="Format: YYYY-Www, e.g. 2026-W44"
               />
             </div>
@@ -1330,37 +1302,43 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
           {myProfileData?.has_published_evaluations ? (
             <div className="space-y-6">
               {/* Encouraging Banner */}
-              <div className="bg-gradient-to-r from-emerald-900/80 via-teal-900 to-slate-900 border border-emerald-700/40 rounded-2xl p-6 text-white shadow-lg space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-emerald-600/30 border border-emerald-400/40 rounded-xl">
-                      <Sparkles className="h-6 w-6 text-emerald-300" />
+              <div className="psych-banner" style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)', borderColor: 'rgba(52, 211, 153, 0.3)' }}>
+                <div className="psych-banner-watermark">
+                  <Sparkles size={160} />
+                </div>
+                <div className="psych-banner-content">
+                  <div className="psych-banner-top">
+                    <div className="psych-banner-brand">
+                      <div className="psych-banner-icon" style={{ background: 'rgba(255, 255, 255, 0.15)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
+                        <Sparkles size={24} style={{ color: '#a7f3d0' }} />
+                      </div>
+                      <div>
+                        <h2 className="psych-banner-title" style={{ fontSize: 20 }}>My Behavioural &amp; Developmental Profile</h2>
+                        <p className="psych-banner-sub" style={{ color: '#d1fae5' }}>
+                          {myProfileData.student_name} • ID: {myProfileData.admission_number}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-xl font-bold">My Behavioural & Developmental Profile</h2>
-                      <p className="text-xs text-emerald-200/80">
-                        {myProfileData.student_name} • ID: {myProfileData.admission_number}
-                      </p>
-                    </div>
-                  </div>
 
-                  {myProfileData.published_weeks?.length > 1 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-emerald-200">Week:</span>
-                      <select
-                        value={myProfileWeek}
-                        onChange={(e) => {
-                          setMyProfileWeek(e.target.value);
-                          fetchMyProfile(e.target.value);
-                        }}
-                        className="text-xs bg-emerald-950 border border-emerald-700 rounded-lg px-2.5 py-1 text-white"
-                      >
-                        {myProfileData.published_weeks.map((wk: string) => (
-                          <option key={wk} value={wk}>{wk}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                    {myProfileData.published_weeks?.length > 1 && (
+                      <div className="psych-banner-actions">
+                        <span style={{ fontSize: 12, color: '#d1fae5', fontWeight: 600 }}>Week:</span>
+                        <select
+                          value={myProfileWeek}
+                          onChange={(e) => {
+                            setMyProfileWeek(e.target.value);
+                            fetchMyProfile(e.target.value);
+                          }}
+                          className="psych-select"
+                          style={{ background: '#064e3b', borderColor: '#059669', color: '#ffffff' }}
+                        >
+                          {myProfileData.published_weeks.map((wk: string) => (
+                            <option key={wk} value={wk}>{wk}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1452,10 +1430,12 @@ export default function PsychologicalEvaluation({ user, notify, activeCampusId, 
               </div>
             </div>
           ) : (
-            <div className="p-10 text-center bg-card border border-border rounded-xl space-y-3">
-              <Sparkles className="mx-auto h-12 w-12 text-muted-foreground opacity-40" />
-              <h3 className="text-base font-semibold">No Published Profile Yet</h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            <div className="psych-empty">
+              <div className="psych-empty-icon">
+                <Sparkles size={28} />
+              </div>
+              <h3>No Published Profile Yet</h3>
+              <p>
                 {myProfileData?.message || 'Your weekly behavioural observation profile has not been published yet. Please check back after your teachers have completed their observations.'}
               </p>
             </div>

@@ -1,0 +1,733 @@
+/* ==========================================================================
+   PSYCHOLOGICAL EVALUATION & STUDENT DEVELOPMENT PROFILE MODULE STYLES
+   Orion Education Intelligence Design System
+   ========================================================================== */
+
+.psych-eval-root {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 10px 4px 40px;
+  max-width: 1320px;
+  margin: 0 auto;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #252b44;
+}
+
+/* --------------------------------------------------------------------------
+   1. MODULE HEADER BANNER & STATS
+   -------------------------------------------------------------------------- */
+.psych-banner {
+  background: linear-gradient(135deg, #1e1b4b 0%, #2e266df0 50%, #4338ca 100%);
+  border: 1px solid rgba(165, 180, 252, 0.25);
+  border-radius: 18px;
+  padding: 24px 28px;
+  color: #ffffff;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 30px -8px rgba(30, 27, 75, 0.35);
+}
+
+.psych-banner-watermark {
+  position: absolute;
+  right: -15px;
+  top: -25px;
+  opacity: 0.08;
+  pointer-events: none;
+  width: 170px;
+  height: 170px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.psych-banner-watermark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.psych-banner-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.psych-banner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.psych-banner-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.psych-banner-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c7d2fe;
+  flex-shrink: 0;
+  backdrop-filter: blur(8px);
+}
+
+.psych-banner-title {
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  color: #ffffff;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.psych-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  letter-spacing: 0.2px;
+}
+
+.psych-status-pill.success {
+  background: rgba(16, 185, 129, 0.22);
+  color: #a7f3d0;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.psych-banner-sub {
+  color: #c7d2fe;
+  font-size: 13px;
+  margin: 4px 0 0;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.psych-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.psych-btn-glass {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.psych-btn-glass:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.psych-notice-box {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(165, 180, 252, 0.2);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: #e0e7ff;
+  line-height: 1.65;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.psych-notice-box svg {
+  color: #fbbf24;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.psych-notice-box strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   2. NAVIGATION BAR, TABS & GLOBAL FILTERS
+   -------------------------------------------------------------------------- */
+.psych-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 1px solid #eef0f6;
+  padding-bottom: 14px;
+}
+
+.psych-tabs-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.psych-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.psych-tab-btn:hover {
+  background: #f8fafc;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.psych-tab-btn.active {
+  background: #f0edff;
+  border-color: #c7d2fe;
+  color: #5544d6;
+  box-shadow: 0 1px 3px rgba(85, 68, 214, 0.12);
+}
+
+.psych-filters-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.psych-select {
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 7px 12px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.psych-select:focus {
+  border-color: #7c68ed;
+}
+
+.psych-week-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 6px 10px;
+  background: #ffffff;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.psych-week-input input {
+  border: none;
+  outline: none;
+  width: 86px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  background: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   3. KPI METRIC CARDS & STATS
+   -------------------------------------------------------------------------- */
+.psych-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .psych-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .psych-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.psych-kpi-card {
+  background: #ffffff;
+  border: 1px solid #f0f1f6;
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.psych-kpi-meta p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.psych-kpi-meta h3 {
+  margin: 4px 0 2px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.psych-kpi-meta span {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.psych-kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.psych-kpi-icon.indigo {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.psych-kpi-icon.emerald {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.psych-kpi-icon.amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.psych-kpi-icon.rose {
+  background: #ffe4e6;
+  color: #e11d48;
+}
+
+/* --------------------------------------------------------------------------
+   4. CONTENT PANELS, GRIDS & CARDS
+   -------------------------------------------------------------------------- */
+.psych-card {
+  background: #ffffff;
+  border: 1px solid #f0f1f6;
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.025);
+}
+
+.psych-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .psych-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.psych-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.psych-card-head h3 {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.psych-card-head p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* --------------------------------------------------------------------------
+   5. EMPTY STATES
+   -------------------------------------------------------------------------- */
+.psych-empty {
+  background: #ffffff;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 16px;
+  padding: 48px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.psych-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.psych-empty h3 {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: #334155;
+}
+
+.psych-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  max-width: 480px;
+  line-height: 1.6;
+}
+
+/* --------------------------------------------------------------------------
+   6. TABLES & SCORE BADGES
+   -------------------------------------------------------------------------- */
+.psych-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid #f0f1f6;
+}
+
+.psych-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.psych-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.psych-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+.psych-table tr:hover td {
+  background: #fbfbfe;
+}
+
+.psych-score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.psych-score-badge.high {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.psych-score-badge.medium {
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+}
+
+.psych-score-badge.support {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.psych-score-badge.insufficient {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+/* --------------------------------------------------------------------------
+   7. STUDENT SELF-SERVICE ENCOURAGING CARDS
+   -------------------------------------------------------------------------- */
+.psych-dimension-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .psych-dimension-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.psych-dim-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.psych-dim-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.psych-dim-head strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.psych-dim-card p {
+  margin: 0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   8. MODALS & POPUPS
+   -------------------------------------------------------------------------- */
+.psych-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.psych-modal-dialog {
+  background: #ffffff;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 760px;
+  max-height: min(92vh, 850px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.35);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.psych-modal-header {
+  padding: 20px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.psych-modal-header h2 {
+  margin: 2px 0 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.psych-modal-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.psych-modal-body {
+  padding: 22px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+.psych-modal-footer {
+  padding: 14px 24px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.psych-btn-secondary {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  border-radius: 9px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.psych-btn-primary {
+  background: #5b46e8;
+  border: 1px solid #4f3cd4;
+  color: #ffffff;
+  border-radius: 9px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(91, 70, 232, 0.3);
+}
+
+.psych-btn-primary:hover {
+  background: #4f3cd4;
+}
+
+/* --------------------------------------------------------------------------
+   9. DARK MODE SUPPORT
+   -------------------------------------------------------------------------- */
+.dark .psych-eval-root {
+  color: #e2e8f0;
+}
+
+.dark .psych-card,
+.dark .psych-kpi-card,
+.dark .psych-empty,
+.dark .psych-dim-card,
+.dark .psych-modal-dialog {
+  background: #1e2238;
+  border-color: #333852;
+  color: #e2e8f0;
+}
+
+.dark .psych-kpi-meta h3,
+.dark .psych-card-head h3,
+.dark .psych-empty h3,
+.dark .psych-dim-head strong,
+.dark .psych-modal-header h2 {
+  color: #f8fafc;
+}
+
+.dark .psych-tab-btn {
+  background: #232742;
+  border-color: #353a56;
+  color: #94a3b8;
+}
+
+.dark .psych-tab-btn.active {
+  background: #352e5a;
+  border-color: #5544d6;
+  color: #c7d2fe;
+}
+
+.dark .psych-select,
+.dark .psych-week-input {
+  background: #232742;
+  border-color: #353a56;
+  color: #e2e8f0;
+}
+
+.dark .psych-week-input input {
+  color: #f8fafc;
+}
+
+.dark .psych-table th {
+  background: #232742;
+  color: #94a3b8;
+  border-color: #353a56;
+}
+
+.dark .psych-table td {
+  border-color: #2b304c;
+  color: #cbd5e1;
+}
+
+.dark .psych-table tr:hover td {
+  background: #262a47;
+}
+
+.dark .psych-modal-header,
+.dark .psych-modal-footer {
+  background: #191c30;
+  border-color: #333852;
+}

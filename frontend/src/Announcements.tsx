@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   AlertCircle, Bell, Calendar, CheckCircle2, ChevronRight,
   Filter, Megaphone, Pencil, Pin, Plus, Search, ShieldAlert,
@@ -24,16 +24,50 @@ interface AnnouncementItem {
   expires_at: string | null;
 }
 
-const AUDIENCE_TABS = [
-  { key: '', label: 'All Announcements', icon: Megaphone },
-  { key: 'students', label: 'Students', icon: Users },
-  { key: 'staff', label: 'Staff', icon: Users },
-  { key: 'teachers', label: 'Teachers', icon: Users },
-  { key: 'principals', label: 'Principals', icon: Users },
-];
+const getAudienceTabs = (role: string) => {
+  const tabs = [
+    { key: '', label: 'All Announcements', icon: Megaphone },
+    { key: 'students', label: 'Students', icon: Users },
+    { key: 'staff', label: 'Staff', icon: Users },
+    { key: 'teachers', label: 'Teachers', icon: Users },
+  ];
+  if (role === 'principal') {
+    tabs.push({ key: 'admins', label: 'Administrators', icon: Users });
+  } else if (role === 'organisation_admin' || role === 'school_admin') {
+    tabs.push({ key: 'principals', label: 'Principals', icon: Users });
+  } else {
+    tabs.push({ key: 'principals', label: 'Principals', icon: Users });
+    tabs.push({ key: 'admins', label: 'Administrators', icon: Users });
+  }
+  return tabs;
+};
+
+const getTargetAudienceOptions = (role: string) => {
+  const options = [{ value: 'all', label: 'Everyone (All Roles)' }];
+  if (role === 'principal') {
+    options.push({ value: 'admins', label: 'Administrators Only' });
+    options.push({ value: 'teachers', label: 'Teachers Only' });
+    options.push({ value: 'students', label: 'Students Only' });
+    options.push({ value: 'staff', label: 'Staff Only' });
+  } else if (role === 'organisation_admin' || role === 'school_admin') {
+    options.push({ value: 'principals', label: 'Principals Only' });
+    options.push({ value: 'teachers', label: 'Teachers Only' });
+    options.push({ value: 'students', label: 'Students Only' });
+    options.push({ value: 'staff', label: 'Staff Only' });
+  } else {
+    options.push({ value: 'admins', label: 'Administrators Only' });
+    options.push({ value: 'principals', label: 'Principals Only' });
+    options.push({ value: 'teachers', label: 'Teachers Only' });
+    options.push({ value: 'students', label: 'Students Only' });
+    options.push({ value: 'staff', label: 'Staff Only' });
+  }
+  return options;
+};
 
 export default function Announcements({ user, notify }: { user: AuthUser; notify: (m: string) => void }) {
   const isManager = ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
+  const audienceTabs = useMemo(() => getAudienceTabs(user.role), [user.role]);
+  const targetAudienceOptions = useMemo(() => getTargetAudienceOptions(user.role), [user.role]);
 
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,7 +229,7 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
 
       {/* AUDIENCE TABS */}
       <nav className="fx-tabs" aria-label="Audience filter" style={{ overflowX: 'auto', flexWrap: 'wrap' }}>
-        {AUDIENCE_TABS.map(t => (
+        {audienceTabs.map(t => (
           <button
             key={t.key}
             className={activeTab === t.key ? 'on' : ''}
@@ -343,11 +377,9 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
                     value={form.target_role}
                     onChange={e => setForm(s => ({ ...s, target_role: e.target.value }))}
                   >
-                    <option value="all">Everyone (All Roles)</option>
-                    <option value="students">Students Only</option>
-                    <option value="staff">Staff Only</option>
-                    <option value="teachers">Teachers Only</option>
-                    <option value="principals">Principals Only</option>
+                    {targetAudienceOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </label>
 
