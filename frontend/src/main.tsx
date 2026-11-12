@@ -967,6 +967,18 @@ function App() {
     return () => window.removeEventListener('optimus_view_student_profile', handleViewStudent);
   }, []);
 
+  useEffect(() => {
+    const handleNav = (e: Event) => {
+      const ce = e as CustomEvent<{ page?: string }>;
+      if (ce.detail?.page) {
+        setPage(ce.detail.page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('optimus_navigate', handleNav);
+    return () => window.removeEventListener('optimus_navigate', handleNav);
+  }, []);
+
   // Close menus and sidebar when clicking outside
   useEffect(() => {
     const clickOutside = (e: MouseEvent) => {

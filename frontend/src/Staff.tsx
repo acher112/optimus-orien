@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowUpRight, CalendarDays, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X, BookOpen, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, CalendarDays, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X, BookOpen, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw, GraduationCap } from 'lucide-react';
 import AttendanceCalendarModal, { CalendarTarget } from './AttendanceCalendarModal';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
@@ -12,6 +12,19 @@ type R = Record<string, any>;
 type Action = { kind: 'add' } | { kind: 'promote' | 'role' | 'terminate' | 'history' | 'edit' | 'assignments'; staff: R };
 const nice = (s: string) => s.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 const EVENT_TEXT: Record<string, string> = { hired: 'Hired', promoted: 'Promoted', role_changed: 'Role changed', terminated: 'Terminated', reinstated: 'Reinstated', updated: 'Updated' };
+
+function formatDisplayDate(val?: string | null): string {
+  if (!val) return '—';
+  try {
+    const d = new Date(val.includes('T') ? val : `${val}T00:00:00`);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  } catch {
+    return val;
+  }
+  return String(val);
+}
 
 export default function Staff({ user, notify }: { user: User; notify: (m: string) => void }) {
   const [rows, setRows] = useState<R[]>([]);
@@ -159,11 +172,11 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
   );
 }
 
-function Modal({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, sub, icon, onClose, children }: { title: string; sub?: string; icon?: React.ReactNode; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-card">
-        <div className="modal-head"><div className="modal-icon"><UserCog size={20} /></div><div><h3>{title}</h3>{sub && <p>{sub}</p>}</div><button onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        <div className="modal-head"><div className="modal-icon">{icon || <UserCog size={20} />}</div><div><h3>{title}</h3>{sub && <p>{sub}</p>}</div><button onClick={onClose} aria-label="Close"><X size={18} /></button></div>
         {children}
       </div>
     </div>
@@ -895,50 +908,143 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
   };
 
   return (
-    <Modal title={`Teaching Assignments — ${s.full_name}`} sub={`Teacher type: ${nice(data?.teacher_type || s.teacher_type || 'unassigned')}`} onClose={onClose}>
-      <div style={{ padding: '4px 0' }}>
+    <Modal
+      title={`Teaching Assignments — ${s.full_name}`}
+      sub={`Teacher type: ${nice(data?.teacher_type || s.teacher_type || 'unassigned')}`}
+      icon={<GraduationCap size={20} color="#4f46e5" />}
+      onClose={onClose}
+    >
+      <div style={{ padding: '6px 0' }}>
         {loading ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>Loading assignments...</div>
+          <div style={{ padding: '32px 20px', textAlign: 'center', color: '#64748b', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <RefreshCw size={15} className="spin" style={{ color: '#6366f1' }} />
+            <span>Loading assignments…</span>
+          </div>
         ) : (
           <div>
-            {err && <div className="hr-error" style={{ marginBottom: '14px' }}>{err}</div>}
+            {err && <div className="hr-error" style={{ marginBottom: '16px' }}>{err}</div>}
 
             {/* Active Class Teacher Assignments */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', margin: 0 }}>
-                  Homeroom Class Teacher Assignment
-                </h4>
+            <div style={{ marginBottom: '22px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <GraduationCap size={16} color="#4f46e5" />
+                  <h4 style={{ fontSize: '13.5px', fontWeight: 700, color: '#1e293b', margin: 0 }}>
+                    Homeroom Class Teacher Assignment
+                  </h4>
+                </div>
                 {(!data?.active_class_assignments || data.active_class_assignments.length === 0) && addMode === 'none' && (
                   <button
                     type="button"
                     onClick={() => { setAddMode('class_teacher'); setErr(''); }}
-                    style={{ border: 'none', background: 'none', color: '#7862d7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      border: '1px solid #c7d2fe',
+                      background: '#eef2ff',
+                      color: '#4338ca',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
                   >
-                    + Assign Homeroom Class
+                    <Plus size={13} /> Assign Homeroom
                   </button>
                 )}
               </div>
 
               {(!data?.active_class_assignments || data.active_class_assignments.length === 0) ? (
-                <div style={{ fontSize: '13px', color: '#94a3b8', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px' }}>
-                  No active homeroom class assignment.
+                <div style={{
+                  fontSize: '13px',
+                  color: '#64748b',
+                  background: '#f8fafc',
+                  padding: '14px 16px',
+                  borderRadius: '10px',
+                  border: '1.5px dashed #cbd5e1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10
+                }}>
+                  <GraduationCap size={16} style={{ color: '#94a3b8' }} />
+                  <span>No active homeroom class assignment.</span>
                 </div>
               ) : (
-                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {data.active_class_assignments.map((a: any) => (
-                    <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>{a.class_name}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>Since {a.start_date}</div>
+                    <div
+                      key={a.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: '#ffffff',
+                        padding: '12px 16px',
+                        borderRadius: '11px',
+                        border: '1.5px solid #e0e7ff',
+                        boxShadow: '0 2px 6px rgba(99, 102, 241, 0.05)',
+                        gap: 12
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 10,
+                          background: '#eff6ff',
+                          color: '#2563eb',
+                          display: 'grid',
+                          placeItems: 'center',
+                          flexShrink: 0
+                        }}>
+                          <GraduationCap size={18} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <strong style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>
+                              {a.class_name}
+                            </strong>
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: '#dbeafe',
+                              color: '#1e40af',
+                              border: '1px solid #bfdbfe'
+                            }}>
+                              Class Teacher
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                            <CalendarDays size={12} color="#94a3b8" />
+                            <span>Since {formatDisplayDate(a.start_date)}</span>
+                          </div>
+                        </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleEnd(a.id, 'class_teacher')}
                         className="outline-btn"
-                        style={{ padding: '4px 10px', fontSize: '12px', color: '#dc2626' }}
+                        style={{
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#dc2626',
+                          borderColor: '#fca5a5',
+                          background: '#fff',
+                          borderRadius: '8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          cursor: 'pointer',
+                          boxShadow: '0 1px 2px rgba(220, 38, 38, 0.05)',
+                          flexShrink: 0
+                        }}
                       >
-                        End assignment
+                        <UserMinus size={13} /> End Assignment
                       </button>
                     </div>
                   ))}
@@ -947,42 +1053,126 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
             </div>
 
             {/* Active Subject Assignments */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', margin: 0 }}>
-                  Subject Teaching Assignments
-                </h4>
+            <div style={{ marginBottom: '22px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <BookOpen size={16} color="#7c3aed" />
+                  <h4 style={{ fontSize: '13.5px', fontWeight: 700, color: '#334155', margin: 0 }}>
+                    Subject Teaching Assignments
+                  </h4>
+                </div>
                 {addMode === 'none' && (
                   <button
                     type="button"
                     onClick={() => { setAddMode('subject'); setErr(''); }}
-                    style={{ border: 'none', background: 'none', color: '#7862d7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      border: '1px solid #ddd6fe',
+                      background: '#f5f3ff',
+                      color: '#6d28d9',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
                   >
-                    + Add Subject Class
+                    <Plus size={13} /> Add Subject Class
                   </button>
                 )}
               </div>
 
               {(!data?.active_subject_assignments || data.active_subject_assignments.length === 0) ? (
-                <div style={{ fontSize: '13px', color: '#94a3b8', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px' }}>
-                  No active subject assignments.
+                <div style={{
+                  fontSize: '13px',
+                  color: '#64748b',
+                  background: '#f8fafc',
+                  padding: '14px 16px',
+                  borderRadius: '10px',
+                  border: '1.5px dashed #cbd5e1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10
+                }}>
+                  <BookOpen size={16} style={{ color: '#94a3b8' }} />
+                  <span>No active subject teaching assignments.</span>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {data.active_subject_assignments.map((a: any) => (
-                    <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b' }}>{a.subject_name}</span>
-                        <span style={{ color: '#64748b', fontSize: '13px', marginLeft: '6px' }}>— {a.class_name}</span>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>Since {a.start_date}</div>
+                    <div
+                      key={a.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: '#ffffff',
+                        padding: '12px 16px',
+                        borderRadius: '11px',
+                        border: '1.5px solid #f1f5f9',
+                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.02)',
+                        gap: 12
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 10,
+                          background: '#f0fdf4',
+                          color: '#16a34a',
+                          display: 'grid',
+                          placeItems: 'center',
+                          flexShrink: 0
+                        }}>
+                          <BookOpen size={18} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <strong style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>
+                              {nice(a.subject_name || '')}
+                            </strong>
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: '#f1f5f9',
+                              color: '#475569',
+                              border: '1px solid #e2e8f0'
+                            }}>
+                              {a.class_name}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                            <CalendarDays size={12} color="#94a3b8" />
+                            <span>Since {formatDisplayDate(a.start_date)}</span>
+                          </div>
+                        </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleEnd(a.id, 'subject')}
                         className="outline-btn"
-                        style={{ padding: '4px 10px', fontSize: '12px', color: '#dc2626' }}
+                        style={{
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#dc2626',
+                          borderColor: '#fca5a5',
+                          background: '#fff',
+                          borderRadius: '8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          cursor: 'pointer',
+                          boxShadow: '0 1px 2px rgba(220, 38, 38, 0.05)',
+                          flexShrink: 0
+                        }}
                       >
-                        End
+                        <UserMinus size={13} /> End Assignment
                       </button>
                     </div>
                   ))}
@@ -992,27 +1182,55 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
 
             {/* Add Assignment Form */}
             {addMode !== 'none' && (
-              <form onSubmit={handleAdd} style={{ background: '#f1f5f9', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '20px' }}>
-                <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b', marginBottom: '8px' }}>
-                  {addMode === 'class_teacher' ? 'Assign New Class Teacher Role' : 'Assign New Subject Class'}
+              <form
+                onSubmit={handleAdd}
+                style={{
+                  background: '#faf5ff',
+                  padding: '16px 18px',
+                  borderRadius: '12px',
+                  border: '1.5px solid #e9d5ff',
+                  marginBottom: '20px',
+                  boxShadow: '0 4px 12px rgba(147, 51, 234, 0.05)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '14px' }}>
+                  <div style={{ width: 24, height: 24, borderRadius: 6, background: '#ede9fe', color: '#7c3aed', display: 'grid', placeItems: 'center' }}>
+                    <Plus size={14} />
+                  </div>
+                  <span style={{ fontWeight: 700, fontSize: '13.5px', color: '#4c1d95' }}>
+                    {addMode === 'class_teacher' ? 'Assign New Homeroom Class Teacher Role' : 'Assign New Subject Class'}
+                  </span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: addMode === 'subject' ? '1fr 1fr' : '1fr', gap: '8px', marginBottom: '8px' }}>
-                  <label style={{ margin: 0, fontSize: '12px' }}>
+
+                <div style={{ display: 'grid', gridTemplateColumns: addMode === 'subject' ? '1fr 1fr' : '1fr', gap: '12px', marginBottom: '12px' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', margin: 0, fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>
                     Class *
-                    <select required value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
+                    <select
+                      required
+                      value={selectedClass}
+                      onChange={e => setSelectedClass(e.target.value)}
+                      className="hr-select"
+                      style={{ width: '100%', height: 38 }}
+                    >
                       <option value="">-- Choose Class --</option>
                       {(data?.available_classes || []).map((c: any) => (
                         <option key={c.id} value={c.id}>
-                          {c.name} {c.current_teacher ? `(Class Teacher: ${c.current_teacher})` : ''}
+                          {c.name} {c.current_teacher ? `(Current Teacher: ${c.current_teacher})` : ''}
                         </option>
                       ))}
                     </select>
                   </label>
 
                   {addMode === 'subject' && (
-                    <label style={{ margin: 0, fontSize: '12px' }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', margin: 0, fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>
                       Subject *
-                      <select required value={selectedSubj} onChange={e => setSelectedSubj(e.target.value)}>
+                      <select
+                        required
+                        value={selectedSubj}
+                        onChange={e => setSelectedSubj(e.target.value)}
+                        className="hr-select"
+                        style={{ width: '100%', height: 38 }}
+                      >
                         <option value="">-- Choose Subject --</option>
                         {(data?.available_subjects || []).map((sub: any) => (
                           <option key={sub.id} value={sub.id}>{sub.name} ({sub.code})</option>
@@ -1022,34 +1240,53 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-                  <label style={{ margin: 0, fontSize: '12px' }}>
-                    Effective Date:
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '14px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                    <span>Effective Date:</span>
                     <input
                       type="date"
                       value={effectiveDate}
                       onChange={e => setEffectiveDate(e.target.value)}
-                      style={{ marginLeft: '6px', fontSize: '12px', padding: '4px 8px' }}
+                      style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '7px', border: '1px solid #cbd5e1' }}
                     />
                   </label>
                   {addMode === 'class_teacher' && (
-                    <label style={{ margin: 0, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                    <label style={{ margin: 0, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#92400e', background: '#fef3c7', padding: '4px 10px', borderRadius: '6px' }}>
                       <input
                         type="checkbox"
                         checked={replaceExisting}
                         onChange={e => setReplaceExisting(e.target.checked)}
                       />
-                      Replace existing class teacher
+                      <span>Replace existing class teacher if assigned</span>
                     </label>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                  <button type="button" className="outline-btn" onClick={() => setAddMode('none')} style={{ padding: '5px 12px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid #f3e8ff', paddingTop: '12px' }}>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => setAddMode('none')}
+                    style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '8px' }}
+                  >
                     Cancel
                   </button>
-                  <button type="submit" className="primary-btn" disabled={saving} style={{ padding: '5px 12px', fontSize: '12px' }}>
-                    {saving ? 'Saving...' : 'Confirm Assignment'}
+                  <button
+                    type="submit"
+                    className="primary-btn"
+                    disabled={saving}
+                    style={{
+                      padding: '6px 16px',
+                      fontSize: '12px',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                      boxShadow: '0 2px 8px rgba(109, 40, 217, 0.25)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5
+                    }}
+                  >
+                    <Check size={14} /> {saving ? 'Saving...' : 'Confirm Assignment'}
                   </button>
                 </div>
               </form>
@@ -1058,19 +1295,46 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
             {/* Historical Assignments */}
             {((data?.historical_class_assignments && data.historical_class_assignments.length > 0) ||
               (data?.historical_subject_assignments && data.historical_subject_assignments.length > 0)) && (
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
-                <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>
-                  Historical Assignments
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: '#64748b' }}>
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '10px' }}>
+                  <History size={14} color="#64748b" />
+                  <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#64748b', margin: 0 }}>
+                    Assignment History
+                  </h4>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: '#64748b' }}>
                   {(data.historical_class_assignments || []).map((h: any) => (
-                    <div key={h.id}>
-                      Class Teacher — {h.class_name} ({h.start_date} to {h.end_date})
+                    <div
+                      key={h.id}
+                      style={{
+                        padding: '8px 12px',
+                        background: '#f8fafc',
+                        borderRadius: '8px',
+                        border: '1px solid #edf0f6',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <span><strong>Class Teacher</strong> — {h.class_name}</span>
+                      <small style={{ color: '#94a3b8' }}>{formatDisplayDate(h.start_date)} to {formatDisplayDate(h.end_date)}</small>
                     </div>
                   ))}
                   {(data.historical_subject_assignments || []).map((h: any) => (
-                    <div key={h.id}>
-                      Subject Teacher — {h.subject_name}, {h.class_name} ({h.start_date} to {h.end_date})
+                    <div
+                      key={h.id}
+                      style={{
+                        padding: '8px 12px',
+                        background: '#f8fafc',
+                        borderRadius: '8px',
+                        border: '1px solid #edf0f6',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <span><strong>{nice(h.subject_name || '')}</strong> ({h.class_name})</span>
+                      <small style={{ color: '#94a3b8' }}>{formatDisplayDate(h.start_date)} to {formatDisplayDate(h.end_date)}</small>
                     </div>
                   ))}
                 </div>
@@ -1079,8 +1343,22 @@ function TeachingAssignmentsModal({ s, user, onClose, onDone }: { s: R; user: Us
           </div>
         )}
 
-        <div className="modal-footer" style={{ marginTop: '20px' }}>
-          <button type="button" className="primary-btn" onClick={onClose}>Close</button>
+        <div className="modal-footer" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={onClose}
+            style={{
+              padding: '8px 22px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)',
+              fontWeight: 600,
+              fontSize: '13px'
+            }}
+          >
+            Close
+          </button>
         </div>
       </div>
     </Modal>

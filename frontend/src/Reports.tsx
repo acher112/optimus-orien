@@ -22,6 +22,8 @@ import {
   RefreshCw,
   Scale,
   ShieldCheck,
+  Crown,
+  Sparkles,
 } from 'lucide-react';
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
@@ -127,6 +129,59 @@ function CatTable({ rows, title = 'CATEGORY' }: { rows: R[]; title?: string }) {
 
 function Link({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return <button className="rp-link" onClick={onClick}>{children}<ChevronRight size={14} /></button>;
+}
+
+function PremiumFeatureLockBanner({
+  featureTitle = 'Financial & Income Analytics',
+  message,
+  onUpgrade
+}: {
+  featureTitle?: string;
+  message: string;
+  onUpgrade?: () => void;
+}) {
+  return (
+    <div className="premium-feature-banner">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '260px', flex: 1 }}>
+        <div className="premium-feature-badge">
+          <Crown size={22} />
+        </div>
+        <div className="premium-feature-info">
+          <h4>
+            <span>{featureTitle}</span>
+            <span style={{
+              fontSize: '10px',
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              background: '#f3e8ff',
+              color: '#7e22ce',
+              border: '1px solid #d8b4fe',
+              padding: '2px 8px',
+              borderRadius: '20px'
+            }}>
+              Premium Plan
+            </span>
+          </h4>
+          <p>{message}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        className="premium-upgrade-btn"
+        onClick={() => {
+          if (onUpgrade) {
+            onUpgrade();
+          } else {
+            window.dispatchEvent(new CustomEvent('optimus_navigate', { detail: { page: 'Plan & Billing' } }));
+            window.location.href = '/app?page=Plan+%26+Billing';
+          }
+        }}
+      >
+        <Sparkles size={15} /> Upgrade to Premium
+      </button>
+    </div>
+  );
 }
 
 export default function Reports({ user }: { user: User }) {
@@ -376,7 +431,19 @@ export default function Reports({ user }: { user: User }) {
             ))}
           </nav>
 
-          {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
+          {error && (
+            /requires an active.*plan/i.test(error) ? (
+              <PremiumFeatureLockBanner
+                featureTitle="Academic Performance Intelligence"
+                message={error}
+              />
+            ) : (
+              <div className="error-bar">
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
+              </div>
+            )
+          )}
           {loading && !data && <div className="rp-empty">Loading report…</div>}
 
           {data && (
@@ -504,9 +571,19 @@ export default function Reports({ user }: { user: User }) {
       {domain !== 'academic' && (
         <div>
           {financeError && (
-            <div className="error-bar">
-              <AlertCircle size={17} /> {financeError}
-            </div>
+            /requires an active.*plan/i.test(financeError) || financeError.includes('finance_dashboard') ? (
+              <PremiumFeatureLockBanner
+                featureTitle="Financial & Income Analytics"
+                message={financeError.includes('finance_dashboard')
+                  ? 'Financial & Income Analytics requires an active Premium plan subscription. Upgrade to unlock multi-campus revenue tracking, expense allocations, and operating surplus reports.'
+                  : financeError}
+              />
+            ) : (
+              <div className="error-bar">
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>{financeError}</span>
+              </div>
+            )
           )}
 
           {financeLoading && <div className="rp-empty">Calculating financial analytics…</div>}

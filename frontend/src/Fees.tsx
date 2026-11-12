@@ -3,7 +3,7 @@ import {
   AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, Receipt,
   RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye,
-  Clock, CheckCheck, Bell, ChevronDown, ChevronUp, Mail, Send, Check
+  Clock, CheckCheck, Bell, ChevronDown, ChevronUp, Mail, Send, Check, UserRound
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User } from './api';
@@ -542,30 +542,53 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
             <div className="panel-head">
               <div><h3>Student Search</h3><p>Locate student to inspect ledger or record payment</p></div>
             </div>
-            <div style={{ padding: '16px 20px', display: 'flex', gap: 8 }}>
+            <div style={{ padding: '16px 20px', display: 'flex', gap: 10, alignItems: 'center' }}>
               <input
                 type="text"
                 placeholder="Search name or admission number…"
                 className="fx-select"
-                style={{ flex: 1 }}
+                style={{ flex: 1, height: 42, borderRadius: 10 }}
                 value={studentSearch}
                 onChange={e => setStudentSearch(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleStudentSearch()}
               />
-              <button className="primary-btn" onClick={handleStudentSearch}><Search size={15} /> Search</button>
+              <button
+                className="primary-btn"
+                onClick={handleStudentSearch}
+                style={{ height: 42, padding: '0 18px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Search size={15} /> Search
+              </button>
             </div>
 
             {searchedStudents.length > 0 && (
               <div style={{ padding: '0 20px 20px', maxHeight: 300, overflowY: 'auto' }}>
                 <table className="data-table">
-                  <thead><tr><th>Name</th><th>Admission #</th><th>Action</th></tr></thead>
+                  <thead><tr><th>Name</th><th>Admission #</th><th style={{ textAlign: 'right' }}>Action</th></tr></thead>
                   <tbody>
                     {searchedStudents.map(s => (
                       <tr key={s.id}>
                         <td><strong>{s.name || `${s.first_name} ${s.last_name}`}</strong></td>
-                        <td>{s.admission_number}</td>
-                        <td>
-                          <button className="sm-btn" onClick={() => selectStudentForPay(s)}>
+                        <td>{s.admission_number || '—'}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            onClick={() => selectStudentForPay(s)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '5px 12px',
+                              borderRadius: 8,
+                              background: '#eff6ff',
+                              color: '#2563eb',
+                              border: '1px solid #bfdbfe',
+                              fontWeight: 600,
+                              fontSize: 12,
+                              cursor: 'pointer'
+                            }}
+                          >
                             Select <ChevronRight size={13} />
                           </button>
                         </td>
@@ -578,16 +601,27 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
             {selectedStudent && studentLedger && (
               <div style={{ padding: '0 20px 20px', borderTop: '1px solid #edf0f6', marginTop: 12 }}>
-                <h4 style={{ margin: '14px 0 8px' }}>Ledger Summary for {selectedStudent.name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}</h4>
-                <div className="fx-kpis" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  <div className="fx-kpi"><small>Total Billed</small><strong>Rs {studentLedger.summary?.total_billed}</strong></div>
-                  <div className="fx-kpi"><small>Total Paid</small><strong style={{ color: '#16a34a' }}>Rs {studentLedger.summary?.total_paid}</strong></div>
-                  <div className="fx-kpi"><small>Outstanding</small><strong style={{ color: '#dc2626' }}>Rs {studentLedger.summary?.outstanding_balance}</strong></div>
+                <h4 style={{ margin: '14px 0 10px', fontSize: 13, fontWeight: 700, color: '#334155' }}>
+                  Ledger Summary: {selectedStudent.name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}
+                </h4>
+                <div className="fx-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
+                  <div className="fx-kpi" style={{ padding: '12px 14px' }}>
+                    <small style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Total Billed</small>
+                    <strong style={{ fontSize: 17 }}>Rs {Number(studentLedger.summary?.total_billed || 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="fx-kpi" style={{ padding: '12px 14px' }}>
+                    <small style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Total Paid</small>
+                    <strong style={{ fontSize: 17, color: '#16a34a' }}>Rs {Number(studentLedger.summary?.total_paid || 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="fx-kpi" style={{ padding: '12px 14px' }}>
+                    <small style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Outstanding</small>
+                    <strong style={{ fontSize: 17, color: '#dc2626' }}>Rs {Number(studentLedger.summary?.outstanding_balance || 0).toLocaleString()}</strong>
+                  </div>
                 </div>
 
                 <div style={{ marginTop: 14 }}>
-                  <b style={{ fontSize: 13 }}>Outstanding Vouchers:</b>
-                  <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 6 }}>
+                  <b style={{ fontSize: 13, color: '#1e293b' }}>Outstanding Vouchers:</b>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 8 }}>
                     <table className="data-table">
                       <thead><tr><th>Period</th><th>Head</th><th>Due</th><th>Status</th></tr></thead>
                       <tbody>
@@ -611,58 +645,139 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
             <div className="panel-head">
               <div><h3>Record Fee Payment</h3><p>Issues receipt & posts automated income entry to Finance</p></div>
             </div>
-            <form onSubmit={handlePayFee} style={{ padding: '16px 20px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <label>Selected Student
+            <form onSubmit={handlePayFee} className="collect-fee-form">
+              {/* Selected Student Field */}
+              <div className="fee-form-field">
+                <label>Selected Student</label>
+                {!selectedStudent ? (
+                  <div style={{
+                    padding: '12px 14px',
+                    background: '#f8fafc',
+                    border: '1.5px dashed #cbd5e1',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: '#64748b',
+                    fontSize: '13px'
+                  }}>
+                    <UserRound size={18} color="#94a3b8" />
+                    <span>Search and select a student from the directory on the left to begin payment.</span>
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '10px 14px',
+                    background: '#f0fdf4',
+                    border: '1.5px solid #86efac',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: '#dcfce7', color: '#16a34a', display: 'grid', placeItems: 'center' }}>
+                        <Check size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#14532d' }}>
+                          {selectedStudent.name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: '#166534', marginTop: 1 }}>
+                          Admission #{selectedStudent.admission_number || selectedStudent.id}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedStudent(null); setStudentLedger(null); }}
+                      style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}
+                      title="Clear selected student"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Amount Field */}
+              <div className="fee-form-field">
+                <label>
+                  <span>Payment Amount (Rs) *</span>
+                  {studentLedger?.summary?.outstanding_balance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPayAmount(String(studentLedger?.summary?.outstanding_balance || 0))}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#4f46e5',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: 0,
+                        textDecoration: 'underline'
+                      }}
+                      title="Click to fill total outstanding balance"
+                    >
+                      Fill Outstanding: Rs {Number(studentLedger?.summary?.outstanding_balance || 0).toLocaleString()}
+                    </button>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  required
+                  placeholder="Enter collected amount (e.g. 15000)"
+                  value={payAmount}
+                  onChange={e => setPayAmount(e.target.value)}
+                  disabled={!selectedStudent}
+                />
+              </div>
+
+              {/* Payment Method and Reference in 2-column grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                <div className="fee-form-field">
+                  <label>Payment Method *</label>
+                  <select value={payMethod} onChange={e => setPayMethod(e.target.value)} disabled={!selectedStudent}>
+                    <option value="cash">Cash</option>
+                    <option value="bank_transfer">Bank Transfer / IBFT</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="online">Online / POS Gateway</option>
+                  </select>
+                </div>
+                <div className="fee-form-field">
+                  <label>Reference # / Notes</label>
                   <input
                     type="text"
-                    disabled
-                    value={selectedStudent ? `${selectedStudent.name || `${selectedStudent.first_name} ${selectedStudent.last_name}`} (${selectedStudent.admission_number || selectedStudent.id})` : 'Search and select a student on the left'}
-                    className="fx-select"
-                  />
-                </label>
-                <label>Payment Amount (Rs) *
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    required
-                    placeholder="Enter collected amount"
-                    value={payAmount}
-                    onChange={e => setPayAmount(e.target.value)}
-                    className="fx-select"
+                    placeholder="Bank slip #, cheque #, or receipt note"
+                    value={payRef}
+                    onChange={e => setPayRef(e.target.value)}
                     disabled={!selectedStudent}
                   />
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <label>Payment Method
-                    <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="fx-select" disabled={!selectedStudent}>
-                      <option value="cash">Cash</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="cheque">Cheque</option>
-                      <option value="online">Online / POS</option>
-                    </select>
-                  </label>
-                  <label>Reference # / Notes
-                    <input
-                      type="text"
-                      placeholder="Bank slip #, cheque #, or receipt note"
-                      value={payRef}
-                      onChange={e => setPayRef(e.target.value)}
-                      className="fx-select"
-                      disabled={!selectedStudent}
-                    />
-                  </label>
                 </div>
-                <button
-                  type="submit"
-                  className="primary-btn"
-                  disabled={!selectedStudent || !payAmount}
-                  style={{ alignSelf: 'flex-start', marginTop: 8 }}
-                >
-                  <Receipt size={16} /> Collect & Issue Official Receipt
-                </button>
               </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                className="primary-btn"
+                disabled={!selectedStudent || !payAmount}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  padding: '12px 20px',
+                  borderRadius: 10,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  background: (!selectedStudent || !payAmount) ? undefined : 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                  boxShadow: (!selectedStudent || !payAmount) ? undefined : '0 4px 14px rgba(79, 70, 229, 0.3)',
+                  marginTop: 6
+                }}
+              >
+                <Receipt size={17} /> Collect &amp; Issue Official Receipt
+              </button>
             </form>
 
             {recentReceipt && (

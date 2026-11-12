@@ -377,6 +377,29 @@ def check_feature_access(school, feature_key, now=None):
     if entitlements['is_suspended']:
         return False, "School account is suspended.", "premium"
 
+FEATURE_HUMAN_NAMES = {
+    'finance_dashboard': 'Financial & Income Analytics',
+    'financial_intelligence': 'Financial & Income Analytics',
+    'advanced_reports': 'Multi-Dimensional Intelligence Reports',
+    'aqi_advanced': 'Academic Quality Index (AQI)',
+    'risk_detector': 'Early Risk Detection System',
+    'multi_campus': 'Multi-Campus Central Management',
+    'bulk_student_import': 'Automated Bulk Student Onboarding',
+    'payroll': 'Staff Salary Register & Payroll',
+    'fee_management': 'Student Fee Collection & Invoicing',
+    'fee_structure': 'Fee Structure & Rates',
+    'fee_vouchers': 'Billing Vouchers & Invoicing',
+    'fee_defaulters': 'Defaulter Tracking & Recovery',
+    'fee_concessions': 'Fee Concessions & Scholarships',
+    'fee_receipts': 'Official Payment Receipts',
+    'custom_branding': 'Custom Domain & School Branding',
+    'audit_log': 'Security Audit Trail',
+    'role_permissions': 'Custom Role & Granular Permissions',
+}
+
+def human_feature_name(key):
+    return FEATURE_HUMAN_NAMES.get(key, str(key).replace('_', ' ').title())
+
     from plans.features import has_feature, FEATURE_MAP, FEATURE_ALIASES
     canonical = FEATURE_ALIASES.get(feature_key, feature_key)
     req_plan = FEATURE_MAP.get(canonical, FEATURE_MAP.get(feature_key, 'premium'))
@@ -385,10 +408,10 @@ def check_feature_access(school, feature_key, now=None):
     if not feature_info:
         if has_feature(school, feature_key):
             return True, "", ""
-        return False, f"Feature '{feature_key}' requires an active {req_plan} plan.", req_plan
+        return False, f"{human_feature_name(feature_key)} requires an active {req_plan.capitalize()} plan subscription.", req_plan
 
     if feature_info['status'] == 'coming_soon':
-        return False, f"Feature '{feature_key}' is coming soon and not yet active.", feature_info['requires_plan']
+        return False, f"{human_feature_name(feature_key)} is coming soon and not yet active.", feature_info['requires_plan']
 
     if feature_info['is_unlocked']:
         return True, "", ""
@@ -398,7 +421,7 @@ def check_feature_access(school, feature_key, now=None):
         cat = FeatureCatalog.objects.filter(key=feature_key).first()
         needed_plan = 'premium' if (cat and cat.is_premium_only) else 'standard'
 
-    return False, f"Feature '{feature_key}' requires an active {needed_plan} plan.", needed_plan
+    return False, f"{human_feature_name(feature_key)} requires an active {needed_plan.capitalize()} plan subscription.", needed_plan
 
 
 def is_limited_mode(school, now=None):
