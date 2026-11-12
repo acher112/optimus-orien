@@ -3246,7 +3246,15 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
   );
 }
 
-export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
+export function AdminLogin({
+  onLogin,
+  currentUser,
+  onGoToApp
+}: {
+  onLogin: (user: User) => void;
+  currentUser?: User | null;
+  onGoToApp?: () => void;
+}) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -3259,7 +3267,11 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
     try {
       const u = await login(username, password);
       const isOwner = Boolean(
-        u && (u.is_superuser || ['platform_admin', 'owner', 'super_admin', 'organisation_admin'].includes(u.role) || (u.is_staff && !u.school))
+        u && (
+          u.is_superuser ||
+          ['platform_admin', 'owner'].includes(u.role) ||
+          (u.is_staff && !u.school && !(u as any).organisation)
+        )
       );
       if (!isOwner) {
         setError('Access denied: This account is not a registered Platform Administrator or Website Owner.');
@@ -3325,23 +3337,47 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
           </p>
         </div>
 
-        {/* Credentials Notice Box */}
-        <div style={{
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          borderRadius: 10,
-          padding: '12px 14px',
-          fontSize: 12,
-          color: '#334155',
-          marginBottom: 18,
-          lineHeight: 1.5,
-        }}>
-          <div><strong>Master Owner Account:</strong> <code style={{ background: '#e2e8f0', padding: '2px 5px', borderRadius: 4 }}>admin</code></div>
-          <div style={{ marginTop: 2 }}><strong>Master Password:</strong> <code style={{ background: '#e2e8f0', padding: '2px 5px', borderRadius: 4 }}>AdminPass123!</code></div>
-          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
-            <em>(You can also log in with your registered Super Owner account)</em>
+        {currentUser && (
+          <div style={{
+            background: '#fef3c7',
+            border: '1px solid #fde68a',
+            borderRadius: 10,
+            padding: '12px 14px',
+            marginBottom: 20,
+            fontSize: 12,
+            color: '#92400e',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <AlertTriangle size={15} color="#d97706" style={{ flexShrink: 0 }} />
+              <span>Signed in to school portal as <strong>{currentUser.username}</strong> ({currentUser.role}).</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+              <span style={{ fontSize: 11, color: '#78350f' }}>Website Owner credentials are required for this section.</span>
+              {onGoToApp && (
+                <button
+                  type="button"
+                  onClick={onGoToApp}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #d97706',
+                    color: '#b45309',
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Go to Workspace (/app) →
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {error && (
           <div style={{
@@ -3433,7 +3469,7 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: 24, borderTop: '1px solid #f1f5f9', paddingTop: 18 }}>
+        <div style={{ textAlign: 'center', marginTop: 24, borderTop: '1px solid #f1f5f9', paddingTop: 18, display: 'flex', justifyContent: 'center', gap: 16 }}>
           <button
             type="button"
             onClick={() => { window.location.href = '/'; }}
@@ -3448,8 +3484,27 @@ export function AdminLogin({ onLogin }: { onLogin: (user: User) => void }) {
               gap: 6,
             }}
           >
-            ← Return to Public Homepage
+            ← Public Homepage
           </button>
+          {onGoToApp && (
+            <button
+              type="button"
+              onClick={onGoToApp}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#4338ca',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              School Workspace (/app) →
+            </button>
+          )}
         </div>
       </div>
     </div>

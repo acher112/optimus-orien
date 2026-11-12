@@ -1457,33 +1457,23 @@ function App() {
   const isAdminRoute = currentPathname === '/admin' || currentPathname.startsWith('/admin');
 
   if (isAdminRoute) {
-    if (!user) {
+    const isPlatformAdmin = Boolean(
+      user && (
+        user.is_superuser ||
+        ['platform_admin', 'owner'].includes(user.role) ||
+        (user.is_staff && !user.school && !(user as any).organisation)
+      )
+    );
+
+    if (!user || !isPlatformAdmin) {
       return (
         <AdminLogin
+          currentUser={user}
           onLogin={(u) => {
             try {
               localStorage.setItem('optimus_user', JSON.stringify(u));
             } catch {}
             setUser(u);
-            window.history.replaceState(null, '', '/admin');
-            setCurrentPathname('/admin');
-          }}
-        />
-      );
-    }
-
-    const isPlatformAdmin = Boolean(
-      user.is_superuser ||
-      ['platform_admin', 'owner', 'super_admin', 'organisation_admin'].includes(user.role) ||
-      (user.is_staff && !user.school)
-    );
-
-    if (!isPlatformAdmin) {
-      return (
-        <AdminUnauthorized
-          user={user}
-          onSignOut={async () => {
-            await handleSignOut();
             window.history.replaceState(null, '', '/admin');
             setCurrentPathname('/admin');
           }}
