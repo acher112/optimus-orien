@@ -362,21 +362,6 @@ def get_school_entitlements(school, now=None, use_cache=True):
     return payload
 
 
-def check_feature_access(school, feature_key, now=None):
-    """
-    Evaluates whether a school has access to a specific feature key.
-    Returns: (is_allowed: bool, reason: str, required_plan: str)
-    """
-    if not school:
-        return True, "", ""
-
-    if feature_key in NEVER_LOCKED_FEATURES:
-        return True, "", ""
-
-    entitlements = get_school_entitlements(school, now=now)
-    if entitlements['is_suspended']:
-        return False, "School account is suspended.", "premium"
-
 FEATURE_HUMAN_NAMES = {
     'finance_dashboard': 'Financial & Income Analytics',
     'financial_intelligence': 'Financial & Income Analytics',
@@ -399,6 +384,22 @@ FEATURE_HUMAN_NAMES = {
 
 def human_feature_name(key):
     return FEATURE_HUMAN_NAMES.get(key, str(key).replace('_', ' ').title())
+
+
+def check_feature_access(school, feature_key, now=None):
+    """
+    Evaluates whether a school has access to a specific feature key.
+    Returns: (is_allowed: bool, reason: str, required_plan: str)
+    """
+    if not school:
+        return True, "", ""
+
+    if feature_key in NEVER_LOCKED_FEATURES:
+        return True, "", ""
+
+    entitlements = get_school_entitlements(school, now=now)
+    if entitlements['is_suspended']:
+        return False, "School account is suspended.", "premium"
 
     from plans.features import has_feature, FEATURE_MAP, FEATURE_ALIASES
     canonical = FEATURE_ALIASES.get(feature_key, feature_key)
