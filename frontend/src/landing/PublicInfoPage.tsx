@@ -698,9 +698,12 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
               type="button"
               className="info-back-btn"
               onClick={(e) => navigateTo('/', e)}
+              title={isUr ? 'ہوم پیج پر واپس جائیں' : 'Back to Home'}
+              aria-label={isUr ? 'ہوم پیج پر واپس جائیں' : 'Back to Home'}
             >
-              <ArrowLeft size={18} />
-              <span>{isUr ? 'ہوم پیج پر واپس جائیں' : 'Back to Home'}</span>
+              <ArrowLeft size={16} />
+              <span className="info-back-text-full">{isUr ? 'ہوم پیج پر واپس جائیں' : 'Back to Home'}</span>
+              <span className="info-back-text-short">{isUr ? 'ہوم' : 'Home'}</span>
             </button>
             <a href="/" className="info-brand-link" onClick={(e) => navigateTo('/', e)}>
               OPTIMUS ORIEN
@@ -724,26 +727,28 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
             {authenticated ? (
               <a
                 href="/app"
-                className="btn-nav-dashboard"
+                className="btn-nav-dashboard info-dashboard-btn"
                 onClick={(e) => navigateTo('/app', e)}
               >
-                {isUr ? 'ڈیش بورڈ پر جائیں' : 'Go to dashboard'}
+                <span className="info-dashboard-text-full">{isUr ? 'ڈیش بورڈ پر جائیں' : 'Go to dashboard'}</span>
+                <span className="info-dashboard-text-short">{isUr ? 'ڈیش بورڈ' : 'Dashboard'}</span>
               </a>
             ) : (
               <>
                 <a
                   href="/login"
-                  className="btn-nav-signin"
+                  className="btn-nav-signin info-signin-btn"
                   onClick={(e) => navigateTo('/login', e)}
                 >
                   {isUr ? 'لاگ ان' : 'Sign in'}
                 </a>
                 <a
                   href="/login?tab=register"
-                  className="btn-nav-register"
+                  className="btn-nav-register info-register-btn"
                   onClick={(e) => navigateTo('/login?tab=register', e)}
                 >
-                  {isUr ? 'اسکول رجسٹر کریں' : 'Register your school'}
+                  <span className="info-register-text-full">{isUr ? 'اسکول رجسٹر کریں' : 'Register your school'}</span>
+                  <span className="info-register-text-short">{isUr ? 'رجسٹر' : 'Register'}</span>
                 </a>
               </>
             )}

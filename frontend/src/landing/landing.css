@@ -252,6 +252,10 @@ body {
   border-radius: 9999px;
   border: 1px solid #d4d4d8;
   background: #ffffff;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
 }
 
@@ -269,6 +273,10 @@ body {
   border-radius: 9999px;
   background: var(--brand-purple-dark);
   box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
 }
 
@@ -286,6 +294,10 @@ body {
   text-decoration: none;
   border-radius: 9999px;
   background: #0f172a;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
 }
 
@@ -1874,7 +1886,8 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid #e2e8f0;
-  padding: 0.85rem 1.5rem;
+  padding: 0.75rem 1.5rem;
+  transition: padding 0.2s ease;
 }
 
 .info-header-container {
@@ -1883,19 +1896,22 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
 }
 
 .info-header-left {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
 .info-back-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.9rem;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
@@ -1903,6 +1919,8 @@ body {
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.2s ease;
 }
 
@@ -1912,33 +1930,213 @@ body {
   border-color: #94a3b8;
 }
 
+.landing-root[dir="rtl"] .info-back-btn svg {
+  transform: rotate(180deg);
+}
+
 .info-brand-link {
   font-size: 1.25rem;
   font-weight: 800;
   color: #1a0b2e;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.2px;
   text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 .info-header-right {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  flex-shrink: 0;
 }
 
 .btn-info-locale {
-  padding: 0.45rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.42rem 0.85rem;
   border-radius: 9999px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
+  color: #334155;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.2s ease;
 }
 
 .btn-info-locale:hover {
   background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+/* Visibility toggles for responsive button text */
+.info-back-text-short,
+.info-register-text-short,
+.info-dashboard-text-short {
+  display: none;
+}
+
+/* Responsive Breakpoints for Info Header */
+@media (max-width: 991px) {
+  .info-page-header {
+    padding: 0.65rem 1rem;
+  }
+  .info-header-left {
+    gap: 0.85rem;
+  }
+  .info-brand-link {
+    font-size: 1.1rem;
+    letter-spacing: 0.8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .info-page-header {
+    padding: 0.5rem 0.75rem;
+  }
+  .info-header-container {
+    gap: 0.5rem;
+  }
+  .info-header-left {
+    gap: 0.6rem;
+  }
+  .info-header-right {
+    gap: 0.45rem;
+  }
+  .info-brand-link {
+    font-size: 1rem;
+    letter-spacing: 0.4px;
+  }
+  .info-back-btn {
+    padding: 0.38rem 0.65rem;
+    font-size: 0.8rem;
+    gap: 0.3rem;
+  }
+  .btn-info-locale {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
+  }
+  .btn-nav-signin {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.78rem;
+  }
+  .btn-nav-register {
+    padding: 0.35rem 0.85rem;
+    font-size: 0.78rem;
+  }
+  .btn-nav-dashboard {
+    padding: 0.35rem 0.85rem;
+    font-size: 0.78rem;
+  }
+
+  /* Show short text versions */
+  .info-back-text-full {
+    display: none;
+  }
+  .info-back-text-short {
+    display: inline;
+  }
+  .info-register-text-full {
+    display: none;
+  }
+  .info-register-text-short {
+    display: inline;
+  }
+  .info-dashboard-text-full {
+    display: none;
+  }
+  .info-dashboard-text-short {
+    display: inline;
+  }
+}
+
+@media (max-width: 520px) {
+  .info-page-header {
+    padding: 0.45rem 0.5rem;
+  }
+  .info-header-container {
+    gap: 0.35rem;
+  }
+  .info-header-left {
+    gap: 0.4rem;
+  }
+  .info-header-right {
+    gap: 0.35rem;
+  }
+  .info-back-btn {
+    padding: 0.32rem 0.55rem;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    gap: 0.25rem;
+  }
+  .info-brand-link {
+    font-size: 0.88rem;
+    letter-spacing: 0.2px;
+  }
+  .btn-info-locale {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.74rem;
+  }
+  .btn-nav-signin {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.74rem;
+  }
+  .btn-nav-register {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.74rem;
+  }
+  .btn-nav-dashboard {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.74rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .info-page-header {
+    padding: 0.4rem 0.35rem;
+  }
+  .info-header-container {
+    gap: 0.2rem;
+  }
+  .info-header-left {
+    gap: 0.3rem;
+  }
+  .info-header-right {
+    gap: 0.25rem;
+  }
+  /* On small phones (< 400px), hide "Home" text so back button is a compact icon */
+  .info-back-text-short {
+    display: none;
+  }
+  .info-back-btn {
+    padding: 0.3rem 0.45rem;
+    width: 32px;
+    height: 32px;
+  }
+  .info-brand-link {
+    font-size: 0.8rem;
+    letter-spacing: 0px;
+  }
+  .btn-info-locale {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.7rem;
+  }
+  .btn-nav-signin {
+    padding: 0.25rem 0.48rem;
+    font-size: 0.7rem;
+  }
+  .btn-nav-register {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.7rem;
+  }
+  .btn-nav-dashboard {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.7rem;
+  }
 }
 
 .info-page-body {
