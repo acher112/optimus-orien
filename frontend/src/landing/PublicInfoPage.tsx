@@ -5,7 +5,7 @@ import {
   GraduationCap, CalendarCheck, ClipboardCheck, BarChart3,
   AlertTriangle, TrendingUp, Award, Building2, School,
   UserCheck, BookOpen, HeartHandshake, Mail, Phone, MapPin,
-  Lock, FileText, Send, Sparkles, Check, HelpCircle
+  Lock, FileText, Send, Sparkles, Check, HelpCircle, LayoutDashboard
 } from 'lucide-react';
 import './landing.css';
 
@@ -698,57 +698,46 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
               type="button"
               className="info-back-btn"
               onClick={(e) => navigateTo('/', e)}
-              title={isUr ? 'ہوم پیج پر واپس جائیں' : 'Back to Home'}
-              aria-label={isUr ? 'ہوم پیج پر واپس جائیں' : 'Back to Home'}
+              title="Back to Home"
+              aria-label="Back to Home"
             >
               <ArrowLeft size={16} />
-              <span className="info-back-text-full">{isUr ? 'ہوم پیج پر واپس جائیں' : 'Back to Home'}</span>
-              <span className="info-back-text-short">{isUr ? 'ہوم' : 'Home'}</span>
+              <span className="info-back-label">Home</span>
             </button>
+            <div className="info-header-divider" />
             <a href="/" className="info-brand-link" onClick={(e) => navigateTo('/', e)}>
-              OPTIMUS ORIEN
+              <span className="info-brand-title">OPTIMUS <span>ORIEN</span></span>
             </a>
           </div>
 
           <div className="info-header-right">
-            <button
-              type="button"
-              className="btn-info-locale"
-              onClick={() => {
-                const next = isUr ? 'en' : 'ur';
-                setLocale(next);
-                localStorage.setItem('optimus_landing_locale', next);
-                document.documentElement.dir = next === 'ur' ? 'rtl' : 'ltr';
-                document.documentElement.lang = next;
-              }}
-            >
-              {isUr ? 'English' : 'اردو'}
-            </button>
             {authenticated ? (
               <a
                 href="/app"
-                className="btn-nav-dashboard info-dashboard-btn"
+                className="info-btn-dashboard"
                 onClick={(e) => navigateTo('/app', e)}
               >
-                <span className="info-dashboard-text-full">{isUr ? 'ڈیش بورڈ پر جائیں' : 'Go to dashboard'}</span>
-                <span className="info-dashboard-text-short">{isUr ? 'ڈیش بورڈ' : 'Dashboard'}</span>
+                <LayoutDashboard size={14} />
+                <span className="info-dash-label-full">Go to dashboard</span>
+                <span className="info-dash-label-short">Dashboard</span>
               </a>
             ) : (
               <>
                 <a
                   href="/login"
-                  className="btn-nav-signin info-signin-btn"
+                  className="info-btn-signin"
                   onClick={(e) => navigateTo('/login', e)}
                 >
-                  {isUr ? 'لاگ ان' : 'Sign in'}
+                  Sign in
                 </a>
                 <a
                   href="/login?tab=register"
-                  className="btn-nav-register info-register-btn"
+                  className="info-btn-register"
                   onClick={(e) => navigateTo('/login?tab=register', e)}
                 >
-                  <span className="info-register-text-full">{isUr ? 'اسکول رجسٹر کریں' : 'Register your school'}</span>
-                  <span className="info-register-text-short">{isUr ? 'رجسٹر' : 'Register'}</span>
+                  <span className="info-reg-label-full">Register your school</span>
+                  <span className="info-reg-label-short">Register</span>
+                  <ArrowRight size={13} className="info-reg-arrow" />
                 </a>
               </>
             )}

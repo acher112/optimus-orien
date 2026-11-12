@@ -1883,11 +1883,12 @@ body {
   top: 0;
   z-index: 100;
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid #e2e8f0;
-  padding: 0.75rem 1.5rem;
-  transition: padding 0.2s ease;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+  padding: 0.7rem 1.5rem;
+  transition: all 0.25s ease;
 }
 
 .info-header-container {
@@ -1896,13 +1897,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
+/* Left side: Back button + Divider + Brand */
 .info-header-left {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 0.85rem;
   min-width: 0;
 }
 
@@ -1911,40 +1913,54 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  padding: 0.45rem 0.85rem;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
-  font-size: 0.85rem;
+  padding: 0.44rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .info-back-btn:hover {
   background: #f1f5f9;
   color: #0f172a;
-  border-color: #94a3b8;
+  border-color: #cbd5e1;
+  transform: translateX(-1px);
 }
 
-.landing-root[dir="rtl"] .info-back-btn svg {
-  transform: rotate(180deg);
+.info-header-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  flex-shrink: 0;
 }
 
 .info-brand-link {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #1a0b2e;
-  letter-spacing: 1.2px;
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.info-brand-title {
+  font-weight: 800;
+  font-size: 1.22rem;
+  letter-spacing: -0.02em;
+  color: #0f172a;
   line-height: 1;
 }
 
+.info-brand-title span {
+  color: var(--brand-purple-dark, #5936a2);
+}
+
+/* Right side: Sign in + Register CTA */
 .info-header-right {
   display: flex;
   align-items: center;
@@ -1952,51 +1968,83 @@ body {
   flex-shrink: 0;
 }
 
-.btn-info-locale {
+.info-btn-signin {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.42rem 0.85rem;
-  border-radius: 9999px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
-  font-size: 0.85rem;
+  padding: 0.44rem 1rem;
+  font-size: 0.84rem;
   font-weight: 600;
-  cursor: pointer;
+  color: #334155;
+  text-decoration: none;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
   white-space: nowrap;
   transition: all 0.2s ease;
 }
 
-.btn-info-locale:hover {
+.info-btn-signin:hover {
   background: #f8fafc;
-  border-color: #94a3b8;
+  border-color: #cbd5e1;
+  color: #0f172a;
 }
 
-/* Visibility toggles for responsive button text */
-.info-back-text-short,
-.info-register-text-short,
-.info-dashboard-text-short {
+.info-btn-register {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.46rem 1.15rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+  box-shadow: 0 2px 8px rgba(109, 40, 217, 0.25);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.info-btn-register:hover {
+  background: linear-gradient(135deg, #5b21b6 0%, #4338ca 100%);
+  box-shadow: 0 4px 14px rgba(109, 40, 217, 0.35);
+  transform: translateY(-1px);
+}
+
+.info-btn-dashboard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.46rem 1.15rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: 9999px;
+  background: #0f172a;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.info-btn-dashboard:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+}
+
+/* Visibility helpers */
+.info-reg-label-short,
+.info-dash-label-short {
   display: none;
 }
 
-/* Responsive Breakpoints for Info Header */
-@media (max-width: 991px) {
-  .info-page-header {
-    padding: 0.65rem 1rem;
-  }
-  .info-header-left {
-    gap: 0.85rem;
-  }
-  .info-brand-link {
-    font-size: 1.1rem;
-    letter-spacing: 0.8px;
-  }
-}
-
+/* Responsive Breakpoints */
 @media (max-width: 768px) {
   .info-page-header {
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.85rem;
   }
   .info-header-container {
     gap: 0.5rem;
@@ -2004,59 +2052,44 @@ body {
   .info-header-left {
     gap: 0.6rem;
   }
-  .info-header-right {
-    gap: 0.45rem;
-  }
-  .info-brand-link {
-    font-size: 1rem;
-    letter-spacing: 0.4px;
+  .info-brand-title {
+    font-size: 1.05rem;
   }
   .info-back-btn {
-    padding: 0.38rem 0.65rem;
+    padding: 0.38rem 0.7rem;
+    font-size: 0.8rem;
+    border-radius: 8px;
+  }
+  .info-btn-signin {
+    padding: 0.38rem 0.8rem;
+    font-size: 0.8rem;
+  }
+  .info-btn-register {
+    padding: 0.38rem 0.95rem;
     font-size: 0.8rem;
     gap: 0.3rem;
   }
-  .btn-info-locale {
-    padding: 0.35rem 0.65rem;
-    font-size: 0.78rem;
+  .info-btn-dashboard {
+    padding: 0.38rem 0.95rem;
+    font-size: 0.8rem;
   }
-  .btn-nav-signin {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.78rem;
-  }
-  .btn-nav-register {
-    padding: 0.35rem 0.85rem;
-    font-size: 0.78rem;
-  }
-  .btn-nav-dashboard {
-    padding: 0.35rem 0.85rem;
-    font-size: 0.78rem;
-  }
-
-  /* Show short text versions */
-  .info-back-text-full {
+  .info-reg-label-full {
     display: none;
   }
-  .info-back-text-short {
+  .info-reg-label-short {
     display: inline;
   }
-  .info-register-text-full {
+  .info-dash-label-full {
     display: none;
   }
-  .info-register-text-short {
-    display: inline;
-  }
-  .info-dashboard-text-full {
-    display: none;
-  }
-  .info-dashboard-text-short {
+  .info-dash-label-short {
     display: inline;
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 480px) {
   .info-page-header {
-    padding: 0.45rem 0.5rem;
+    padding: 0.45rem 0.6rem;
   }
   .info-header-container {
     gap: 0.35rem;
@@ -2064,77 +2097,65 @@ body {
   .info-header-left {
     gap: 0.4rem;
   }
-  .info-header-right {
-    gap: 0.35rem;
-  }
-  .info-back-btn {
-    padding: 0.32rem 0.55rem;
-    font-size: 0.75rem;
-    border-radius: 6px;
-    gap: 0.25rem;
-  }
-  .info-brand-link {
-    font-size: 0.88rem;
-    letter-spacing: 0.2px;
-  }
-  .btn-info-locale {
-    padding: 0.3rem 0.5rem;
-    font-size: 0.74rem;
-  }
-  .btn-nav-signin {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.74rem;
-  }
-  .btn-nav-register {
-    padding: 0.3rem 0.65rem;
-    font-size: 0.74rem;
-  }
-  .btn-nav-dashboard {
-    padding: 0.3rem 0.65rem;
-    font-size: 0.74rem;
-  }
-}
-
-@media (max-width: 400px) {
-  .info-page-header {
-    padding: 0.4rem 0.35rem;
-  }
-  .info-header-container {
-    gap: 0.2rem;
-  }
-  .info-header-left {
-    gap: 0.3rem;
-  }
-  .info-header-right {
-    gap: 0.25rem;
-  }
-  /* On small phones (< 400px), hide "Home" text so back button is a compact icon */
-  .info-back-text-short {
+  .info-header-divider {
     display: none;
   }
   .info-back-btn {
-    padding: 0.3rem 0.45rem;
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 8px;
   }
-  .info-brand-link {
-    font-size: 0.8rem;
-    letter-spacing: 0px;
+  .info-back-label {
+    display: none;
   }
-  .btn-info-locale {
-    padding: 0.25rem 0.4rem;
+  .info-brand-title {
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+  }
+  .info-header-right {
+    gap: 0.4rem;
+  }
+  .info-btn-signin {
+    padding: 0.32rem 0.65rem;
+    font-size: 0.75rem;
+  }
+  .info-btn-register {
+    padding: 0.32rem 0.75rem;
+    font-size: 0.75rem;
+    gap: 0.25rem;
+  }
+  .info-btn-dashboard {
+    padding: 0.32rem 0.75rem;
+    font-size: 0.75rem;
+  }
+  .info-reg-arrow {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .info-page-header {
+    padding: 0.4rem 0.4rem;
+  }
+  .info-brand-title {
+    font-size: 0.86rem;
+  }
+  .info-back-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .info-btn-signin {
+    padding: 0.28rem 0.52rem;
     font-size: 0.7rem;
   }
-  .btn-nav-signin {
-    padding: 0.25rem 0.48rem;
+  .info-btn-register {
+    padding: 0.28rem 0.62rem;
     font-size: 0.7rem;
   }
-  .btn-nav-register {
-    padding: 0.25rem 0.55rem;
-    font-size: 0.7rem;
-  }
-  .btn-nav-dashboard {
-    padding: 0.25rem 0.55rem;
+  .info-btn-dashboard {
+    padding: 0.28rem 0.62rem;
     font-size: 0.7rem;
   }
 }

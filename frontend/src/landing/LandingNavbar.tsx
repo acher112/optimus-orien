@@ -101,15 +101,6 @@ export default function LandingNavbar({
             </a>
           </nav>
 
-          <button
-            type="button"
-            className="lang-toggle-btn"
-            onClick={onToggleLocale}
-            aria-label="Toggle language between English and Urdu"
-          >
-            {t.langToggle}
-          </button>
-
           <div className="nav-auth-actions">
             {authenticated ? (
               <a
