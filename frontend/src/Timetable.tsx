@@ -688,7 +688,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
 
       {/* Add / Edit Period Modal */}
       {isModalOpen && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 560, width: '95%' }}>
             <div className="modal-head">
               <div className="modal-icon">

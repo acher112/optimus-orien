@@ -509,12 +509,25 @@ class ClassSerializer(DynamicSerializer):
  teacher_name=serializers.SerializerMethodField()
  display_name=serializers.CharField(read_only=True)
  full_display_name=serializers.SerializerMethodField()
- def get_teacher_name(self,o):return o.teacher.get_full_name() if o.teacher else 'Unassigned'
+ def get_teacher_name(self,o):
+  if o.teacher:
+   return o.teacher.get_full_name() or o.teacher.username
+  cta = o.class_teacher_assignments.filter(end_date__isnull=True).select_related('teacher').first()
+  if cta and cta.teacher:
+   return cta.teacher.get_full_name() or cta.teacher.username
+  return 'Unassigned'
  def get_full_display_name(self,o):
   base=o.display_name
   if o.school_id and getattr(o,'school',None):
    return f"{base} ({o.school.name})"
   return base
+ def to_representation(self, instance):
+  data = super().to_representation(instance)
+  if not data.get('teacher'):
+   cta = instance.class_teacher_assignments.filter(end_date__isnull=True).first()
+   if cta:
+    data['teacher'] = cta.teacher_id
+  return data
  class Meta:model=SchoolClass;fields='__all__'
 class StudentSerializer(DynamicSerializer):
  full_name=serializers.CharField(read_only=True)
@@ -1285,7 +1298,33 @@ class ScopedViewSet(viewsets.ModelViewSet):
    raise APIValidationError({'detail': f'Cannot delete {model.__name__} because active records exist ({", ".join(types)}). Please remove them first.'})
 
 class Schools(ScopedViewSet):queryset=School.objects.all();serializer_class=SchoolSerializer
-class Classes(ScopedViewSet):queryset=SchoolClass.objects.all();serializer_class=ClassSerializer
+class Classes(ScopedViewSet):
+ queryset=SchoolClass.objects.all()
+ serializer_class=ClassSerializer
+
+ def perform_create(self, serializer):
+  instance = serializer.save()
+  if instance.teacher:
+   ClassTeacherAssignment.objects.create(
+    school_class=instance,
+    teacher=instance.teacher,
+    start_date=date.today(),
+    created_by=self.request.user if getattr(self, 'request', None) and self.request.user.is_authenticated else None
+   )
+
+ def perform_update(self, serializer):
+  old_teacher = serializer.instance.teacher
+  instance = serializer.save()
+  new_teacher = instance.teacher
+  if old_teacher != new_teacher:
+   ClassTeacherAssignment.objects.filter(school_class=instance, end_date__isnull=True).update(end_date=date.today())
+   if new_teacher:
+    ClassTeacherAssignment.objects.create(
+     school_class=instance,
+     teacher=new_teacher,
+     start_date=date.today(),
+     created_by=self.request.user if getattr(self, 'request', None) and self.request.user.is_authenticated else None
+    )
 class Students(ScopedViewSet):
  queryset=Student.objects.select_related('school', 'user')
  serializer_class=StudentSerializer
@@ -1548,8 +1587,8 @@ def dashboard(request):
   for school in schools[:20]:
    scoped_students=students.filter(school=school)
    school_items.append({'id':school.id,'name':school.name,'students':scoped_students.count(),**student_stats(scoped_students,classes.filter(school=school))})
-  recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name'))
-  recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}"} for x in recent]
+  recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name','student__school__name'))
+  recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}",'school_name':x.pop('student__school__name','')} for x in recent]
   recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
   return {
    'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':StaffMember.objects.filter(school__in=schools,status='active').count()},
@@ -1647,6 +1686,12 @@ def teachers_list(request):
   raise PermissionDenied('Teachers may not view the staff directory.')
  schools=schools_scope(request.user)
  teachers=User.objects.filter(school__in=schools,role='teacher',is_active=True).select_related('school')
+ school_param = request.query_params.get('school')
+ if school_param:
+  try:
+   teachers = teachers.filter(school_id=int(school_param))
+  except (ValueError, TypeError):
+   pass
  return Response({'results':[{'id':t.id,'name':t.get_full_name() or t.username,'username':t.username,'school_id':t.school_id,'school_name':t.school.name if t.school else ''} for t in teachers]})
 
 @api_view(['POST'])

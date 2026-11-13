@@ -19,6 +19,8 @@ interface SalariesProps {
   plan?: string;
   isPremiumUnlocked?: boolean;
   onUpgrade?: () => void;
+  activeCampusId?: number | null;
+  campuses?: Array<any>;
 }
 
 export default function Salaries({
@@ -26,12 +28,28 @@ export default function Salaries({
   notify,
   plan,
   isPremiumUnlocked = true,
-  onUpgrade
+  onUpgrade,
+  activeCampusId,
+  campuses = []
 }: SalariesProps) {
   const isTeacher = user.role === 'teacher';
   const [tab, setTab] = useState<Tab>(isTeacher ? 'my_payslips' : 'sheet');
-  const [schools, setSchools] = useState<R[]>([]);
-  const [school, setSchool] = useState('');
+  const [schools, setSchools] = useState<R[]>(() => campuses || []);
+  const [school, setSchool] = useState(() => (activeCampusId ? String(activeCampusId) : ''));
+
+  useEffect(() => {
+    if (activeCampusId) {
+      setSchool(String(activeCampusId));
+    } else {
+      setSchool('');
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
+    if (campuses.length > 0) {
+      setSchools(campuses);
+    }
+  }, [campuses]);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [staffList, setStaffList] = useState<R[]>([]);
   const [records, setRecords] = useState<R[]>([]);
@@ -687,7 +705,7 @@ export default function Salaries({
 
       {/* MODAL: Generate Sheet */}
       {generateModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setGenerateModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Generate Monthly Salary Sheet</h3>
@@ -716,7 +734,7 @@ export default function Salaries({
 
       {/* MODAL: Pay Salary */}
       {payModal && activePayRecord && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setPayModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Disburse Salary: {activePayRecord.staff_name}</h3>
@@ -752,7 +770,7 @@ export default function Salaries({
 
       {/* MODAL: Void Salary */}
       {voidModal && activeVoidRecord && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setVoidModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Void Salary Record: {activeVoidRecord.staff_name}</h3>
@@ -775,7 +793,7 @@ export default function Salaries({
 
       {/* MODAL: Printable Payslip */}
       {payslipModal && activePayslip && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setPayslipModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 640 }}>
             <div className="modal-head">
               <h3>Employee Payslip</h3>
@@ -845,7 +863,7 @@ export default function Salaries({
 
       {/* MODAL: New Structure Revision */}
       {structModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setStructModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Define Salary Structure</h3>
@@ -877,7 +895,7 @@ export default function Salaries({
 
       {/* MODAL: Adjustment */}
       {adjModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setAdjModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Record Salary Adjustment</h3>

@@ -59,15 +59,22 @@ interface AttendanceModuleProps {
   user: User;
   notify: (msg: string) => void;
   campuses?: Array<{ id: number; name: string }>;
+  activeCampusId?: number | null;
 }
 
-export default function AttendanceModule({ user, notify, campuses = [] }: AttendanceModuleProps) {
+export default function AttendanceModule({ user, notify, campuses = [], activeCampusId }: AttendanceModuleProps) {
   const isManager = ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
   const [activeTab, setActiveTab] = useState<'student' | 'staff'>('student');
 
   // Multi-campus handling for Org Admin
-  const [schoolId, setSchoolId] = useState<string>(() => (user.school ? String(user.school) : ''));
+  const [schoolId, setSchoolId] = useState<string>(() => (activeCampusId ? String(activeCampusId) : (user.school ? String(user.school) : '')));
   const [schools, setSchools] = useState<Array<{ id: number; name: string }>>(campuses);
+
+  useEffect(() => {
+    if (activeCampusId) {
+      setSchoolId(String(activeCampusId));
+    }
+  }, [activeCampusId]);
 
   // Student Attendance States
   const [classes, setClasses] = useState<SchoolClassOption[]>([]);
@@ -344,7 +351,7 @@ export default function AttendanceModule({ user, notify, campuses = [] }: Attend
 
       {/* SUB-TAB 2: STAFF ATTENDANCE */}
       {activeTab === 'staff' && isManager && (
-        <StaffAttendanceRegister user={user} notify={notify} />
+        <StaffAttendanceRegister user={user} notify={notify} activeCampusId={activeCampusId} campuses={campuses} />
       )}
 
       {/* SUB-TAB 1: STUDENT ATTENDANCE */}

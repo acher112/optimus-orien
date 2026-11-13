@@ -43,7 +43,7 @@ export type Student = {
   active?: boolean;
 };
 
-export type Case = { id: number; title: string; status: string; priority: string; student_id: number; student_name?: string };
+export type Case = { id: number; title: string; status: string; priority: string; student_id: number; student_name?: string; school_name?: string };
 export type Resource = { id: number; [key: string]: unknown };
 
 let csrfToken = '';

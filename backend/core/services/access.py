@@ -52,7 +52,7 @@ IMMUTABLE_RELATIONS = {
  School: {'organisation'}, SchoolClass: {'school','academic_year'},
  AcademicYear: {'school'}, Subject: {'school'}, Student: {'school','user','guardians'},
  Enrollment: {'student','school_class','start_date'},
- Assessment: {'school_class','subject','date'}, Grade: {'student','assessment'},
+ Assessment: {'school_class','subject'}, Grade: {'student','assessment'},
  Attendance: {'student','school_class','date'}, Homework: {'school_class','subject'},
  HomeworkSubmission: {'homework','student'}, Observation: {'student','teacher','subject','date'},
  ReviewCase: {'student','school'}, Intervention: {'case'},
@@ -290,9 +290,14 @@ def validate_related(user, model, attrs, instance=None):
   for field in restricted:
    if field in attrs:
     if field == 'guardians':raise PermissionDenied('Guardian changes require a verified workflow')
-    old_id=getattr(instance,f'{field}_id',None)
+    if hasattr(instance, f'{field}_id'):
+     old_val = getattr(instance, f'{field}_id')
+    else:
+     old_val = getattr(instance, field, None)
     incoming=getattr(attrs[field],'pk',attrs[field])
-    if incoming != old_id:raise PermissionDenied(f'{field} is historical/immutable')
+    old_compare = str(old_val) if old_val is not None else None
+    inc_compare = str(incoming) if incoming is not None else None
+    if inc_compare != old_compare:raise PermissionDenied(f'{field} is historical/immutable')
  # Defensive whitelist for all incoming relations including less obvious links:
  for field, value in attrs.items():
   if field == 'guardians':

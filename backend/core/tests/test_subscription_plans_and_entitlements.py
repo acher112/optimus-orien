@@ -586,3 +586,94 @@ class SubscriptionPlansAndEntitlementsTests(TestCase):
         res_fin = self.client.get('/api/v1/finance/summary/')
         self.assertEqual(res_fin.status_code, 403)
         self.assertEqual(res_fin.data['code'], 'feature_locked')
+
+    def test_six_month_billing_period_and_duplicate_prevention(self):
+        """
+        Tests that:
+        1. 6-month billing period calculates discount properly without 'Invalid billing period' errors.
+        2. Exact duplicate active plan purchase is rejected.
+        3. Seat modifications (e.g. 200 -> 500 students) or period/tier changes are allowed.
+        """
+        # 1. Verify 6-month estimate calculation
+        est = calculate_invoice_estimate(
+            plan=self.standard_plan,
+            billing_months=6,
+            student_count=200,
+            currency='USD'
+        )
+        # 200 students * 3.60 * 6 months = 4320.00
+        self.assertEqual(est['subtotal'], Decimal('4320.00'))
+        self.assertEqual(est['discount_percentage'], Decimal('5.00'))
+        self.assertEqual(est['discount_amount'], Decimal('216.00'))
+
+        # Set up an active subscription for school_b (Standard, 6 months, 200 students)
+        order_1 = create_subscription_order(
+            school=self.school_b,
+            plan=self.standard_plan,
+            billing_months=6,
+            payment_reference='BANK-STD-200',
+            paid_on=timezone.now().date(),
+            amount=Decimal('4104.00'),
+            currency='USD',
+            submitted_by=self.admin_b,
+            custom_student_count=200
+        )
+        approve_subscription_order(order_1, reviewer=self.platform_admin, review_note='Initial 200 students')
+
+        # 2. Re-purchasing the exact same package (Standard, 6 months, 200 students) MUST FAIL
+        with self.assertRaises(ValueError) as ctx:
+            create_subscription_order(
+                school=self.school_b,
+                plan=self.standard_plan,
+                billing_months=6,
+                payment_reference='BANK-STD-DUP',
+                paid_on=timezone.now().date(),
+                amount=Decimal('4104.00'),
+                currency='USD',
+                submitted_by=self.admin_b,
+                custom_student_count=200
+            )
+        self.assertIn('You already bought this plan for your this school', str(ctx.exception))
+
+        # 3. Purchasing with different student count (200 -> 500 students) MUST SUCCEED
+        order_expanded = create_subscription_order(
+            school=self.school_b,
+            plan=self.standard_plan,
+            billing_months=6,
+            payment_reference='BANK-STD-500',
+            paid_on=timezone.now().date(),
+            amount=Decimal('10260.00'),
+            currency='USD',
+            submitted_by=self.admin_b,
+            custom_student_count=500
+        )
+        self.assertEqual(order_expanded.student_count, 500)
+
+        # 4. Purchasing with different billing period (6 -> 12 months) MUST SUCCEED
+        order_12m = create_subscription_order(
+            school=self.school_b,
+            plan=self.standard_plan,
+            billing_months=12,
+            payment_reference='BANK-STD-12M',
+            paid_on=timezone.now().date(),
+            amount=Decimal('7776.00'),
+            currency='USD',
+            submitted_by=self.admin_b,
+            custom_student_count=200
+        )
+        self.assertEqual(order_12m.billing_months, 12)
+
+        # 5. Upgrading tier (Standard -> Premium) MUST SUCCEED
+        order_prem = create_subscription_order(
+            school=self.school_b,
+            plan=self.premium_plan,
+            billing_months=6,
+            payment_reference='BANK-PREM-200',
+            paid_on=timezone.now().date(),
+            amount=Decimal('8208.00'),
+            currency='USD',
+            submitted_by=self.admin_b,
+            custom_student_count=200
+        )
+        self.assertEqual(order_prem.plan, self.premium_plan)
+

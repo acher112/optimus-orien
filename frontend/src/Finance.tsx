@@ -76,20 +76,38 @@ function LockedChartCard({
   );
 }
 
+const DEFAULT_CATEGORIES: Record<'income' | 'expense', Array<{ id: string | number; name: string; active?: boolean }>> = {
+  expense: [
+    { id: 'Salaries', name: 'Salaries', active: true },
+    { id: 'Utilities', name: 'Utilities', active: true },
+    { id: 'Maintenance', name: 'Maintenance', active: true },
+    { id: 'Stationery', name: 'Stationery', active: true },
+    { id: 'Other expenses', name: 'Other expenses', active: true },
+  ],
+  income: [
+    { id: 'Tuition fees', name: 'Tuition fees', active: true },
+    { id: 'Admission fees', name: 'Admission fees', active: true },
+    { id: 'Annual fees', name: 'Annual fees', active: true },
+    { id: 'Other income', name: 'Other income', active: true },
+  ],
+};
+
 interface FinanceProps {
   user: User;
   notify: (m: string) => void;
   plan?: string;
   isPremiumUnlocked?: boolean;
   onUpgrade?: () => void;
+  activeCampusId?: number | null;
+  campuses?: Array<any>;
 }
 
-export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgrade }: FinanceProps) {
+export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgrade, activeCampusId, campuses = [] }: FinanceProps) {
   const isPrincipal = user.role === 'principal';
   const hasPremium = isPremiumUnlocked !== undefined ? isPremiumUnlocked : (plan === 'premium' || plan === 'custom');
   const [tab, setTab] = useState<Tab>('overview');
-  const [schools, setSchools] = useState<R[]>([]);
-  const [school, setSchool] = useState(isPrincipal && user.school ? String(user.school) : '');
+  const [schools, setSchools] = useState<R[]>(() => campuses || []);
+  const [school, setSchool] = useState(() => (activeCampusId ? String(activeCampusId) : (isPrincipal && user.school ? String(user.school) : '')));
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [sum, setSum] = useState<R | null>(null);
@@ -97,13 +115,23 @@ export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgra
   const [bump, setBump] = useState(0);
 
   useEffect(() => {
+    if (activeCampusId) {
+      setSchool(String(activeCampusId));
+    } else {
+      setSchool('');
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
     list<R>('schools').then(res => {
       setSchools(res);
-      if (isPrincipal && user.school) {
+      if (!school && res.length === 1) {
+        setSchool(String(res[0].id));
+      } else if (isPrincipal && user.school) {
         setSchool(String(user.school));
       }
     }).catch(() => {});
-  }, [isPrincipal, user.school]);
+  }, [isPrincipal, user.school, school]);
   const qs = useMemo(() => {
     const p = new URLSearchParams();
     const effectiveSchool = isPrincipal && user.school ? String(user.school) : school;
@@ -219,7 +247,7 @@ export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgra
       {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
 
       {tab === 'overview' && sum && <Overview sum={sum} isPrincipal={isPrincipal} hasPremium={hasPremium} onUpgrade={onUpgrade} />}
-      {(tab === 'income' || tab === 'expense') && <Entries kind={tab} school={school} schools={schools} user={user} qs={qs} bump={bump} onChanged={changed} hasPremium={hasPremium} onUpgrade={onUpgrade} />}
+      {(tab === 'income' || tab === 'expense') && <Entries kind={tab} school={school} schools={schools} user={user} qs={qs} bump={bump} onChanged={changed} hasPremium={hasPremium} onUpgrade={onUpgrade} activeCampusId={activeCampusId} />}
       {tab === 'categories' && <Categories school={school} schools={schools} user={user} onChanged={changed} />}
     </>
   );
@@ -441,13 +469,17 @@ function CatTable({ rows }: { rows: R[] }) {
   );
 }
 
-function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium, onUpgrade }: { kind: 'income' | 'expense'; school: string; schools: R[]; user: User; qs: string; bump: number; onChanged: (m: string) => void; hasPremium?: boolean; onUpgrade?: () => void }) {
+function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium, onUpgrade, activeCampusId }: { kind: 'income' | 'expense'; school: string; schools: R[]; user: User; qs: string; bump: number; onChanged: (m: string) => void; hasPremium?: boolean; onUpgrade?: () => void; activeCampusId?: number | null }) {
   const [rows, setRows] = useState<R[]>([]);
-  const [cats, setCats] = useState<R[]>([]);
+  const [cats, setCats] = useState<R[]>(() => DEFAULT_CATEGORIES[kind]);
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [f, setF] = useState<R>({ date: new Date().toISOString().slice(0, 10) });
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
-  const target = school || f.school || (user.role !== 'organisation_admin' ? String(user.school || '') : '') || String(schools[0]?.id || '');
+  const target = school || (activeCampusId ? String(activeCampusId) : '') || f.school || (user.role !== 'organisation_admin' ? String(user.school || '') : '') || String(schools[0]?.id || '');
+
+  useEffect(() => {
+    setCats(DEFAULT_CATEGORIES[kind]);
+  }, [kind]);
 
   const load = useCallback(async () => {
     const p = new URLSearchParams();
@@ -461,7 +493,14 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium,
   useEffect(() => { load(); }, [load, bump]);
   useEffect(() => {
     if (!target) return;
-    request<R>(`finance/categories/?school=${target}&kind=${kind}`).then(d => setCats(d.results.filter((c: R) => c.active))).catch(() => setCats([]));
+    request<R>(`finance/categories/?school=${target}&kind=${kind}`)
+      .then(d => {
+        const active = (d?.results || []).filter((c: R) => c.active);
+        if (active.length > 0) {
+          setCats(active);
+        }
+      })
+      .catch(() => {});
   }, [target, kind, bump]);
 
   const label = kind === 'income' ? 'income' : 'expense';

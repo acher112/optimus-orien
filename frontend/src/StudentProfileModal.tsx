@@ -136,7 +136,6 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
         padding: 16,
         overflowY: 'auto'
       }}
-      onClick={onClose}
     >
       <div
         style={{

@@ -26,12 +26,24 @@ function formatDisplayDate(val?: string | null): string {
   return String(val);
 }
 
-export default function Staff({ user, notify }: { user: User; notify: (m: string) => void }) {
+export default function Staff({
+  user,
+  notify,
+  activeCampusId,
+  campuses = []
+}: {
+  user: User;
+  notify: (m: string) => void;
+  activeCampusId?: number | null;
+  campuses?: Array<{ id: number; name: string }>;
+}) {
   const [rows, setRows] = useState<R[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
   const [summary, setSummary] = useState<R>({ total: 0, active: 0, terminated: 0 });
   const [schools, setSchools] = useState<R[]>([]);
-  const [filterValues, setFilterValues] = useState<Record<string, any>>({ status: 'active' });
+  const [filterValues, setFilterValues] = useState<Record<string, any>>(() => (
+    activeCampusId ? { status: 'active', school: String(activeCampusId) } : { status: 'active' }
+  ));
   const [error, setError] = useState('');
   const [action, setAction] = useState<Action | null>(null);
   const [feed, setFeed] = useState(false);
@@ -39,16 +51,31 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
   const [calendarTarget, setCalendarTarget] = useState<CalendarTarget | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (activeCampusId) {
+      setFilterValues(prev => ({ ...prev, school: String(activeCampusId) }));
+    } else {
+      setFilterValues(prev => {
+        const next = { ...prev };
+        delete next.school;
+        return next;
+      });
+    }
+  }, [activeCampusId]);
+
   const load = useCallback(async () => {
     setError('');
     try {
       const p = new URLSearchParams();
       if (filterValues.status) p.set('status', filterValues.status);
       if (filterValues.q?.trim()) p.set('q', filterValues.q.trim());
+      const sc = filterValues.school || (activeCampusId ? String(activeCampusId) : '');
+      if (sc) p.set('school', sc);
+      if (filterValues.role) p.set('role', filterValues.role);
       const d = await request<R>(`staff/?${p.toString()}`);
       setRows(d.results); setSummary(d.summary); setRoles(d.roles);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not load staff'); }
-  }, [filterValues]);
+  }, [filterValues, activeCampusId]);
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
   useEffect(() => { list<R>('schools').then(setSchools).catch(() => {}); }, []);
 
@@ -93,7 +120,7 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
       </div>
 
       {viewTab === 'attendance' ? (
-        <StaffAttendanceRegister user={user} notify={notify} />
+        <StaffAttendanceRegister user={user} notify={notify} activeCampusId={activeCampusId} campuses={campuses} />
       ) : (
         <>
           <div className="hr-kpis">
@@ -116,18 +143,33 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
                 { label: 'Active', value: 'active' },
                 { label: 'Terminated', value: 'terminated' },
               ]
-            }
+            },
+            ...((campuses.length > 1 || schools.length > 1) ? [{
+              key: 'school',
+              label: 'Campus',
+              options: (campuses.length ? campuses : schools).map(s => ({ label: s.name, value: String(s.id) }))
+            }] : []),
+            ...(roles.length > 0 ? [{
+              key: 'role',
+              label: 'Role',
+              options: roles.map(r => ({ label: nice(r), value: r }))
+            }] : [])
           ]}
           values={filterValues}
           onChange={setFilterValues}
-          onClear={() => setFilterValues({})}
+          onClear={() => setFilterValues(activeCampusId ? { status: 'active', school: String(activeCampusId) } : { status: 'active' })}
           rightActions={
             <>
               <span className="result-count">{rows.length} staff members</span>
               <ExportMenu
                 title="Staff Directory"
                 filename="staff-directory"
-                endpoint={`staff/?${new URLSearchParams({ ...(filterValues.status ? { status: filterValues.status } : {}), ...(filterValues.q ? { q: filterValues.q } : {}) }).toString()}`}
+                endpoint={`staff/?${new URLSearchParams({
+                  ...(filterValues.status ? { status: filterValues.status } : {}),
+                  ...(filterValues.q ? { q: filterValues.q } : {}),
+                  ...(filterValues.school || activeCampusId ? { school: String(filterValues.school || activeCampusId) } : {}),
+                  ...(filterValues.role ? { role: filterValues.role } : {})
+                }).toString()}`}
                 notify={notify}
               />
             </>
@@ -160,7 +202,7 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
       </>
       )}
 
-      {action?.kind === 'add' && <AddStaff schools={schools} roles={roles} leader={leader} user={user} onClose={() => setAction(null)} onDone={() => done('Staff member added')} />}
+      {action?.kind === 'add' && <AddStaff schools={campuses.length ? (campuses as any) : schools} roles={roles} leader={leader} user={user} defaultCampusId={activeCampusId} onClose={() => setAction(null)} onDone={() => done('Staff member added')} />}
       {action?.kind === 'promote' && <Promote s={action.staff} roles={roles} leader={leader} isOrgAdmin={user.role === 'organisation_admin' || !!user.is_superuser} onClose={() => setAction(null)} onDone={() => done('Promotion saved')} />}
       {action?.kind === 'role' && <AssignRole s={action.staff} roles={roles} leader={leader} isOrgAdmin={user.role === 'organisation_admin' || !!user.is_superuser} onClose={() => setAction(null)} onDone={() => done('Role updated')} />}
       {action?.kind === 'edit' && <EditStaff s={action.staff} roles={roles} leader={leader} isOrgAdmin={user.role === 'organisation_admin' || !!user.is_superuser} onClose={() => setAction(null)} onDone={() => done('Staff record updated')} />}
@@ -174,7 +216,7 @@ export default function Staff({ user, notify }: { user: User; notify: (m: string
 
 function Modal({ title, sub, icon, onClose, children }: { title: string; sub?: string; icon?: React.ReactNode; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-backdrop">
       <div className="modal-card">
         <div className="modal-head"><div className="modal-icon">{icon || <UserCog size={20} />}</div><div><h3>{title}</h3>{sub && <p>{sub}</p>}</div><button onClick={onClose} aria-label="Close"><X size={18} /></button></div>
         {children}
@@ -205,10 +247,26 @@ const roleOptions = (roles: string[], leader: boolean, isOrgAdmin?: boolean) => 
   return filtered;
 };
 
-function AddStaff({ schools, roles, leader, user, onClose, onDone }: { schools: R[]; roles: string[]; leader: boolean; user: User; onClose: () => void; onDone: () => void }) {
+function AddStaff({
+  schools,
+  roles,
+  leader,
+  user,
+  defaultCampusId,
+  onClose,
+  onDone
+}: {
+  schools: R[];
+  roles: string[];
+  leader: boolean;
+  user: User;
+  defaultCampusId?: number | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const isOrgAdmin = user.role === 'organisation_admin' || !!user.is_superuser;
   const [f, setF] = useState<R>({
-    school: user.school || schools[0]?.id || '',
+    school: defaultCampusId || user.school || schools[0]?.id || '',
     role: 'teacher',
     teacher_type: 'class_teacher',
     hired_on: new Date().toISOString().slice(0, 10),

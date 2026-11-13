@@ -743,8 +743,22 @@ function App() {
     }
   }, [isSingleCampusRole, user, activeCampusId]);
 
-  const [subscription, setSubscription] = useState<any>(null);
-  const [entitlements, setEntitlements] = useState<any>(null);
+  const [subscription, setSubscription] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem('optimus_subscription');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [entitlements, setEntitlements] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem('optimus_entitlements');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const fetchSubscription = useCallback(async () => {
     if (!user) return;
@@ -754,8 +768,14 @@ function App() {
         request<any>(`subscription/current/${campusQs}`).catch(() => null),
         request<any>(`subscription/entitlements/${campusQs}`).catch(() => null)
       ]);
-      if (subRes) setSubscription(subRes);
-      if (entRes) setEntitlements(entRes);
+      if (subRes) {
+        setSubscription(subRes);
+        try { localStorage.setItem('optimus_subscription', JSON.stringify(subRes)); } catch {}
+      }
+      if (entRes) {
+        setEntitlements(entRes);
+        try { localStorage.setItem('optimus_entitlements', JSON.stringify(entRes)); } catch {}
+      }
     } catch {
       // unscoped or platform admin
     }
@@ -893,6 +913,8 @@ function App() {
     try {
       localStorage.removeItem('optimus_active_campus_id');
       localStorage.removeItem('optimus_user');
+      localStorage.removeItem('optimus_subscription');
+      localStorage.removeItem('optimus_entitlements');
       sessionStorage.clear();
       queryCache.clear();
     } catch {}
@@ -955,6 +977,23 @@ function App() {
   }, []);
 
   const [viewStudentId, setViewStudentId] = useState<number | null>(null);
+  const [campusPromptModal, setCampusPromptModal] = useState<{
+    isOpen: boolean;
+    targetPage: string;
+    cardLabel: string;
+  } | null>(null);
+
+  const handleCardClick = (targetPage: string, cardLabel?: string) => {
+    if (activeCampusId || campuses.length <= 1 || isSingleCampusRole) {
+      switchPage(targetPage);
+      return;
+    }
+    setCampusPromptModal({
+      isOpen: true,
+      targetPage,
+      cardLabel: cardLabel || targetPage
+    });
+  };
 
   useEffect(() => {
     const handleViewStudent = (e: Event) => {
@@ -1333,6 +1372,9 @@ function App() {
     const initial: Record<string, string> = {};
     for (const f of config.fields) {
       let val = r[f.key];
+      if (f.key === 'teacher') {
+        val = (r as any).teacher !== undefined ? (r as any).teacher : (r as any).teacher_id;
+      }
       if (f.key === 'school_class' && !val && (r as any).school_class_id) {
         val = (r as any).school_class_id;
       }
@@ -1347,6 +1389,12 @@ function App() {
         }
       }
       initial[f.key] = val !== undefined && val !== null ? String(val) : '';
+    }
+    const campusId = (r as any).school || (r as any).school_id || (r as any).campus || activeCampusId;
+    if (campusId) {
+      list<{ id: number; name: string; school_id?: number }>('teachers', { school: campusId }).then(tchs => {
+        setRefData(prev => ({ ...prev, teachers: tchs || [] }));
+      }).catch(() => {});
     }
     setEditForm(initial);
     setEditModal(true);
@@ -1363,6 +1411,8 @@ function App() {
         if (val !== undefined && val !== '') {
           const isNum = ['school', 'academic_year', 'teacher', 'school_class', 'subject', 'student', 'max_marks', 'weight', 'attendance_alert_threshold'].includes(f.key) || f.type === 'number';
           data[f.key] = isNum ? Number(val) : val;
+        } else if (f.key === 'teacher' && config.api === 'classes') {
+          data[f.key] = null;
         }
       }
       await update(config.api, editingRecord.id, data);
@@ -1990,6 +2040,57 @@ function App() {
                 </span>
               ))}
             </div>
+            {campuses.length > 1 && ['organisation_admin', 'school_admin'].includes(user.role) && (
+              <div
+                className="topbar-campus-filter"
+                style={{
+                  marginLeft: 12,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  padding: '4px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border-color, #e2e8f0)',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                }}
+              >
+                <Building2 size={15} color="var(--brand-primary, #6366f1)" />
+                <select
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--text-primary, #334155)',
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                  value={activeCampusId === null ? 'all' : String(activeCampusId)}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === 'all') {
+                      setActiveCampusId(null);
+                      localStorage.removeItem('optimus_active_campus_id');
+                      notify('Showing data across all campuses');
+                    } else {
+                      const cid = Number(val);
+                      setActiveCampusId(cid);
+                      localStorage.setItem('optimus_active_campus_id', String(cid));
+                      const matched = campuses.find(c => c.id === cid);
+                      notify(`Switched to campus: ${matched?.name || 'selected campus'}`);
+                    }
+                  }}
+                >
+                  <option value="all">All Campuses (Consolidated)</option>
+                  {campuses.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.city ? `(${c.city})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="topbar-right">
             <span className="today">
@@ -2219,7 +2320,6 @@ function App() {
                   <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user.name.split(' ')[0]} <span className="wave">✳</span></h1>
                   <p>Here's what's happening across your learning community today.</p>
                 </div>
-                <button className="primary-btn" onClick={() => switchPage('Reports')}><FileBarChart size={17} /> Reports <ArrowUpRight size={16} /></button>
               </div>
 
               <section className="hero-banner">
@@ -2227,7 +2327,7 @@ function App() {
                   <span className="hero-kicker"><Sparkles size={15} /> THE BIGGER PICTURE</span>
                   <h2>Better insights.<br /><span>Brighter futures.</span></h2>
                   <p>Turn everyday campus data into meaningful actions that help every learner thrive.</p>
-                  <button onClick={() => switchPage('Interventions')}>Explore student support <ArrowRight size={17} /></button>
+                  <button onClick={() => handleCardClick('Interventions', 'Student Support Interventions')}>Explore student support <ArrowRight size={17} /></button>
                 </div>
                 <div className="hero-art">
                   <div className="orbit orbit-one" />
@@ -2250,45 +2350,70 @@ function App() {
               </div>
 
               <div className="stats-grid five-items">
-                <Stat icon={GraduationCap} label="Total students" value={dash?.counts.students ?? 0} foot="Across authorised campuses" tone="lavender" onClick={() => switchPage('Students')} />
-                <Stat icon={Building2} label="Active campuses" value={dash?.counts.schools ?? campuses.length} foot="In your organisation" tone="mint" onClick={() => switchPage('Campuses')} />
-                <Stat icon={TrendingUp} label="Academic average" value={fmt(dash?.stats.academic_average)} foot={`${dash?.stats.grade_records ?? 0} recorded grades`} tone="peach" onClick={() => switchPage('Examinations')} />
-                <Stat icon={ClipboardCheck} label="Attendance rate" value={fmt(dash?.stats.attendance_rate)} foot={`${dash?.stats.attendance_records ?? 0} recorded sessions`} tone="blue" onClick={() => switchPage('Attendance')} />
-                <Stat icon={Briefcase} label="Total Employees" value={(dash?.counts as any)?.employees ?? dash?.counts.teachers ?? 0} foot="Staff & faculty members" tone="rose" onClick={() => switchPage('Staff')} />
+                {/* 1: Active campuses */}
+                <Stat icon={Building2} label="Active campuses" value={dash?.counts.schools ?? campuses.length} foot="In your organisation" tone="mint" onClick={() => handleCardClick('Campuses', 'Campuses')} />
+                {/* 2: Total students */}
+                <Stat icon={GraduationCap} label="Total students" value={dash?.counts.students ?? 0} foot="Across authorised campuses" tone="lavender" onClick={() => handleCardClick('Students', 'Students')} />
+                {/* 3: Total Employees */}
+                <Stat icon={Briefcase} label="Total Employees" value={(dash?.counts as any)?.employees ?? dash?.counts.teachers ?? 0} foot="Staff & faculty members" tone="rose" onClick={() => handleCardClick('Staff', 'Staff Directory')} />
+                {/* 4: Attendance rate */}
+                <Stat icon={ClipboardCheck} label="Attendance rate" value={fmt(dash?.stats.attendance_rate)} foot={`${dash?.stats.attendance_records ?? 0} recorded sessions`} tone="blue" onClick={() => handleCardClick('Attendance', 'Attendance')} />
+                {/* 5: Academic average */}
+                <Stat icon={TrendingUp} label="Academic average" value={fmt(dash?.stats.academic_average)} foot={`${dash?.stats.grade_records ?? 0} recorded grades`} tone="peach" onClick={() => handleCardClick('Examinations', 'Examinations & Academics')} />
               </div>
 
               <div className="dashboard-grid">
                 <section className="panel chart-panel">
                   <div className="panel-head">
-                    <div><h3>Campus performance</h3><p>Academic results across your campuses</p></div>
-                    <div className="head-chip"><Activity size={15} /> Academic overview</div>
+                    <div><h3>Campus performance</h3><p>Student performance average across campuses</p></div>
+                    <div className="head-chip"><Activity size={15} /> Multi-campus comparison</div>
                   </div>
-                  <div className="chart-wrap">
-                    {!(dash?.schools || []).some(s => Number(s.academic_average) > 0) ? (
+                  <div className="chart-wrap" style={{ minHeight: 280, height: 280 }}>
+                    {!(dash?.schools || []).length ? (
                       <div className="chart-empty">
                         <BarChart3 size={32} />
-                        <strong>No published assessment data yet</strong>
-                        <p>Publish assessment results in Academics to view performance trends and analytics.</p>
+                        <strong>No campus data available</strong>
+                        <p>No campuses found in your active scope.</p>
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={(dash?.schools || []).map((s, i) => ({ name: s.name.length > 13 ? s.name.slice(0, 13) + '…' : s.name, value: s.academic_average || 0, index: i }))} margin={{ top: 20, right: 15, left: -18, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="chartfill" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={accentHex} stopOpacity={0.24} />
-                              <stop offset="95%" stopColor={accentHex} stopOpacity={0.005} />
-                            </linearGradient>
-                          </defs>
+                        <BarChart
+                          data={(dash?.schools || []).map(s => ({
+                            name: s.name.length > 15 ? s.name.slice(0, 15) + '…' : s.name,
+                            fullName: s.name,
+                            academic_average: s.academic_average !== null && s.academic_average !== undefined ? Number(s.academic_average) : 0,
+                            attendance_rate: s.attendance_rate !== null && s.attendance_rate !== undefined ? Number(s.attendance_rate) : 0,
+                            students: s.students || 0
+                          }))}
+                          margin={{ top: 20, right: 15, left: -10, bottom: 0 }}
+                        >
                           <CartesianGrid vertical={false} stroke="#edf0f6" strokeDasharray="4 6" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#929bad', fontSize: 11 }} dy={13} />
-                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: '#929bad', fontSize: 11 }} />
-                          <Tooltip contentStyle={{ borderRadius: 15, border: '1px solid #eee', boxShadow: '0 12px 35px #28336b18' }} formatter={(v) => `${v}%`} />
-                          <Area dataKey="value" stroke={accentHex} strokeWidth={3} fill="url(#chartfill)" type="monotone" dot={{ r: 5, fill: accentHex, strokeWidth: 3, stroke: '#fff' }} activeDot={{ r: 7 }} />
-                        </AreaChart>
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} dy={10} />
+                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                          <Tooltip
+                            contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}
+                            formatter={(v: any, name: any) => [`${v}%`, name]}
+                            labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                          />
+                          <Legend
+                            wrapperStyle={{ paddingTop: 10, fontSize: 12 }}
+                            iconType="circle"
+                          />
+                          <Bar dataKey="academic_average" name="Academic Average (%)" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                          <Bar dataKey="attendance_rate" name="Attendance Rate (%)" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                        </BarChart>
                       </ResponsiveContainer>
                     )}
                   </div>
-                  <div className="chart-footer"><span className="legend-dot" /> Published assessment averages <span className="foot-note">Based on available records</span></div>
+                  <div className="chart-footer">
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} /> Blue: Academic Average
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 14 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} /> Red: Attendance Rate
+                    </span>
+                    <span className="foot-note" style={{ marginLeft: 'auto' }}>Comparing all campuses</span>
+                  </div>
                 </section>
 
                 <section className="panel attention-panel">
@@ -2300,12 +2425,22 @@ function App() {
                     {dash?.recent_cases.length ? dash.recent_cases.slice(0, 4).map((c, i) => (
                       <div className="case-item" key={c.id}>
                         <div className={'case-badge c' + i}>{c.priority === 'high' ? <AlertCircle size={18} /> : <HeartHandshake size={18} />}</div>
-                        <div className="case-text"><strong>{c.title}</strong><span>{c.student_name || `Student #${c.student_id}`}</span></div>
+                        <div className="case-text">
+                          <strong>{c.title}</strong>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            {c.student_name || `Student #${c.student_id}`}
+                            {c.school_name && (
+                              <span style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <Building2 size={10} /> {c.school_name}
+                              </span>
+                            )}
+                          </span>
+                        </div>
                         <Pill value={c.priority} />
                       </div>
                     )) : <Empty small text="No outstanding support cases." />}
                   </div>
-                  <button className="view-link" onClick={() => switchPage('Interventions')}>Manage support cases <ArrowRight size={17} /></button>
+                  <button className="view-link" onClick={() => handleCardClick('Interventions', 'Student Support Cases')}>Manage support cases <ArrowRight size={17} /></button>
                 </section>
               </div>
 
@@ -2351,7 +2486,7 @@ function App() {
                         Automated balance reminders with non-restrictive policy for student examinations and materials.
                       </div>
                     </div>
-                    <button className="view-link" onClick={() => switchPage('Defaulters')}>
+                    <button className="view-link" onClick={() => handleCardClick('Defaulters', 'Fee Defaulters')}>
                       Inspect Fee Defaulters <ArrowRight size={17} />
                     </button>
                   </section>
@@ -2390,7 +2525,7 @@ function App() {
                         Minimum 3 recorded assessments required for active risk evaluation.
                       </div>
                     </div>
-                    <button className="view-link" onClick={() => switchPage('Students at Risk')}>
+                    <button className="view-link" onClick={() => handleCardClick('Students at Risk', 'Students at Risk')}>
                       Inspect At-Risk Students <ArrowRight size={17} />
                     </button>
                   </section>
@@ -2398,10 +2533,10 @@ function App() {
               </div>
 
               <div className="dashboard-grid lower">
-                <section className="panel students-panel">
+                <section className="panel students-panel" style={{ gridColumn: '1 / -1' }}>
                   <div className="panel-head">
                     <div><h3>Recently added students</h3><p>Latest learners in your workspace</p></div>
-                    <button className="text-link" onClick={() => switchPage('Students')}>View all <ArrowRight size={16} /></button>
+                    <button className="text-link" onClick={() => handleCardClick('Students', 'Students')}>View all <ArrowRight size={16} /></button>
                   </div>
                   <div className="simple-table">
                     <div className="simple-tr table-title"><span>STUDENT</span><span>ADMISSION ID</span><span>CAMPUS</span></div>
@@ -2427,29 +2562,35 @@ function App() {
                     )}
                   </div>
                 </section>
+              </div>
 
-                <section className="panel pulse-panel">
-                  <div className="panel-head">
-                    <div><h3>Workspace pulse</h3><p>The numbers behind your progress</p></div>
-                    <MoreHorizontal size={20} color="#a6adbb" />
+              {/* Bottom Reports Action Bar (SS3) */}
+              <div style={{
+                marginTop: 20,
+                marginBottom: 20,
+                padding: '18px 24px',
+                background: 'var(--panel, #ffffff)',
+                borderRadius: 14,
+                border: '1px solid var(--border-color, #edf0f6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 16,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: '#ede9fe', color: '#7c3aed', display: 'grid', placeItems: 'center' }}>
+                    <FileBarChart size={22} />
                   </div>
-                  <div className="pulse-feature">
-                    <div className="pulse-ring">
-                      <strong>{fmt(dash?.stats.attendance_rate)}</strong>
-                      <small>Attendance</small>
-                    </div>
-                    <div className="pulse-copy">
-                      <span className="pulse-chip"><Activity size={14} /> Key indicator</span>
-                      <h4>Every day counts.</h4>
-                      <p>Attendance reflects recorded eligible sessions, not unrecorded days.</p>
-                    </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary, #1e293b)' }}>School Analytics & Official Transcripts</h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>Export campus registers, student grades, and institutional summary reports</p>
                   </div>
-                  <div className="pulse-bottom">
-                    <div><strong>{dash?.counts.classes ?? 0}</strong><span>Classes</span></div>
-                    <div><strong>{dash?.counts.teachers ?? 0}</strong><span>Teachers</span></div>
-                    <div><strong>{dash?.counts.open_cases ?? 0}</strong><span>Review cases</span></div>
-                  </div>
-                </section>
+                </div>
+                <button className="primary-btn" onClick={() => handleCardClick('Reports', 'Reports')}>
+                  <FileBarChart size={17} /> Reports <ArrowUpRight size={16} />
+                </button>
               </div>
             </>
             )
@@ -2482,10 +2623,12 @@ function App() {
                           const val = e.target.value;
                           if (val === 'all') {
                             setActiveCampusId(null);
+                            localStorage.removeItem('optimus_active_campus_id');
                             notify('Showing records across all campuses');
                           } else {
                             const cid = Number(val);
                             setActiveCampusId(cid);
+                            localStorage.setItem('optimus_active_campus_id', String(cid));
                             const matched = campuses.find(c => c.id === cid);
                             notify(`Filtered to ${matched?.name || 'selected campus'}`);
                           }
@@ -2802,10 +2945,10 @@ function App() {
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              <Reports user={user} />
+              <Reports user={user} activeCampusId={activeCampusId} campuses={campuses} />
             )
           )}
-          {page === 'Staff' && <Staff user={user} notify={notify} />}
+          {page === 'Staff' && <Staff user={user} notify={notify} activeCampusId={activeCampusId} campuses={campuses} />}
           {page === 'Finance' && (
             (isFreePlan || !isFeatureUnlocked('finance')) ? (
               <FeatureLockedScreen
@@ -2819,6 +2962,8 @@ function App() {
                 user={user}
                 notify={notify}
                 plan={orgPlan}
+                activeCampusId={activeCampusId}
+                campuses={campuses}
                 isPremiumUnlocked={isFeatureUnlocked('finance_dashboard')}
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
@@ -2844,7 +2989,7 @@ function App() {
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} />
+              user.role === 'student' ? <StudentAttendance user={user} notify={notify} /> : <AttendanceModule user={user} notify={notify} campuses={campuses} activeCampusId={activeCampusId} />
             )
           )}
           {page === 'Results & Progress' && (
@@ -2870,7 +3015,7 @@ function App() {
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              <Fees user={user} notify={notify} initialTab={page} />
+              <Fees user={user} notify={notify} initialTab={page} activeCampusId={activeCampusId} campuses={campuses} />
             )
           )}
           {page === 'Study materials' && (
@@ -2882,7 +3027,7 @@ function App() {
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              <StudyMaterials user={user} notify={notify} />
+              <StudyMaterials user={user} notify={notify} activeCampusId={activeCampusId} campuses={campuses} />
             )
           )}
           {page === 'Staff Salaries' && (
@@ -2900,6 +3045,8 @@ function App() {
                 plan={orgPlan}
                 isPremiumUnlocked={isFeatureUnlocked('salary_exports')}
                 onUpgrade={() => switchPage('Plan & Billing')}
+                activeCampusId={activeCampusId}
+                campuses={campuses}
               />
             )
           )}
@@ -3020,7 +3167,7 @@ function App() {
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} />
+              <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} activeCampusId={activeCampusId} campuses={campuses} />
             )
           )}
           </React.Suspense>
@@ -3036,7 +3183,7 @@ function App() {
 
       {/* Create Modal */}
       {modal && config && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <div className="modal-icon"><Plus size={20} /></div>
@@ -3548,7 +3695,7 @@ function App() {
 
       {/* Edit Modal */}
       {editModal && config && editingRecord && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setEditModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <div className="modal-icon"><Pencil size={20} /></div>
@@ -3611,6 +3758,26 @@ function App() {
                         <select required={f.required} value={editForm.subject || ''} onChange={e => setEditForm(s => ({ ...s, subject: e.target.value }))}>
                           <option value="">Select subject…</option>
                           {subs.map(sub => <option key={sub.id} value={sub.id}>{sub.name} {sub.code ? `(${sub.code})` : ''}</option>)}
+                        </select>
+                      </label>
+                    );
+                  }
+                  if (f.key === 'teacher') {
+                    const currentCampus = editForm.school || String(activeCampusId || (editingRecord as any).school || (editingRecord as any).school_id || '');
+                    const tchs = currentCampus ? refData.teachers.filter(t => !t.school_id || String(t.school_id) === currentCampus) : refData.teachers;
+                    return (
+                      <label key={f.key}>
+                        {f.label}{f.required && <span className="required"> *</span>}
+                        <select
+                          value={editForm.teacher || ''}
+                          onChange={e => setEditForm(s => ({ ...s, teacher: e.target.value }))}
+                        >
+                          <option value="">Select class teacher (optional)</option>
+                          {tchs.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
                         </select>
                       </label>
                     );
@@ -3681,6 +3848,89 @@ function App() {
                 <button className="primary-btn" disabled={saving}>{saving ? 'Saving…' : 'Save changes'} <ArrowRight size={16} /></button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Campus Prompt Modal for All-Campuses drilldowns */}
+      {campusPromptModal?.isOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: 520, borderRadius: 16 }}>
+            <div className="modal-head">
+              <div className="modal-icon" style={{ background: '#ede9fe', color: '#6d28d9' }}><Building2 size={22} /></div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Select Campus</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Choose which campus you want to view for {campusPromptModal.cardLabel}</p>
+              </div>
+              <button type="button" onClick={() => setCampusPromptModal(null)} aria-label="Close modal"><X size={20} /></button>
+            </div>
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ fontSize: 13, color: '#475569', marginBottom: 14, lineHeight: 1.5 }}>
+                You are currently in <b>All Campuses (Consolidated view)</b>. To keep your records distinct, please select a specific campus:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
+                {campuses.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveCampusId(c.id);
+                      localStorage.setItem('optimus_active_campus_id', String(c.id));
+                      setCampusPromptModal(null);
+                      notify(`Filtered to campus: ${c.name}`);
+                      switchPage(campusPromptModal.targetPage);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '14px 18px',
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 12,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 10,
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        color: '#4f46e5',
+                        display: 'grid',
+                        placeItems: 'center'
+                      }}>
+                        <Building2 size={18} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{c.name}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{c.code || 'Campus'} {c.city ? `• ${c.city}` : ''}</div>
+                      </div>
+                    </div>
+                    <ArrowRight size={16} color="#94a3b8" />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #f0f1f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="text-link"
+                style={{ fontSize: 12, color: '#6366f1', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
+                onClick={() => {
+                  setCampusPromptModal(null);
+                  notify('Showing consolidated records across all campuses');
+                  switchPage(campusPromptModal.targetPage);
+                }}
+              >
+                View all together (Consolidated)
+              </button>
+              <button type="button" className="outline-btn" onClick={() => setCampusPromptModal(null)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
@@ -4559,7 +4809,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
 
       {/* Edit Campus Modal */}
       {editModal && editCampus && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setEditModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <div className="modal-icon"><Pencil size={20} /></div>
@@ -4588,7 +4838,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
 
       {/* Register Campus Modal */}
       {addModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setAddModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card modal-card-wide">
             <div className="modal-head">
               <div className="modal-icon"><Plus size={20} /></div>

@@ -66,7 +66,14 @@ def calculate_invoice_estimate(plan, billing_months, student_count, currency='US
         active_periods = BillingPeriod.get_active_periods()
         period = next((p for p in active_periods if p.months == billing_months), None)
         if not period:
-            raise ValueError(f"Invalid billing period: {billing_months} months.")
+            if hasattr(BillingPeriod, 'STANDARD_DEFAULTS') and billing_months in BillingPeriod.STANDARD_DEFAULTS:
+                disc, order = BillingPeriod.STANDARD_DEFAULTS[billing_months]
+                period, _ = BillingPeriod.objects.get_or_create(
+                    months=billing_months,
+                    defaults={'discount_percentage': disc, 'is_active': True, 'display_order': order}
+                )
+            else:
+                raise ValueError(f"Invalid billing period: {billing_months} months.")
 
     currency = (currency or 'USD').upper()
     if currency not in ('USD', 'PKR'):
@@ -181,6 +188,47 @@ def provision_school_registration_subscription(school, admin_user, plan_slug=Non
 
 
 
+def check_duplicate_subscription(school, plan, billing_months, student_count):
+    """
+    Prevents purchasing the exact same plan, billing period, and student count
+    if the institution already has an active subscription with those identical terms.
+    Allows seat expansions (different student count), term upgrades (different months),
+    or tier changes (different plan).
+    """
+    sub = SchoolSubscription.objects.filter(school=school).first()
+    if not sub or sub.status not in ('active', 'past_due'):
+        return
+
+    # Check if active plan matches requested plan
+    active_plan_code = getattr(sub.plan, 'code', None)
+    requested_plan_code = getattr(plan, 'code', None)
+    if active_plan_code != requested_plan_code:
+        return
+
+    # Find the most recent active/approved/paid order for this school
+    last_order = SubscriptionOrder.objects.filter(
+        school=school,
+        status__in=['paid', 'approved']
+    ).order_by('-created_at').first()
+
+    current_students = sub.student_count_at_last_invoice
+    current_months = None
+    if last_order:
+        current_students = last_order.student_count or current_students
+        current_months = last_order.billing_months
+
+    # If months is known, check if it matches; if last_order not recorded, match on students
+    same_months = (current_months is None) or (current_months == billing_months)
+    same_students = (current_students == student_count)
+
+    if same_months and same_students:
+        school_label = f" ({school.name})" if getattr(school, 'name', None) else ""
+        raise ValueError(
+            f"You already bought this plan for your this school{school_label}. "
+            f"Choose a different student count, billing period, or tier to modify your subscription."
+        )
+
+
 def create_subscription_order(school, plan, billing_months, payment_reference, paid_on,
                               amount, currency='USD', notes='', submitted_by=None,
                               selected_features=None, custom_student_count=None):
@@ -192,6 +240,8 @@ def create_subscription_order(school, plan, billing_months, payment_reference, p
         active_students = int(custom_student_count)
     else:
         active_students = get_active_enrolled_student_count(school)
+
+    check_duplicate_subscription(school, plan, billing_months, active_students)
 
     if isinstance(paid_on, str):
         try:
@@ -454,6 +504,8 @@ def create_card_subscription_order(school, plan, billing_months, return_url, can
         active_students = int(custom_student_count)
     else:
         active_students = get_active_enrolled_student_count(school)
+
+    check_duplicate_subscription(school, plan, billing_months, active_students)
 
     estimate = calculate_invoice_estimate(
         plan=plan,

@@ -1536,7 +1536,7 @@ export default function Examinations({
       {/* MODAL: Create Configurable Examination Structure             */}
       {/* ------------------------------------------------------------- */}
       {configModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setConfigModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 760, width: 'min(760px, 95vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-head">
               <div>
@@ -1806,7 +1806,7 @@ export default function Examinations({
 
       {/* Legacy Session Modal */}
       {sessionModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSessionModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Create Exam Session</h3>
@@ -1838,7 +1838,7 @@ export default function Examinations({
 
       {/* Legacy Paper Schedule Modal */}
       {paperModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setPaperModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Schedule Exam Paper</h3>

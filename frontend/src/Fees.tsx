@@ -3,7 +3,8 @@ import {
   AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, Receipt,
   RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye,
-  Clock, CheckCheck, Bell, ChevronDown, ChevronUp, Mail, Send, Check, UserRound
+  Clock, CheckCheck, Bell, ChevronDown, ChevronUp, Mail, Send, Check, UserRound,
+  Building2
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User } from './api';
@@ -18,12 +19,28 @@ interface FeesProps {
   user: User;
   notify: (m: string) => void;
   initialTab?: string;
+  activeCampusId?: number | null;
+  campuses?: Array<any>;
 }
 
-export default function Fees({ user, notify, initialTab }: FeesProps) {
+export default function Fees({ user, notify, initialTab, activeCampusId, campuses = [] }: FeesProps) {
   const [tab, setTab] = useState<Tab>('overview');
-  const [schools, setSchools] = useState<R[]>([]);
-  const [school, setSchool] = useState('');
+  const [schools, setSchools] = useState<R[]>(() => campuses || []);
+  const [school, setSchool] = useState(() => (activeCampusId ? String(activeCampusId) : ''));
+
+  useEffect(() => {
+    if (activeCampusId) {
+      setSchool(String(activeCampusId));
+    } else {
+      setSchool('');
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
+    if (campuses.length > 0) {
+      setSchools(campuses);
+    }
+  }, [campuses]);
   const [summary, setSummary] = useState<R | null>(null);
   const [defaulters, setDefaulters] = useState<R[]>([]);
   const [heads, setHeads] = useState<R[]>([]);
@@ -926,6 +943,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                     <th style={{ width: 36 }}></th>
                     <th>STUDENT & FATHER</th>
                     <th>ADMISSION #</th>
+                    <th>CAMPUS</th>
                     <th>CLASS & SECTION</th>
                     <th>DAYS OVERDUE</th>
                     <th>OVERDUE HEADS</th>
@@ -962,6 +980,13 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                             </div>
                           </td>
                           <td>{d.admission_number || '—'}</td>
+                          <td>
+                            {d.school_name ? (
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '3px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <Building2 size={11} /> {d.school_name}
+                              </span>
+                            ) : '—'}
+                          </td>
                           <td><strong>{d.full_class_name}</strong></td>
                           <td>
                             <span style={{
@@ -1009,7 +1034,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
                         {/* Expandable Overdue Breakdown Sub-table */}
                         {isExpanded && (
                           <tr style={{ background: '#f8fafc' }}>
-                            <td colSpan={9} style={{ padding: '12px 24px 16px 48px' }}>
+                            <td colSpan={10} style={{ padding: '12px 24px 16px 48px' }}>
                               <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#ffffff', overflow: 'hidden' }}>
                                 <div style={{ padding: '8px 14px', background: '#f1f5f9', fontSize: 12, fontWeight: 700, color: '#334155', display: 'flex', justifyContent: 'space-between' }}>
                                   <span>Overdue Fee Heads & Vouchers</span>
@@ -1049,7 +1074,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
                   {!defaulters.length && (
                     <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b' }}>
+                      <td colSpan={10} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b' }}>
                         <CheckCircle2 size={36} color="#16a34a" style={{ margin: '0 auto 8px', opacity: 0.8 }} />
                         <h4 style={{ margin: '0 0 4px', fontSize: 15, color: '#1e293b' }}>No Fee Defaulters Found</h4>
                         <p style={{ margin: 0, fontSize: 13 }}>All student accounts are up to date within the selected criteria.</p>
@@ -1343,7 +1368,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* MODAL: Generate Vouchers */}
       {voucherModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setVoucherModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Generate Monthly Billing Vouchers</h3>
@@ -1406,7 +1431,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* MODAL: Fee Head */}
       {headModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setHeadModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Create Fee Head</h3>
@@ -1463,7 +1488,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* MODAL: Structure */}
       {structureModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setStructureModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>{editingStructureId ? 'Edit Fee Structure Rate' : 'Set Fee Structure Rate'}</h3>
@@ -1550,7 +1575,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* MODAL: Concession */}
       {concessionModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setConcessionModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-head">
               <h3>Grant Student Concession</h3>
@@ -1625,8 +1650,8 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* MODAL: Official Receipt Preview / Print */}
       {receiptModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setReceiptModal(null); }}>
-          <div className="modal-card" style={{ maxWidth: 520 }}>
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: 540 }}>
             <div className="modal-head">
               <div className="modal-icon"><Receipt size={20} /></div>
               <div>
@@ -1636,46 +1661,48 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
               <button onClick={() => setReceiptModal(null)}><X size={18} /></button>
             </div>
 
-            <div style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: 10, background: '#fafaf9', margin: '14px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Receipt Number</div>
-                  <strong style={{ fontSize: 16, color: '#2563eb' }}>{receiptModal.receipt_number}</strong>
+            <div style={{ padding: '20px 24px 0' }}>
+              <div style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fafaf9' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: 10, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Receipt Number</div>
+                    <strong style={{ fontSize: 16, color: '#2563eb' }}>{receiptModal.receipt_number}</strong>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Date</div>
+                    <strong>{receiptModal.paid_on || new Date().toISOString().slice(0, 10)}</strong>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Date</div>
-                  <strong>{receiptModal.paid_on || new Date().toISOString().slice(0, 10)}</strong>
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-                <div>
-                  <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>STUDENT NAME</small>
-                  <strong>{receiptModal.student_name}</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>STUDENT NAME</small>
+                    <strong>{receiptModal.student_name}</strong>
+                  </div>
+                  <div>
+                    <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>ADMISSION ID</small>
+                    <strong>{receiptModal.admission_number || '—'}</strong>
+                  </div>
+                  <div>
+                    <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>PAYMENT METHOD</small>
+                    <strong style={{ textTransform: 'capitalize' }}>{String(receiptModal.method || 'cash').replace('_', ' ')}</strong>
+                  </div>
+                  <div>
+                    <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>REFERENCE</small>
+                    <strong>{receiptModal.reference || 'Institutional Tuition'}</strong>
+                  </div>
                 </div>
-                <div>
-                  <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>ADMISSION ID</small>
-                  <strong>{receiptModal.admission_number || '—'}</strong>
-                </div>
-                <div>
-                  <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>PAYMENT METHOD</small>
-                  <strong style={{ textTransform: 'capitalize' }}>{String(receiptModal.method || 'cash').replace('_', ' ')}</strong>
-                </div>
-                <div>
-                  <small style={{ color: '#64748b', display: 'block', fontSize: 11 }}>REFERENCE</small>
-                  <strong>{receiptModal.reference || 'Institutional Tuition'}</strong>
-                </div>
-              </div>
 
-              <div style={{ background: '#f1f5f9', padding: '12px 16px', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>Amount Received:</span>
-                <strong style={{ fontSize: 18, color: '#16a34a' }}>Rs {receiptModal.amount}</strong>
+                <div style={{ background: '#f1f5f9', padding: '12px 16px', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>Amount Received:</span>
+                  <strong style={{ fontSize: 18, color: '#16a34a' }}>Rs {receiptModal.amount}</strong>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button type="button" className="outline-btn" onClick={() => setReceiptModal(null)}>Close</button>
-              <button type="button" className="primary-btn" onClick={handlePrintReceipt}>
+            <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f0f1f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="outline-btn" style={{ minWidth: 90 }} onClick={() => setReceiptModal(null)}>Close</button>
+              <button type="button" className="primary-btn" style={{ minWidth: 140, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }} onClick={handlePrintReceipt}>
                 <Printer size={15} /> Print Receipt
               </button>
             </div>
@@ -1685,7 +1712,7 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
       {/* MODAL: Fee Reminder Confirmation */}
       {reminderModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setReminderModal(null); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 480 }}>
             <div className="modal-head">
               <div className="modal-icon" style={{ background: '#fef3c7', color: '#b45309' }}>
@@ -1700,8 +1727,13 @@ export default function Fees({ user, notify, initialTab }: FeesProps) {
 
             <div style={{ padding: '16px 0' }}>
               <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 14 }}>
-                <div style={{ fontSize: 13, color: '#334155' }}>
-                  Student: <strong>{reminderModal.student_name}</strong> ({reminderModal.full_class_name})
+                <div style={{ fontSize: 13, color: '#334155', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>Student: <strong>{reminderModal.student_name}</strong> ({reminderModal.full_class_name})</span>
+                  {reminderModal.school_name && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#e2e8f0', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <Building2 size={10} /> {reminderModal.school_name}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 13, color: '#dc2626', fontWeight: 700, marginTop: 4 }}>
                   Outstanding Amount: {reminderModal.currency} {Number(reminderModal.total_outstanding).toLocaleString()}

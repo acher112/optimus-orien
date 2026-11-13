@@ -42,14 +42,18 @@ export default function StaffAttendanceRegister({
   user,
   notify,
   embedded = false,
+  activeCampusId,
+  campuses = [],
 }: {
   user: User;
   notify: (msg: string) => void;
   embedded?: boolean;
+  activeCampusId?: number | null;
+  campuses?: Array<{ id: number; name: string }>;
 }) {
   const [dateVal, setDateVal] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [schools, setSchools] = useState<Array<{ id: number; name: string }>>([]);
-  const [schoolId, setSchoolId] = useState<string>(() => (user.school ? String(user.school) : ''));
+  const [schoolId, setSchoolId] = useState<string>(() => (activeCampusId ? String(activeCampusId) : (user.school ? String(user.school) : '')));
   const [records, setRecords] = useState<StaffAttendanceRecord[]>([]);
   const [summary, setSummary] = useState({
     total: 0, present: 0, absent: 0, late: 0, excused: 0, not_taken: 0, recorded_count: 0
@@ -65,13 +69,22 @@ export default function StaffAttendanceRegister({
   const [calendarTarget, setCalendarTarget] = useState<CalendarTarget | null>(null);
 
   useEffect(() => {
+    if (activeCampusId) {
+      setSchoolId(String(activeCampusId));
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
+    if (campuses.length > 0) {
+      setSchools(campuses);
+    }
     list<any>('schools').then(res => {
       setSchools(res);
       if (!schoolId && res.length > 0) {
-        setSchoolId(String(user.school || res[0].id));
+        setSchoolId(String(activeCampusId || user.school || res[0].id));
       }
     }).catch(() => {});
-  }, [user.school, schoolId]);
+  }, [user.school, schoolId, activeCampusId, campuses]);
 
   const loadAttendance = useCallback(async () => {
     setLoading(true);

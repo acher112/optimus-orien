@@ -2367,24 +2367,28 @@ class BillingPeriod(models.Model):
     def __str__(self):
         return f"{self.months} Month(s) - {self.discount_percentage}% discount"
 
+    STANDARD_DEFAULTS = {
+        1: (Decimal('0.00'), 1),
+        4: (Decimal('5.00'), 2),
+        6: (Decimal('5.00'), 3),
+        8: (Decimal('10.00'), 4),
+        12: (Decimal('10.00'), 5),
+        24: (Decimal('20.00'), 6),
+        36: (Decimal('25.00'), 7),
+        60: (Decimal('30.00'), 8),
+    }
+
     @classmethod
     def get_active_periods(cls):
-        """Returns active billing periods or seeds defaults if none exist."""
-        periods = list(cls.objects.filter(is_active=True).order_by('months'))
-        if not periods:
-            defaults = [
-                (1, Decimal('0.00'), 1),
-                (6, Decimal('5.00'), 2),
-                (12, Decimal('10.00'), 3),
-            ]
-            for m, disc, order in defaults:
-                p, _ = cls.objects.get_or_create(
+        """Returns active billing periods and ensures essential defaults (1, 6, 12 months) exist."""
+        for m in (1, 6, 12):
+            if m in cls.STANDARD_DEFAULTS:
+                disc, order = cls.STANDARD_DEFAULTS[m]
+                cls.objects.get_or_create(
                     months=m,
                     defaults={'discount_percentage': disc, 'is_active': True, 'display_order': order}
                 )
-                periods.append(p)
-            periods.sort(key=lambda x: x.months)
-        return periods
+        return list(cls.objects.filter(is_active=True).order_by('months'))
 
 
 class PlatformBillingSettings(models.Model):

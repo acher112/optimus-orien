@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Wallet, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
-  Building2, Calendar, AlertCircle, RefreshCw, Layers, DollarSign
+  Building2, Calendar, AlertCircle, RefreshCw, Layers, DollarSign,
+  CheckCircle2, Clock
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, Line, XAxis, YAxis,
@@ -69,8 +70,10 @@ export default function DashboardFinanceChart({ user, notify, campuses, onNaviga
 
   const currency = data?.active_currency || data?.currency || 'PKR';
   const totalIncome = data?.total_income || 0;
+  const totalCollected = data?.total_collected !== undefined ? data.total_collected : (data?.student_projection?.collected ?? totalIncome);
+  const remainingToCollect = data?.remaining_to_collect !== undefined ? data.remaining_to_collect : Math.max(0, totalIncome - totalCollected);
   const totalExpense = data?.total_expense || 0;
-  const netBalance = data?.net || 0;
+  const netBalance = data?.net !== undefined ? data.net : (totalCollected - totalExpense);
   const isSurplus = netBalance >= 0;
 
   const chartData = useMemo(() => {
@@ -220,23 +223,51 @@ export default function DashboardFinanceChart({ user, notify, campuses, onNaviga
       {/* KPI Strip */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         gap: 12,
         padding: '16px 20px',
         borderBottom: '1px solid #f1f5f9'
       }}>
-        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <ArrowUpRight size={14} /> Total Income
+        {/* Total Income */}
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <TrendingUp size={14} /> Total Income
           </div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#15803d', marginTop: 4 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#1d4ed8', marginTop: 4 }}>
             +{currency} {Number(totalIncome).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: 11, color: '#166534', marginTop: 2 }}>
-            Across {data?.entries || 0} recorded transactions
+          <div style={{ fontSize: 11, color: '#1e40af', marginTop: 2 }}>
+            Total income across all branches
           </div>
         </div>
 
+        {/* Total Collected */}
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle2 size={14} /> Total Collected
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#15803d', marginTop: 4 }}>
+            +{currency} {Number(totalCollected).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div style={{ fontSize: 11, color: '#166534', marginTop: 2 }}>
+            Total paid & collected revenue
+          </div>
+        </div>
+
+        {/* Left to Collect */}
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Clock size={14} /> Left to Collect
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#b45309', marginTop: 4 }}>
+            {currency} {Number(remainingToCollect).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
+            Remaining balance to collect
+          </div>
+        </div>
+
+        {/* Total Expenses */}
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowDownRight size={14} /> Total Expenses
@@ -249,40 +280,41 @@ export default function DashboardFinanceChart({ user, notify, campuses, onNaviga
           </div>
         </div>
 
+        {/* Net Operating Balance */}
         <div style={{
-          background: isSurplus ? '#eff6ff' : '#fff7ed',
-          border: `1px solid ${isSurplus ? '#bfdbfe' : '#ffedd5'}`,
+          background: isSurplus ? '#f8fafc' : '#fff7ed',
+          border: `1px solid ${isSurplus ? '#cbd5e1' : '#ffedd5'}`,
           borderRadius: 10,
           padding: '12px 16px'
         }}>
           <div style={{
             fontSize: 11, fontWeight: 700,
-            color: isSurplus ? '#1e40af' : '#9a3412',
+            color: isSurplus ? '#0f172a' : '#9a3412',
             textTransform: 'uppercase',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
           }}>
-            <span>Net Operating Balance</span>
+            <span>Net Balance</span>
             <span style={{
               fontSize: 10,
               padding: '2px 6px',
               borderRadius: 4,
-              background: isSurplus ? '#2563eb' : '#ea580c',
+              background: isSurplus ? '#0ea5e9' : '#ea580c',
               color: '#ffffff'
             }}>
-              {isSurplus ? 'Operating Surplus' : 'Operating Deficit'}
+              {isSurplus ? 'Surplus' : 'Deficit'}
             </span>
           </div>
           <div style={{
             fontSize: 20, fontWeight: 800,
-            color: isSurplus ? '#1d4ed8' : '#c2410c',
+            color: isSurplus ? '#0f172a' : '#c2410c',
             marginTop: 4
           }}>
             {isSurplus ? '+' : '-'}{currency} {Math.abs(Number(netBalance)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: 11, color: isSurplus ? '#1e40af' : '#9a3412', marginTop: 2 }}>
-            Net cash generation after all heads
+          <div style={{ fontSize: 11, color: isSurplus ? '#475569' : '#9a3412', marginTop: 2 }}>
+            Operating balance (Collected - Expenses)
           </div>
         </div>
       </div>

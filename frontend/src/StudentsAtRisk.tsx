@@ -4,7 +4,7 @@ import {
   Download, FileSpreadsheet, FileText, Filter, Plus, Printer, RefreshCw, Search,
   ShieldAlert, Sparkles, UserCheck, Users, X, Edit2, Trash2, Eye, Clock,
   CheckCheck, Info, SlidersHorizontal, BookOpen, HeartHandshake, TrendingUp, TrendingDown,
-  Minus, ShieldCheck, User as UserIcon
+  Minus, ShieldCheck, User as UserIcon, Building2
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { list, request, type User } from './api';
@@ -20,12 +20,29 @@ interface StudentsAtRiskProps {
   notify: (m: string) => void;
   initialTab?: string;
   onNavigate?: (page: string) => void;
+  activeCampusId?: number | null;
+  campuses?: Array<any>;
 }
 
-export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }: StudentsAtRiskProps) {
+export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, activeCampusId, campuses = [] }: StudentsAtRiskProps) {
   const [tab, setTab] = useState<RiskTab>('list');
-  const [schools, setSchools] = useState<R[]>([]);
-  const [school, setSchool] = useState('');
+  const [schools, setSchools] = useState<R[]>(() => campuses || []);
+  const [school, setSchool] = useState(() => (activeCampusId ? String(activeCampusId) : ''));
+
+  useEffect(() => {
+    if (activeCampusId) {
+      setSchool(String(activeCampusId));
+    } else {
+      setSchool('');
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
+    if (campuses.length > 0) {
+      setSchools(campuses);
+    }
+  }, [campuses]);
+
   const [classes, setClasses] = useState<R[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -472,6 +489,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                   <tr>
                     <th>STUDENT</th>
                     <th>ADMISSION #</th>
+                    <th>CAMPUS</th>
                     <th>CLASS & SECTION</th>
                     <th>GENDER</th>
                     <th>RISK LEVEL</th>
@@ -518,6 +536,13 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                           </div>
                         </td>
                         <td>{s.admission_number || '—'}</td>
+                        <td>
+                          {s.school_name ? (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '3px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <Building2 size={11} /> {s.school_name}
+                            </span>
+                          ) : '—'}
+                        </td>
                         <td><strong>{s.full_class_name}</strong></td>
                         <td>
                           <span style={{
@@ -609,7 +634,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
 
                   {!flaggedStudents.length && !loading && (
                     <tr>
-                      <td colSpan={10} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b' }}>
+                      <td colSpan={11} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b' }}>
                         <CheckCircle2 size={36} color="#16a34a" style={{ margin: '0 auto 8px', opacity: 0.8 }} />
                         <h4 style={{ margin: '0 0 4px', fontSize: 15, color: '#1e293b' }}>No Students Currently Flagged</h4>
                         <p style={{ margin: 0, fontSize: 13 }}>
@@ -647,6 +672,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                 <tr>
                   <th>STUDENT NAME</th>
                   <th>ADMISSION #</th>
+                  <th>CAMPUS</th>
                   <th>CLASS</th>
                   <th>RECORDED GRADES</th>
                   <th>REQUIRED RESULTS</th>
@@ -658,6 +684,13 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                   <tr key={s.student_id}>
                     <td><strong>{s.student_name}</strong></td>
                     <td>{s.admission_number || '—'}</td>
+                    <td>
+                      {s.school_name ? (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '3px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Building2 size={11} /> {s.school_name}
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td>{s.full_class_name}</td>
                     <td><span className="pill orange">{s.recorded_grades_count} recorded</span></td>
                     <td>{s.required_results} minimum required</td>
@@ -670,7 +703,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
                 ))}
                 {!insufficientStudents.length && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: '#64748b' }}>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: 30, color: '#64748b' }}>
                       All active learners currently have sufficient recorded assessments for full evaluation.
                     </td>
                   </tr>
@@ -971,7 +1004,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
       {/* EVIDENCE DRAWER (SLIDE-OUT) */}
       {/* ------------------------------------------------------------------- */}
       {drawerStudent && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setDrawerStudent(null); }}>
+        <div className="modal-backdrop">
           <div
             className="modal-card"
             style={{
@@ -984,8 +1017,13 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
             <div className="modal-head" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 12 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 18 }}>Objective Evidence Dossier</h3>
-                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
-                  {drawerStudent.student_name} ({drawerStudent.admission_number || 'No ID'}) — {drawerStudent.full_class_name}
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>{drawerStudent.student_name} ({drawerStudent.admission_number || 'No ID'}) — {drawerStudent.full_class_name}</span>
+                  {drawerStudent.school_name && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '2px 7px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Building2 size={11} /> {drawerStudent.school_name}
+                    </span>
+                  )}
                 </p>
                 <button
                   type="button"
@@ -1134,7 +1172,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
       {/* MODAL: OPEN REVIEW CASE */}
       {/* ------------------------------------------------------------------- */}
       {caseModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCaseModal(null); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 540, width: 'min(540px, 95vw)' }}>
             <div className="modal-head">
               <h3 style={{ margin: 0, fontSize: 16 }}>Open Support / Review Case</h3>
@@ -1142,6 +1180,20 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
             </div>
             <form onSubmit={handleCreateCase}>
               <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <strong style={{ fontSize: 13, color: '#1e293b' }}>{caseModal.student_name}</strong>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                      Admission #{caseModal.admission_number || '—'} • {caseModal.full_class_name}
+                    </div>
+                  </div>
+                  {caseModal.school_name && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#e2e8f0', padding: '3px 8px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Building2 size={11} /> {caseModal.school_name}
+                    </span>
+                  )}
+                </div>
+
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #334155)' }}>
                   Case Title *
                   <input
@@ -1190,13 +1242,18 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate }:
       {/* MODAL: DISMISS AT-RISK FLAG */}
       {/* ------------------------------------------------------------------- */}
       {dismissModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setDismissModal(null); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 520, width: 'min(520px, 95vw)' }}>
             <div className="modal-head">
               <div>
                 <h3 style={{ margin: 0, fontSize: 16 }}>Dismiss At-Risk Flag</h3>
-                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
-                  For {dismissModal.student_name} ({dismissModal.full_class_name})
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>For {dismissModal.student_name} ({dismissModal.full_class_name})</span>
+                  {dismissModal.school_name && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '2px 7px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Building2 size={11} /> {dismissModal.school_name}
+                    </span>
+                  )}
                 </p>
               </div>
               <button type="button" onClick={() => setDismissModal(null)}><X size={18} /></button>

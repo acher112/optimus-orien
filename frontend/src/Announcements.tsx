@@ -19,6 +19,9 @@ interface AnnouncementItem {
   priority: 'normal' | 'important' | 'urgent';
   pinned: boolean;
   created_by: string;
+  created_by_id?: number | null;
+  created_by_role?: string | null;
+  can_edit?: boolean;
   created_at: string;
   updated_at: string;
   expires_at: string | null;
@@ -43,6 +46,13 @@ const getAudienceTabs = (role: string) => {
 };
 
 const getTargetAudienceOptions = (role: string) => {
+  if (role === 'teacher') {
+    return [
+      { value: 'all', label: 'Everyone (Campus-wide)' },
+      { value: 'students', label: 'Students Only' },
+      { value: 'parents', label: 'Parents Only' },
+    ];
+  }
   const options = [{ value: 'all', label: 'Everyone (All Roles)' }];
   if (role === 'principal') {
     options.push({ value: 'admins', label: 'Administrators Only' });
@@ -66,6 +76,7 @@ const getTargetAudienceOptions = (role: string) => {
 
 export default function Announcements({ user, notify }: { user: AuthUser; notify: (m: string) => void }) {
   const isManager = ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
+  const canCreate = ['organisation_admin', 'school_admin', 'principal', 'teacher'].includes(user.role);
   const audienceTabs = useMemo(() => getAudienceTabs(user.role), [user.role]);
   const targetAudienceOptions = useMemo(() => getTargetAudienceOptions(user.role), [user.role]);
 
@@ -220,7 +231,7 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
           <h1>Announcements</h1>
           <p>Targeted notices and institutional updates for students, staff, teachers, leadership, and parents.</p>
         </div>
-        {isManager && (
+        {canCreate && (
           <button className="primary-btn" onClick={openCreateModal}>
             <Plus size={16} /> New Announcement
           </button>
@@ -337,7 +348,7 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
             <p style={{ color: '#94a3b8', fontSize: 13, maxWidth: 360, margin: '0 auto' }}>
               {search || activeTab || priorityFilter ? 'Try clearing your filters or search terms.' : 'No announcements have been published yet.'}
             </p>
-            {isManager && (
+            {canCreate && (
               <button className="primary-btn" style={{ marginTop: 18 }} onClick={openCreateModal}>
                 <Plus size={15} /> Create First Announcement
               </button>
@@ -348,7 +359,7 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
 
       {/* CREATE / EDIT MODAL */}
       {showModal && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 560 }}>
             <div className="modal-head">
               <div className="modal-icon"><Megaphone size={20} /></div>
@@ -529,7 +540,7 @@ function AnnouncementCard({
           </div>
         </div>
 
-        {isManager && (
+        {item.can_edit && (
           <div style={{ display: 'flex', gap: 6, alignSelf: 'flex-start' }}>
             <button className="hr-mini" title="Edit announcement" onClick={onEdit}>
               <Pencil size={12} /> Edit

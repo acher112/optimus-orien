@@ -217,6 +217,8 @@ def evaluate_students_at_risk(school, teacher_classes=None, period_override=None
                 'student_id': student.id,
                 'student_name': student.full_name,
                 'admission_number': student.admission_number,
+                'school_id': student.school_id,
+                'school_name': student.school.name,
                 'class_name': sc.name,
                 'section': sc.section or '',
                 'full_class_name': f"{sc.name} – {sc.section}" if sc.section else sc.name,

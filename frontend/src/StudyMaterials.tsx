@@ -5,7 +5,7 @@ import {
   CheckCircle2, Clock, Trash2, Edit3, Archive, Eye, Users, Layers,
   ChevronDown, X, Sparkles, Filter, ShieldCheck, ArrowRight
 } from 'lucide-react';
-import { list, request, type User } from './api';
+import { list, request, fetchCsrfToken, type User } from './api';
 import ExportMenu, { type ExportColumn } from './ExportMenu';
 import { FilterBar } from './FilterBar';
 
@@ -34,17 +34,49 @@ interface StudyMaterialItem {
   updated_at: string;
 }
 
-export default function StudyMaterials({ user, notify }: { user: User; notify: (msg: string) => void }) {
+export default function StudyMaterials({
+  user,
+  notify,
+  activeCampusId,
+  campuses = []
+}: {
+  user: User;
+  notify: (msg: string) => void;
+  activeCampusId?: number | null;
+  campuses?: Array<any>;
+}) {
   const [materials, setMaterials] = useState<StudyMaterialItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [filterValues, setFilterValues] = useState<Record<string, any>>({});
-  const [school, setSchool] = useState<string>('');
+  const [filterValues, setFilterValues] = useState<Record<string, any>>(() => (
+    activeCampusId ? { school: activeCampusId } : {}
+  ));
+  const [school, setSchool] = useState<string>(() => (activeCampusId ? String(activeCampusId) : ''));
 
   // Dropdown reference data
   const [classes, setClasses] = useState<Array<{ id: number; name: string; school?: number }>>([]);
   const [subjects, setSubjects] = useState<Array<{ id: number; name: string; code?: string; school?: number }>>([]);
-  const [schools, setSchools] = useState<Array<{ id: number; name: string }>>([]);
+  const [schools, setSchools] = useState<Array<{ id: number; name: string }>>(() => campuses || []);
+
+  useEffect(() => {
+    if (activeCampusId) {
+      setSchool(String(activeCampusId));
+      setFilterValues(prev => ({ ...prev, school: activeCampusId }));
+    } else {
+      setSchool('');
+      setFilterValues(prev => {
+        const next = { ...prev };
+        delete next.school;
+        return next;
+      });
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
+    if (campuses.length > 0) {
+      setSchools(campuses);
+    }
+  }, [campuses]);
 
   // Upload modal state
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -85,7 +117,8 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
     setLoading(true);
     setError('');
     const params = new URLSearchParams();
-    if (school) params.append('school', school);
+    const effSchool = filterValues.school || school || (activeCampusId ? String(activeCampusId) : '');
+    if (effSchool && effSchool !== 'all') params.append('school', String(effSchool));
     if (filterValues.class && filterValues.class !== 'all') params.append('class', filterValues.class);
     if (filterValues.subject && filterValues.subject !== 'all') params.append('subject', filterValues.subject);
     if (filterValues.status && filterValues.status !== 'all') params.append('status', filterValues.status);
@@ -99,7 +132,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
     } finally {
       setLoading(false);
     }
-  }, [school, filterValues]);
+  }, [school, filterValues, activeCampusId]);
 
   useEffect(() => {
     loadMaterials();
@@ -159,20 +192,52 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
       formData.append('status', uploadStatus);
       if (uploadVisibleFrom) formData.append('visible_from', uploadVisibleFrom);
 
-      const csrf = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/)?.[2] || '';
-      const res = await fetch('/api/v1/materials/', {
+      let token = await fetchCsrfToken().catch(() => '');
+      let res = await fetch('/api/v1/materials/', {
         method: 'POST',
         credentials: 'include',
         headers: {
-          ...(csrf ? { 'X-CSRFToken': decodeURIComponent(csrf) } : {})
+          ...(token ? { 'X-CSRFToken': token } : {})
         },
         body: formData
       });
 
+      if (!res.ok && res.status === 403) {
+        token = await fetchCsrfToken(true).catch(() => '');
+        res = await fetch('/api/v1/materials/', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            ...(token ? { 'X-CSRFToken': token } : {})
+          },
+          body: formData
+        });
+      }
+
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        const msg = errJson.detail || (errJson.file ? errJson.file[0] : 'Upload failed');
-        throw new Error(msg);
+        let errorMsg = 'Upload failed';
+        try {
+          const errJson = await res.json();
+          if (errJson.detail) {
+            errorMsg = errJson.detail;
+          } else if (errJson.file) {
+            errorMsg = Array.isArray(errJson.file) ? errJson.file[0] : String(errJson.file);
+          } else if (errJson.school_class) {
+            errorMsg = Array.isArray(errJson.school_class) ? errJson.school_class[0] : String(errJson.school_class);
+          } else if (errJson.subject) {
+            errorMsg = Array.isArray(errJson.subject) ? errJson.subject[0] : String(errJson.subject);
+          } else if (errJson.title) {
+            errorMsg = Array.isArray(errJson.title) ? errJson.title[0] : String(errJson.title);
+          } else if (typeof errJson === 'object' && Object.keys(errJson).length > 0) {
+            const first = Object.values(errJson)[0];
+            errorMsg = Array.isArray(first) ? first[0] : String(first);
+          }
+        } catch {
+          if (res.status === 403) errorMsg = 'Access denied or session expired. Please refresh.';
+          else if (res.status === 413) errorMsg = 'File exceeds maximum size limit (Max 20 MB).';
+          else errorMsg = `Server error (${res.status}). Please try again.`;
+        }
+        throw new Error(errorMsg);
       }
 
       notify('Study material uploaded successfully');
@@ -205,19 +270,46 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
       const formData = new FormData();
       formData.append('file', replaceFile);
 
-      const csrf = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/)?.[2] || '';
-      const res = await fetch(`/api/v1/materials/${replacingMaterial.id}/replace/`, {
+      let token = await fetchCsrfToken().catch(() => '');
+      let res = await fetch(`/api/v1/materials/${replacingMaterial.id}/replace/`, {
         method: 'POST',
         credentials: 'include',
         headers: {
-          ...(csrf ? { 'X-CSRFToken': decodeURIComponent(csrf) } : {})
+          ...(token ? { 'X-CSRFToken': token } : {})
         },
         body: formData
       });
 
+      if (!res.ok && res.status === 403) {
+        token = await fetchCsrfToken(true).catch(() => '');
+        res = await fetch(`/api/v1/materials/${replacingMaterial.id}/replace/`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            ...(token ? { 'X-CSRFToken': token } : {})
+          },
+          body: formData
+        });
+      }
+
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.detail || 'File replacement failed');
+        let errorMsg = 'File replacement failed';
+        try {
+          const errJson = await res.json();
+          if (errJson.detail) {
+            errorMsg = errJson.detail;
+          } else if (errJson.file) {
+            errorMsg = Array.isArray(errJson.file) ? errJson.file[0] : String(errJson.file);
+          } else if (typeof errJson === 'object' && Object.keys(errJson).length > 0) {
+            const first = Object.values(errJson)[0];
+            errorMsg = Array.isArray(first) ? first[0] : String(first);
+          }
+        } catch {
+          if (res.status === 403) errorMsg = 'Access denied or session expired. Please refresh.';
+          else if (res.status === 413) errorMsg = 'File exceeds maximum size limit (Max 20 MB).';
+          else errorMsg = `Server error (${res.status}). Please try again.`;
+        }
+        throw new Error(errorMsg);
       }
 
       notify(`File replaced (Updated to v${replacingMaterial.version + 1})`);
@@ -340,7 +432,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
             title="Study Materials Directory"
             filename="study-materials"
             endpoint={`materials/?${new URLSearchParams({
-              ...(school ? { school } : {}),
+              ...((filterValues.school || school || activeCampusId) ? { school: String(filterValues.school || school || activeCampusId) } : {}),
               ...(filterValues.class && filterValues.class !== 'all' ? { class: filterValues.class } : {}),
               ...(filterValues.subject && filterValues.subject !== 'all' ? { subject: filterValues.subject } : {}),
               ...(filterValues.status && filterValues.status !== 'all' ? { status: filterValues.status } : {}),
@@ -429,7 +521,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
           ]}
           values={filterValues}
           onChange={setFilterValues}
-          onClear={() => setFilterValues({})}
+          onClear={() => setFilterValues(activeCampusId ? { school: activeCampusId } : {})}
           rightActions={
             <>
               <span className="result-count">{materials.length} learning resources</span>
@@ -677,8 +769,8 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
 
       {/* Upload Material Modal */}
       {uploadModalOpen && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setUploadModalOpen(false); }}>
-          <div className="modal-card" style={{ maxWidth: '540px' }}>
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: '540px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-head">
               <div className="modal-icon"><Upload size={20} /></div>
               <div>
@@ -688,8 +780,8 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
               <button onClick={() => setUploadModalOpen(false)}><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleUploadSubmit}>
-              <div className="modal-fields" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleUploadSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div className="modal-fields" style={{ display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', padding: '20px 24px', flex: 1 }}>
                 {/* File Dropzone */}
                 <div
                   style={{
@@ -805,7 +897,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
                 </div>
               </div>
 
-              <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid #f0f1f6', marginTop: 'auto', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button type="button" className="outline-btn" onClick={() => setUploadModalOpen(false)}>
                   Cancel
                 </button>
@@ -820,7 +912,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
 
       {/* Replace File Modal */}
       {replaceModalOpen && replacingMaterial && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setReplaceModalOpen(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: '480px' }}>
             <div className="modal-head">
               <div className="modal-icon"><Upload size={20} /></div>
@@ -831,8 +923,8 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
               <button onClick={() => setReplaceModalOpen(false)}><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleReplaceSubmit}>
-              <div style={{ padding: '16px 0' }}>
+            <form onSubmit={handleReplaceSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '20px 24px' }}>
                 <div
                   style={{
                     border: '2px dashed var(--border-color, #cbd5e1)',
@@ -874,7 +966,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
                 </div>
               </div>
 
-              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid #f0f1f6', marginTop: 'auto', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button type="button" className="outline-btn" onClick={() => setReplaceModalOpen(false)}>
                   Cancel
                 </button>
@@ -889,7 +981,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
 
       {/* Edit Details Modal */}
       {editModalOpen && editingMaterial && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setEditModalOpen(false); }}>
+        <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: '480px' }}>
             <div className="modal-head">
               <div className="modal-icon"><Edit3 size={20} /></div>
@@ -900,8 +992,8 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
               <button onClick={() => setEditModalOpen(false)}><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleEditSubmit}>
-              <div className="modal-fields" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="modal-fields" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <label>
                   Title <span className="required">*</span>
                   <input
@@ -934,7 +1026,7 @@ export default function StudyMaterials({ user, notify }: { user: User; notify: (
                 </label>
               </div>
 
-              <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid #f0f1f6', marginTop: 'auto', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button type="button" className="outline-btn" onClick={() => setEditModalOpen(false)}>
                   Cancel
                 </button>

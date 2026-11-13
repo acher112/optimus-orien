@@ -20,19 +20,52 @@ from core.models import Announcement, Notification, School, User
 from core.services.access import schools_scope
 from core.services.audit import record_event
 
+ADMIN_ROLES = {'platform_admin', 'organisation_admin', 'school_admin', 'owner'}
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
+CREATORS = ('organisation_admin', 'school_admin', 'principal', 'teacher')
 VALID_TARGETS = ['all', 'students', 'staff', 'teachers', 'principals', 'admins', 'parents']
 VALID_PRIORITIES = ['normal', 'important', 'urgent']
 
 
-def _require_manager(user):
+def _require_creator(user):
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Authentication required')
-    if not user.is_superuser and user.role not in MANAGERS:
-        raise PermissionDenied('Managing announcements requires administrator or principal privileges.')
+    if not user.is_superuser and getattr(user, 'role', None) not in CREATORS:
+        raise PermissionDenied('Publishing announcements requires administrative, principal, or teacher privileges.')
 
 
-def _serialize(a):
+def can_manage_announcement(user, a):
+    """Hierarchy rule:
+    - Admins can manage any announcement in their scope.
+    - Creators can always manage their own announcement.
+    - Principals can manage their own announcements and teachers'/staff's announcements,
+      but can NEVER edit or delete announcements created by Administrators.
+    - Teachers can ONLY edit or delete their own announcements.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or getattr(user, 'role', None) in ADMIN_ROLES:
+        return True
+    creator = a.created_by
+    if creator and creator.id == user.id:
+        return True
+    user_role = getattr(user, 'role', None)
+    if user_role == 'principal':
+        if not creator:
+            return False
+        # Principals CANNOT edit or delete admin announcements
+        if creator.is_superuser or getattr(creator, 'role', None) in ADMIN_ROLES:
+            return False
+        # Principals can edit or delete teachers/staff announcements
+        if getattr(creator, 'role', None) in ('teacher', 'staff', 'principal'):
+            return True
+        return False
+    if user_role == 'teacher':
+        return bool(creator and creator.id == user.id)
+    return False
+
+
+def _serialize(a, user=None):
     return {
         'id': a.id,
         'school_id': a.school_id,
@@ -43,6 +76,9 @@ def _serialize(a):
         'priority': a.priority,
         'pinned': a.pinned,
         'created_by': (a.created_by.get_full_name() or a.created_by.username) if a.created_by else 'System',
+        'created_by_id': a.created_by_id,
+        'created_by_role': getattr(a.created_by, 'role', None) if a.created_by else None,
+        'can_edit': can_manage_announcement(user, a) if user else False,
         'created_at': a.created_at.isoformat(),
         'updated_at': a.updated_at.isoformat(),
         'expires_at': a.expires_at.isoformat() if a.expires_at else None,
@@ -103,7 +139,7 @@ def announcements_list(request):
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(content__icontains=search))
 
-        results = [_serialize(a) for a in qs]
+        results = [_serialize(a, user=user) for a in qs]
         return Response({
             'results': results,
             'summary': {
@@ -114,7 +150,7 @@ def announcements_list(request):
         })
 
     # POST: Create announcement
-    _require_manager(user)
+    _require_creator(user)
     data = request.data or {}
     title = (data.get('title') or '').strip()
     if not title:
@@ -127,6 +163,9 @@ def announcements_list(request):
     target_role = (data.get('target_role') or 'all').strip().lower()
     if target_role not in VALID_TARGETS:
         raise ValidationError({'target_role': f"Target role must be one of: {', '.join(VALID_TARGETS)}"})
+
+    if getattr(user, 'role', None) == 'teacher' and target_role in ('admins', 'principals'):
+        raise ValidationError({'target_role': 'Teachers can only broadcast to students, parents, or campus-wide.'})
 
     priority = (data.get('priority') or 'normal').strip().lower()
     if priority not in VALID_PRIORITIES:
@@ -205,7 +244,7 @@ def announcements_list(request):
         if notifications:
             Notification.objects.bulk_create(notifications)
 
-    return Response(_serialize(ann), status=201)
+    return Response(_serialize(ann, user=user), status=201)
 
 
 @api_view(['GET', 'PATCH', 'PUT', 'DELETE'])
@@ -227,9 +266,10 @@ def announcement_detail(request, pk):
             raise PermissionDenied('Outside your authorised scope.')
 
     if request.method == 'GET':
-        return Response(_serialize(ann))
+        return Response(_serialize(ann, user=user))
 
-    _require_manager(user)
+    if not can_manage_announcement(user, ann):
+        raise PermissionDenied('You do not have permission to modify or delete this announcement.')
 
     if request.method == 'DELETE':
         with transaction.atomic():
@@ -257,6 +297,8 @@ def announcement_detail(request, pk):
         tr = str(data['target_role']).strip().lower()
         if tr not in VALID_TARGETS:
             raise ValidationError({'target_role': f"Must be one of: {', '.join(VALID_TARGETS)}"})
+        if getattr(user, 'role', None) == 'teacher' and tr in ('admins', 'principals'):
+            raise ValidationError({'target_role': 'Teachers can only broadcast to students, parents, or campus-wide.'})
         ann.target_role = tr
         changed.append('target_role')
 
@@ -285,4 +327,4 @@ def announcement_detail(request, pk):
         ann.save()
         record_event(actor=user, action='update', obj=ann, changed_fields=changed)
 
-    return Response(_serialize(ann))
+    return Response(_serialize(ann, user=user))

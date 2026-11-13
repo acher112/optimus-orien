@@ -160,7 +160,6 @@ def _entries(user, params, request=None, target_schools=None):
 
 
 @api_view(['GET', 'POST'])
-@requires_feature('accounts_ledger')
 def categories(request):
     user = request.user
     _require(user)
@@ -224,7 +223,6 @@ def category_detail(request, pk):
 
 
 @api_view(['GET', 'POST'])
-@requires_feature('accounts_ledger')
 def entries(request):
     user = request.user
     _require(user)
@@ -235,7 +233,20 @@ def entries(request):
             qs = qs.filter(voided=False)
         return Response({'results': [_entry_row(e) for e in qs[:500]]})
     school = _school(user, request.data.get('school'))
-    cat = FinanceCategory.objects.filter(pk=request.data.get('category'), school=school, active=True).first()
+    cat_val = request.data.get('category')
+    cat = None
+    if cat_val is not None and str(cat_val).strip():
+        val_str = str(cat_val).strip()
+        if val_str.isdigit():
+            cat = FinanceCategory.objects.filter(pk=int(val_str), school=school, active=True).first()
+        if not cat:
+            cat = FinanceCategory.objects.filter(name__iexact=val_str, school=school, active=True).first()
+        if not cat:
+            _ensure_defaults(school)
+            cat = FinanceCategory.objects.filter(name__iexact=val_str, school=school, active=True).first()
+        if not cat and not val_str.isdigit():
+            cat_kind = request.data.get('kind') or ('income' if any(val_str.lower() in n.lower() for n in DEFAULTS['income']) else 'expense')
+            cat = FinanceCategory.objects.create(school=school, kind=cat_kind, name=val_str[:80])
     if not cat:
         raise ValidationError({'category': 'Choose an active category from this campus.'})
     when = _date(request.data.get('date')) or date.today()
@@ -346,6 +357,16 @@ def summary(request):
     st_remaining = max(Decimal('0.00'), st_expected - st_collected)
     st_avg = round(float(st_expected / Decimal(str(st_count))), 2) if st_count > 0 else 0.0
 
+    extra_income = max(Decimal('0.00'), total['income'] - st_collected)
+    if st_expected > Decimal('0.00'):
+        billed_income = float(st_expected + extra_income)
+        collected_income = float(st_collected + extra_income)
+        remaining_income = max(0.0, billed_income - collected_income)
+    else:
+        billed_income = float(total['income'])
+        collected_income = float(total['income'])
+        remaining_income = 0.0
+
     monthly_rows = [{'month': m, 'income': float(v['income']), 'expense': float(v['expense']), 'net': float(v['income'] - v['expense'])} for m, v in sorted(monthly.items())]
 
     # Handle export if requested
@@ -375,8 +396,14 @@ def summary(request):
             return export_res
 
     return Response({
-        'total_income': float(total['income']), 'total_expense': float(total['expense']),
-        'net': float(total['income'] - total['expense']), 'entries': qs.count(),
+        'total_income': billed_income,
+        'total_collected': collected_income,
+        'remaining_to_collect': remaining_income,
+        'total_billed': billed_income,
+        'total_expense': float(total['expense']),
+        'net': float(Decimal(str(collected_income)) - total['expense']),
+        'ledger_income': float(total['income']),
+        'entries': qs.count(),
         'currency': active_currency,
         'active_currency': active_currency,
         'currencies_present': currencies_present,

@@ -350,7 +350,32 @@ def staff_list(request):
         _log(s, 'hired', user, to=f'{s.position} ({role})')
         _sync_login(s, role)
 
-        if role == 'teacher' and link:
+        if role == 'teacher':
+            if not link:
+                fn = (s.first_name or 'Teacher').strip().lower()
+                ln = (s.last_name or str(s.id)).strip().lower()
+                base_username = f"tch_{fn}_{ln}"[:20]
+                uname = base_username
+                c = 1
+                while User.objects.filter(username=uname).exists():
+                    uname = f"{base_username}_{c}"[:30]
+                    c += 1
+                email_to_use = s.email or f"{uname}@institutional.local"
+                link = User.objects.create(
+                    username=uname,
+                    email=email_to_use,
+                    first_name=s.first_name,
+                    last_name=s.last_name,
+                    role='teacher',
+                    school=school,
+                    organisation=school.organisation,
+                    is_active=True
+                )
+                link.set_unusable_password()
+                link.save()
+                s.user = link
+                s.save(update_fields=['user'])
+
             if invitation_token:
                 UserInvitation.objects.create(
                     token_hash=token_hash, email=link.email, role='teacher',

@@ -184,31 +184,59 @@ function PremiumFeatureLockBanner({
   );
 }
 
-export default function Reports({ user }: { user: User }) {
+export default function Reports({
+  user,
+  activeCampusId,
+  campuses = []
+}: {
+  user: User;
+  activeCampusId?: number | null;
+  campuses?: Array<any>;
+}) {
   const isPrincipal = user.role === 'principal';
   const [domain, setDomain] = useState<Domain>('academic');
-  const [view, setView] = useState<View>({ level: 'org' });
+  const [view, setView] = useState<View>(() => {
+    if (activeCampusId && campuses.length > 0) {
+      const match = campuses.find(c => c.id === activeCampusId);
+      if (match) return { level: 'campus', id: match.id, name: match.name };
+    }
+    return { level: 'org' };
+  });
   const [period, setPeriod] = useState('');
   const [data, setData] = useState<R | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [singleCampus, setSingleCampus] = useState(isPrincipal);
+  const [singleCampus, setSingleCampus] = useState(isPrincipal || !!activeCampusId);
 
   // Financial Analytics State
-  const [schools, setSchools] = useState<R[]>([]);
-  const [financeSchool, setFinanceSchool] = useState(isPrincipal && user.school ? String(user.school) : '');
+  const [schools, setSchools] = useState<R[]>(() => campuses || []);
+  const [financeSchool, setFinanceSchool] = useState(() => (activeCampusId ? String(activeCampusId) : (isPrincipal && user.school ? String(user.school) : '')));
   const [financeSum, setFinanceSum] = useState<R | null>(null);
   const [financeLoading, setFinanceLoading] = useState(false);
   const [financeError, setFinanceError] = useState('');
 
   useEffect(() => {
+    if (activeCampusId) {
+      const match = (campuses.length ? campuses : schools).find(c => c.id === activeCampusId);
+      setView({ level: 'campus', id: activeCampusId, name: match?.name || 'Selected Campus' });
+      setFinanceSchool(String(activeCampusId));
+    } else {
+      setView({ level: 'org' });
+      setFinanceSchool('');
+    }
+  }, [activeCampusId]);
+
+  useEffect(() => {
+    if (campuses.length > 0) {
+      setSchools(campuses);
+    }
     list<R>('schools').then(res => {
       setSchools(res);
       if (isPrincipal && user.school) {
         setFinanceSchool(String(user.school));
       }
     }).catch(() => {});
-  }, [isPrincipal, user.school]);
+  }, [isPrincipal, user.school, campuses]);
 
   const path = useCallback((v: View) => {
     const q = period && !['this_month', 'last_30_days', 'last_3_months', 'last_6_months', 'this_year'].includes(period)
