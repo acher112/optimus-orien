@@ -2957,21 +2957,50 @@ function App() {
                 </div>
               </div>
 
-              <div className="resource-summary" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div className="resource-icon"><LayersIcon page={page} /></div>
-                  <div><strong className="resource-kpi-val">{records.length}</strong><span>Total {page.toLowerCase()} records</span></div>
-                </div>
-                {(activeCampus || campuses.length > 0) && (
-                  <div className="campus-indicator-pill">
-                    <Building2 size={13} color="var(--brand-primary, #6366f1)" />
-                    <span>Campus: <b className="campus-indicator-name">{activeCampus ? activeCampus.name : (campuses.length === 1 ? campuses[0].name : 'All Campuses')}</b></span>
-                    {(activeCampus?.principal_name || (campuses.length === 1 && campuses[0].principal_name)) && (
-                      <span className="campus-indicator-principal">• Principal: {activeCampus?.principal_name || campuses[0].principal_name}</span>
-                    )}
+              <div className="resource-hero-bar">
+                <div className="resource-hero-left">
+                  <div className="resource-hero-icon">
+                    <LayersIcon page={page} />
                   </div>
-                )}
-                <div className="resource-side" style={{ marginLeft: 'auto' }}><CheckCircle2 size={17} /> Synced with your workspace</div>
+                  <div className="resource-hero-stat">
+                    <div className="resource-hero-label">
+                      Total {page === 'Students' ? 'Students Enrolled' : page === 'Classes' ? 'Classes & Cohorts' : page === 'Subjects' ? 'Curriculum Subjects' : `${page}`}
+                    </div>
+                    <div className="resource-hero-num-wrap">
+                      <span className="resource-hero-num">{records.length.toLocaleString()}</span>
+                      <span className="resource-hero-badge">
+                        {filtered.length !== records.length ? (
+                          <span className="badge-filtered">{filtered.length} matching filter</span>
+                        ) : (
+                          <span className="badge-total">Registered records</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="resource-hero-center">
+                  {(activeCampus || campuses.length > 0) && (
+                    <div className="resource-scope-badge">
+                      <Building2 size={14} className="scope-icon" />
+                      <span className="scope-text">
+                        Campus Scope: <strong>{activeCampus ? activeCampus.name : (campuses.length === 1 ? campuses[0].name : 'All Campuses (Entire Organisation)')}</strong>
+                      </span>
+                      {(activeCampus?.principal_name || (campuses.length === 1 && campuses[0].principal_name)) && (
+                        <span className="scope-principal-chip">
+                          <Crown size={11} /> {activeCampus?.principal_name || campuses[0].principal_name}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="resource-hero-right">
+                  <div className="resource-live-sync-pill">
+                    <span className="sync-pulse-dot" />
+                    <span>Live Synced</span>
+                  </div>
+                </div>
               </div>
 
               <section className="panel resource-panel">
@@ -3331,7 +3360,35 @@ function App() {
                       ))}
                     </tbody>
                   </table>
-                  {!filtered.length && <Empty text={search ? 'No matching records. Try a different search.' : 'No records yet. Add your first entry to get started.'} />}
+                  {!filtered.length && (
+                    <Empty
+                      title={
+                        search || Object.keys(effectiveResourceFilters).length > 0
+                          ? 'No matching records found'
+                          : `No ${page.toLowerCase()} registered yet`
+                      }
+                      text={
+                        search || Object.keys(effectiveResourceFilters).length > 0
+                          ? 'No records match your active search and filter criteria. Try resetting filters to see all available records.'
+                          : `There are currently no ${page.toLowerCase()} registered in the selected campus. Get started by adding your first record.`
+                      }
+                      icon={() => <LayersIcon page={page} />}
+                      actionLabel={
+                        search || Object.keys(effectiveResourceFilters).length > 0
+                          ? 'Reset all filters'
+                          : config.fields.length > 0 && !['student', 'teacher'].includes(user.role)
+                          ? `Add ${getSingularTitle(page)}`
+                          : undefined
+                      }
+                      onAction={
+                        search || Object.keys(effectiveResourceFilters).length > 0
+                          ? () => handleResourceFilterClear()
+                          : config.fields.length > 0 && !['student', 'teacher'].includes(user.role)
+                          ? () => openCreateModal()
+                          : undefined
+                      }
+                    />
+                  )}
                 </div>
 
                 <div className="table-footer">
@@ -4757,12 +4814,36 @@ function Stat({ icon: Icon, label, value, foot, tone, onClick }: { icon: typeof 
   );
 }
 
-function Empty({ text, small = false }: { text: string; small?: boolean }) {
+function Empty({
+  text,
+  title,
+  icon: CustomIcon,
+  actionLabel,
+  onAction,
+  small = false
+}: {
+  text: string;
+  title?: string;
+  icon?: any;
+  actionLabel?: string;
+  onAction?: () => void;
+  small?: boolean;
+}) {
+  const IconComponent = CustomIcon || ClipboardList;
   return (
-    <div className={'empty ' + (small ? 'empty-small' : '')}>
-      <span><ClipboardList size={25} /></span>
-      <strong>Nothing to show yet</strong>
-      <p>{text}</p>
+    <div className={'empty-state-card ' + (small ? 'empty-state-card-small' : '')}>
+      <div className="empty-state-icon-ambient">
+        <div className="empty-state-icon-inner">
+          {typeof IconComponent === 'function' ? <IconComponent size={small ? 20 : 26} /> : IconComponent}
+        </div>
+      </div>
+      <h3 className="empty-state-title">{title || 'Nothing to show yet'}</h3>
+      <p className="empty-state-desc">{text}</p>
+      {actionLabel && onAction && (
+        <button type="button" className="empty-state-cta-btn" onClick={onAction}>
+          <Plus size={15} /> <span>{actionLabel}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -6131,10 +6212,23 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
           <p>Complete traceability of administrative modifications, account provisioning, transfers, and configuration activations.</p>
         </div>
       </div>
-      <div className="resource-summary">
-        <div className="resource-icon"><ShieldCheck size={23} /></div>
-        <div><strong>{logs.length}</strong><span>Total recorded security events</span></div>
-        <div className="resource-side"><CheckCircle2 size={17} /> Verified Activity Trail</div>
+      <div className="resource-hero-bar">
+        <div className="resource-hero-left">
+          <div className="resource-hero-icon"><ShieldCheck size={24} /></div>
+          <div className="resource-hero-stat">
+            <div className="resource-hero-label">Security Audit Trail</div>
+            <div className="resource-hero-num-wrap">
+              <span className="resource-hero-num">{logs.length.toLocaleString()}</span>
+              <span className="resource-hero-badge"><span className="badge-total">Recorded events</span></span>
+            </div>
+          </div>
+        </div>
+        <div className="resource-hero-right">
+          <div className="resource-live-sync-pill">
+            <span className="sync-pulse-dot" />
+            <span>Verified Activity Trail</span>
+          </div>
+        </div>
       </div>
       <section className="panel audit-panel">
         <FilterBar
@@ -6210,7 +6304,13 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
               })}
             </tbody>
           </table>
-          {!filtered.length && <Empty text={filters.q ? 'No matching audit events found.' : 'No audit events recorded yet.'} />}
+          {!filtered.length && (
+            <Empty
+              title={filters.q || filters.action ? 'No matching audit events' : 'No audit records yet'}
+              text={filters.q || filters.action ? 'No recorded events match your filter query. Clear filters to see full history.' : 'All system modifications and security actions will be recorded here.'}
+              icon={ShieldCheck}
+            />
+          )}
         </div>
       </section>
     </>

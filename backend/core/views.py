@@ -703,7 +703,7 @@ class SubjectSerializer(DynamicSerializer):
  def get_assigned_classes(self,obj):
   return list(obj.class_subjects.values_list('school_class_id',flat=True))
  def get_assigned_class_names(self,obj):
-  return list(obj.class_subjects.values_list('school_class__name',flat=True))
+  return [cs.school_class.display_name for cs in obj.class_subjects.select_related('school_class').all()]
  def create(self,validated_data):
   classes=validated_data.pop('classes',None)
   subject=super().create(validated_data)
@@ -718,10 +718,11 @@ class SubjectSerializer(DynamicSerializer):
   subject=super().update(instance,validated_data)
   if classes is not None:
    from core.models import ClassSubject, SchoolClass
-   current_cids=set(instance.class_subjects.values_list('school_class_id',flat=True))
+   target_school_id = subject.school_id or instance.school_id
+   current_cids=set(subject.class_subjects.values_list('school_class_id',flat=True))
    new_cids=set(classes)
-   instance.class_subjects.filter(school_class_id__in=(current_cids-new_cids)).delete()
-   valid_classes=SchoolClass.objects.filter(pk__in=(new_cids-current_cids),school_id=instance.school_id)
+   subject.class_subjects.filter(school_class_id__in=(current_cids-new_cids)).delete()
+   valid_classes=SchoolClass.objects.filter(pk__in=(new_cids-current_cids),school_id=target_school_id)
    for sc in valid_classes:
     ClassSubject.objects.get_or_create(school_class=sc,subject=subject)
   return subject
@@ -1205,7 +1206,7 @@ class ScopedViewSet(viewsets.ModelViewSet):
     if Grade.objects.filter(student=old.student,assessment__school_class=old.school_class,assessment__date__gt=cutoff).exists() or Attendance.objects.filter(student=old.student,school_class=old.school_class,date__gt=cutoff).exists() or HomeworkSubmission.objects.filter(student=old.student,homework__school_class=old.school_class,homework__due_date__gt=cutoff).exists():
      raise APIValidationError({'end_date':'Cannot shorten enrollment before recorded grades or attendance'})
   validate_model(model,data,instance=old,server_attrs=extras)
-  before={k:getattr(old,k) for k in data}
+  before={k:getattr(old,k,None) for k in data}
   saved=serializer.save(**extras)
   if model is SchoolClass:
    try:
