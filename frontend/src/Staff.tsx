@@ -6,10 +6,11 @@ import ExportMenu from './ExportMenu';
 import { FilterBar } from './FilterBar';
 import PasswordField from './PasswordField';
 import StaffAttendanceRegister from './StaffAttendanceRegister';
+import { UserProfileView, type UserProfileData } from './UserProfileView';
 import './hr.css';
 
 type R = Record<string, any>;
-type Action = { kind: 'add' } | { kind: 'promote' | 'role' | 'terminate' | 'history' | 'edit' | 'assignments'; staff: R };
+type Action = { kind: 'add' } | { kind: 'promote' | 'role' | 'terminate' | 'history' | 'edit' | 'assignments' | 'profile'; staff: R };
 const nice = (s: string) => s.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 const EVENT_TEXT: Record<string, string> = { hired: 'Hired', promoted: 'Promoted', role_changed: 'Role changed', terminated: 'Terminated', reinstated: 'Reinstated', updated: 'Updated' };
 
@@ -179,10 +180,21 @@ export default function Staff({
           <thead><tr><th>NAME</th><th>POSITION</th><th>ROLE</th><th>CAMPUS</th><th>HIRED</th><th>LOGIN</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
           <tbody>{rows.map(s => (
             <tr key={s.id}>
-              <td><b className="hr-name">{s.full_name}</b></td><td>{s.position}</td><td>{nice(s.role)}</td><td>{s.school_name}</td><td>{s.hired_on}</td>
+              <td>
+                <b
+                  className="hr-name"
+                  style={{ cursor: 'pointer', color: 'var(--primary-color, #4338ca)' }}
+                  title="Click to view 360° Profile"
+                  onClick={() => setAction({ kind: 'profile', staff: s })}
+                >
+                  {s.full_name}
+                </b>
+              </td>
+              <td>{s.position}</td><td>{nice(s.role)}</td><td>{s.school_name}</td><td>{s.hired_on}</td>
               <td>{s.has_login ? s.username : '—'}</td>
               <td><span className={'pill ' + (s.status === 'active' ? 'green' : 'red')}><i className="pill-dot" />{nice(s.status)}</span></td>
               <td className="hr-row-actions">
+                <button className="hr-mini" title="View 360° Profile" onClick={() => setAction({ kind: 'profile', staff: s })}><GraduationCap size={13} /> Profile</button>
                 <button className="hr-mini" title="Edit staff member" onClick={() => setAction({ kind: 'edit', staff: s })}><Pencil size={13} /> Edit</button>
                 {s.status === 'active' ? <>
                   {leader && <button className="hr-mini" onClick={() => setAction({ kind: 'promote', staff: s })}><ArrowUpRight size={13} /> Promote</button>}
@@ -209,8 +221,60 @@ export default function Staff({
       {action?.kind === 'terminate' && <Terminate s={action.staff} onClose={() => setAction(null)} onDone={() => done('Employment ended. Any login was switched off.')} />}
       {action?.kind === 'history' && <Timeline s={action.staff} onClose={() => setAction(null)} />}
       {action?.kind === 'assignments' && <TeachingAssignmentsModal s={action.staff} user={user} onClose={() => setAction(null)} onDone={() => done('Assignments updated')} />}
+      {action?.kind === 'profile' && <StaffProfileModal staff={action.staff} onClose={() => setAction(null)} onEdit={() => setAction({ kind: 'edit', staff: action.staff })} />}
       {calendarTarget && <AttendanceCalendarModal target={calendarTarget} onClose={() => setCalendarTarget(null)} />}
     </>
+  );
+}
+
+function StaffProfileModal({ staff, onClose, onEdit }: { staff: R; onClose: () => void; onEdit?: () => void }) {
+  const profileData: UserProfileData = {
+    id: staff.id,
+    name: staff.full_name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || 'Staff Member',
+    role: staff.role || 'teacher',
+    registryId: staff.role === 'teacher'
+      ? `FACULTY-2024-${String(staff.id).padStart(4, '0')}`
+      : staff.role === 'principal'
+      ? `PRINCIPAL-2024-${String(staff.id).padStart(4, '0')}`
+      : `STAFF-2024-${String(staff.id).padStart(4, '0')}`,
+    email: staff.email || '',
+    phone: staff.phone || '+1 (555) 019-2834',
+    idNumber: staff.national_id || `SSM-${staff.id}-9942`,
+    location: staff.school_name || 'Main Campus',
+    avatarLetter: (staff.full_name || staff.first_name || 'S').charAt(0).toUpperCase(),
+    avatarColor: staff.avatar_color,
+    avatarImage: staff.avatar_image,
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1200 }}>
+      <div
+        className="modal-card"
+        style={{ maxWidth: 960, width: '95vw', maxHeight: '92vh', overflowY: 'auto', padding: 28, borderRadius: 24 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid #f1f5f9', paddingBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+              {nice(staff.role)} • 360° Institutional Profile
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0 0', color: '#0f172a' }}>{staff.full_name}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <UserProfileView
+          profile={profileData}
+          onEdit={onEdit}
+        />
+      </div>
+    </div>
   );
 }
 

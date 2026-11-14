@@ -65,6 +65,7 @@ import { StudentDiscussion } from './StudentDiscussion';
 import { StudentProfile } from './StudentProfile';
 import StudentProfileModal from './StudentProfileModal';
 const PsychologicalEvaluation = React.lazy(() => import('./PsychologicalEvaluation'));
+import LongitudinalPerformanceTrends from './LongitudinalPerformanceTrends';
 
 const ViewLoadingSkeleton = () => (
   <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -2529,6 +2530,9 @@ function App() {
                 {/* 5: Academic average */}
                 <Stat icon={TrendingUp} label="Academic average" value={fmt(dash?.stats.academic_average)} foot={`${dash?.stats.grade_records ?? 0} recorded grades`} tone="peach" onClick={() => handleCardClick('Examinations', 'Examinations & Academics')} />
               </div>
+
+              {/* SS1 Longitudinal Performance Trends */}
+              <LongitudinalPerformanceTrends campuses={campuses} />
 
               <div className="dashboard-grid">
                 <section className="panel chart-panel">

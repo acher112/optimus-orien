@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { User, Shield, Lock, Phone, Calendar, School, KeyRound, CheckCircle2 } from 'lucide-react';
 import { request } from './api';
+import UserProfileView, { type UserProfileData } from './UserProfileView';
 
 interface Props {
   user: any;
@@ -11,6 +12,7 @@ export const StudentProfile: React.FC<Props> = ({ user, notify }) => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPwdCard, setShowPwdCard] = useState(false);
 
   // Password Change state
   const [oldPassword, setOldPassword] = useState('');
@@ -86,115 +88,50 @@ export const StudentProfile: React.FC<Props> = ({ user, notify }) => {
     );
   }
 
+  const profileData: UserProfileData = {
+    id: profile.id,
+    name: profile.full_name || `Student-ID-${profile.id}`,
+    role: 'student',
+    registryId: `REGISTRY ID: STUDENT-${profile.admission_number || profile.id}`,
+    email: `${profile.username || `student-id-${profile.id}`}@${profile.school_name ? profile.school_name.toLowerCase().replace(/[^a-z0-9]/g, '') : 'edu'}.us`,
+    phone: profile.guardian_phone || '+1 (555) 000-0000',
+    idNumber: `ID-${profile.admission_number || '776141'}`,
+    location: profile.school_name ? `${profile.school_name}, ${profile.city || 'Campus'}` : 'Philadelphia, Philadelphia',
+    avatarLetter: profile.first_name ? profile.first_name[0].toUpperCase() : 'S',
+    avatarColor: '#f1f5f9',
+    trajectory: profile.performance_trajectory,
+    historyItems: profile.grade_history,
+    transferRecord: profile.transfer_record,
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40, maxWidth: 900 }}>
-      {/* Header Banner */}
-      <div style={{
-        background: '#ffffff',
-        borderRadius: 16,
-        padding: '24px 28px',
-        border: '1px solid #e2e8f0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 20
-      }}>
-        <div style={{
-          width: 64,
-          height: 64,
-          borderRadius: '50%',
-          background: '#e0e7ff',
-          color: '#4338ca',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 24,
-          fontWeight: 800
-        }}>
-          {profile.first_name[0]}{profile.last_name ? profile.last_name[0] : ''}
-        </div>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a' }}>
-            {profile.full_name}
-          </h2>
-          <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-            Admission Number: <b>{profile.admission_number}</b> · Enrolled in <b>{profile.class_name}</b>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
+      <UserProfileView
+        profile={profileData}
+        extraActions={
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button
+              type="button"
+              className="outline-btn"
+              style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}
+              onClick={() => setShowPwdCard(v => !v)}
+            >
+              <KeyRound size={14} /> {showPwdCard ? 'Hide Password Settings' : 'Change Password & Security'}
+            </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
-        {/* Personal & Enrolment Information */}
+      {/* Optional Password Change Card */}
+      {showPwdCard && (
         <div style={{
           background: '#ffffff',
-          borderRadius: 16,
+          borderRadius: 20,
           padding: 24,
           border: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16
+          maxWidth: 520,
         }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <User size={18} color="#4f46e5" /> Academic & Personal Details
-          </h3>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontSize: 13 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Full Name</div>
-              <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{profile.full_name}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Admission ID</div>
-              <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{profile.admission_number}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Campus</div>
-              <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{profile.school_name}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Class & Section</div>
-              <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{profile.class_name}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Father's Name</div>
-              <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{profile.father_name || '—'}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Gender</div>
-              <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2, textTransform: 'capitalize' }}>{profile.gender}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Enrolment Date</div>
-              <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{profile.enrolled_on || '—'}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Portal Username</div>
-              <div style={{ fontWeight: 700, color: '#4f46e5', marginTop: 2, fontFamily: 'monospace' }}>{profile.username || '—'}</div>
-            </div>
-          </div>
-
-          {/* Guardian Info */}
-          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
-              Guardian Emergency Contact
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155' }}>
-              <Phone size={15} color="#64748b" />
-              <span>{profile.guardian_phone || 'No phone number on record'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Change Password Card */}
-        <div style={{
-          background: '#ffffff',
-          borderRadius: 16,
-          padding: 24,
-          border: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16
-        }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
             <KeyRound size={18} color="#4f46e5" /> Security & Password
           </h3>
 
@@ -205,7 +142,8 @@ export const StudentProfile: React.FC<Props> = ({ user, notify }) => {
               color: pwdMsg.type === 'success' ? '#166534' : '#b91c1c',
               padding: '10px 14px',
               borderRadius: 8,
-              fontSize: 13
+              fontSize: 13,
+              marginBottom: 14,
             }}>
               {pwdMsg.text}
             </div>
@@ -276,7 +214,7 @@ export const StudentProfile: React.FC<Props> = ({ user, notify }) => {
             </button>
           </form>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import {
   X, User, Phone, Calendar, Award, BookOpen, Clock,
   GraduationCap, AlertCircle, RefreshCw, CheckCircle2,
-  Printer, KeyRound, Building2, Users, HeartHandshake, ShieldCheck
+  Printer, KeyRound, Building2, Users, HeartHandshake, ShieldCheck, TrendingUp
 } from 'lucide-react';
 import { request } from './api';
+import UserProfileView, { type UserProfileData } from './UserProfileView';
 
 interface StudentProfileData {
   id: number;
@@ -69,6 +70,12 @@ interface StudentProfileData {
     percentage: number | null;
     date: string | null;
   }>;
+  performance_trajectory?: Array<{ year: string; avgScore: number }>;
+  grade_history?: Array<{ index: string; grade: string; year: string; score: string; status: string }>;
+  transfer_record?: {
+    current_enrollment: { school_name: string; details: string };
+    previous_institution?: { school_name: string; details: string };
+  };
 }
 
 interface Props {
@@ -81,7 +88,7 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
   const [profile, setProfile] = useState<StudentProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'bio' | 'academics' | 'attendance'>('bio');
+  const [activeTab, setActiveTab] = useState<'profile' | 'bio' | 'academics' | 'attendance'>('profile');
 
   useEffect(() => {
     if (!studentId) return;
@@ -142,7 +149,7 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
           background: '#ffffff',
           borderRadius: 20,
           width: '100%',
-          maxWidth: 820,
+          maxWidth: 960,
           maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
@@ -248,8 +255,28 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
             display: 'flex',
             borderBottom: '1px solid #e2e8f0',
             background: '#f8fafc',
-            padding: '0 20px'
+            padding: '0 20px',
+            overflowX: 'auto'
           }}>
+            <button
+              onClick={() => setActiveTab('profile')}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '14px 16px',
+                fontSize: 13,
+                fontWeight: 700,
+                color: activeTab === 'profile' ? '#4f46e5' : '#64748b',
+                borderBottom: activeTab === 'profile' ? '3px solid #4f46e5' : '3px solid transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <TrendingUp size={15} /> 360° Profile & Trajectory
+            </button>
             <button
               onClick={() => setActiveTab('bio')}
               style={{
@@ -335,6 +362,27 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
             </div>
           ) : profile ? (
             <>
+              {/* TAB 0: 360° PROFILE & TRAJECTORY (SS4) */}
+              {activeTab === 'profile' && (
+                <UserProfileView
+                  profile={{
+                    id: profile.id,
+                    name: profile.full_name || `Student-ID-${profile.id}`,
+                    role: 'student',
+                    registryId: `REGISTRY ID: STUDENT-${profile.admission_number || profile.id}`,
+                    email: `${profile.username || `student-id-${profile.id}`}@${profile.school_name ? profile.school_name.toLowerCase().replace(/[^a-z0-9]/g, '') : 'edu'}.us`,
+                    phone: profile.guardian_phone || '+1 (555) 000-0000',
+                    idNumber: `ID-${profile.admission_number || '776141'}`,
+                    location: profile.school_name ? `${profile.school_name}` : 'Philadelphia, Philadelphia',
+                    avatarLetter: profile.first_name ? profile.first_name[0].toUpperCase() : 'S',
+                    avatarColor: profile.gender === 'female' ? '#fdf2f8' : '#eff6ff',
+                    trajectory: profile.performance_trajectory,
+                    historyItems: profile.grade_history,
+                    transferRecord: profile.transfer_record,
+                  }}
+                />
+              )}
+
               {/* TAB 1: BIO & FAMILY */}
               {activeTab === 'bio' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

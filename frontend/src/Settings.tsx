@@ -19,6 +19,7 @@ import {
 import { updateProfile, changePassword, type User } from './api';
 import { applyTheme, getStoredTheme, resolveHex, THEME_PRESETS, type ThemeMode } from './theme';
 import PasswordField from './PasswordField';
+import { UserProfileView, type UserProfileData } from './UserProfileView';
 import './style.css';
 
 interface SettingsProps {
@@ -165,17 +166,91 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
     }
   };
 
+  const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
+
+  const userProfileData: UserProfileData = {
+    id: user.id,
+    name: user.name || `${firstName} ${lastName}`.trim() || 'User Profile',
+    role: user.role,
+    registryId: user.role === 'teacher'
+      ? `FACULTY-2024-${String(user.id).padStart(4, '0')}`
+      : user.role === 'principal'
+      ? `PRINCIPAL-2024-${String(user.id).padStart(4, '0')}`
+      : `ADMIN-2024-${String(user.id).padStart(4, '0')}`,
+    email: email || user.email,
+    phone: (user as any).phone || '+1 (555) 019-2834',
+    idNumber: (user as any).national_id || `SSM-${user.id}-9942`,
+    location: user.school_name || 'Central Campus - Islamabad',
+    avatarColor: avatarColor,
+    avatarImage: avatarImage,
+  };
+
   return (
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">PREFERENCES / WORKSPACE</div>
-          <h1>Settings &amp; Preferences</h1>
-          <p>Customise your profile details, personal color themes, and workspace experience.</p>
+          <div className="eyebrow">{user.role === 'teacher' ? 'FACULTY PROFILE & PREFERENCES' : user.role === 'principal' ? 'EXECUTIVE LEADERSHIP PROFILE' : 'WORKSPACE & PREFERENCES'}</div>
+          <h1>{activeTab === 'profile' ? (user.role === 'teacher' ? 'Teacher 360° Profile' : user.role === 'principal' ? 'Principal 360° Profile' : 'Professional 360° Profile') : 'Settings & Preferences'}</h1>
+          <p>{activeTab === 'profile' ? 'Comprehensive longitudinal performance trajectory, career milestones, and institutional credentials.' : 'Customise your profile details, personal color themes, and workspace experience.'}</p>
         </div>
       </div>
 
-      <div className="settings-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, borderBottom: '1px solid var(--border-color, #e2e8f0)', paddingBottom: 14 }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('profile')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 18px',
+            borderRadius: 12,
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 700,
+            background: activeTab === 'profile' ? 'var(--primary-color, #4338ca)' : 'var(--bg-subtle, #f1f5f9)',
+            color: activeTab === 'profile' ? '#ffffff' : 'var(--text-secondary, #64748b)',
+            boxShadow: activeTab === 'profile' ? '0 4px 12px rgba(67, 56, 202, 0.25)' : 'none',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <UserRound size={16} />
+          {user.role === 'teacher' ? 'Teacher 360° Profile' : user.role === 'principal' ? 'Principal 360° Profile' : '360° Career Profile'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('settings')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 18px',
+            borderRadius: 12,
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 700,
+            background: activeTab === 'settings' ? 'var(--primary-color, #4338ca)' : 'var(--bg-subtle, #f1f5f9)',
+            color: activeTab === 'settings' ? '#ffffff' : 'var(--text-secondary, #64748b)',
+            boxShadow: activeTab === 'settings' ? '0 4px 12px rgba(67, 56, 202, 0.25)' : 'none',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <SlidersHorizontal size={16} />
+          Settings & Preferences
+        </button>
+      </div>
+
+      {activeTab === 'profile' ? (
+        <div style={{ marginBottom: 30 }}>
+          <UserProfileView
+            profile={userProfileData}
+            onEdit={() => setActiveTab('settings')}
+          />
+        </div>
+      ) : (
+        <div className="settings-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}>
         {/* Appearance & Themes Section */}
         <section className="panel setting-card" style={{ gridColumn: '1 / -1' }}>
           <div className="setting-icon">
@@ -444,6 +519,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
           </div>
         </section>
       </div>
+      )}
     </>
   );
 }

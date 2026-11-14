@@ -8,6 +8,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 import { request, type User } from './api';
+import LongitudinalPerformanceTrends from './LongitudinalPerformanceTrends';
 
 interface PrincipalHomeProps {
   user: User;
@@ -249,6 +250,9 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
           </div>
         </div>
       </div>
+
+      {/* SS1 Longitudinal Performance Trends */}
+      <LongitudinalPerformanceTrends />
 
       {/* Needs Attention Panel */}
       <div className="panel" style={{ background: 'var(--card-bg, #fff)', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)', padding: '1.5rem' }}>
