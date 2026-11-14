@@ -1885,28 +1885,47 @@ function App() {
   if (user && page === 'PlanSelection') {
     return (
       <div className={dark ? 'dark' : ''}>
-        <RegistrationPlanSelection
-          user={user}
-          activeCampusId={activeCampusId}
-          notify={notify}
-          onContinueTrial={() => {
-            try {
-              localStorage.removeItem(`optimus_pending_plan_${user.id}`);
-            } catch {}
-            fetchSubscription();
-            setPage('Overview');
-            notify('Welcome to Optimus Orien! You are exploring with the Free Trial. Standard and Premium features are marked with lock icons.');
-          }}
-          onPlanUpgraded={(newPlan) => {
-            try {
-              localStorage.removeItem(`optimus_pending_plan_${user.id}`);
-            } catch {}
-            fetchSubscription();
-            setPage('Overview');
-            const planLabel = newPlan === 'premium' ? 'Premium' : newPlan === 'custom' ? 'Custom' : 'Standard';
-            notify(`🎉 Welcome! Your ${planLabel} plan is now active. All corresponding institutional modules are unlocked.`);
-          }}
-        />
+        <ErrorBoundary
+          fallbackTitle="Plan Selection"
+          actionSlot={
+            <button
+              type="button"
+              className="outline-btn"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(`optimus_pending_plan_${user.id}`);
+                } catch {}
+                fetchSubscription();
+                setPage('Overview');
+              }}
+            >
+              Continue to Dashboard
+            </button>
+          }
+        >
+          <RegistrationPlanSelection
+            user={user}
+            activeCampusId={activeCampusId}
+            notify={notify}
+            onContinueTrial={() => {
+              try {
+                localStorage.removeItem(`optimus_pending_plan_${user.id}`);
+              } catch {}
+              fetchSubscription();
+              setPage('Overview');
+              notify('Welcome to Optimus Orien! You are exploring with the Free Trial. Standard and Premium features are marked with lock icons.');
+            }}
+            onPlanUpgraded={(newPlan) => {
+              try {
+                localStorage.removeItem(`optimus_pending_plan_${user.id}`);
+              } catch {}
+              fetchSubscription();
+              setPage('Overview');
+              const planLabel = newPlan === 'premium' ? 'Premium' : newPlan === 'custom' ? 'Custom' : 'Standard';
+              notify(`🎉 Welcome! Your ${planLabel} plan is now active. All corresponding institutional modules are unlocked.`);
+            }}
+          />
+        </ErrorBoundary>
       </div>
     );
   }
@@ -2191,7 +2210,7 @@ function App() {
                         name,
                         name,
                         Icon,
-                        name === 'Interventions' && !!dash?.counts.open_cases ? <em>{dash.counts.open_cases}</em> : null
+                        name === 'Interventions' && !!dash?.counts?.open_cases ? <em>{dash.counts.open_cases}</em> : null
                       );
                     })}
                   </React.Fragment>
@@ -2582,7 +2601,7 @@ function App() {
                   <div className="glass glass-a">
                     <div className="mini-orb">↗</div>
                     <span>Academic growth</span>
-                    <strong>{fmt(dash?.stats.academic_average)}</strong>
+                    <strong>{fmt(dash?.stats?.academic_average)}</strong>
                     <div className="mini-bars"><i /><i /><i /><i /><i /></div>
                   </div>
                   <div className="glass glass-b"><CheckCircle2 size={18} /><span>Stronger together</span></div>
@@ -2598,15 +2617,15 @@ function App() {
 
               <div className="stats-grid five-items">
                 {/* 1: Active campuses */}
-                <Stat icon={Building2} label="Active campuses" value={dash?.counts.schools ?? campuses.length} foot="In your organisation" tone="mint" onClick={() => handleCardClick('Campuses', 'Campuses')} />
+                <Stat icon={Building2} label="Active campuses" value={dash?.counts?.schools ?? campuses.length} foot="In your organisation" tone="mint" onClick={() => handleCardClick('Campuses', 'Campuses')} />
                 {/* 2: Total students */}
-                <Stat icon={GraduationCap} label="Total students" value={dash?.counts.students ?? 0} foot="Across authorised campuses" tone="lavender" onClick={() => handleCardClick('Students', 'Students')} />
+                <Stat icon={GraduationCap} label="Total students" value={dash?.counts?.students ?? 0} foot="Across authorised campuses" tone="lavender" onClick={() => handleCardClick('Students', 'Students')} />
                 {/* 3: Total Employees */}
-                <Stat icon={Briefcase} label="Total Employees" value={(dash?.counts as any)?.employees ?? dash?.counts.teachers ?? 0} foot="Staff & faculty members" tone="rose" onClick={() => handleCardClick('Staff', 'Staff Directory')} />
+                <Stat icon={Briefcase} label="Total Employees" value={(dash?.counts as any)?.employees ?? dash?.counts?.teachers ?? 0} foot="Staff & faculty members" tone="rose" onClick={() => handleCardClick('Staff', 'Staff Directory')} />
                 {/* 4: Attendance rate */}
-                <Stat icon={ClipboardCheck} label="Attendance rate" value={fmt(dash?.stats.attendance_rate)} foot={`${dash?.stats.attendance_records ?? 0} recorded sessions`} tone="blue" onClick={() => handleCardClick('Attendance', 'Attendance')} />
+                <Stat icon={ClipboardCheck} label="Attendance rate" value={fmt(dash?.stats?.attendance_rate)} foot={`${dash?.stats?.attendance_records ?? 0} recorded sessions`} tone="blue" onClick={() => handleCardClick('Attendance', 'Attendance')} />
                 {/* 5: Academic average */}
-                <Stat icon={TrendingUp} label="Academic average" value={fmt(dash?.stats.academic_average)} foot={`${dash?.stats.grade_records ?? 0} recorded grades`} tone="peach" onClick={() => handleCardClick('Examinations', 'Examinations & Academics')} />
+                <Stat icon={TrendingUp} label="Academic average" value={fmt(dash?.stats?.academic_average)} foot={`${dash?.stats?.grade_records ?? 0} recorded grades`} tone="peach" onClick={() => handleCardClick('Examinations', 'Examinations & Academics')} />
               </div>
 
               {/* SS1 Longitudinal Performance Trends */}
@@ -2669,10 +2688,10 @@ function App() {
                 <section className="panel attention-panel">
                   <div className="panel-head">
                     <div><h3>Needs your attention</h3><p>Student support follow-ups</p></div>
-                    <span className="attention-count">{dash?.counts.open_cases ?? 0} open</span>
+                    <span className="attention-count">{dash?.counts?.open_cases ?? 0} open</span>
                   </div>
                   <div className="case-list">
-                    {dash?.recent_cases.length ? dash.recent_cases.slice(0, 4).map((c, i) => (
+                    {(dash?.recent_cases || []).length ? (dash?.recent_cases || []).slice(0, 4).map((c, i) => (
                       <div className="case-item" key={c.id}>
                         <div className={'case-badge c' + i}>{c.priority === 'high' ? <AlertCircle size={18} /> : <HeartHandshake size={18} />}</div>
                         <div className="case-text">
@@ -2790,8 +2809,8 @@ function App() {
                   </div>
                   <div className="simple-table">
                     <div className="simple-tr table-title"><span>STUDENT</span><span>ADMISSION ID</span><span>CAMPUS</span></div>
-                    {dash?.recent_students && dash.recent_students.length > 0 ? (
-                      dash.recent_students.map((s, i) => (
+                    {(dash?.recent_students || []).length > 0 ? (
+                      (dash?.recent_students || []).map((s, i) => (
                         <div className="simple-tr" key={s.id}>
                           <span className="student-label">
                             <span className="student-avatar" style={{ background: dynColor[i % dynColor.length] + '1b', color: dynColor[i % dynColor.length] }}>
@@ -4834,7 +4853,11 @@ function Empty({
     <div className={'empty-state-card ' + (small ? 'empty-state-card-small' : '')}>
       <div className="empty-state-icon-ambient">
         <div className="empty-state-icon-inner">
-          {typeof IconComponent === 'function' ? <IconComponent size={small ? 20 : 26} /> : IconComponent}
+          {React.isValidElement(IconComponent) ? (
+            IconComponent
+          ) : (
+            <IconComponent size={small ? 20 : 26} />
+          )}
         </div>
       </div>
       <h3 className="empty-state-title">{title || 'Nothing to show yet'}</h3>
@@ -6317,4 +6340,10 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <ErrorBoundary fallbackTitle="Optimus Orien Workspace">
+      <App />
+    </ErrorBoundary>
+  </React.StrictMode>
+);
