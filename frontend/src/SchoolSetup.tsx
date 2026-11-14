@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   AlertCircle, ArrowLeft, ArrowRight, BookOpenCheck, CalendarDays, Check, CheckCircle2,
-  ChevronDown, ClipboardCheck, Clock3, FileCheck2, Globe2, GraduationCap, Info, LoaderCircle,
+  ChevronDown, ClipboardCheck, Clock3, Crown, FileCheck2, Globe2, GraduationCap, Info, LoaderCircle,
   MapPin, Plus, Save, School, ShieldCheck, Trash2
 } from 'lucide-react';
 import { list, request, type Resource, type User } from './api';
@@ -94,8 +94,23 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [mapModalOpen, setMapModalOpen] = useState(false);
+  const campusSelectRef = useRef<HTMLSelectElement>(null);
 
   const canManage = user.role === 'organisation_admin' || user.role === 'school_admin';
+  const currentSchool = schools.find(s => Number(s.id) === Number(schoolId));
+
+  const triggerCampusDropdown = () => {
+    if (campusSelectRef.current) {
+      if (typeof (campusSelectRef.current as any).showPicker === 'function') {
+        try {
+          (campusSelectRef.current as any).showPicker();
+          return;
+        } catch {}
+      }
+      campusSelectRef.current.focus();
+      campusSelectRef.current.click();
+    }
+  };
 
   useEffect(() => {
     list<Resource>('schools')
@@ -200,16 +215,40 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
       <div className="setup-picker">
         <div className="setup-picker-text">
           <span>YOUR AUTHORISED CAMPUS</span>
-          <div className="setup-picker-row">
+          <div className="setup-picker-row" onClick={triggerCampusDropdown} title="Click to choose campus">
             <School size={18} />
-            <select aria-label="Select campus for configuration" value={schoolId ?? ''} onChange={e => setSchoolId(Number(e.target.value))}>
+            <select
+              ref={campusSelectRef}
+              aria-label="Select campus for configuration"
+              value={schoolId ?? ''}
+              onChange={e => setSchoolId(Number(e.target.value))}
+              onClick={e => e.stopPropagation()}
+            >
               <option value="" disabled>Select a campus</option>
               {schools.map(s => (
-                <option key={s.id} value={s.id}>{String(s.name)} ({String(s.code)})</option>
+                <option key={s.id} value={s.id}>
+                  {String(s.name)} ({String(s.code)}){(s as any).principal_name ? ` — Principal: ${(s as any).principal_name}` : ''}
+                </option>
               ))}
             </select>
-            <ChevronDown size={17} />
+            <button
+              type="button"
+              className="setup-picker-chevron-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerCampusDropdown();
+              }}
+              title="Select campus"
+              aria-label="Select campus"
+            >
+              <ChevronDown size={17} />
+            </button>
           </div>
+          {(currentSchool as any)?.principal_name && (
+            <div style={{ fontSize: 12, color: '#6366f1', marginTop: 4, display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+              <Crown size={13} color="#f59e0b" /> Principal: {(currentSchool as any).principal_name}
+            </div>
+          )}
         </div>
         <div className="setup-state">
           {data?.configuration?.status === 'active' ? (
@@ -486,9 +525,6 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
                         <option value="custom">School-defined / custom</option>
                       </select>
                     </Input>
-                    <Input label="Approved calculation basis (optional)">
-                      <textarea rows={3} placeholder="Explain weights, eligible assessment types, rounding and missing-result rules…" value={form.grading_policy.description || ''} onChange={e => grading('description', e.target.value)} />
-                    </Input>
                   </div>
                   <div className="setup-policy">
                     <span className="setup-policy-icon green"><ClipboardCheck size={22} /></span>
@@ -523,9 +559,6 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
                         <option value="session">Per session</option>
                         <option value="custom">School-defined / custom</option>
                       </select>
-                    </Input>
-                    <Input label="Approved status & denominator rules (optional)">
-                      <textarea rows={3} placeholder="Define present/absent/late/excused and exclusions including closure days…" value={form.attendance_policy.description || ''} onChange={e => attendance('description', e.target.value)} />
                     </Input>
                   </div>
                 </div>

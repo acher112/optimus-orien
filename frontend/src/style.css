@@ -2735,6 +2735,29 @@ input:checked + .toggle-slider:before {
   background: #ffffff;
   border: 1px solid #e2e8f0;
 }
+.campus-demographic-badge.clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.campus-demographic-badge.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+.campus-demographic-badge.clickable:active {
+  transform: translateY(0);
+}
+.campus-principal-badge {
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.dark .campus-principal-badge {
+  background: #25283d !important;
+  border-color: #35374c !important;
+  color: #cbd5e1 !important;
+}
+.dark .campus-principal-badge strong {
+  color: #f8fafc !important;
+}
 .campus-demographic-badge.total-students-badge {
   background: #f5f3ff;
   border-color: #ddd6fe;

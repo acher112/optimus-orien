@@ -442,7 +442,7 @@ export default function AcademicQualityIndex({
   };
 
   return (
-    <div className="aqi-container" style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto' }}>
+    <div className="aqi-container" style={{ padding: 'clamp(10px, 3vw, 24px)', maxWidth: '1440px', margin: '0 auto', boxSizing: 'border-box', width: '100%', overflowX: 'hidden' }}>
       {/* --------------------------------------------------------------------- */}
       {/* Top Header & Global Campus Filter                                      */}
       {/* --------------------------------------------------------------------- */}
@@ -463,7 +463,7 @@ export default function AcademicQualityIndex({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {/* Admin Global Campus Filter */}
           {isOrgAdmin && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -669,7 +669,8 @@ export default function AcademicQualityIndex({
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Campus Performance Comparison</h3>
               <span style={{ fontSize: 12, color: '#64748b' }}>Sorted descending by Class-Weighted Average</span>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                   <th style={{ padding: '12px 16px' }}>Campus Name</th>
@@ -722,6 +723,7 @@ export default function AcademicQualityIndex({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -783,7 +785,8 @@ export default function AcademicQualityIndex({
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Classes Inside Campus</h3>
               <span style={{ fontSize: 12, color: '#64748b' }}>Sorted descending by Class Average</span>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                   <th style={{ padding: '12px 16px' }}>Class Name</th>
@@ -834,6 +837,7 @@ export default function AcademicQualityIndex({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -925,7 +929,8 @@ export default function AcademicQualityIndex({
           {/* Subjects Table */}
           {classActiveTab === 'subjects' && (
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                     <th style={{ padding: '12px 16px' }}>Subject</th>
@@ -982,13 +987,15 @@ export default function AcademicQualityIndex({
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 
           {/* Students Roster Table */}
           {classActiveTab === 'students' && (
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                     <th style={{ padding: '12px 16px' }}>Student Name</th>
@@ -1059,6 +1066,7 @@ export default function AcademicQualityIndex({
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>
@@ -1160,7 +1168,8 @@ export default function AcademicQualityIndex({
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Student Results in {level4Data.subject_name}</h3>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                   <th style={{ padding: '12px 16px' }}>Student Name</th>
@@ -1248,6 +1257,7 @@ export default function AcademicQualityIndex({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -1377,7 +1387,8 @@ export default function AcademicQualityIndex({
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Subject-wise Examination Performance</h3>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                   <th style={{ padding: '12px 16px' }}>Subject</th>
@@ -1450,6 +1461,7 @@ export default function AcademicQualityIndex({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -1980,7 +1992,8 @@ function MarksGridModal({ classId, className, subjectId, subjectName, notify, on
           <div style={{ textAlign: 'center', padding: 30 }}>Loading students...</div>
         ) : (
           <div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, marginBottom: 20 }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, marginBottom: 20, minWidth: 480 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                   <th style={{ padding: '10px 12px' }}>Student Name</th>
@@ -2039,6 +2052,7 @@ function MarksGridModal({ classId, className, subjectId, subjectName, notify, on
                 ))}
               </tbody>
             </table>
+            </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
               <button

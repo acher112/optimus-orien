@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Calendar, Check,
-  CheckCircle2, ChevronRight, Crown, Download, FileSpreadsheet, FileText, Lock, Plus,
-  Printer, RefreshCw, Search, ShieldCheck, Sparkles, User, Users, X
+  AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Building2, Calendar, Check,
+  CheckCircle2, ChevronRight, Crown, Download, FileSpreadsheet, FileText, LayoutGrid,
+  Lock, Plus, Printer, RefreshCw, Search, ShieldCheck, Sparkles, Table, User, Users, X
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { list, request, type User as ApiUser } from './api';
@@ -21,6 +21,7 @@ interface SalariesProps {
   onUpgrade?: () => void;
   activeCampusId?: number | null;
   campuses?: Array<any>;
+  onSelectCampus?: (id: number | null) => void;
 }
 
 export default function Salaries({
@@ -30,10 +31,12 @@ export default function Salaries({
   isPremiumUnlocked = true,
   onUpgrade,
   activeCampusId,
-  campuses = []
+  campuses = [],
+  onSelectCampus
 }: SalariesProps) {
   const isTeacher = user.role === 'teacher';
   const [tab, setTab] = useState<Tab>(isTeacher ? 'my_payslips' : 'sheet');
+  const [viewMode, setViewMode] = useState<'boxes' | 'table'>('boxes');
   const [schools, setSchools] = useState<R[]>(() => campuses || []);
   const [school, setSchool] = useState(() => (activeCampusId ? String(activeCampusId) : ''));
 
@@ -58,6 +61,7 @@ export default function Salaries({
   const [adjustments, setAdjustments] = useState<R[]>([]);
   const [myPayslips, setMyPayslips] = useState<R[]>([]);
   const [summary, setSummary] = useState<R | null>(null);
+  const [overallSummary, setOverallSummary] = useState<R | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [bump, setBump] = useState(0);
@@ -121,18 +125,20 @@ export default function Salaries({
         const myRes = await request<R>('salaries/my-payslips/');
         setMyPayslips(myRes.results || []);
       } else {
-        const [sheetRes, sumRes, structRes, adjRes] = await Promise.all([
+        const [sheetRes, sumRes, structRes, adjRes, orgSumRes] = await Promise.all([
           request<R>(`salaries/sheet/${sheetQs()}`).catch(err => {
             throw err;
           }),
           request<R>(`salaries/summary/${qs}`).catch(() => ({})),
           request<R>(`salaries/structures/${school ? `?school=${school}` : ''}`).catch(() => ({ results: [] })),
-          request<R>(`salaries/adjustments/${qs}`).catch(() => ({ results: [] }))
+          request<R>(`salaries/adjustments/${qs}`).catch(() => ({ results: [] })),
+          request<R>(`salaries/summary/?month=${month}`).catch(() => ({}))
         ]);
         setRecords(sheetRes.results || []);
         setSummary(sumRes);
         setStructures(structRes.results || []);
         setAdjustments(adjRes.results || []);
+        setOverallSummary(orgSumRes);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load salary data');
@@ -142,6 +148,22 @@ export default function Salaries({
   }, [month, school, isTeacher, sheetQs]);
 
   useEffect(() => { loadData(); }, [loadData, bump]);
+
+  const currentCampus = schools.find(s => String(s.id) === String(school)) || null;
+
+  const totalCalculations = {
+    totalStaff: records.length,
+    basic: records.reduce((sum, r) => sum + (parseFloat(r.basic) || 0), 0),
+    allowances: records.reduce((sum, r) => sum + (parseFloat(r.allowances_total) || 0), 0),
+    additions: records.reduce((sum, r) => sum + (parseFloat(r.additions_total) || 0), 0),
+    deductions: records.reduce((sum, r) => sum + (parseFloat(r.deductions_total) || 0), 0),
+    gross: records.reduce((sum, r) => sum + (parseFloat(r.gross) || 0), 0),
+    net: records.reduce((sum, r) => sum + (parseFloat(r.net) || 0), 0),
+    paidCount: records.filter(r => r.status === 'paid').length,
+    pendingCount: records.filter(r => r.status !== 'paid' && r.status !== 'void' && r.status !== 'cancelled').length,
+  };
+
+  const overallTotalAllCampuses = (parseFloat(overallSummary?.total_paid) || 0) + (parseFloat(overallSummary?.total_pending) || 0);
 
   const handleGenerateSheet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -297,6 +319,10 @@ export default function Salaries({
           <div className="eyebrow">FINANCE / STAFF SALARIES & PAYROLL</div>
           <h1>Staff Salaries</h1>
           <p>Compensation structures, monthly payroll sheets, bulk approvals, and auto-linked finance expenses.</p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#eef2ff', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#4338ca', marginTop: 8 }}>
+            <Building2 size={15} />
+            <span>{currentCampus ? `${currentCampus.name}${currentCampus.principal_name ? ` • Principal: ${currentCampus.principal_name}` : ''}` : '🌐 All Campuses (Consolidated)'}</span>
+          </div>
         </div>
         <div className="fx-filters">
           {!isTeacher && (
@@ -306,8 +332,16 @@ export default function Salaries({
               </label>
               {schools.length > 1 && (
                 <label>Campus
-                  <select className="fx-select" value={school} onChange={e => setSchool(e.target.value)}>
-                    <option value="">All campuses</option>
+                  <select
+                    className="fx-select"
+                    value={school}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setSchool(val);
+                      if (onSelectCampus) onSelectCampus(val ? Number(val) : null);
+                    }}
+                  >
+                    <option value="">🌐 All Campuses (Overall)</option>
                     {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </label>
@@ -364,7 +398,47 @@ export default function Salaries({
               <h3>Payroll Sheet for {month}</h3>
               <p>Review draft salaries, prorations, bulk-approve, and mark paid</p>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Boxes vs Table Toggle */}
+              <div style={{ display: 'inline-flex', borderRadius: 6, border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: viewMode === 'boxes' ? '#4f46e5' : '#fff',
+                    color: viewMode === 'boxes' ? '#fff' : '#475569'
+                  }}
+                  onClick={() => setViewMode('boxes')}
+                >
+                  <LayoutGrid size={13} /> Boxes
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: viewMode === 'table' ? '#4f46e5' : '#fff',
+                    color: viewMode === 'table' ? '#fff' : '#475569'
+                  }}
+                  onClick={() => setViewMode('table')}
+                >
+                  <Table size={13} /> Table
+                </button>
+              </div>
+
               {isPremiumUnlocked === false ? (
                 <button
                   type="button"
@@ -400,7 +474,63 @@ export default function Salaries({
               </button>
             </div>
           </div>
-          <div style={{ padding: '0 20px 14px 20px' }}>
+
+          {/* KPI Boxes (As requested in SS 2: "Also show Overall total salaries of all campuses... Use boxes") */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, padding: '14px 20px 6px 20px' }}>
+            {/* Box 1: Overall Total of All Campuses */}
+            <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderTop: '4px solid #6366f1', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                Overall Total Salaries (All Campuses)
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#4338ca', margin: '6px 0 2px' }}>
+                Rs {overallTotalAllCampuses.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>
+                Paid: Rs {Number(overallSummary?.total_paid || 0).toLocaleString()} • Pending: Rs {Number(overallSummary?.total_pending || 0).toLocaleString()}
+              </div>
+            </div>
+
+            {/* Box 2: Current Campus / Scope Total */}
+            <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderTop: '4px solid #0ea5e9', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                {currentCampus ? `${currentCampus.name} Total` : 'Filtered Payroll Total'}
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#0369a1', margin: '6px 0 2px' }}>
+                Rs {totalCalculations.net.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>
+                {totalCalculations.totalStaff} staff in view (Gross: Rs {totalCalculations.gross.toLocaleString()})
+              </div>
+            </div>
+
+            {/* Box 3: Total Paid in View */}
+            <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderTop: '4px solid #10b981', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                Total Paid (This View)
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#15803d', margin: '6px 0 2px' }}>
+                {totalCalculations.paidCount} Staff
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>
+                Processed & auto-posted to expenses
+              </div>
+            </div>
+
+            {/* Box 4: Pending / Draft */}
+            <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderTop: '4px solid #f59e0b', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                Pending / Draft
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#b45309', margin: '6px 0 2px' }}>
+                {totalCalculations.pendingCount} Staff
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>
+                Awaiting approval or disbursement
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: '8px 20px 14px 20px' }}>
             <FilterBar
               searchPlaceholder="Search staff name or position..."
               filters={[
@@ -421,102 +551,279 @@ export default function Salaries({
               onClear={() => setSheetFilters({})}
             />
           </div>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 35 }}>
-                    <input
-                      type="checkbox"
-                      checked={records.length > 0 && selectedIds.length === records.filter(r => r.status === 'draft').length}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setSelectedIds(records.filter(r => r.status === 'draft').map(r => r.id));
-                        } else {
-                          setSelectedIds([]);
-                        }
-                      }}
-                    />
-                  </th>
-                  <th>STAFF MEMBER</th>
-                  <th>POSITION</th>
-                  <th>DUE DATE</th>
-                  <th>BASIC</th>
-                  <th>ALLOWANCES</th>
-                  <th>ADDITIONS</th>
-                  <th>DEDUCTIONS</th>
-                  <th>GROSS</th>
-                  <th>NET PAY</th>
-                  <th>STATUS</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map(r => (
-                  <tr key={r.id}>
-                    <td>
-                      {r.status === 'draft' && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(r.id)}
-                          onChange={e => {
-                            if (e.target.checked) setSelectedIds(ids => [...ids, r.id]);
-                            else setSelectedIds(ids => ids.filter(id => id !== r.id));
-                          }}
-                        />
-                      )}
-                    </td>
-                    <td><strong>{r.staff_name}</strong></td>
-                    <td>{r.position}</td>
-                    <td><span style={{ fontSize: 12, color: '#64748b' }}>{r.due_date || '—'}</span></td>
-                    <td>Rs {r.basic}</td>
-                    <td>Rs {r.allowances_total}</td>
-                    <td><span style={{ color: '#16a34a' }}>+Rs {r.additions_total}</span></td>
-                    <td><span style={{ color: '#dc2626' }}>-Rs {r.deductions_total}</span></td>
-                    <td>Rs {r.gross}</td>
-                    <td><strong style={{ fontSize: 14 }}>Rs {r.net}</strong></td>
-                    <td>
+
+          {/* View: Boxes Mode (SS 2: "Show salaries list... Use boxes") */}
+          {viewMode === 'boxes' ? (
+            <div style={{ padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+              {records.map(r => (
+                <div
+                  key={r.id}
+                  style={{
+                    background: '#fff',
+                    border: '1.5px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: 16,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    {/* Header: Checkbox + Staff + Status */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {r.status === 'draft' && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(r.id)}
+                            onChange={e => {
+                              if (e.target.checked) setSelectedIds(ids => [...ids, r.id]);
+                              else setSelectedIds(ids => ids.filter(id => id !== r.id));
+                            }}
+                          />
+                        )}
+                        <div>
+                          <strong style={{ fontSize: 15, color: '#0f172a' }}>{r.staff_name}</strong>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                            {r.position} {r.school_name ? `• ${r.school_name}` : ''}
+                          </div>
+                        </div>
+                      </div>
                       <span className={`pill ${r.status === 'paid' ? 'green' : r.status === 'approved' ? 'blue' : r.status === 'cancelled' || r.status === 'void' ? 'red' : 'amber'}`}>
                         {r.status}
                       </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <button className="sm-btn" onClick={() => openPayslip(r.id)} title="View Payslip">
-                          <FileText size={13} />
-                        </button>
-                        {r.status !== 'void' && (
-                          <select
-                            className="fx-select"
-                            style={{ fontSize: 11, padding: '2px 6px', height: 26, width: 'auto' }}
-                            value={r.status}
-                            onChange={e => handleStatusChange(r.id, e.target.value)}
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="paid">Paid</option>
-                            <option value="cancelled">Cancelled</option>
-                            {r.status === 'draft' && <option value="draft">Draft</option>}
-                            {r.status === 'approved' && <option value="approved">Approved</option>}
-                          </select>
-                        )}
-                        {r.status !== 'void' && (
-                          <button className="sm-btn" onClick={() => { setActiveVoidRecord(r); setVoidModal(true); }} style={{ color: '#dc2626' }} title="Void Record">
-                            Void
-                          </button>
-                        )}
+                    </div>
+
+                    {/* Salary Metric Mini-Boxes */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginTop: 12 }}>
+                      <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Basic Pay</span>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Rs {Number(r.basic).toLocaleString()}</div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {!records.length && (
+                      <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, textTransform: 'uppercase' }}>Allowances</span>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>+Rs {Number(r.allowances_total).toLocaleString()}</div>
+                      </div>
+                      <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, textTransform: 'uppercase' }}>Additions</span>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>+Rs {Number(r.additions_total).toLocaleString()}</div>
+                      </div>
+                      <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600, textTransform: 'uppercase' }}>Deductions</span>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>-Rs {Number(r.deductions_total).toLocaleString()}</div>
+                      </div>
+                    </div>
+
+                    {/* Net Pay Box */}
+                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8, padding: '10px 12px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#065f46', textTransform: 'uppercase' }}>Net Pay</span>
+                      <strong style={{ fontSize: 17, fontWeight: 800, color: '#047857' }}>Rs {Number(r.net).toLocaleString()}</strong>
+                    </div>
+
+                    {r.due_date && (
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 8 }}>
+                        Due Date: <strong>{r.due_date}</strong> {r.paid_on ? `• Paid on: ${r.paid_on}` : ''}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button className="sm-btn" onClick={() => openPayslip(r.id)} title="View Payslip">
+                        <FileText size={13} style={{ marginRight: 4 }} /> Payslip
+                      </button>
+                      {r.status !== 'void' && (
+                        <button className="sm-btn" onClick={() => { setActiveVoidRecord(r); setVoidModal(true); }} style={{ color: '#dc2626' }} title="Void Record">
+                          Void
+                        </button>
+                      )}
+                    </div>
+                    {r.status !== 'void' && (
+                      <select
+                        className="fx-select"
+                        style={{ fontSize: 11, padding: '2px 6px', height: 26, width: 'auto' }}
+                        value={r.status}
+                        onChange={e => handleStatusChange(r.id, e.target.value)}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="paid">Paid</option>
+                        <option value="cancelled">Cancelled</option>
+                        {r.status === 'draft' && <option value="draft">Draft</option>}
+                        {r.status === 'approved' && <option value="approved">Approved</option>}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {!records.length && (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px 20px', color: '#64748b', background: '#f8fafc', borderRadius: 12 }}>
+                  No salary records generated for {month}. Click 'Generate Monthly Sheet' to generate.
+                </div>
+              )}
+            </div>
+          ) : (
+            /* View: Table Mode */
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan={12} style={{ textAlign: 'center', padding: 30 }}>
-                      No salary records generated for {month}. Click 'Generate Monthly Sheet' to generate.
-                    </td>
+                    <th style={{ width: 35 }}>
+                      <input
+                        type="checkbox"
+                        checked={records.length > 0 && selectedIds.length === records.filter(r => r.status === 'draft').length}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setSelectedIds(records.filter(r => r.status === 'draft').map(r => r.id));
+                          } else {
+                            setSelectedIds([]);
+                          }
+                        }}
+                      />
+                    </th>
+                    <th>STAFF MEMBER</th>
+                    <th>POSITION</th>
+                    <th>DUE DATE</th>
+                    <th>BASIC</th>
+                    <th>ALLOWANCES</th>
+                    <th>ADDITIONS</th>
+                    <th>DEDUCTIONS</th>
+                    <th>GROSS</th>
+                    <th>NET PAY</th>
+                    <th>STATUS</th>
+                    <th>ACTIONS</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {records.map(r => (
+                    <tr key={r.id}>
+                      <td>
+                        {r.status === 'draft' && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(r.id)}
+                            onChange={e => {
+                              if (e.target.checked) setSelectedIds(ids => [...ids, r.id]);
+                              else setSelectedIds(ids => ids.filter(id => id !== r.id));
+                            }}
+                          />
+                        )}
+                      </td>
+                      <td><strong>{r.staff_name}</strong></td>
+                      <td>{r.position}</td>
+                      <td><span style={{ fontSize: 12, color: '#64748b' }}>{r.due_date || '—'}</span></td>
+                      <td>Rs {r.basic}</td>
+                      <td>Rs {r.allowances_total}</td>
+                      <td><span style={{ color: '#16a34a' }}>+Rs {r.additions_total}</span></td>
+                      <td><span style={{ color: '#dc2626' }}>-Rs {r.deductions_total}</span></td>
+                      <td>Rs {r.gross}</td>
+                      <td><strong style={{ fontSize: 14 }}>Rs {r.net}</strong></td>
+                      <td>
+                        <span className={`pill ${r.status === 'paid' ? 'green' : r.status === 'approved' ? 'blue' : r.status === 'cancelled' || r.status === 'void' ? 'red' : 'amber'}`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <button className="sm-btn" onClick={() => openPayslip(r.id)} title="View Payslip">
+                            <FileText size={13} />
+                          </button>
+                          {r.status !== 'void' && (
+                            <select
+                              className="fx-select"
+                              style={{ fontSize: 11, padding: '2px 6px', height: 26, width: 'auto' }}
+                              value={r.status}
+                              onChange={e => handleStatusChange(r.id, e.target.value)}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="paid">Paid</option>
+                              <option value="cancelled">Cancelled</option>
+                              {r.status === 'draft' && <option value="draft">Draft</option>}
+                              {r.status === 'approved' && <option value="approved">Approved</option>}
+                            </select>
+                          )}
+                          {r.status !== 'void' && (
+                            <button className="sm-btn" onClick={() => { setActiveVoidRecord(r); setVoidModal(true); }} style={{ color: '#dc2626' }} title="Void Record">
+                              Void
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!records.length && (
+                    <tr>
+                      <td colSpan={12} style={{ textAlign: 'center', padding: 30 }}>
+                        No salary records generated for {month}. Click 'Generate Monthly Sheet' to generate.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* GRAND TOTAL SUM BOX (SS 2: "At the end show the total sum. Use boxes.") */}
+          <div style={{
+            margin: '20px',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #ede9fe 100%)',
+            border: '2px solid #c7d2fe',
+            borderRadius: 12,
+            padding: '18px 20px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e1b4b' }}>
+                  Payroll Grand Total Sum ({currentCampus ? currentCampus.name : 'All Campuses'})
+                </h4>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
+                  Consolidated totals across all {totalCalculations.totalStaff} staff members for {month}
+                </p>
+              </div>
+              <span className="pill purple" style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px' }}>
+                Payroll Month: {month}
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+              <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Staff</span>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginTop: 4 }}>
+                  {totalCalculations.totalStaff}
+                </div>
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Basic</span>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#334155', marginTop: 4 }}>
+                  Rs {totalCalculations.basic.toLocaleString()}
+                </div>
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#16a34a', textTransform: 'uppercase' }}>Total Allowances</span>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>
+                  +Rs {totalCalculations.allowances.toLocaleString()}
+                </div>
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>Total Deductions</span>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#dc2626', marginTop: 4 }}>
+                  -Rs {totalCalculations.deductions.toLocaleString()}
+                </div>
+              </div>
+
+              <div style={{ background: '#4338ca', borderRadius: 10, padding: '12px 14px', color: '#fff', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(67, 56, 202, 0.3)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#c7d2fe', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grand Total Net Pay</span>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 4 }}>
+                  Rs {totalCalculations.net.toLocaleString()}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       )}

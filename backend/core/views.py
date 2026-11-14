@@ -461,6 +461,26 @@ class DynamicSerializer(serializers.ModelSerializer):
  """Model-level validation is performed after explicit API permission checks."""
  pass
 
+def resolve_school_principal_name(school):
+ """Returns the principal name for a school from User, StaffMember, or school_settings."""
+ if not school:
+  return ''
+ u = User.objects.filter(school=school, role='principal', is_active=True).first()
+ if u:
+  fn = (u.get_full_name() or '').strip()
+  return fn if fn else u.username
+ sm = school.staff.filter(status='active').filter(
+  Q(role='principal') | Q(position__icontains='principal')
+ ).first()
+ if sm and sm.full_name:
+  return sm.full_name
+ cfg = getattr(school, 'configuration', None)
+ if cfg and isinstance(cfg.school_settings, dict):
+  pn = cfg.school_settings.get('principal_name') or cfg.school_settings.get('principal')
+  if pn:
+   return str(pn).strip()
+ return ''
+
 class SchoolSerializer(DynamicSerializer):
  total_students = serializers.SerializerMethodField()
  girls_count = serializers.SerializerMethodField()
@@ -469,6 +489,7 @@ class SchoolSerializer(DynamicSerializer):
  country = serializers.SerializerMethodField()
  jurisdiction = serializers.SerializerMethodField()
  school_settings = serializers.SerializerMethodField()
+ principal_name = serializers.SerializerMethodField()
 
  class Meta:
   model = School
@@ -476,7 +497,7 @@ class SchoolSerializer(DynamicSerializer):
    'id', 'organisation', 'name', 'code', 'city',
    'attendance_alert_threshold', 'grade_alert_threshold',
    'total_students', 'girls_count', 'boys_count', 'total_employees',
-   'country', 'jurisdiction', 'school_settings'
+   'country', 'jurisdiction', 'school_settings', 'principal_name'
   ]
   read_only_fields = ['organisation']
 
@@ -503,6 +524,22 @@ class SchoolSerializer(DynamicSerializer):
  def get_school_settings(self, obj):
   cfg = getattr(obj, 'configuration', None)
   return cfg.school_settings if cfg else {}
+
+ def get_principal_name(self, obj):
+  return resolve_school_principal_name(obj)
+
+ def update(self, instance, validated_data):
+  req = self.context.get('request')
+  if req and hasattr(req, 'data'):
+   principal_name = req.data.get('principal_name')
+   if principal_name is not None:
+    from .models import SchoolConfiguration
+    cfg, _ = SchoolConfiguration.objects.get_or_create(school=instance)
+    st = cfg.school_settings or {}
+    st['principal_name'] = str(principal_name).strip()
+    cfg.school_settings = st
+    cfg.save()
+  return super().update(instance, validated_data)
 class ClassSerializer(DynamicSerializer):
  school_name=serializers.CharField(source='school.name',read_only=True)
  academic_year_name=serializers.CharField(source='academic_year.name',read_only=True)
@@ -1586,7 +1623,7 @@ def dashboard(request):
   school_items=[]
   for school in schools[:20]:
    scoped_students=students.filter(school=school)
-   school_items.append({'id':school.id,'name':school.name,'students':scoped_students.count(),**student_stats(scoped_students,classes.filter(school=school))})
+   school_items.append({'id':school.id,'name':school.name,'principal_name':resolve_school_principal_name(school),'students':scoped_students.count(),**student_stats(scoped_students,classes.filter(school=school))})
   recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name','student__school__name'))
   recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}",'school_name':x.pop('student__school__name','')} for x in recent]
   recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
@@ -1951,6 +1988,8 @@ def register_campus(request):
    config.programmes=[p[:120] for p in programmes if isinstance(p,str)]
   
   settings_dict=config.school_settings or {}
+  principal_name=(data.get('principal_name') or '').strip()
+  if principal_name:settings_dict['principal_name']=principal_name
   if address:settings_dict['address']=address
   if contact_email:settings_dict['contact_email']=contact_email
   if contact_phone:settings_dict['contact_phone']=contact_phone

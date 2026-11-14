@@ -475,13 +475,32 @@ function getSingularTitle(p: string): string {
   return p.toLowerCase();
 }
 
-function getResourceFilterConfigs(pageName: string, user?: User | null, teacherScope?: any, refClasses?: any[]): FilterConfig[] {
+function getResourceFilterConfigs(
+  pageName: string,
+  user?: User | null,
+  teacherScope?: any,
+  refClasses?: any[],
+  campuses?: Array<{ id: number; name: string; code?: string; city?: string; principal_name?: string }>
+): FilterConfig[] {
+  const campusFilter: FilterConfig | null = campuses && campuses.length > 0 ? {
+    key: 'school',
+    label: 'Campus',
+    placeholder: 'All Campuses',
+    options: campuses.map(c => ({
+      label: `${c.name}${c.principal_name ? ` (Principal: ${c.principal_name})` : ''}`,
+      value: String(c.id)
+    }))
+  } : null;
+
   switch (pageName) {
     case 'Students': {
       const classOpts = user?.role === 'teacher' && teacherScope?.classes
         ? teacherScope.classes.map((c: any) => ({ label: c.display_name || c.name, value: String(c.id) }))
         : (refClasses || []).map((c: any) => ({ label: c.name, value: String(c.id) }));
       const filters: FilterConfig[] = [];
+      if (campusFilter) {
+        filters.push(campusFilter);
+      }
       if (classOpts.length > 0) {
         filters.push({
           key: 'school_class',
@@ -511,6 +530,7 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
     }
     case 'Classes':
       return [
+        ...(campusFilter ? [campusFilter] : []),
         {
           key: 'grade_level',
           label: 'Grade Level',
@@ -530,6 +550,7 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
       ];
     case 'Academic years':
       return [
+        ...(campusFilter ? [campusFilter] : []),
         {
           key: 'active',
           label: 'Status',
@@ -541,6 +562,7 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
       ];
     case 'Subjects':
       return [
+        ...(campusFilter ? [campusFilter] : []),
         {
           key: 'active',
           label: 'Status',
@@ -552,6 +574,7 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
       ];
     case 'Academics':
       return [
+        ...(campusFilter ? [campusFilter] : []),
         {
           key: 'published',
           label: 'Status',
@@ -563,6 +586,7 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
       ];
     case 'Attendance':
       return [
+        ...(campusFilter ? [campusFilter] : []),
         {
           key: 'status',
           label: 'Status',
@@ -581,6 +605,7 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
       ];
     case 'Interventions':
       return [
+        ...(campusFilter ? [campusFilter] : []),
         {
           key: 'priority',
           label: 'Priority',
@@ -607,11 +632,12 @@ function getResourceFilterConfigs(pageName: string, user?: User | null, teacherS
         value: String(c.id)
       }));
       return [
+        ...(campusFilter ? [campusFilter] : []),
         ...(classOpts.length > 0 ? [{ key: 'school_class', label: 'Class', options: classOpts }] : [])
       ];
     }
     default:
-      return [];
+      return campusFilter ? [campusFilter] : [];
   }
 }
 
@@ -729,11 +755,18 @@ function App() {
     }));
   };
   const isSingleCampusRole = !!user && ['principal', 'school_admin', 'teacher', 'student'].includes(user.role);
-  const [campuses, setCampuses] = useState<Array<{ id: number; name: string; code?: string; city?: string }>>([]);
+  const [campuses, setCampuses] = useState<Array<{ id: number; name: string; code?: string; city?: string; principal_name?: string }>>([]);
   const [activeCampusId, setActiveCampusId] = useState<number | null>(() => {
     if (user && ['principal', 'school_admin', 'teacher', 'student'].includes(user.role)) {
       return user.school || null;
     }
+    try {
+      const saved = localStorage.getItem('optimus_active_campus_id');
+      if (saved) {
+        const id = Number(saved);
+        if (!isNaN(id) && id > 0) return id;
+      }
+    } catch {}
     return null;
   });
 
@@ -984,15 +1017,19 @@ function App() {
   } | null>(null);
 
   const handleCardClick = (targetPage: string, cardLabel?: string) => {
-    if (activeCampusId || campuses.length <= 1 || isSingleCampusRole) {
+    if (isSingleCampusRole) {
       switchPage(targetPage);
       return;
     }
-    setCampusPromptModal({
-      isOpen: true,
-      targetPage,
-      cardLabel: cardLabel || targetPage
-    });
+    if (campuses.length > 0) {
+      setCampusPromptModal({
+        isOpen: true,
+        targetPage,
+        cardLabel: cardLabel || targetPage
+      });
+      return;
+    }
+    switchPage(targetPage);
   };
 
   useEffect(() => {
@@ -1113,7 +1150,7 @@ function App() {
           localStorage.removeItem('optimus_active_campus_id');
         }
       }
-      list<{ id: number; name: string; code?: string; city?: string }>('schools').then(scs => {
+      list<{ id: number; name: string; code?: string; city?: string; principal_name?: string }>('schools').then(scs => {
         setCampuses(scs);
         const saved = localStorage.getItem('optimus_active_campus_id');
         const savedId = saved ? Number(saved) : null;
@@ -1122,6 +1159,9 @@ function App() {
         } else if (u.role !== 'organisation_admin' && u.school && scs.some(s => s.id === u.school)) {
           setActiveCampusId(u.school);
           localStorage.setItem('optimus_active_campus_id', String(u.school));
+        } else if (scs.length === 1) {
+          setActiveCampusId(scs[0].id);
+          localStorage.setItem('optimus_active_campus_id', String(scs[0].id));
         } else {
           setActiveCampusId(null);
           localStorage.removeItem('optimus_active_campus_id');
@@ -1145,10 +1185,14 @@ function App() {
     if (!user) return;
     setError('');
     const params = new URLSearchParams();
-    const safeCampusId = (activeCampusId && campuses.some(c => c.id === activeCampusId)) ? activeCampusId : null;
+    const targetSchoolVal = resourceFilters.school;
+    const effectiveCampusId = targetSchoolVal !== undefined && targetSchoolVal !== ''
+      ? (targetSchoolVal === 'all' ? null : Number(targetSchoolVal))
+      : activeCampusId;
+    const safeCampusId = (effectiveCampusId && campuses.some(c => c.id === effectiveCampusId)) ? effectiveCampusId : null;
     if (safeCampusId && user.role !== 'student') params.set('school', String(safeCampusId));
     Object.entries(resourceFilters).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
+      if (k !== 'school' && v !== undefined && v !== null && v !== '') {
         params.set(k, String(v));
       }
     });
@@ -1165,7 +1209,7 @@ function App() {
         setRecords(await list<Resource>(`${resourceInfo[page].api}/${qs}`));
       }
       // Also refresh campus list
-      list<{ id: number; name: string; code?: string; city?: string }>('schools').then(setCampuses).catch(() => {});
+      list<{ id: number; name: string; code?: string; city?: string; principal_name?: string }>('schools').then(setCampuses).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load data');
     }
@@ -1173,15 +1217,46 @@ function App() {
 
   useEffect(() => { load(); }, [load]);
 
-  const switchPage = (p: string) => {
+  const switchPage = (p: string, initialFilters?: Record<string, any>) => {
     let target = p;
     if (target === 'Fees' || target === 'Student Fees') target = 'Student fees';
     setPage(target);
     setSearch('');
     setFilter('All');
-    setResourceFilters({});
+    const filters: Record<string, any> = { ...(initialFilters || {}) };
+    if (activeCampusId && filters.school === undefined) {
+      filters.school = String(activeCampusId);
+    }
+    setResourceFilters(filters);
     setSidebar(false);
   };
+
+  const handleResourceFilterChange = useCallback((newFilters: Record<string, any>) => {
+    setResourceFilters(newFilters);
+    if ('school' in newFilters) {
+      if (newFilters.school && newFilters.school !== 'all') {
+        const cid = Number(newFilters.school);
+        if (!isNaN(cid)) {
+          setActiveCampusId(cid);
+          try { localStorage.setItem('optimus_active_campus_id', String(cid)); } catch {}
+        }
+      } else {
+        setActiveCampusId(null);
+        try { localStorage.removeItem('optimus_active_campus_id'); } catch {}
+      }
+    } else if (resourceFilters.school && !('school' in newFilters)) {
+      setActiveCampusId(null);
+      try { localStorage.removeItem('optimus_active_campus_id'); } catch {}
+    }
+  }, [resourceFilters]);
+
+  const handleResourceFilterClear = useCallback(() => {
+    setResourceFilters({});
+    if (['organisation_admin', 'school_admin'].includes(user?.role || '')) {
+      setActiveCampusId(null);
+      try { localStorage.removeItem('optimus_active_campus_id'); } catch {}
+    }
+  }, [user]);
 
   const renderNavButton = useCallback((
     targetPage: string,
@@ -1232,7 +1307,16 @@ function App() {
   }, [config, page, user, teacherScope]);
   const filtered = records;
 
-  const activeCampus = useMemo(() => campuses.find(c => c.id === activeCampusId) || null, [campuses, activeCampusId]);
+  const activeCampus = useMemo(() => {
+    return campuses.find(c => c.id === activeCampusId) || (campuses.length === 1 ? campuses[0] : null);
+  }, [campuses, activeCampusId]);
+
+  const effectiveResourceFilters = useMemo(() => {
+    if (activeCampusId && !resourceFilters.school) {
+      return { ...resourceFilters, school: String(activeCampusId) };
+    }
+    return resourceFilters;
+  }, [activeCampusId, resourceFilters]);
 
   const openCreateModal = async () => {
     const initialForm: Record<string, string> = {
@@ -1704,7 +1788,7 @@ function App() {
                 <span className="workspace-icon"><Building2 size={19} /></span>
                 <span className="workspace-name">
                   <b>{campuses.find(c => c.id === activeCampusId)?.name || 'Assigned Campus'}</b>
-                  <small>Teaching Campus</small>
+                  <small>{campuses.find(c => c.id === activeCampusId)?.principal_name ? `Principal: ${campuses.find(c => c.id === activeCampusId)?.principal_name} • ` : ''}Teaching Campus</small>
                 </span>
                 <ChevronDown size={15} style={{ transform: campusDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
               </button>
@@ -1713,6 +1797,7 @@ function App() {
                   <div className="campus-dropdown-title">Your Assigned Campuses</div>
                   {teacherScope.campuses.map((c: any) => {
                     const isSelected = activeCampusId === c.id;
+                    const campObj = campuses.find(sc => sc.id === c.id) || c;
                     return (
                       <button
                         key={c.id}
@@ -1727,7 +1812,7 @@ function App() {
                         <div className="campus-item-icon"><Building2 size={15} /></div>
                         <div className="campus-item-info">
                           <b>{c.name}</b>
-                          <small>Teaching Branch</small>
+                          <small>{campObj.principal_name ? `Principal: ${campObj.principal_name} • ` : ''}Teaching Branch</small>
                         </div>
                         {isSelected && <Check size={16} color="var(--brand-primary, #715ee8)" />}
                       </button>
@@ -1741,7 +1826,7 @@ function App() {
               <span className="workspace-icon"><Building2 size={19} /></span>
               <span className="workspace-name">
                 <b>{activeCampus ? activeCampus.name : (campuses[0]?.name || 'Assigned Campus')}</b>
-                <small>{activeCampus?.city ? `${activeCampus.city} · Campus` : 'Assigned Campus'}</small>
+                <small>{((activeCampus || campuses[0]) as any)?.principal_name ? `Principal: ${((activeCampus || campuses[0]) as any).principal_name} • ` : ''}{activeCampus?.city ? `${activeCampus.city} · Campus` : 'Assigned Campus'}</small>
               </span>
             </div>
           ) : (
@@ -1753,7 +1838,7 @@ function App() {
               <span className="workspace-icon"><Building2 size={19} /></span>
               <span className="workspace-name">
                 <b>{activeCampus ? activeCampus.name : 'All Campuses'}</b>
-                <small>{activeCampus ? (activeCampus.city ? `${activeCampus.city} · Branch` : 'Selected Campus') : `${campuses.length} Campuses · Multi-branch`}</small>
+                <small>{activeCampus ? `${activeCampus.principal_name ? `Principal: ${activeCampus.principal_name} • ` : ''}${activeCampus.city ? `${activeCampus.city} · Branch` : 'Selected Campus'}` : `${campuses.length} Campuses · Multi-branch`}</small>
               </span>
               <ChevronDown size={15} style={{ transform: campusDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
             </button>
@@ -1795,7 +1880,7 @@ function App() {
                     <div className="campus-item-icon"><Building2 size={15} /></div>
                     <div className="campus-item-info">
                       <b>{c.name}</b>
-                      <small>{c.code || 'Campus'} {c.city ? `• ${c.city}` : ''}</small>
+                      <small>{c.principal_name ? `Principal: ${c.principal_name} • ` : ''}{c.code || 'Campus'} {c.city ? `• ${c.city}` : ''}</small>
                     </div>
                     {isSelected && <Check size={16} color="var(--brand-primary, #715ee8)" />}
                   </button>
@@ -2608,26 +2693,50 @@ function App() {
             <>
               <div className="page-header">
                 <div>
-                  <div className="eyebrow">WORKSPACE / {page.toUpperCase()}</div>
+                  <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>WORKSPACE / {page.toUpperCase()}</span>
+                    {(activeCampus || campuses.length > 0) && (
+                      <>
+                        <span style={{ color: '#cbd5e1' }}>•</span>
+                        <span style={{ color: 'var(--brand-primary, #6366f1)', fontWeight: 600 }}>
+                          Campus: {activeCampus ? activeCampus.name : 'All Campuses'}
+                        </span>
+                        {activeCampus?.principal_name && (
+                          <span style={{ color: '#64748b', fontWeight: 500, fontSize: 11 }}>
+                            (Principal: {activeCampus.principal_name})
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
                   <h1>{config.title}</h1>
                   <p>{config.desc}</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  {campuses.length > 1 && ['organisation_admin', 'school_admin'].includes(user.role) && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f8fafc', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                      <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                  {campuses.length > 1 && ['organisation_admin', 'school_admin'].includes(user.role) ? (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', maxWidth: '100%', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Campus:</span>
+                      </div>
                       <select
-                        style={{ border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, color: '#334155', cursor: 'pointer', outline: 'none' }}
+                        style={{ border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, color: '#1e293b', cursor: 'pointer', outline: 'none', maxWidth: 220 }}
                         value={activeCampusId === null ? 'all' : String(activeCampusId)}
                         onChange={e => {
                           const val = e.target.value;
                           if (val === 'all') {
                             setActiveCampusId(null);
+                            setResourceFilters(prev => {
+                              const next = { ...prev };
+                              delete next.school;
+                              return next;
+                            });
                             localStorage.removeItem('optimus_active_campus_id');
                             notify('Showing records across all campuses');
                           } else {
                             const cid = Number(val);
                             setActiveCampusId(cid);
+                            setResourceFilters(prev => ({ ...prev, school: String(cid) }));
                             localStorage.setItem('optimus_active_campus_id', String(cid));
                             const matched = campuses.find(c => c.id === cid);
                             notify(`Filtered to ${matched?.name || 'selected campus'}`);
@@ -2637,11 +2746,32 @@ function App() {
                         <option value="all">All Campuses (Entire Organisation)</option>
                         {campuses.map(c => (
                           <option key={c.id} value={c.id}>
-                            {c.name}
+                            {c.name}{c.principal_name ? ` (Principal: ${c.principal_name})` : ''}
                           </option>
                         ))}
                       </select>
+                      {activeCampus?.principal_name && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#eff6ff', color: '#1d4ed8', padding: '2px 8px', borderRadius: 6, fontSize: '12px', fontWeight: 600, border: '1px solid #bfdbfe' }}>
+                          <Crown size={12} />
+                          Principal: {activeCampus.principal_name}
+                        </span>
+                      )}
                     </div>
+                  ) : (
+                    (activeCampus || (campuses.length > 0 && campuses[0])) && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', maxWidth: '100%', flexWrap: 'wrap' }}>
+                        <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>
+                          Campus: {(activeCampus || campuses[0]).name}
+                        </span>
+                        {((activeCampus || campuses[0]).principal_name) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#eff6ff', color: '#1d4ed8', padding: '2px 8px', borderRadius: 6, fontSize: '12px', fontWeight: 600, border: '1px solid #bfdbfe' }}>
+                            <Crown size={12} />
+                            Principal: {(activeCampus || campuses[0]).principal_name}
+                          </span>
+                        )}
+                      </div>
+                    )
                   )}
 
                   {config.fields.length > 0 && !['student', 'teacher'].includes(user.role) && (
@@ -2652,19 +2782,30 @@ function App() {
                 </div>
               </div>
 
-              <div className="resource-summary">
-                <div className="resource-icon"><LayersIcon page={page} /></div>
-                <div><strong>{records.length}</strong><span>Total {page.toLowerCase()} records</span></div>
-                <div className="resource-side"><CheckCircle2 size={17} /> Synced with your workspace</div>
+              <div className="resource-summary" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div className="resource-icon"><LayersIcon page={page} /></div>
+                  <div><strong>{records.length}</strong><span>Total {page.toLowerCase()} records</span></div>
+                </div>
+                {(activeCampus || campuses.length > 0) && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(255,255,255,0.7)', borderRadius: 6, border: '1px solid rgba(0,0,0,0.06)', fontSize: '13px', color: '#334155' }}>
+                    <Building2 size={14} color="var(--brand-primary, #6366f1)" />
+                    <span>Campus: <strong>{activeCampus ? activeCampus.name : (campuses.length === 1 ? campuses[0].name : 'All Campuses')}</strong></span>
+                    {(activeCampus?.principal_name || (campuses.length === 1 && campuses[0].principal_name)) && (
+                      <span style={{ color: '#475569', marginLeft: 4 }}>• Principal: <strong>{activeCampus?.principal_name || campuses[0].principal_name}</strong></span>
+                    )}
+                  </div>
+                )}
+                <div className="resource-side" style={{ marginLeft: 'auto' }}><CheckCircle2 size={17} /> Synced with your workspace</div>
               </div>
 
               <section className="panel resource-panel">
                 <FilterBar
                   searchPlaceholder={`Search ${page.toLowerCase()} (name, section, keyword)...`}
-                  filters={getResourceFilterConfigs(page, user, teacherScope, refData.classes)}
-                  values={resourceFilters}
-                  onChange={setResourceFilters}
-                  onClear={() => setResourceFilters({})}
+                  filters={getResourceFilterConfigs(page, user, teacherScope, refData.classes, campuses)}
+                  values={effectiveResourceFilters}
+                  onChange={handleResourceFilterChange}
+                  onClear={handleResourceFilterClear}
                   rightActions={
                     <>
                       <span className="result-count">{filtered.length} records found</span>
@@ -2923,7 +3064,19 @@ function App() {
           <React.Suspense fallback={<ViewLoadingSkeleton />}>
           {page === 'My Class' && <TeacherMyClass user={user} onNavigate={switchPage} notify={notify} />}
           {page === 'My Subjects' && <TeacherMySubjects user={user} onNavigate={switchPage} notify={notify} />}
-          {page === 'Campuses' && <CampusesPage user={user} notify={notify} onSetupSchool={(id) => { setSetupSchool(id); switchPage('Campus setup'); }} onCampusesChanged={() => { load(); }} />}
+          {page === 'Campuses' && (
+            <CampusesPage
+              user={user}
+              notify={notify}
+              onSetupSchool={(id) => { setSetupSchool(id); switchPage('Campus setup'); }}
+              onCampusesChanged={() => { load(); }}
+              onSelectCampusAndNavigate={(campusId: number, targetPage: string, initialFilters?: Record<string, any>) => {
+                setActiveCampusId(campusId);
+                localStorage.setItem('optimus_active_campus_id', String(campusId));
+                switchPage(targetPage, { ...(initialFilters || {}), school: String(campusId) });
+              }}
+            />
+          )}
           {page === 'Audit log' && (
             !isFeatureUnlocked('audit_log_viewer') ? (
               <FeatureLockedScreen
@@ -3134,7 +3287,22 @@ function App() {
             )
           )}
           {page === 'My performance' && <MyPerformance />}
-          {page === 'Communication' && <Communication user={user} notify={notify} />}
+          {page === 'Communication' && (
+            <Communication
+              user={user}
+              notify={notify}
+              activeCampusId={activeCampusId}
+              campuses={campuses}
+              onSelectCampus={(newId) => {
+                setActiveCampusId(newId);
+                if (newId) {
+                  localStorage.setItem('optimus_active_campus_id', String(newId));
+                } else {
+                  localStorage.removeItem('optimus_active_campus_id');
+                }
+              }}
+            />
+          )}
           {page === 'Announcements' && <Announcements user={user} notify={notify} />}
           {page === 'Settings' && <Settings user={user} onUserUpdated={u => setUser(u)} notify={notify} />}
           {page === 'Permissions' && <Permissions user={user} notify={notify} />}
@@ -3866,7 +4034,7 @@ function App() {
             </div>
             <div style={{ padding: '20px 24px' }}>
               <div style={{ fontSize: 13, color: '#475569', marginBottom: 14, lineHeight: 1.5 }}>
-                You are currently in <b>All Campuses (Consolidated view)</b>. To keep your records distinct, please select a specific campus:
+                Please select a specific campus to open <b>{campusPromptModal.cardLabel}</b>:
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
                 {campuses.map(c => (
@@ -3878,7 +4046,7 @@ function App() {
                       localStorage.setItem('optimus_active_campus_id', String(c.id));
                       setCampusPromptModal(null);
                       notify(`Filtered to campus: ${c.name}`);
-                      switchPage(campusPromptModal.targetPage);
+                      switchPage(campusPromptModal.targetPage, { school: String(c.id) });
                     }}
                     style={{
                       display: 'flex',
@@ -3908,7 +4076,10 @@ function App() {
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{c.name}</div>
-                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{c.code || 'Campus'} {c.city ? `• ${c.city}` : ''}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                          {c.principal_name ? <span style={{ color: '#4338ca', fontWeight: 600 }}>Principal: {c.principal_name} • </span> : ''}
+                          {c.code || 'Campus'} {c.city ? `• ${c.city}` : ''}
+                        </div>
                       </div>
                     </div>
                     <ArrowRight size={16} color="#94a3b8" />
@@ -3916,19 +4087,7 @@ function App() {
                 ))}
               </div>
             </div>
-            <div className="modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #f0f1f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button
-                type="button"
-                className="text-link"
-                style={{ fontSize: 12, color: '#6366f1', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
-                onClick={() => {
-                  setCampusPromptModal(null);
-                  notify('Showing consolidated records across all campuses');
-                  switchPage(campusPromptModal.targetPage);
-                }}
-              >
-                View all together (Consolidated)
-              </button>
+            <div className="modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #f0f1f6', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
               <button type="button" className="outline-btn" onClick={() => setCampusPromptModal(null)}>Cancel</button>
             </div>
           </div>
@@ -4445,7 +4604,7 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
   );
 }
 
-function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user: User; notify: (m: string) => void; onSetupSchool: (id: number) => void; onCampusesChanged?: () => void }) {
+function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelectCampusAndNavigate }: { user: User; notify: (m: string) => void; onSetupSchool: (id: number) => void; onCampusesChanged?: () => void; onSelectCampusAndNavigate?: (campusId: number, targetPage: string, initialFilters?: Record<string, any>) => void }) {
   const [schools, setSchools] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [addModal, setAddModal] = useState(false);
@@ -4516,6 +4675,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
       name: String(s.name || ''),
       code: String(s.code || ''),
       city: String(s.city || ''),
+      principal_name: String((s as any).principal_name || ''),
       attendance_alert_threshold: String(s.attendance_alert_threshold ?? 80),
       grade_alert_threshold: String(s.grade_alert_threshold ?? 60),
     });
@@ -4531,6 +4691,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
         name: editForm.name,
         code: editForm.code,
         city: editForm.city,
+        principal_name: editForm.principal_name,
         attendance_alert_threshold: Number(editForm.attendance_alert_threshold),
         grade_alert_threshold: Number(editForm.grade_alert_threshold),
       });
@@ -4646,23 +4807,91 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                       <span className="campus-tag">{cType}</span>
                       {Boolean(s.country) && <span className="campus-tag">{String(s.country)}</span>}
                     </div>
+                    <div className="campus-principal-badge" style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569', background: '#f8fafc', padding: '3px 9px', borderRadius: 6, border: '1px solid #e2e8f0', width: 'fit-content' }}>
+                      <Crown size={14} color="#d97706" />
+                      <span>Principal: <strong style={{ color: '#1e293b' }}>{(s as any).principal_name || 'Not assigned'}</strong></span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="campus-demographics-container">
-                  <div className="campus-demographic-badge total-students-badge" title="Total active students enrolled at this campus">
+                  <div
+                    className="campus-demographic-badge total-students-badge clickable"
+                    title={`View students enrolled at ${s.name}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      notify(`Filtered to campus: ${s.name}`);
+                      onSelectCampusAndNavigate?.(sid, 'Students');
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        notify(`Filtered to campus: ${s.name}`);
+                        onSelectCampusAndNavigate?.(sid, 'Students');
+                      }
+                    }}
+                  >
                     <GraduationCap size={15} />
                     <span>Total Students: <strong>{Number(s.total_students || 0)}</strong></span>
                   </div>
-                  <div className="campus-demographic-badge girls-badge" title="Girls enrolled">
+                  <div
+                    className="campus-demographic-badge girls-badge clickable"
+                    title={`View girls enrolled at ${s.name}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      notify(`Filtered to girls at ${s.name}`);
+                      onSelectCampusAndNavigate?.(sid, 'Students', { gender: 'female' });
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        notify(`Filtered to girls at ${s.name}`);
+                        onSelectCampusAndNavigate?.(sid, 'Students', { gender: 'female' });
+                      }
+                    }}
+                  >
                     <span className="dot-circle-pink" />
                     <span>Girls: <strong className="pink-highlight">{Number(s.girls_count || 0)}</strong></span>
                   </div>
-                  <div className="campus-demographic-badge boys-badge" title="Boys enrolled">
+                  <div
+                    className="campus-demographic-badge boys-badge clickable"
+                    title={`View boys enrolled at ${s.name}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      notify(`Filtered to boys at ${s.name}`);
+                      onSelectCampusAndNavigate?.(sid, 'Students', { gender: 'male' });
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        notify(`Filtered to boys at ${s.name}`);
+                        onSelectCampusAndNavigate?.(sid, 'Students', { gender: 'male' });
+                      }
+                    }}
+                  >
                     <span className="dot-circle-blue" />
                     <span>Boys: <strong className="blue-highlight">{Number(s.boys_count || 0)}</strong></span>
                   </div>
-                  <div className="campus-demographic-badge employees-badge" title="Total campus employees and faculty">
+                  <div
+                    className="campus-demographic-badge employees-badge clickable"
+                    title={`View staff and faculty for ${s.name}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      notify(`Filtered to staff directory for ${s.name}`);
+                      onSelectCampusAndNavigate?.(sid, 'Staff');
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        notify(`Filtered to staff directory for ${s.name}`);
+                        onSelectCampusAndNavigate?.(sid, 'Staff');
+                      }
+                    }}
+                  >
                     <Briefcase size={15} />
                     <span>Total Employees: <strong>{Number(s.total_employees || 0)}</strong></span>
                   </div>
@@ -4823,6 +5052,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
               <div className="modal-fields">
                 <label>Campus name <span className="required">*</span><input required value={editForm.name || ''} onChange={e => setEditField('name', e.target.value)} /></label>
                 <label>Campus code <span className="required">*</span><input required value={editForm.code || ''} onChange={e => setEditField('code', e.target.value)} /></label>
+                <label>Principal name<input value={editForm.principal_name || ''} onChange={e => setEditField('principal_name', e.target.value)} placeholder="e.g. Dr. Ahmed Khan" /></label>
                 <label>City<input value={editForm.city || ''} onChange={e => setEditField('city', e.target.value)} /></label>
                 <label>Attendance alert threshold (%)<input type="number" min="0" max="100" value={editForm.attendance_alert_threshold || '80'} onChange={e => setEditField('attendance_alert_threshold', e.target.value)} /></label>
                 <label>Academic alert threshold (%)<input type="number" min="0" max="100" value={editForm.grade_alert_threshold || '60'} onChange={e => setEditField('grade_alert_threshold', e.target.value)} /></label>
@@ -4853,6 +5083,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged }: { user
                 <div className="modal-section-title">1. Campus Identity</div>
                 <label>Campus name <span className="required">*</span><input required value={addForm.name || ''} onChange={e => setAddField('name', e.target.value)} placeholder="e.g. Northstar Academy — City Campus" /></label>
                 <label>Campus code <span className="required">*</span><input required value={addForm.code || ''} onChange={e => setAddField('code', e.target.value)} placeholder="e.g. NSA-CITY" /></label>
+                <label>Principal / Head name<input value={addForm.principal_name || ''} onChange={e => setAddField('principal_name', e.target.value)} placeholder="e.g. Dr. Ahmed Khan" /></label>
                 <label>Campus type
                   <select value={addForm.campus_type || 'Branch Campus'} onChange={e => setAddField('campus_type', e.target.value)}>
                     <option value="Main Campus">Main Campus</option>

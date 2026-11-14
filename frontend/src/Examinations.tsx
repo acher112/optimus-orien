@@ -234,19 +234,85 @@ export default function Examinations({
     }
   }, [activeCampusId, isSingleCampusRole, selectedConfigId, analyticsAveragingMethod, analyticsGenderFilter, analyticsClassFilter]);
 
+  // Helper to compute live row calculation for normalized % and scaled marks
+  const computeLiveStudentRow = useCallback((student: R, columns: R[], reportingScale: number = 100): R => {
+    let accumulatedContribution = 0;
+    let assessedWeight = 0;
+    let allCompleted = (columns && columns.length > 0);
+
+    for (const col of columns || []) {
+      const termEntry = student.terms?.[col.id] || { marks_obtained: '', result_status: 'recorded' };
+      const maxMarks = parseFloat(col.max_marks) || 100;
+      const weight = parseFloat(col.weight_percentage) || 0;
+      const rawVal = termEntry.marks_obtained;
+      const isExempt = termEntry.is_exempt || termEntry.result_status === 'exempt';
+      const isAbsent = termEntry.result_status === 'absent';
+
+      if (isExempt) {
+        continue;
+      }
+
+      if (rawVal !== '' && rawVal !== null && rawVal !== undefined && !isNaN(parseFloat(rawVal))) {
+        const marks = Math.min(Math.max(parseFloat(rawVal), 0), maxMarks);
+        const normalizedPercent = maxMarks > 0 ? (marks / maxMarks) * 100 : 0;
+        const contribution = (normalizedPercent * weight) / 100;
+        accumulatedContribution += contribution;
+        assessedWeight += weight;
+      } else if (isAbsent) {
+        assessedWeight += weight;
+      } else {
+        allCompleted = false;
+      }
+    }
+
+    let finalPercentage: string | null = null;
+    let currentPercentage: string | null = null;
+    let scaledMarks: string | null = null;
+    const completed = allCompleted && (columns && columns.length > 0);
+
+    if (assessedWeight > 0) {
+      const curPct = (accumulatedContribution / (assessedWeight / 100));
+      currentPercentage = curPct.toFixed(2);
+      const scaled = (curPct * reportingScale) / 100;
+      scaledMarks = scaled.toFixed(2);
+    }
+
+    if (completed) {
+      finalPercentage = accumulatedContribution.toFixed(2);
+      const scaled = (accumulatedContribution * reportingScale) / 100;
+      scaledMarks = scaled.toFixed(2);
+    }
+
+    return {
+      ...student,
+      completed,
+      final_percentage: finalPercentage,
+      current_percentage: currentPercentage,
+      scaled_marks: scaledMarks,
+      assessed_weight: assessedWeight.toFixed(2)
+    };
+  }, []);
+
   // Load Marks Grid Data
   const loadMarksGridData = useCallback(async () => {
     if (!selectedConfigId || !gridClassId || !gridSubjectId) return;
     setLoading(true);
     try {
       const res = await request<R>(`exams/engine/configurations/${selectedConfigId}/marks-grid/?class=${gridClassId}&subject=${gridSubjectId}`);
-      setEngineMarksData(res);
+      const reportingScale = parseFloat(res.configuration?.reporting_scale) || 100;
+      const enrichedStudents = (res.students || []).map((st: R) => {
+        if (st.final_percentage !== null || st.current_percentage !== null || st.scaled_marks !== null) {
+          return st;
+        }
+        return computeLiveStudentRow(st, res.columns || [], reportingScale);
+      });
+      setEngineMarksData({ ...res, students: enrichedStudents });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load mark entry grid');
     } finally {
       setLoading(false);
     }
-  }, [selectedConfigId, gridClassId, gridSubjectId]);
+  }, [selectedConfigId, gridClassId, gridSubjectId, computeLiveStudentRow]);
 
   // Load Student Transcript
   const loadTranscript = useCallback(async (stId: number) => {
@@ -634,8 +700,11 @@ export default function Examinations({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
                 {/* Headline Average */}
                 <div className="panel" style={{ padding: '16px 20px', borderTop: `4px solid ${OVERALL_COLOR}` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                    Headline Average ({analyticsAveragingMethod === 'class_weighted' ? 'Class-Weighted' : 'Student-Weighted'})
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    <span>Headline Average ({analyticsAveragingMethod === 'class_weighted' ? 'Class-Weighted' : 'Student-Weighted'})</span>
+                    {analyticsData.summary?.is_in_progress && (
+                      <span className="pill amber" style={{ fontSize: 10, textTransform: 'none', padding: '2px 6px' }}>In Progress (Assessed)</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 30, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
                     {analyticsData.summary?.headline_average !== null && analyticsData.summary?.headline_average !== undefined ? `${analyticsData.summary.headline_average}%` : 'N/A'}
@@ -771,7 +840,7 @@ export default function Examinations({
               )}
 
               {/* Charts Row: Score Distribution & Gender Split */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
                 {/* Score Distribution Chart */}
                 <section className="panel" style={{ padding: '16px 20px' }}>
                   <div className="panel-head" style={{ marginBottom: 12 }}>
@@ -1190,6 +1259,12 @@ export default function Examinations({
                       <td>{st.roll_number}</td>
                       {(engineMarksData.columns || []).map((col: R) => {
                         const termEntry = st.terms?.[col.id] || { marks_obtained: '', result_status: 'recorded' };
+                        const hasVal = termEntry.marks_obtained !== '' && termEntry.marks_obtained !== null && !isNaN(parseFloat(termEntry.marks_obtained));
+                        const maxVal = parseFloat(col.max_marks) || 100;
+                        const wtVal = parseFloat(col.weight_percentage) || 0;
+                        const termPct = hasVal ? ((parseFloat(termEntry.marks_obtained) / maxVal) * 100).toFixed(1) : null;
+                        const termContr = hasVal ? ((parseFloat(termEntry.marks_obtained) / maxVal) * wtVal).toFixed(1) : null;
+
                         return (
                           <td key={col.id}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1203,11 +1278,20 @@ export default function Examinations({
                                 value={termEntry.marks_obtained}
                                 onChange={e => {
                                   const val = e.target.value;
+                                  const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
                                   const updatedStudents = [...engineMarksData.students];
-                                  updatedStudents[sIdx].terms[col.id] = {
-                                    ...termEntry,
-                                    marks_obtained: val
+                                  const updatedTerms = {
+                                    ...st.terms,
+                                    [col.id]: {
+                                      ...termEntry,
+                                      marks_obtained: val
+                                    }
                                   };
+                                  updatedStudents[sIdx] = computeLiveStudentRow(
+                                    { ...st, terms: updatedTerms },
+                                    engineMarksData.columns || [],
+                                    repScale
+                                  );
                                   setEngineMarksData({ ...engineMarksData, students: updatedStudents });
                                 }}
                               />
@@ -1216,11 +1300,20 @@ export default function Examinations({
                                 value={termEntry.result_status}
                                 onChange={e => {
                                   const stVal = e.target.value;
+                                  const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
                                   const updatedStudents = [...engineMarksData.students];
-                                  updatedStudents[sIdx].terms[col.id] = {
-                                    ...termEntry,
-                                    result_status: stVal
+                                  const updatedTerms = {
+                                    ...st.terms,
+                                    [col.id]: {
+                                      ...termEntry,
+                                      result_status: stVal
+                                    }
                                   };
+                                  updatedStudents[sIdx] = computeLiveStudentRow(
+                                    { ...st, terms: updatedTerms },
+                                    engineMarksData.columns || [],
+                                    repScale
+                                  );
                                   setEngineMarksData({ ...engineMarksData, students: updatedStudents });
                                 }}
                               >
@@ -1229,31 +1322,52 @@ export default function Examinations({
                                 <option value="exempt">Exempt</option>
                                 <option value="incomplete">Incomplete</option>
                               </select>
+                              {hasVal && (
+                                <div style={{ fontSize: 10, color: '#475569', background: '#f1f5f9', padding: '2px 4px', borderRadius: 4, textAlign: 'center' }}>
+                                  <strong style={{ color: '#0f172a' }}>{termPct}%</strong>
+                                  <span style={{ color: '#64748b', marginLeft: 3 }}>· W: {termContr}%</span>
+                                </div>
+                              )}
                             </div>
                           </td>
                         );
                       })}
                       <td>
-                        {st.final_percentage !== null ? (
-                          <strong style={{ color: OVERALL_COLOR, fontSize: 14 }}>{st.final_percentage}%</strong>
-                        ) : st.current_percentage !== null ? (
-                          <span style={{ color: '#d97706', fontSize: 13 }} title={`Current progress across ${st.assessed_weight}% weight assessed`}>
-                            {st.current_percentage}% <small>(cur)</small>
-                          </span>
+                        {st.final_percentage !== null && st.final_percentage !== undefined ? (
+                          <div>
+                            <strong style={{ color: OVERALL_COLOR, fontSize: 14 }}>{st.final_percentage}%</strong>
+                            <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>100% complete</div>
+                          </div>
+                        ) : st.current_percentage !== null && st.current_percentage !== undefined ? (
+                          <div>
+                            <span style={{ color: '#0d9488', fontSize: 13, fontWeight: 700 }} title={`Current progress across ${st.assessed_weight}% weight assessed`}>
+                              {st.current_percentage}% <small style={{ fontWeight: 500 }}>(cur)</small>
+                            </span>
+                            <div style={{ fontSize: 10, color: '#64748b' }}>Assessed: {st.assessed_weight}%</div>
+                          </div>
                         ) : (
                           <span style={{ color: '#94a3b8' }}>–</span>
                         )}
                       </td>
                       <td>
-                        {st.scaled_marks !== null ? (
-                          <span>{st.scaled_marks} / {engineMarksData.configuration?.reporting_scale || '100.00'}</span>
-                        ) : '–'}
+                        {st.scaled_marks !== null && st.scaled_marks !== undefined ? (
+                          <div>
+                            <strong style={{ fontSize: 13, color: '#1e293b' }}>{st.scaled_marks}</strong>
+                            <span style={{ fontSize: 11, color: '#64748b' }}> / {engineMarksData.configuration?.reporting_scale || '100.00'}</span>
+                          </div>
+                        ) : (
+                          <span style={{ color: '#94a3b8' }}>–</span>
+                        )}
                       </td>
                       <td>
                         {st.completed ? (
-                          <span className="pill green">Complete</span>
+                          <span className="pill green" style={{ fontWeight: 700 }}>Complete</span>
+                        ) : parseFloat(st.assessed_weight || '0') > 0 ? (
+                          <span className="pill blue" style={{ fontWeight: 600 }} title={`Assessed: ${st.assessed_weight}%`}>
+                            In Progress ({st.assessed_weight}%)
+                          </span>
                         ) : (
-                          <span className="pill amber" title="Required terms pending">Pending</span>
+                          <span className="pill amber" title="No marks entered yet">Pending</span>
                         )}
                       </td>
                     </tr>

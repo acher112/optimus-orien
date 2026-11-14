@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   BookOpen,
+  Building2,
   CheckCircle2,
   CornerDownRight,
   MessageSquare,
@@ -51,7 +52,21 @@ interface MessageItem {
   created_at: string;
 }
 
-export default function Communication({ user, notify }: { user: User; notify: (m: string) => void }) {
+interface CommunicationProps {
+  user: User;
+  notify: (m: string) => void;
+  activeCampusId?: number | null;
+  campuses?: Array<{ id: number; name: string; principal_name?: string }>;
+  onSelectCampus?: (id: number | null) => void;
+}
+
+export default function Communication({
+  user,
+  notify,
+  activeCampusId,
+  campuses = [],
+  onSelectCampus,
+}: CommunicationProps) {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
@@ -63,6 +78,33 @@ export default function Communication({ user, notify }: { user: User; notify: (m
   const [msgSearch, setMsgSearch] = useState('');
   const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
   const [error, setError] = useState('');
+
+  const currentCampus = useMemo(() => {
+    if (!activeCampusId) return null;
+    return (campuses || []).find(c => c.id === activeCampusId) || null;
+  }, [campuses, activeCampusId]);
+
+  const visibleClasses = useMemo(() => {
+    if (!activeCampusId) return classes;
+    return classes.filter(c => c.school_id === activeCampusId);
+  }, [classes, activeCampusId]);
+
+  // When visibleClasses changes, ensure selectedClassId is valid
+  useEffect(() => {
+    if (visibleClasses.length > 0) {
+      if (!visibleClasses.some(c => c.id === selectedClassId)) {
+        setSelectedClassId(visibleClasses[0].id);
+        if (visibleClasses[0].subjects && visibleClasses[0].subjects.length > 0) {
+          setSelectedSubjectId(visibleClasses[0].subjects[0].id);
+        } else {
+          setSelectedSubjectId(null);
+        }
+      }
+    } else {
+      setSelectedClassId(null);
+      setSelectedSubjectId(null);
+    }
+  }, [visibleClasses, selectedClassId]);
 
   const displayMessages = useMemo(() => {
     if (!msgSearch.trim()) return messages;
@@ -109,7 +151,7 @@ export default function Communication({ user, notify }: { user: User; notify: (m
     }
   }, [canManageTeachers]);
 
-  const activeClass = classes.find(c => c.id === selectedClassId) || classes[0];
+  const activeClass = visibleClasses.find(c => c.id === selectedClassId) || visibleClasses[0];
   const activeSubject = activeClass?.subjects.find(s => s.id === selectedSubjectId) || activeClass?.subjects[0];
 
   // Load messages for selected class and subject
@@ -203,8 +245,32 @@ export default function Communication({ user, notify }: { user: User; notify: (m
           <p>
             Communicate and ask questions within your class subjects. Subject teachers can answer and guide their students.
           </p>
+          {currentCampus && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#eef2ff', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#4338ca', marginTop: 8 }}>
+              <Building2 size={15} />
+              <span>{currentCampus.name}{currentCampus.principal_name ? ` • Principal: ${currentCampus.principal_name}` : ''}</span>
+            </div>
+          )}
         </div>
-        <div className="toolbar-right">
+        <div className="toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {campuses && campuses.length > 1 && (
+            <label style={{ fontSize: 13, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              Campus:
+              <select
+                className="fx-select"
+                value={activeCampusId || ''}
+                onChange={e => {
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  onSelectCampus?.(val);
+                }}
+              >
+                <option value="">🌐 All Campuses</option>
+                {campuses.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="outline-btn" onClick={loadMessages}>
             <RefreshCw size={15} /> Refresh discussions
           </button>
@@ -218,7 +284,7 @@ export default function Communication({ user, notify }: { user: User; notify: (m
       )}
 
       {/* Class Selector if multiple classes */}
-      {classes.length > 1 && (
+      {visibleClasses.length > 1 && (
         <div className="fx-filters" style={{ marginBottom: 18 }}>
           <label>
             Select Class
@@ -228,13 +294,13 @@ export default function Communication({ user, notify }: { user: User; notify: (m
               onChange={e => {
                 const cid = Number(e.target.value);
                 setSelectedClassId(cid);
-                const cls = classes.find(c => c.id === cid);
+                const cls = visibleClasses.find(c => c.id === cid);
                 if (cls && cls.subjects.length > 0) {
                   setSelectedSubjectId(cls.subjects[0].id);
                 }
               }}
             >
-              {classes.map(c => (
+              {visibleClasses.map(c => (
                 <option key={c.id} value={c.id}>
                   {c.name} {c.school_name ? `(${c.school_name})` : ''}
                 </option>
@@ -244,8 +310,16 @@ export default function Communication({ user, notify }: { user: User; notify: (m
         </div>
       )}
 
-      {/* Main Discussion Layout */}
-      <div className="comm-container">
+
+      {!visibleClasses.length ? (
+        <div className="empty" style={{ margin: '40px auto', maxWidth: 480 }}>
+          <span><MessageSquare size={28} /></span>
+          <strong>No active classes found for this campus</strong>
+          <p>Please select another campus or configure classes in Campus Setup.</p>
+        </div>
+      ) : (
+        /* Main Discussion Layout */
+        <div className="comm-container">
         {/* Subject Navigation Tabs / Sidebar */}
         <aside className="comm-sidebar">
           <div className="comm-sidebar-header">
@@ -443,6 +517,7 @@ export default function Communication({ user, notify }: { user: User; notify: (m
           )}
         </main>
       </div>
+      )}
 
       {/* Assign Teacher Modal */}
       {assignModal && activeClass && activeSubject && (

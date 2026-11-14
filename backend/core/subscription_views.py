@@ -1053,10 +1053,12 @@ def platform_admin_schools_view(request):
 
         registered_at_dt = admin_user.date_joined if admin_user else (sub.created_at if sub else start_dt)
 
+        from core.views import resolve_school_principal_name
         results.append({
             'school_id': s.id,
             'school_name': s.name,
             'school_code': s.code,
+            'principal_name': resolve_school_principal_name(s),
             'city': s.city or '',
             'currency': getattr(s, 'currency', 'PKR'),
             'organisation_id': s.organisation_id,

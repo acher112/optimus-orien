@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays, CheckCircle2, Clock, AlertTriangle, XCircle,
-  RefreshCw, Save, Users, AlertCircle, Check
+  RefreshCw, Save, Users, AlertCircle, Check, Eye, Edit3, Search
 } from 'lucide-react';
 import { list, request, type User } from './api';
 import AttendanceCalendarModal, { CalendarTarget } from './AttendanceCalendarModal';
@@ -67,6 +67,24 @@ export default function StaffAttendanceRegister({
   const [error, setError] = useState<string>('');
   const [dirty, setDirty] = useState<boolean>(false);
   const [calendarTarget, setCalendarTarget] = useState<CalendarTarget | null>(null);
+  const [attendanceMode, setAttendanceMode] = useState<'view' | 'mark'>('view');
+  const [statusFilter, setStatusFilter] = useState<StatusType | 'all'>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  const filteredRecords = useMemo(() => {
+    return records.filter(r => {
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matchName = (r.staff_name || '').toLowerCase().includes(q);
+        const matchEmail = (r.email || '').toLowerCase().includes(q);
+        const matchPos = (r.position || '').toLowerCase().includes(q);
+        const matchRole = (r.role || '').toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchPos && !matchRole) return false;
+      }
+      return true;
+    });
+  }, [records, statusFilter, searchTerm]);
 
   useEffect(() => {
     if (activeCampusId) {
@@ -183,6 +201,63 @@ export default function StaffAttendanceRegister({
 
   return (
     <section className={`panel hr-panel ${embedded ? 'embedded-attendance' : ''}`} style={{ marginTop: embedded ? 0 : 20 }}>
+      {/* Mode Switcher: View Attendance vs Mark Or Edit Attendance */}
+      <div style={{
+        display: 'flex',
+        gap: 10,
+        padding: '12px 20px',
+        background: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0',
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Register Mode:
+        </span>
+        <button
+          type="button"
+          onClick={() => setAttendanceMode('view')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '7px 16px',
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: attendanceMode === 'view' ? 700 : 500,
+            background: attendanceMode === 'view' ? '#6366f1' : '#fff',
+            color: attendanceMode === 'view' ? '#fff' : '#475569',
+            border: attendanceMode === 'view' ? '1px solid #6366f1' : '1px solid #cbd5e1',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            boxShadow: attendanceMode === 'view' ? '0 2px 4px rgba(99, 102, 241, 0.25)' : 'none'
+          }}
+        >
+          <Eye size={14} /> View Attendance
+        </button>
+        <button
+          type="button"
+          onClick={() => setAttendanceMode('mark')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '7px 16px',
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: attendanceMode === 'mark' ? 700 : 500,
+            background: attendanceMode === 'mark' ? '#6366f1' : '#fff',
+            color: attendanceMode === 'mark' ? '#fff' : '#475569',
+            border: attendanceMode === 'mark' ? '1px solid #6366f1' : '1px solid #cbd5e1',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            boxShadow: attendanceMode === 'mark' ? '0 2px 4px rgba(99, 102, 241, 0.25)' : 'none'
+          }}
+        >
+          <Edit3 size={14} /> Mark Or Edit Attendance
+        </button>
+      </div>
+
       {/* Header with Title and Filters */}
       <div className="panel-head" style={{ flexWrap: 'wrap', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -232,46 +307,59 @@ export default function StaffAttendanceRegister({
             />
           </label>
 
-          <button
-            type="button"
-            className="outline-btn"
-            onClick={markAllPresent}
-            disabled={loading || records.length === 0}
-            style={{ height: 36, fontSize: 12 }}
-          >
-            <Check size={14} /> Mark All Present
-          </button>
+          {attendanceMode === 'mark' ? (
+            <>
+              <button
+                type="button"
+                className="outline-btn"
+                onClick={markAllPresent}
+                disabled={loading || records.length === 0}
+                style={{ height: 36, fontSize: 12 }}
+              >
+                <Check size={14} /> Mark All Present
+              </button>
 
-          <button
-            type="button"
-            className="primary-btn"
-            onClick={() => handleSave()}
-            disabled={isSubmitDisabled}
-            style={{
-              height: 36,
-              fontSize: 12,
-              opacity: isSubmitDisabled ? 0.6 : 1,
-              cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
-              background: dirty ? '#16a34a' : undefined,
-              borderColor: dirty ? '#16a34a' : undefined,
-            }}
-            title={
-              isConducted && !dirty
-                ? 'Attendance already conducted and saved. Change any staff status to undisable submit.'
-                : 'Submit staff attendance to database'
-            }
-          >
-            <Save size={14} />{' '}
-            {saving
-              ? 'Saving...'
-              : dirty
-              ? isConducted
-                ? 'Update Attendance *'
-                : 'Submit Attendance *'
-              : isConducted
-              ? 'Attendance Saved'
-              : 'Submit Attendance'}
-          </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => handleSave()}
+                disabled={isSubmitDisabled}
+                style={{
+                  height: 36,
+                  fontSize: 12,
+                  opacity: isSubmitDisabled ? 0.6 : 1,
+                  cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+                  background: dirty ? '#16a34a' : undefined,
+                  borderColor: dirty ? '#16a34a' : undefined,
+                }}
+                title={
+                  isConducted && !dirty
+                    ? 'Attendance already conducted and saved. Change any staff status to undisable submit.'
+                    : 'Submit staff attendance to database'
+                }
+              >
+                <Save size={14} />{' '}
+                {saving
+                  ? 'Saving...'
+                  : dirty
+                  ? isConducted
+                    ? 'Update Attendance *'
+                    : 'Submit Attendance *'
+                  : isConducted
+                  ? 'Attendance Saved'
+                  : 'Submit Attendance'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="outline-btn"
+              onClick={() => setAttendanceMode('mark')}
+              style={{ height: 36, fontSize: 12, borderColor: '#6366f1', color: '#6366f1' }}
+            >
+              <Edit3 size={14} /> Switch to Mark / Edit
+            </button>
+          )}
         </div>
       </div>
 
@@ -319,47 +407,160 @@ export default function StaffAttendanceRegister({
         )}
       </div>
 
-      {/* KPI Stats */}
+      {/* KPI Stats - Clickable to filter staff */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
         gap: 10,
-        padding: '14px 20px',
+        padding: '12px 20px',
         background: '#f8fafc',
         borderBottom: '1px solid #e2e8f0'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          onClick={() => setStatusFilter('all')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            padding: '6px 10px', borderRadius: 8,
+            background: statusFilter === 'all' ? '#e2e8f0' : 'transparent',
+            border: statusFilter === 'all' ? '1.5px solid #64748b' : '1.5px solid transparent',
+            transition: 'all 0.15s ease'
+          }}
+          title="Click to view all staff"
+        >
           <Users size={16} color="#64748b" />
           <span style={{ fontSize: 12, color: '#64748b' }}>Total Staff:</span>
           <strong style={{ fontSize: 14 }}>{currentSummary.total}</strong>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          onClick={() => setStatusFilter('present')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            padding: '6px 10px', borderRadius: 8,
+            background: statusFilter === 'present' ? '#dcfce7' : 'transparent',
+            border: statusFilter === 'present' ? '1.5px solid #16a34a' : '1.5px solid transparent',
+            transition: 'all 0.15s ease'
+          }}
+          title="Click to filter by Present staff"
+        >
           <CheckCircle2 size={16} color="#16a34a" />
           <span style={{ fontSize: 12, color: '#16a34a' }}>Present:</span>
           <strong style={{ fontSize: 14, color: '#16a34a' }}>{currentSummary.present}</strong>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          onClick={() => setStatusFilter('absent')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            padding: '6px 10px', borderRadius: 8,
+            background: statusFilter === 'absent' ? '#fee2e2' : 'transparent',
+            border: statusFilter === 'absent' ? '1.5px solid #dc2626' : '1.5px solid transparent',
+            transition: 'all 0.15s ease'
+          }}
+          title="Click to filter by Absent staff"
+        >
           <XCircle size={16} color="#dc2626" />
           <span style={{ fontSize: 12, color: '#dc2626' }}>Absent:</span>
           <strong style={{ fontSize: 14, color: '#dc2626' }}>{currentSummary.absent}</strong>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          onClick={() => setStatusFilter('late')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            padding: '6px 10px', borderRadius: 8,
+            background: statusFilter === 'late' ? '#fef3c7' : 'transparent',
+            border: statusFilter === 'late' ? '1.5px solid #d97706' : '1.5px solid transparent',
+            transition: 'all 0.15s ease'
+          }}
+          title="Click to filter by Late staff"
+        >
           <Clock size={16} color="#d97706" />
           <span style={{ fontSize: 12, color: '#d97706' }}>Late:</span>
           <strong style={{ fontSize: 14, color: '#d97706' }}>{currentSummary.late}</strong>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          onClick={() => setStatusFilter('excused')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            padding: '6px 10px', borderRadius: 8,
+            background: statusFilter === 'excused' ? '#f3e8ff' : 'transparent',
+            border: statusFilter === 'excused' ? '1.5px solid #7c3aed' : '1.5px solid transparent',
+            transition: 'all 0.15s ease'
+          }}
+          title="Click to filter by Excused staff"
+        >
           <AlertTriangle size={16} color="#7c3aed" />
           <span style={{ fontSize: 12, color: '#7c3aed' }}>Excused:</span>
           <strong style={{ fontSize: 14, color: '#7c3aed' }}>{currentSummary.excused}</strong>
         </div>
-        {currentSummary.not_taken > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlertCircle size={16} color="#b45309" />
-            <span style={{ fontSize: 12, color: '#b45309' }}>Not Taken:</span>
-            <strong style={{ fontSize: 14, color: '#b45309' }}>{currentSummary.not_taken}</strong>
-          </div>
-        )}
+        <div
+          onClick={() => setStatusFilter('not_taken')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            padding: '6px 10px', borderRadius: 8,
+            background: statusFilter === 'not_taken' ? '#fef3c7' : 'transparent',
+            border: statusFilter === 'not_taken' ? '1.5px solid #b45309' : '1.5px solid transparent',
+            transition: 'all 0.15s ease'
+          }}
+          title="Click to filter by Not Taken staff"
+        >
+          <AlertCircle size={16} color="#b45309" />
+          <span style={{ fontSize: 12, color: '#b45309' }}>Not Taken:</span>
+          <strong style={{ fontSize: 14, color: '#b45309' }}>{currentSummary.not_taken}</strong>
+        </div>
+      </div>
+
+      {/* Table Controls (Search & Status Filter) */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '10px 20px',
+        borderBottom: '1px solid #e2e8f0',
+        flexWrap: 'wrap',
+        gap: 10
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1', minWidth: 240 }}>
+          <Search size={14} color="#94a3b8" />
+          <input
+            type="text"
+            placeholder="Search staff by name, email, role..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 12, width: '100%' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: '#64748b' }}>Filter:</span>
+          {(['all', 'present', 'absent', 'late', 'excused', 'not_taken'] as const).map(st => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setStatusFilter(st)}
+              style={{
+                border: statusFilter === st ? '1px solid #6366f1' : '1px solid #cbd5e1',
+                background: statusFilter === st ? '#ede9fe' : '#fff',
+                color: statusFilter === st ? '#4f46e5' : '#64748b',
+                fontSize: 11,
+                fontWeight: statusFilter === st ? 700 : 500,
+                padding: '3px 9px',
+                borderRadius: 5,
+                cursor: 'pointer',
+                textTransform: 'capitalize'
+              }}
+            >
+              {st === 'all' ? 'All' : st.replace('_', ' ')}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="outline-btn"
+            onClick={loadAttendance}
+            style={{ height: 28, padding: '0 8px', fontSize: 11 }}
+            title="Reload staff attendance"
+          >
+            <RefreshCw size={12} />
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -377,6 +578,10 @@ export default function StaffAttendanceRegister({
         <div style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
           No active staff members registered on this campus.
         </div>
+      ) : filteredRecords.length === 0 ? (
+        <div style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+          No staff members match the selected filter or search query.
+        </div>
       ) : (
         <div className="table-scroll">
           <table className="data-table">
@@ -391,7 +596,7 @@ export default function StaffAttendanceRegister({
               </tr>
             </thead>
             <tbody>
-              {records.map((r, idx) => {
+              {filteredRecords.map((r, idx) => {
                 const initials = r.staff_name.split(/\s+/).map(p => p[0]).join('').slice(0, 2).toUpperCase();
                 return (
                   <tr key={r.staff_id}>
@@ -438,41 +643,80 @@ export default function StaffAttendanceRegister({
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', padding: 3, borderRadius: 8 }}>
-                        {(['present', 'absent', 'late', 'excused'] as const).map(st => {
-                          const isActive = r.status === st;
-                          let activeStyle: React.CSSProperties = {};
-                          if (isActive) {
-                            if (st === 'present') activeStyle = { background: '#16a34a', color: '#fff', fontWeight: 700 };
-                            if (st === 'absent') activeStyle = { background: '#dc2626', color: '#fff', fontWeight: 700 };
-                            if (st === 'late') activeStyle = { background: '#d97706', color: '#fff', fontWeight: 700 };
-                            if (st === 'excused') activeStyle = { background: '#7c3aed', color: '#fff', fontWeight: 700 };
-                          }
-                          return (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={() => updateStatus(r.staff_id, st)}
-                              style={{
-                                border: 'none',
-                                background: isActive ? undefined : 'transparent',
-                                color: isActive ? undefined : '#475569',
-                                padding: '4px 10px',
-                                borderRadius: 6,
-                                fontSize: 11,
-                                cursor: 'pointer',
-                                textTransform: 'capitalize',
-                                transition: 'all 0.15s ease',
-                                ...activeStyle,
-                              }}
-                            >
-                              {st}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {attendanceMode === 'mark' ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', padding: 3, borderRadius: 8 }}>
+                          {(['present', 'absent', 'late', 'excused'] as const).map(st => {
+                            const isActive = r.status === st;
+                            let activeStyle: React.CSSProperties = {};
+                            if (isActive) {
+                              if (st === 'present') activeStyle = { background: '#16a34a', color: '#fff', fontWeight: 700 };
+                              if (st === 'absent') activeStyle = { background: '#dc2626', color: '#fff', fontWeight: 700 };
+                              if (st === 'late') activeStyle = { background: '#d97706', color: '#fff', fontWeight: 700 };
+                              if (st === 'excused') activeStyle = { background: '#7c3aed', color: '#fff', fontWeight: 700 };
+                            }
+                            return (
+                              <button
+                                key={st}
+                                type="button"
+                                onClick={() => updateStatus(r.staff_id, st)}
+                                style={{
+                                  border: 'none',
+                                  background: isActive ? undefined : 'transparent',
+                                  color: isActive ? undefined : '#475569',
+                                  padding: '4px 10px',
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  cursor: 'pointer',
+                                  textTransform: 'capitalize',
+                                  transition: 'all 0.15s ease',
+                                  ...activeStyle,
+                                }}
+                              >
+                                {st}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* Read-only status pills in 'view' mode */
+                        <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {r.status === 'present' && (
+                            <span className="pill green" style={{ fontSize: 11, padding: '4px 10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <CheckCircle2 size={12} /> Present
+                            </span>
+                          )}
+                          {r.status === 'absent' && (
+                            <span className="pill red" style={{ fontSize: 11, padding: '4px 10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <XCircle size={12} /> Absent
+                            </span>
+                          )}
+                          {r.status === 'late' && (
+                            <span className="pill amber" style={{ fontSize: 11, padding: '4px 10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <Clock size={12} /> Late
+                            </span>
+                          )}
+                          {r.status === 'excused' && (
+                            <span className="pill purple" style={{ fontSize: 11, padding: '4px 10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <AlertTriangle size={12} /> Excused
+                            </span>
+                          )}
+                          {r.status === 'not_taken' && (
+                            <span style={{
+                              background: '#fef3c7',
+                              color: '#b45309',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '3px 8px',
+                              borderRadius: 8,
+                              border: '1px solid #fde68a'
+                            }}>
+                              Not Recorded
+                            </span>
+                          )}
+                        </div>
+                      )}
 
-                      {r.status === 'not_taken' && (
+                      {attendanceMode === 'mark' && r.status === 'not_taken' && (
                         <span style={{
                           marginLeft: 8,
                           background: '#fef3c7',
@@ -488,20 +732,26 @@ export default function StaffAttendanceRegister({
                       )}
                     </td>
                     <td>
-                      <input
-                        type="text"
-                        placeholder="Add note..."
-                        value={r.note || ''}
-                        onChange={e => updateNote(r.staff_id, e.target.value)}
-                        style={{
-                          width: '100%',
-                          maxWidth: 220,
-                          padding: '4px 8px',
-                          fontSize: 12,
-                          borderRadius: 6,
-                          border: '1px solid #cbd5e1',
-                        }}
-                      />
+                      {attendanceMode === 'mark' ? (
+                        <input
+                          type="text"
+                          placeholder="Add note..."
+                          value={r.note || ''}
+                          onChange={e => updateNote(r.staff_id, e.target.value)}
+                          style={{
+                            width: '100%',
+                            maxWidth: 220,
+                            padding: '4px 8px',
+                            fontSize: 12,
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                          }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 12, color: r.note ? '#334155' : '#94a3b8', fontStyle: r.note ? 'normal' : 'italic' }}>
+                          {r.note || '—'}
+                        </span>
+                      )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {r.is_recorded ? (

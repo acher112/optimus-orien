@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ClipboardCheck, Users, CalendarDays, CheckCircle2, Clock,
   AlertTriangle, XCircle, RefreshCw, Save, Check, Search,
-  ChevronRight, ArrowRight, UserCheck, Filter, AlertCircle, User as UserIcon
+  ChevronRight, ArrowRight, UserCheck, Filter, AlertCircle, User as UserIcon,
+  Eye, Edit3
 } from 'lucide-react';
 import { list, request, type User } from './api';
 import StaffAttendanceRegister from './StaffAttendanceRegister';
@@ -101,6 +102,7 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent' | 'late' | 'not_taken'>('all');
   const [calendarTarget, setCalendarTarget] = useState<CalendarTarget | null>(null);
+  const [attendanceMode, setAttendanceMode] = useState<'view' | 'mark'>('view');
 
   // Load campus list if org admin
   useEffect(() => {
@@ -364,6 +366,63 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
             border: '1px solid var(--border-color, #e2e8f0)',
             padding: '1.25rem'
           }}>
+            {/* Mode Switcher: View Attendance vs Mark Or Edit Attendance */}
+            <div style={{
+              display: 'flex',
+              gap: 10,
+              marginBottom: 16,
+              paddingBottom: 14,
+              borderBottom: '1px solid #f1f5f9',
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', marginRight: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Register Mode:
+              </span>
+              <button
+                type="button"
+                onClick={() => setAttendanceMode('view')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 16px',
+                  borderRadius: 8,
+                  fontSize: '0.84rem',
+                  fontWeight: attendanceMode === 'view' ? 700 : 500,
+                  background: attendanceMode === 'view' ? '#6366f1' : '#f8fafc',
+                  color: attendanceMode === 'view' ? '#fff' : '#475569',
+                  border: attendanceMode === 'view' ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: attendanceMode === 'view' ? '0 2px 4px rgba(99, 102, 241, 0.25)' : 'none'
+                }}
+              >
+                <Eye size={15} /> View Attendance
+              </button>
+              <button
+                type="button"
+                onClick={() => setAttendanceMode('mark')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 16px',
+                  borderRadius: 8,
+                  fontSize: '0.84rem',
+                  fontWeight: attendanceMode === 'mark' ? 700 : 500,
+                  background: attendanceMode === 'mark' ? '#6366f1' : '#f8fafc',
+                  color: attendanceMode === 'mark' ? '#fff' : '#475569',
+                  border: attendanceMode === 'mark' ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: attendanceMode === 'mark' ? '0 2px 4px rgba(99, 102, 241, 0.25)' : 'none'
+                }}
+              >
+                <Edit3 size={15} /> Mark Or Edit Attendance
+              </button>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 {/* Campus Filter (Org Admin) */}
@@ -432,51 +491,64 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 </label>
               </div>
 
-              {/* Action Buttons: Mark All Present & Submit / Update Attendance */}
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="outline-btn"
-                  onClick={markAllPresent}
-                  disabled={loading || records.length === 0}
-                  style={{ height: 38, fontSize: '0.85rem' }}
-                >
-                  <Check size={15} /> Mark All Present
-                </button>
+              {/* Action Buttons: Only visible in 'mark' mode */}
+              {attendanceMode === 'mark' ? (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={markAllPresent}
+                    disabled={loading || records.length === 0}
+                    style={{ height: 38, fontSize: '0.85rem' }}
+                  >
+                    <Check size={15} /> Mark All Present
+                  </button>
 
-                <button
-                  type="button"
-                  className="primary-btn"
-                  onClick={handleSaveStudentAttendance}
-                  disabled={isSubmitDisabled}
-                  style={{
-                    height: 38,
-                    fontSize: '0.85rem',
-                    padding: '0 18px',
-                    opacity: isSubmitDisabled ? 0.6 : 1,
-                    cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
-                    background: dirty ? '#16a34a' : undefined,
-                    borderColor: dirty ? '#16a34a' : undefined,
-                    transition: 'all 0.2s ease',
-                  }}
-                  title={
-                    isConducted && !dirty
-                      ? 'Attendance already conducted and saved. Change any student status to undisable submit.'
-                      : 'Submit attendance updates to database'
-                  }
-                >
-                  <Save size={15} />{' '}
-                  {saving
-                    ? 'Saving...'
-                    : dirty
-                    ? isConducted
-                      ? 'Update Attendance *'
-                      : 'Submit Attendance *'
-                    : isConducted
-                    ? 'Attendance Saved (No Changes)'
-                    : 'Submit Attendance'}
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={handleSaveStudentAttendance}
+                    disabled={isSubmitDisabled}
+                    style={{
+                      height: 38,
+                      fontSize: '0.85rem',
+                      padding: '0 18px',
+                      opacity: isSubmitDisabled ? 0.6 : 1,
+                      cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+                      background: dirty ? '#16a34a' : undefined,
+                      borderColor: dirty ? '#16a34a' : undefined,
+                      transition: 'all 0.2s ease',
+                    }}
+                    title={
+                      isConducted && !dirty
+                        ? 'Attendance already conducted and saved. Change any student status to undisable submit.'
+                        : 'Submit attendance updates to database'
+                    }
+                  >
+                    <Save size={15} />{' '}
+                    {saving
+                      ? 'Saving...'
+                      : dirty
+                      ? isConducted
+                        ? 'Update Attendance *'
+                        : 'Submit Attendance *'
+                      : isConducted
+                      ? 'Attendance Saved (No Changes)'
+                      : 'Submit Attendance'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => setAttendanceMode('mark')}
+                    style={{ height: 38, fontSize: '0.84rem', borderColor: '#6366f1', color: '#6366f1' }}
+                  >
+                    <Edit3 size={14} /> Switch to Mark / Edit
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Quick Classroom Filter Chips */}
@@ -579,7 +651,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
             border: '1px solid var(--border-color, #e2e8f0)',
             padding: '1rem'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              onClick={() => setStatusFilter('all')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 8,
+                background: statusFilter === 'all' ? '#f1f5f9' : 'transparent',
+                border: statusFilter === 'all' ? '1.5px solid #64748b' : '1.5px solid transparent',
+                transition: 'all 0.15s ease'
+              }}
+              title="Click to show all students"
+            >
               <Users size={18} color="#64748b" />
               <div>
                 <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>TOTAL ENROLLED</div>
@@ -587,7 +669,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              onClick={() => setStatusFilter('present')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 8,
+                background: statusFilter === 'present' ? '#ecfdf5' : 'transparent',
+                border: statusFilter === 'present' ? '1.5px solid #16a34a' : '1.5px solid transparent',
+                transition: 'all 0.15s ease'
+              }}
+              title="Click to filter by Present students"
+            >
               <CheckCircle2 size={18} color="#16a34a" />
               <div>
                 <div style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 600 }}>PRESENT</div>
@@ -595,7 +687,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              onClick={() => setStatusFilter('absent')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 8,
+                background: statusFilter === 'absent' ? '#fef2f2' : 'transparent',
+                border: statusFilter === 'absent' ? '1.5px solid #dc2626' : '1.5px solid transparent',
+                transition: 'all 0.15s ease'
+              }}
+              title="Click to filter by Absent students"
+            >
               <XCircle size={18} color="#dc2626" />
               <div>
                 <div style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 600 }}>ABSENT</div>
@@ -603,7 +705,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              onClick={() => setStatusFilter('late')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 8,
+                background: statusFilter === 'late' ? '#fffbeb' : 'transparent',
+                border: statusFilter === 'late' ? '1.5px solid #d97706' : '1.5px solid transparent',
+                transition: 'all 0.15s ease'
+              }}
+              title="Click to filter by Late students"
+            >
               <Clock size={18} color="#d97706" />
               <div>
                 <div style={{ fontSize: '0.72rem', color: '#d97706', fontWeight: 600 }}>LATE</div>
@@ -611,7 +723,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              onClick={() => setStatusFilter('not_taken')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 8,
+                background: statusFilter === 'not_taken' ? '#f5f3ff' : 'transparent',
+                border: statusFilter === 'not_taken' ? '1.5px solid #8b5cf6' : '1.5px solid transparent',
+                transition: 'all 0.15s ease'
+              }}
+              title="Click to filter by Not Taken students"
+            >
               <AlertTriangle size={18} color="#8b5cf6" />
               <div>
                 <div style={{ fontSize: '0.72rem', color: '#8b5cf6', fontWeight: 600 }}>NOT TAKEN</div>
@@ -621,7 +743,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              onClick={() => setStatusFilter('all')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 8,
+                background: 'transparent',
+                border: '1.5px solid transparent',
+                transition: 'all 0.15s ease'
+              }}
+              title="Attendance rate across enrolled students"
+            >
               <ClipboardCheck size={18} color="#0ea5e9" />
               <div>
                 <div style={{ fontSize: '0.72rem', color: '#0ea5e9', fontWeight: 600 }}>ATTENDANCE RATE</div>
@@ -810,45 +942,84 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                             </div>
                           </td>
 
-                          {/* Attendance Status Buttons: Present, Absent, Late */}
+                          {/* Attendance Status */}
                           <td>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', padding: 3, borderRadius: 8 }}>
-                              {(['present', 'absent', 'late', 'excused'] as const).map(st => {
-                                const isActive = r.status === st;
-                                let activeStyle: React.CSSProperties = {};
-                                if (isActive) {
-                                  if (st === 'present') activeStyle = { background: '#16a34a', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)' };
-                                  if (st === 'absent') activeStyle = { background: '#dc2626', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(220, 38, 38, 0.3)' };
-                                  if (st === 'late') activeStyle = { background: '#d97706', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(217, 119, 6, 0.3)' };
-                                  if (st === 'excused') activeStyle = { background: '#7c3aed', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(124, 58, 237, 0.3)' };
-                                }
+                            {attendanceMode === 'mark' ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', padding: 3, borderRadius: 8 }}>
+                                {(['present', 'absent', 'late', 'excused'] as const).map(st => {
+                                  const isActive = r.status === st;
+                                  let activeStyle: React.CSSProperties = {};
+                                  if (isActive) {
+                                    if (st === 'present') activeStyle = { background: '#16a34a', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)' };
+                                    if (st === 'absent') activeStyle = { background: '#dc2626', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(220, 38, 38, 0.3)' };
+                                    if (st === 'late') activeStyle = { background: '#d97706', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(217, 119, 6, 0.3)' };
+                                    if (st === 'excused') activeStyle = { background: '#7c3aed', color: '#fff', fontWeight: 700, boxShadow: '0 1px 3px rgba(124, 58, 237, 0.3)' };
+                                  }
 
-                                return (
-                                  <button
-                                    key={st}
-                                    type="button"
-                                    onClick={() => updateStudentStatus(r.student_id, st)}
-                                    style={{
-                                      border: 'none',
-                                      background: isActive ? undefined : 'transparent',
-                                      color: isActive ? undefined : '#475569',
-                                      padding: '5px 11px',
-                                      borderRadius: 6,
-                                      fontSize: '0.8rem',
-                                      cursor: 'pointer',
-                                      textTransform: 'capitalize',
-                                      transition: 'all 0.15s ease',
-                                      ...activeStyle,
-                                    }}
-                                  >
-                                    {st}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                                  return (
+                                    <button
+                                      key={st}
+                                      type="button"
+                                      onClick={() => updateStudentStatus(r.student_id, st)}
+                                      style={{
+                                        border: 'none',
+                                        background: isActive ? undefined : 'transparent',
+                                        color: isActive ? undefined : '#475569',
+                                        padding: '5px 11px',
+                                        borderRadius: 6,
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer',
+                                        textTransform: 'capitalize',
+                                        transition: 'all 0.15s ease',
+                                        ...activeStyle,
+                                      }}
+                                    >
+                                      {st}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              /* Clean Read-Only Status Badges in 'view' mode */
+                              <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                {r.status === 'present' && (
+                                  <span className="pill green" style={{ fontSize: '0.82rem', padding: '5px 12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <CheckCircle2 size={13} /> Present
+                                  </span>
+                                )}
+                                {r.status === 'absent' && (
+                                  <span className="pill red" style={{ fontSize: '0.82rem', padding: '5px 12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <XCircle size={13} /> Absent
+                                  </span>
+                                )}
+                                {r.status === 'late' && (
+                                  <span className="pill amber" style={{ fontSize: '0.82rem', padding: '5px 12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <Clock size={13} /> Late
+                                  </span>
+                                )}
+                                {r.status === 'excused' && (
+                                  <span className="pill purple" style={{ fontSize: '0.82rem', padding: '5px 12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <AlertTriangle size={13} /> Excused
+                                  </span>
+                                )}
+                                {r.status === 'not_taken' && (
+                                  <span style={{
+                                    background: '#fef3c7',
+                                    color: '#b45309',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    padding: '4px 10px',
+                                    borderRadius: 10,
+                                    border: '1px solid #fde68a'
+                                  }}>
+                                    Not Recorded
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
-                            {/* Clear indicator if status is not taken yet */}
-                            {r.status === 'not_taken' && (
+                            {/* Clear indicator if status is not taken yet in mark mode */}
+                            {attendanceMode === 'mark' && r.status === 'not_taken' && (
                               <span style={{
                                 marginLeft: 8,
                                 background: '#fef3c7',
@@ -866,20 +1037,26 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
 
                           {/* Notes field */}
                           <td>
-                            <input
-                              type="text"
-                              placeholder="Reason / note..."
-                              value={r.note || ''}
-                              onChange={e => updateStudentNote(r.student_id, e.target.value)}
-                              style={{
-                                width: '100%',
-                                maxWidth: 220,
-                                padding: '5px 8px',
-                                fontSize: '0.8rem',
-                                borderRadius: 6,
-                                border: '1px solid #cbd5e1',
-                              }}
-                            />
+                            {attendanceMode === 'mark' ? (
+                              <input
+                                type="text"
+                                placeholder="Reason / note..."
+                                value={r.note || ''}
+                                onChange={e => updateStudentNote(r.student_id, e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  maxWidth: 220,
+                                  padding: '5px 8px',
+                                  fontSize: '0.8rem',
+                                  borderRadius: 6,
+                                  border: '1px solid #cbd5e1',
+                                }}
+                              />
+                            ) : (
+                              <span style={{ fontSize: '0.82rem', color: r.note ? '#334155' : '#94a3b8', fontStyle: r.note ? 'normal' : 'italic' }}>
+                                {r.note || '—'}
+                              </span>
+                            )}
                           </td>
 
                           {/* Database Saved Status */}

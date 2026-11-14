@@ -157,6 +157,7 @@ def calculate_subject_result(
         current_percentage = (accumulated_contribution / (assessed_weight / Decimal('100.0000')))
 
     remaining_weight = Decimal('100.0000') - assessed_weight
+    current_scaled_marks = (current_percentage * (reporting_scale / Decimal('100.0000'))) if current_percentage is not None else None
 
     if not all_completed:
         return {
@@ -164,7 +165,7 @@ def calculate_subject_result(
             'subject_id': subject_id,
             'completed': False,
             'final_percentage': None,
-            'scaled_marks': None,
+            'scaled_marks': current_scaled_marks,
             'current_percentage': current_percentage,
             'accumulated_contribution': accumulated_contribution,
             'assessed_weight': assessed_weight,
@@ -626,22 +627,27 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
                 weights_arg = subject_weights if config.subject_weighting_mode == 'custom' else None
                 overall_res = calculate_student_average(student_subject_summaries, weights=weights_arg)
 
-                # Find highest and lowest subject
-                completed_subs = [
+                # Find highest and lowest subject (from completed or in-progress evaluated subjects)
+                evaluated_subs = [
                     s for s in student_subject_summaries
-                    if s.get('final_percentage') is not None
+                    if s.get('final_percentage') is not None or s.get('current_percentage') is not None
                 ]
                 highest_sub = None
                 lowest_sub = None
-                if completed_subs:
-                    sorted_subs = sorted(completed_subs, key=lambda x: to_decimal(x['final_percentage']), reverse=True)
+                if evaluated_subs:
+                    sorted_subs = sorted(
+                        evaluated_subs,
+                        key=lambda x: to_decimal(x['final_percentage'] if x.get('final_percentage') is not None else x.get('current_percentage')),
+                        reverse=True
+                    )
                     highest_sub = subjects_by_id.get(sorted_subs[0]['subject_id'])
                     lowest_sub = subjects_by_id.get(sorted_subs[-1]['subject_id'])
 
                 missing_count = sum(1 for s in student_subject_summaries if not s.get('completed', False))
                 is_passed = None
-                if overall_res['overall_percentage'] is not None:
-                    is_passed = overall_res['overall_percentage'] >= passing_threshold
+                eff_student_pct = overall_res['overall_percentage'] if overall_res.get('overall_percentage') is not None else overall_res.get('current_overall_percentage')
+                if eff_student_pct is not None:
+                    is_passed = eff_student_pct >= passing_threshold
 
                 CalculatedStudentResult.objects.update_or_create(
                     student=student,
@@ -671,7 +677,7 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
         }
 
 
-def recalculate_student(student_id: int, configuration_id: int) -> Dict[str, Any]:
+def recalculate_student(student_id: int, configuration_id: int, target_school_class=None) -> Dict[str, Any]:
     """Recalculates a single student's subject and overall results after a mark change."""
     from core.models import (
         ExamConfiguration, ExamComponent, ExamComponentSubjectConfig,
@@ -690,14 +696,32 @@ def recalculate_student(student_id: int, configuration_id: int) -> Dict[str, Any
             return {'error': 'No components'}
 
         # Get student's class
-        enrollment = Enrollment.objects.filter(
-            student=student,
-            school_class__school=config.school
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
-        ).select_related('school_class').first()
+        klass = target_school_class
+        if not klass:
+            enrollment_qs = Enrollment.objects.filter(
+                student=student,
+                school_class__school=config.school
+            )
+            if config.academic_year and getattr(config.academic_year, 'start_date', None):
+                enrollment_qs = enrollment_qs.filter(
+                    Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
+                )
+            else:
+                enrollment_qs = enrollment_qs.filter(end_date__isnull=True)
 
-        klass = enrollment.school_class if enrollment else config.school_class
+            enrollment = enrollment_qs.select_related('school_class').first()
+            klass = enrollment.school_class if enrollment else config.school_class
+
+        if not klass:
+            last_mark = ExamStudentMark.objects.filter(student=student, component__in=components).exclude(school_class=None).first()
+            if last_mark:
+                klass = last_mark.school_class
+
+        if not klass:
+            first_en = Enrollment.objects.filter(student=student).select_related('school_class').first()
+            if first_en:
+                klass = first_en.school_class
+
         if not klass:
             return {'error': 'No class found for student'}
 
@@ -774,18 +798,26 @@ def recalculate_student(student_id: int, configuration_id: int) -> Dict[str, Any
         weights_arg = subject_weights if config.subject_weighting_mode == 'custom' else None
         overall_res = calculate_student_average(student_subject_summaries, weights=weights_arg)
 
-        completed_subs = [s for s in student_subject_summaries if s.get('final_percentage') is not None]
+        evaluated_subs = [
+            s for s in student_subject_summaries
+            if s.get('final_percentage') is not None or s.get('current_percentage') is not None
+        ]
         highest_sub = None
         lowest_sub = None
-        if completed_subs:
-            sorted_subs = sorted(completed_subs, key=lambda x: to_decimal(x['final_percentage']), reverse=True)
+        if evaluated_subs:
+            sorted_subs = sorted(
+                evaluated_subs,
+                key=lambda x: to_decimal(x['final_percentage'] if x.get('final_percentage') is not None else x.get('current_percentage')),
+                reverse=True
+            )
             highest_sub = subjects_by_id.get(sorted_subs[0]['subject_id'])
             lowest_sub = subjects_by_id.get(sorted_subs[-1]['subject_id'])
 
         missing_count = sum(1 for s in student_subject_summaries if not s.get('completed', False))
         is_passed = None
-        if overall_res['overall_percentage'] is not None:
-            is_passed = overall_res['overall_percentage'] >= config.passing_threshold
+        eff_student_pct = overall_res['overall_percentage'] if overall_res.get('overall_percentage') is not None else overall_res.get('current_overall_percentage')
+        if eff_student_pct is not None:
+            is_passed = eff_student_pct >= config.passing_threshold
 
         CalculatedStudentResult.objects.update_or_create(
             student=student,

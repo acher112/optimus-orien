@@ -536,3 +536,35 @@
   color: #7a70a0;
   pointer-events: none;
 }
+
+.setup-picker-row {
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  position: relative;
+}
+.setup-picker-row select {
+  cursor: pointer;
+}
+.setup-picker-chevron-btn {
+  background: #f1edff;
+  border: 1px solid #e0d7fc;
+  cursor: pointer;
+  padding: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6e58d9;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+.setup-picker-chevron-btn:hover {
+  background: #e4dcfe;
+  color: #553ebd;
+  transform: translateY(-1px);
+}
+.setup-picker-chevron-btn:active {
+  transform: translateY(0);
+}
+

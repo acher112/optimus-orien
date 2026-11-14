@@ -860,6 +860,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                                 <div style={{ fontWeight: 600, color: '#0f172a' }}>{s.school_name}</div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#64748b', marginTop: 2 }}>
                                   <span style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 5px', borderRadius: 4 }}>{s.school_code}</span>
+                                  {s.principal_name && <span style={{ color: '#4338ca', fontWeight: 600 }}>• Principal: {s.principal_name}</span>}
                                   {s.city && <span>• {s.city}</span>}
                                 </div>
                               </div>
