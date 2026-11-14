@@ -128,16 +128,7 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
   };
 
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        borderRadius: 24,
-        padding: '28px 32px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)',
-        marginBottom: 24,
-      }}
-    >
+    <div className="longitudinal-trends-card">
       {/* Header */}
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -171,16 +162,9 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
       </div>
 
       <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(320px, 1.4fr) minmax(280px, 1fr)',
-            gap: 28,
-            alignItems: 'start',
-          }}
-        >
+        <div className="longitudinal-trends-grid">
           {/* Left Column: Bar Chart */}
-          <div>
+          <div style={{ minWidth: 0, width: '100%' }}>
             <div
               style={{
                 fontSize: 11,
@@ -194,7 +178,7 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
               SPI PERFORMANCE INDEX BY CITY
             </div>
 
-            <div style={{ width: '100%', height: 280 }}>
+            <div style={{ width: '100%', height: 280, minWidth: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={displayData}
@@ -236,7 +220,7 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
           </div>
 
           {/* Right Column: Standings List */}
-          <div>
+          <div style={{ minWidth: 0, width: '100%' }}>
             <div
               style={{
                 fontSize: 11,
@@ -252,19 +236,7 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {displayData.slice(0, 5).map((divItem) => (
-                <div
-                  key={divItem.city}
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 14,
-                    padding: '12px 18px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
+                <div key={divItem.city} className="standing-row-card">
                   <div>
                     <div
                       style={{

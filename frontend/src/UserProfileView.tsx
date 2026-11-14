@@ -119,9 +119,10 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
 
   return (
     <div
+      className="user-profile-layout-grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(280px, 320px) minmax(450px, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
         gap: 24,
         alignItems: 'start',
       }}

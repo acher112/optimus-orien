@@ -355,9 +355,10 @@ export const StudentAttendance: React.FC<Props> = ({ user, notify }) => {
 
         return (
           <div
+            className="attendance-summary-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(380px, 1.8fr) minmax(260px, 1fr)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
               gap: 20,
               alignItems: 'start',
             }}

@@ -31,6 +31,9 @@ for name, view in [
     r.register(name, view, basename=name)
 
 urlpatterns = [
+    # Class-Subject Assignments
+    path('classes/<int:class_id>/subjects/', views.class_subjects_api),
+
     # Attendance Registers (Class/Student & Staff)
     path('attendance/class-register/', attendance_views.class_attendance_register),
     path('attendance/history/', attendance_views.attendance_history),

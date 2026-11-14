@@ -1221,7 +1221,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
             </div>
 
             {/* Visual Charts Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 20, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 20, marginBottom: 24 }}>
               {/* Chart 1: Monthly Revenue Trend Bar Chart */}
               <div style={{
                 background: '#ffffff',
@@ -1855,7 +1855,7 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
         {/* ============================================================== */}
         {activeTab === 'security' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 20 }}>
               {/* Support Grants */}
               <div style={{
                 background: '#ffffff',

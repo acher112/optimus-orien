@@ -355,7 +355,7 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
       {/* ------------------------------------------------------------------- */}
       {/* Visual Analytics Strip (Subject Chart & Performance Tiers) */}
       {/* ------------------------------------------------------------------- */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 2fr) minmax(280px, 1fr)', gap: 16, marginBottom: 24 }}>
+      <div className="teacher-class-analytics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 16, marginBottom: 24 }}>
         {/* Subject Performance Bar Chart */}
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -856,7 +856,7 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
       {/* Tab 3: At-Risk & Interventions */}
       {/* ------------------------------------------------------------------- */}
       {activeTab === 'risk' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(320px, 1fr)', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
           {/* At-Risk Students Card */}
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #fee2e2', padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>

@@ -696,7 +696,35 @@ class TeacherStudentSerializer(DynamicSerializer):
   ]
 class SubjectSerializer(DynamicSerializer):
  school_name=serializers.CharField(source='school.name',read_only=True)
+ classes=serializers.ListField(child=serializers.IntegerField(),required=False,write_only=True)
+ assigned_classes=serializers.SerializerMethodField(read_only=True)
+ assigned_class_names=serializers.SerializerMethodField(read_only=True)
  class Meta:model=Subject;fields='__all__'
+ def get_assigned_classes(self,obj):
+  return list(obj.class_subjects.values_list('school_class_id',flat=True))
+ def get_assigned_class_names(self,obj):
+  return list(obj.class_subjects.values_list('school_class__name',flat=True))
+ def create(self,validated_data):
+  classes=validated_data.pop('classes',None)
+  subject=super().create(validated_data)
+  if classes:
+   from core.models import ClassSubject, SchoolClass
+   valid_classes=SchoolClass.objects.filter(pk__in=classes,school_id=subject.school_id)
+   for sc in valid_classes:
+    ClassSubject.objects.get_or_create(school_class=sc,subject=subject)
+  return subject
+ def update(self,instance,validated_data):
+  classes=validated_data.pop('classes',None)
+  subject=super().update(instance,validated_data)
+  if classes is not None:
+   from core.models import ClassSubject, SchoolClass
+   current_cids=set(instance.class_subjects.values_list('school_class_id',flat=True))
+   new_cids=set(classes)
+   instance.class_subjects.filter(school_class_id__in=(current_cids-new_cids)).delete()
+   valid_classes=SchoolClass.objects.filter(pk__in=(new_cids-current_cids),school_id=instance.school_id)
+   for sc in valid_classes:
+    ClassSubject.objects.get_or_create(school_class=sc,subject=subject)
+  return subject
 class AssessmentSerializer(DynamicSerializer):
  subject_name=serializers.CharField(source='subject.name',read_only=True)
  class_name=serializers.CharField(source='school_class.name',read_only=True)
@@ -783,6 +811,9 @@ MODEL_FILTER_SPECS = {
    'section': 'section',
    'academic_year': 'academic_year_id',
    'teacher': 'teacher_id',
+   'grade_level': 'grade_level',
+   'school': 'school_id',
+   'campus': 'school_id',
   },
   'allowed_orderings': ['name', 'section'],
   'default_ordering': ['name', 'section']
@@ -792,6 +823,8 @@ MODEL_FILTER_SPECS = {
   'filter_map': {
    'name': 'name',
    'code': 'code',
+   'school': 'school_id',
+   'campus': 'school_id',
   },
   'allowed_orderings': ['name', 'code'],
   'default_ordering': ['name']
@@ -810,12 +843,15 @@ MODEL_FILTER_SPECS = {
   'search_fields': ['name'],
   'filter_map': {
    'name': 'name',
+   'active': 'active',
+   'school': 'school_id',
+   'campus': 'school_id',
    'start_date_from': 'start_date__gte',
    'start_date_to': 'start_date__lte',
    'end_date_from': 'end_date__gte',
    'end_date_to': 'end_date__lte',
   },
-  'allowed_orderings': ['name', 'start_date', 'end_date'],
+  'allowed_orderings': ['name', 'start_date', 'end_date', 'active'],
   'default_ordering': ['-start_date']
  },
  Attendance: {
@@ -2078,3 +2114,61 @@ def school_users(request,school_id):
     item['admission_number']=st.admission_number
   res.append(item)
  return Response({'results':res})
+
+@api_view(['GET', 'POST'])
+def class_subjects_api(request, class_id):
+ """
+ GET: List all subjects assigned to this class, plus all available subjects for the campus.
+ POST: Assign / sync multiple subjects to this class.
+ """
+ from core.models import SchoolClass, Subject, ClassSubject
+ from core.services.access import require_visible
+ require_visible(request.user, SchoolClass, class_id)
+ school_class = get_object_or_404(SchoolClass, pk=class_id)
+
+ if request.method == 'GET':
+  assigned = list(ClassSubject.objects.filter(school_class=school_class).values(
+   'id', 'subject_id', 'subject__name', 'subject__code', 'required'
+  ))
+  all_subjects = list(Subject.objects.filter(school_id=school_class.school_id).values(
+   'id', 'name', 'code'
+  ))
+  return Response({
+   'class_id': school_class.id,
+   'class_name': school_class.display_name,
+   'school_id': school_class.school_id,
+   'assigned': assigned,
+   'assigned_subject_ids': [a['subject_id'] for a in assigned],
+   'available_subjects': all_subjects
+  })
+
+ # POST: Update subjects for this class
+ data = request.data
+ subject_ids = data.get('subject_ids', data if isinstance(data, list) else [])
+ try:
+  subject_ids = [int(s) for s in subject_ids]
+ except (ValueError, TypeError):
+  return Response({'detail': 'Invalid subject IDs provided.'}, status=400)
+
+ current_sids = set(ClassSubject.objects.filter(school_class=school_class).values_list('subject_id', flat=True))
+ new_sids = set(subject_ids)
+
+ with transaction.atomic():
+  # Remove unselected
+  ClassSubject.objects.filter(school_class=school_class, subject_id__in=(current_sids - new_sids)).delete()
+  # Add newly selected
+  valid_subjects = Subject.objects.filter(pk__in=(new_sids - current_sids), school_id=school_class.school_id)
+  for subj in valid_subjects:
+   ClassSubject.objects.get_or_create(school_class=school_class, subject=subj)
+
+ assigned_subjects = list(ClassSubject.objects.filter(school_class=school_class).values(
+  'id', 'subject_id', 'subject__name', 'subject__code', 'required'
+ ))
+ return Response({
+  'ok': True,
+  'class_id': school_class.id,
+  'assigned_count': len(assigned_subjects),
+  'assigned_subject_ids': [a['subject_id'] for a in assigned_subjects],
+  'assigned': assigned_subjects
+ })
+

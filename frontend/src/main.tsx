@@ -381,6 +381,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'name', label: 'Subject' },
       { key: 'code', label: 'Code' },
       { key: 'school_name', label: 'Campus' },
+      { key: 'assigned_class_names', label: 'Assigned Classes' },
       { key: 'active', label: 'Status' }
     ],
     fields: [
@@ -803,6 +804,15 @@ function App() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [campusDropdownOpen, setCampusDropdownOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
+  const [subjectAssignedClasses, setSubjectAssignedClasses] = useState<number[]>([]);
+  const [assignClassSubjectsModalOpen, setAssignClassSubjectsModalOpen] = useState(false);
+  const [selectedClassForSubjects, setSelectedClassForSubjects] = useState<number | null>(null);
+  const [selectedClassCampusId, setSelectedClassCampusId] = useState<number | null>(null);
+  const [classAssignedSubjectIds, setClassAssignedSubjectIds] = useState<number[]>([]);
+  const [classAvailableSubjects, setClassAvailableSubjects] = useState<Array<{ id: number; name: string; code?: string }>>([]);
+  const [loadingClassSubjects, setLoadingClassSubjects] = useState(false);
+  const [savingClassSubjects, setSavingClassSubjects] = useState(false);
+  const [subjectFilterQuery, setSubjectFilterQuery] = useState('');
 
   const toggleDropdown = (name: string, e?: React.MouseEvent) => {
     if (e) {
@@ -1318,6 +1328,59 @@ function App() {
     }
   }, [user]);
 
+  const fetchClassSubjects = async (classId: number) => {
+    setLoadingClassSubjects(true);
+    try {
+      const res: any = await request(`classes/${classId}/subjects/`);
+      setClassAssignedSubjectIds(res.assigned_subject_ids || []);
+      setClassAvailableSubjects(res.available_subjects || []);
+    } catch {
+      const currentCampus = selectedClassCampusId || activeCampusId;
+      const subs = await list<{ id: number; name: string; code?: string }>(`subjects/${currentCampus ? `?school=${currentCampus}` : ''}`).catch(() => []);
+      setClassAvailableSubjects(subs);
+    } finally {
+      setLoadingClassSubjects(false);
+    }
+  };
+
+  const openAssignSubjectsModal = async (classId?: number, _className?: string, schoolId?: number) => {
+    const currentCampus = schoolId || activeCampusId || campuses[0]?.id || null;
+    setSelectedClassCampusId(currentCampus);
+    setSubjectFilterQuery('');
+    setAssignClassSubjectsModalOpen(true);
+
+    if (refData.classes.length === 0) {
+      try {
+        const cls = await list<{ id: number; name: string; school?: number }>('classes');
+        setRefData(prev => ({ ...prev, classes: cls }));
+      } catch {}
+    }
+
+    const targetClassId = classId || (refData.classes.find(c => !currentCampus || !c.school || c.school === currentCampus)?.id ?? null);
+    setSelectedClassForSubjects(targetClassId);
+    if (targetClassId) {
+      await fetchClassSubjects(targetClassId);
+    }
+  };
+
+  const handleSaveClassSubjects = async () => {
+    if (!selectedClassForSubjects) return;
+    setSavingClassSubjects(true);
+    try {
+      await request(`classes/${selectedClassForSubjects}/subjects/`, {
+        method: 'POST',
+        body: JSON.stringify({ subject_ids: classAssignedSubjectIds })
+      });
+      notify('Subjects assigned to class successfully!');
+      setAssignClassSubjectsModalOpen(false);
+      await load();
+    } catch (err: any) {
+      notify(err?.message || 'Could not assign subjects to class');
+    } finally {
+      setSavingClassSubjects(false);
+    }
+  };
+
   const renderNavButton = useCallback((
     targetPage: string,
     label: string,
@@ -1415,6 +1478,9 @@ function App() {
     if (page === 'Students') {
       initialForm.admission_fee = '0';
     }
+    if (page === 'Subjects') {
+      setSubjectAssignedClasses([]);
+    }
     setForm(initialForm);
     setModal(true);
     try {
@@ -1445,6 +1511,9 @@ function App() {
           const isNum = ['school', 'academic_year', 'teacher', 'school_class', 'subject', 'student', 'max_marks', 'weight', 'attendance_alert_threshold'].includes(f.key) || f.type === 'number';
           data[f.key] = isNum ? Number(val) : val;
         }
+      }
+      if (page === 'Subjects') {
+        data.classes = subjectAssignedClasses;
       }
       if (page === 'Students') {
         const selectedCampus = form.school || (user?.school ? String(user.school) : (activeCampusId ? String(activeCampusId) : ''));
@@ -1558,6 +1627,12 @@ function App() {
         setRefData(prev => ({ ...prev, teachers: tchs || [] }));
       }).catch(() => {});
     }
+    if (page === 'Subjects') {
+      const assigned = Array.isArray((r as any).assigned_classes)
+        ? (r as any).assigned_classes
+        : [];
+      setSubjectAssignedClasses(assigned);
+    }
     setEditForm(initial);
     setEditModal(true);
   };
@@ -1576,6 +1651,9 @@ function App() {
         } else if (f.key === 'teacher' && config.api === 'classes') {
           data[f.key] = null;
         }
+      }
+      if (page === 'Subjects') {
+        data.classes = subjectAssignedClasses;
       }
       await update(config.api, editingRecord.id, data);
       setEditModal(false);
@@ -2861,6 +2939,16 @@ function App() {
                     )
                   )}
 
+                  {(page === 'Classes' || page === 'Subjects') && !['student', 'teacher'].includes(user.role) && (
+                    <button
+                      className="outline-btn"
+                      onClick={() => openAssignSubjectsModal()}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <BookOpen size={16} /> Assign Subjects to Class
+                    </button>
+                  )}
+
                   {config.fields.length > 0 && !['student', 'teacher'].includes(user.role) && (
                     <button className="primary-btn" onClick={openCreateModal}>
                       <Plus size={17} /> Add {getSingularTitle(page)}
@@ -2872,14 +2960,14 @@ function App() {
               <div className="resource-summary" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div className="resource-icon"><LayersIcon page={page} /></div>
-                  <div><strong>{records.length}</strong><span>Total {page.toLowerCase()} records</span></div>
+                  <div><strong className="resource-kpi-val">{records.length}</strong><span>Total {page.toLowerCase()} records</span></div>
                 </div>
                 {(activeCampus || campuses.length > 0) && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(255,255,255,0.7)', borderRadius: 6, border: '1px solid rgba(0,0,0,0.06)', fontSize: '13px', color: '#334155' }}>
-                    <Building2 size={14} color="var(--brand-primary, #6366f1)" />
-                    <span>Campus: <strong>{activeCampus ? activeCampus.name : (campuses.length === 1 ? campuses[0].name : 'All Campuses')}</strong></span>
+                  <div className="campus-indicator-pill">
+                    <Building2 size={13} color="var(--brand-primary, #6366f1)" />
+                    <span>Campus: <b className="campus-indicator-name">{activeCampus ? activeCampus.name : (campuses.length === 1 ? campuses[0].name : 'All Campuses')}</b></span>
                     {(activeCampus?.principal_name || (campuses.length === 1 && campuses[0].principal_name)) && (
-                      <span style={{ color: '#475569', marginLeft: 4 }}>• Principal: <strong>{activeCampus?.principal_name || campuses[0].principal_name}</strong></span>
+                      <span className="campus-indicator-principal">• Principal: {activeCampus?.principal_name || campuses[0].principal_name}</span>
                     )}
                   </div>
                 )}
@@ -3148,6 +3236,17 @@ function App() {
                                       {r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : '—'}
                                     </span>
                                   )
+                                  : c.key === 'assigned_class_names' ? (
+                                    Array.isArray(r.assigned_class_names) && r.assigned_class_names.length > 0 ? (
+                                      <div className="classes-badge-list">
+                                        {r.assigned_class_names.map((cn: string, idx: number) => (
+                                          <span key={idx} className="class-chip-tag">{cn}</span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 12 }}>Unassigned</span>
+                                    )
+                                  )
                                   : c.key === 'school_class' ? String(r.class_name || (refData.classes.find(cl => cl.id === r.school_class)?.name) || ((r.school_class as any)?.name) || r.school_class || '—')
                                   : c.key === 'subject' ? String(r.subject_name || (refData.subjects.find(sb => sb.id === r.subject)?.name) || ((r.subject as any)?.name) || r.subject || '—')
                                   : c.key === 'school' || c.key === 'school_name' ? String(r.school_name || (refData.schools.find(sc => sc.id === r.school)?.name) || (campuses.find(cp => cp.id === r.school)?.name) || ((r.school as any)?.name) || '—')
@@ -3160,6 +3259,24 @@ function App() {
                           ))}
                           <td>
                             <div className="table-actions">
+                              {page === 'Classes' && !['student', 'teacher'].includes(user.role) && (
+                                <button
+                                  className="action-btn-sm"
+                                  title="Manage Subjects for this Class"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openAssignSubjectsModal(r.id, r.name ? String(r.name) : undefined, Number(r.school || (r as any).school_id));
+                                  }}
+                                  style={{
+                                    background: '#f5f3ff',
+                                    color: '#7c3aed',
+                                    borderColor: '#ddd6fe',
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  <BookOpen size={13} /> <span>Subjects</span>
+                                </button>
+                              )}
                               {page === 'Students' && (
                                 <button
                                   className="action-btn-sm"
@@ -4016,6 +4133,75 @@ function App() {
                     );
                   })
                 )}
+                {page === 'Subjects' && (
+                  <div style={{ gridColumn: '1 / -1', marginTop: 8, background: '#f8fafc', padding: 14, borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                          Assign this Subject to Class(es)
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>
+                          Choose which classes in this campus will be taught this subject
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="outline-btn"
+                          style={{ fontSize: 11, padding: '3px 8px', height: 'auto' }}
+                          onClick={() => {
+                            const curCampus = form.school || String(activeCampusId || refData.schools[0]?.id || '');
+                            const campusCls = refData.classes.filter(c => !curCampus || !c.school || String(c.school) === curCampus);
+                            setSubjectAssignedClasses(campusCls.map(c => c.id));
+                          }}
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          className="outline-btn"
+                          style={{ fontSize: 11, padding: '3px 8px', height: 'auto' }}
+                          onClick={() => setSubjectAssignedClasses([])}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    {(() => {
+                      const curCampus = form.school || String(activeCampusId || refData.schools[0]?.id || '');
+                      const campusCls = refData.classes.filter(c => !curCampus || !c.school || String(c.school) === curCampus);
+                      if (campusCls.length === 0) {
+                        return (
+                          <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: 8 }}>
+                            No classes available for this campus. Please create a class first.
+                          </div>
+                        );
+                      }
+                      return (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxHeight: 180, overflowY: 'auto', padding: 2 }}>
+                          {campusCls.map(cls => {
+                            const isSelected = subjectAssignedClasses.includes(cls.id);
+                            return (
+                              <button
+                                type="button"
+                                key={cls.id}
+                                className={`class-subject-pill ${isSelected ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSubjectAssignedClasses(prev =>
+                                    isSelected ? prev.filter(id => id !== cls.id) : [...prev, cls.id]
+                                  );
+                                }}
+                              >
+                                {isSelected ? <Check size={13} color="#4338ca" /> : <Plus size={13} color="#94a3b8" />}
+                                <span>{(cls as any).display_name || ((cls as any).section ? `${cls.name} (${(cls as any).section})` : cls.name)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="outline-btn" onClick={() => setModal(false)}>Cancel</button>
@@ -4175,6 +4361,75 @@ function App() {
                     </label>
                   );
                 })}
+                {page === 'Subjects' && (
+                  <div style={{ gridColumn: '1 / -1', marginTop: 8, background: '#f8fafc', padding: 14, borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                          Assign to Class(es)
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>
+                          Choose which classes in this campus will be taught this subject
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="outline-btn"
+                          style={{ fontSize: 11, padding: '3px 8px', height: 'auto' }}
+                          onClick={() => {
+                            const curCampus = editForm.school || String(activeCampusId || (editingRecord as any)?.school || (editingRecord as any)?.school_id || '');
+                            const campusCls = refData.classes.filter(c => !curCampus || !c.school || String(c.school) === curCampus);
+                            setSubjectAssignedClasses(campusCls.map(c => c.id));
+                          }}
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          className="outline-btn"
+                          style={{ fontSize: 11, padding: '3px 8px', height: 'auto' }}
+                          onClick={() => setSubjectAssignedClasses([])}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    {(() => {
+                      const curCampus = editForm.school || String(activeCampusId || (editingRecord as any)?.school || (editingRecord as any)?.school_id || '');
+                      const campusCls = refData.classes.filter(c => !curCampus || !c.school || String(c.school) === curCampus);
+                      if (campusCls.length === 0) {
+                        return (
+                          <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: 8 }}>
+                            No classes available for this campus. Please create a class first.
+                          </div>
+                        );
+                      }
+                      return (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxHeight: 180, overflowY: 'auto', padding: 2 }}>
+                          {campusCls.map(cls => {
+                            const isSelected = subjectAssignedClasses.includes(cls.id);
+                            return (
+                              <button
+                                type="button"
+                                key={cls.id}
+                                className={`class-subject-pill ${isSelected ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSubjectAssignedClasses(prev =>
+                                    isSelected ? prev.filter(id => id !== cls.id) : [...prev, cls.id]
+                                  );
+                                }}
+                              >
+                                {isSelected ? <Check size={13} color="#4338ca" /> : <Plus size={13} color="#94a3b8" />}
+                                <span>{(cls as any).display_name || ((cls as any).section ? `${cls.name} (${(cls as any).section})` : cls.name)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="outline-btn" onClick={() => setEditModal(false)}>Cancel</button>
@@ -4254,6 +4509,191 @@ function App() {
             </div>
             <div className="modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #f0f1f6', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
               <button type="button" className="outline-btn" onClick={() => setCampusPromptModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {assignClassSubjectsModalOpen && (
+        <div className="modal-backdrop" onClick={() => setAssignClassSubjectsModalOpen(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="modal-head">
+              <div className="modal-icon" style={{ background: '#ede9fe', color: '#6d28d9' }}><BookOpen size={22} /></div>
+              <div>
+                <h3>Assign Subjects to Class</h3>
+                <p>Select a class and assign multiple curriculum subjects to it at once.</p>
+              </div>
+              <button onClick={() => setAssignClassSubjectsModalOpen(false)}><X size={20} /></button>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {campuses.length > 1 && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6, color: '#475569' }}>
+                    Campus
+                  </label>
+                  <select
+                    value={selectedClassCampusId || ''}
+                    onChange={e => {
+                      const cid = Number(e.target.value);
+                      setSelectedClassCampusId(cid);
+                      const firstCls = refData.classes.find(c => c.school === cid);
+                      setSelectedClassForSubjects(firstCls ? firstCls.id : null);
+                      if (firstCls) fetchClassSubjects(firstCls.id);
+                      else {
+                        setClassAssignedSubjectIds([]);
+                        setClassAvailableSubjects([]);
+                      }
+                    }}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  >
+                    {campuses.map(cp => <option key={cp.id} value={cp.id}>{cp.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6, color: '#475569' }}>
+                  Select Class <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  value={selectedClassForSubjects || ''}
+                  onChange={e => {
+                    const cid = Number(e.target.value);
+                    setSelectedClassForSubjects(cid);
+                    if (cid) fetchClassSubjects(cid);
+                  }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                >
+                  <option value="">Choose a class…</option>
+                  {refData.classes
+                    .filter(c => !selectedClassCampusId || !c.school || c.school === selectedClassCampusId)
+                    .map(c => (
+                      <option key={c.id} value={c.id}>
+                        {(c as any).display_name || ((c as any).section ? `${c.name} (${(c as any).section})` : c.name)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {selectedClassForSubjects ? (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                      Subjects for this Class ({classAssignedSubjectIds.length} assigned)
+                    </span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        style={{ fontSize: 11, padding: '3px 8px', height: 'auto' }}
+                        onClick={() => setClassAssignedSubjectIds(classAvailableSubjects.map(s => s.id))}
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        style={{ fontSize: 11, padding: '3px 8px', height: 'auto' }}
+                        onClick={() => setClassAssignedSubjectIds([])}
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+
+                  {classAvailableSubjects.length > 5 && (
+                    <input
+                      type="text"
+                      placeholder="Filter subjects by name or code..."
+                      value={subjectFilterQuery}
+                      onChange={e => setSubjectFilterQuery(e.target.value)}
+                      style={{ width: '100%', padding: '7px 10px', fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0', marginBottom: 8 }}
+                    />
+                  )}
+
+                  {loadingClassSubjects ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                      Loading subjects...
+                    </div>
+                  ) : classAvailableSubjects.length === 0 ? (
+                    <div style={{ padding: 16, background: '#f8fafc', borderRadius: 8, textAlign: 'center', color: '#64748b', fontSize: 12 }}>
+                      No subjects found for this campus. Please create subjects in the Subjects tab first.
+                    </div>
+                  ) : (
+                    <div style={{
+                      maxHeight: 240,
+                      overflowY: 'auto',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      padding: 10,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6
+                    }}>
+                      {classAvailableSubjects
+                        .filter(s => !subjectFilterQuery || s.name.toLowerCase().includes(subjectFilterQuery.toLowerCase()) || (s.code && s.code.toLowerCase().includes(subjectFilterQuery.toLowerCase())))
+                        .map(sub => {
+                          const isChecked = classAssignedSubjectIds.includes(sub.id);
+                          return (
+                            <label
+                              key={sub.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '8px 12px',
+                                borderRadius: 6,
+                                background: isChecked ? '#f0fdf4' : '#ffffff',
+                                border: isChecked ? '1px solid #86efac' : '1px solid #f1f5f9',
+                                cursor: 'pointer',
+                                margin: 0
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setClassAssignedSubjectIds(prev =>
+                                      isChecked ? prev.filter(id => id !== sub.id) : [...prev, sub.id]
+                                    );
+                                  }}
+                                  style={{ width: 16, height: 16, margin: 0 }}
+                                />
+                                <span style={{ fontSize: 13, fontWeight: 600, color: isChecked ? '#166534' : '#1e293b' }}>
+                                  {sub.name}
+                                </span>
+                              </div>
+                              {sub.code && (
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>
+                                  {sub.code}
+                                </span>
+                              )}
+                            </label>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ padding: 20, background: '#f8fafc', borderRadius: 8, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                  Please select a class above to manage its assigned subjects.
+                </div>
+              )}
+            </div>
+            <div className="modal-footer" style={{ padding: '12px 20px' }}>
+              <button type="button" className="outline-btn" onClick={() => setAssignClassSubjectsModalOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                disabled={!selectedClassForSubjects || savingClassSubjects}
+                onClick={handleSaveClassSubjects}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                {savingClassSubjects ? 'Saving...' : 'Save Class Subjects'}
+              </button>
             </div>
           </div>
         </div>
