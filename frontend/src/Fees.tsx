@@ -21,9 +21,10 @@ interface FeesProps {
   initialTab?: string;
   activeCampusId?: number | null;
   campuses?: Array<any>;
+  onSelectCampus?: (id: number | null) => void;
 }
 
-export default function Fees({ user, notify, initialTab, activeCampusId, campuses = [] }: FeesProps) {
+export default function Fees({ user, notify, initialTab, activeCampusId, campuses = [], onSelectCampus }: FeesProps) {
   const [tab, setTab] = useState<Tab>('overview');
   const [schools, setSchools] = useState<R[]>(() => campuses || []);
   const [school, setSchool] = useState(() => (activeCampusId ? String(activeCampusId) : ''));
@@ -48,6 +49,9 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
   const [concessions, setConcessions] = useState<R[]>([]);
   const [receiptsList, setReceiptsList] = useState<R[]>([]);
   const [classes, setClasses] = useState<R[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>('all');
+  const [allStudents, setAllStudents] = useState<R[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState<boolean>(false);
   const [defaulterFilters, setDefaulterFilters] = useState<Record<string, any>>({});
   const [defaulterSummary, setDefaulterSummary] = useState<R | null>(null);
   const [defaulterCurrency, setDefaulterCurrency] = useState('PKR');
@@ -64,7 +68,6 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
 
   // Collect tab state
   const [studentSearch, setStudentSearch] = useState('');
-  const [searchedStudents, setSearchedStudents] = useState<R[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<R | null>(null);
   const [studentLedger, setStudentLedger] = useState<R | null>(null);
   const [payAmount, setPayAmount] = useState('');
@@ -165,21 +168,50 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
 
   useEffect(() => { loadData(); }, [loadData, bump]);
 
-  // Search students for fee collection
-  const handleStudentSearch = async () => {
-    if (!studentSearch.trim()) return;
+  const loadStudents = useCallback(async () => {
+    setLoadingStudents(true);
     try {
-      const res = await list<R>('students');
-      const filtered = res.filter((s: R) =>
-        s.first_name?.toLowerCase().includes(studentSearch.toLowerCase()) ||
-        s.last_name?.toLowerCase().includes(studentSearch.toLowerCase()) ||
-        s.admission_number?.toLowerCase().includes(studentSearch.toLowerCase())
-      );
-      setSearchedStudents(filtered);
+      const q = school ? `?school=${school}` : '';
+      const res = await list<R>(`students${q}`);
+      setAllStudents(res || []);
     } catch {
-      notify('Search failed');
+      setAllStudents([]);
+    } finally {
+      setLoadingStudents(false);
     }
-  };
+  }, [school]);
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents, bump]);
+
+  const visibleClasses = useMemo(() => {
+    if (!school) return classes;
+    return classes.filter(c => String(c.school || c.school_id) === String(school));
+  }, [classes, school]);
+
+  const activeCampus = useMemo(() => {
+    return schools.find(s => String(s.id) === String(school)) || (activeCampusId ? schools.find(s => s.id === activeCampusId) : null) || (schools.length === 1 ? schools[0] : null);
+  }, [schools, school, activeCampusId]);
+
+  const visibleStudents = useMemo(() => {
+    let list = allStudents;
+    if (selectedClassId && selectedClassId !== 'all') {
+      list = list.filter(s => {
+        const cid = String(s.school_class || s.school_class_id || s.current_class || (s.enrollments && s.enrollments[0]?.school_class?.id) || '');
+        return cid === String(selectedClassId);
+      });
+    }
+    if (studentSearch.trim()) {
+      const q = studentSearch.toLowerCase();
+      list = list.filter(s => {
+        const fn = (s.full_name || `${s.first_name || ''} ${s.last_name || ''}` || s.name || '').toLowerCase();
+        const adm = String(s.admission_number || '').toLowerCase();
+        return fn.includes(q) || adm.includes(q);
+      });
+    }
+    return list;
+  }, [allStudents, selectedClassId, studentSearch]);
 
   const selectStudentForPay = async (s: R) => {
     setSelectedStudent(s);
@@ -412,16 +444,49 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
           <div className="eyebrow">STUDENTS & LEARNING / FEES</div>
           <h1>Student Fees</h1>
           <p>Institutional fee collection, heads, billing vouchers, and automated finance integration.</p>
+          {activeCampus && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#f8fafc',
+              padding: '6px 14px',
+              borderRadius: 8,
+              border: '1px solid #e2e8f0',
+              marginTop: 8,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+            }}>
+              <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>
+                Campus: <strong style={{ color: '#0f172a' }}>{activeCampus.name}</strong>
+              </span>
+              {activeCampus.principal_name && (
+                <span style={{ color: '#64748b', borderLeft: '1px solid #cbd5e1', paddingLeft: 8, fontSize: 12 }}>
+                  Principal: <strong style={{ color: '#0f172a' }}>{activeCampus.principal_name}</strong>
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="fx-filters">
-          {schools.length > 1 && (
-            <label>Campus
-              <select className="fx-select" value={school} onChange={e => setSchool(e.target.value)}>
-                <option value="">All campuses</option>
-                {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </label>
-          )}
+          <label>Campus
+            <select
+              className="fx-select"
+              value={school}
+              onChange={e => {
+                const val = e.target.value;
+                setSchool(val);
+                onSelectCampus?.(val ? Number(val) : null);
+              }}
+            >
+              <option value="">All campuses</option>
+              {schools.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.principal_name ? ` (Principal: ${s.principal_name})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {tab === 'defaulters' && (
             <ExportMenu
@@ -557,64 +622,124 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
         <div className="collect-fee-grid">
           <section className="panel hr-panel">
             <div className="panel-head">
-              <div><h3>Student Search</h3><p>Locate student to inspect ledger or record payment</p></div>
-            </div>
-            <div style={{ padding: '16px 20px', display: 'flex', gap: 10, alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder="Search name or admission number…"
-                className="fx-select"
-                style={{ flex: 1, height: 42, borderRadius: 10 }}
-                value={studentSearch}
-                onChange={e => setStudentSearch(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleStudentSearch()}
-              />
-              <button
-                className="primary-btn"
-                onClick={handleStudentSearch}
-                style={{ height: 42, padding: '0 18px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                <Search size={15} /> Search
-              </button>
+              <div>
+                <h3>Student Fee Directory</h3>
+                <p>Filter by cohort class and click Collect Fee to record payment</p>
+              </div>
             </div>
 
-            {searchedStudents.length > 0 && (
-              <div style={{ padding: '0 20px 20px', maxHeight: 300, overflowY: 'auto' }}>
+            {/* Class Filter & Search Bar */}
+            <div style={{ padding: '16px 20px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 200, flex: '1 1 200px' }}>
+                <Users size={16} color="#6366f1" />
+                <select
+                  className="fx-select"
+                  value={selectedClassId}
+                  onChange={e => setSelectedClassId(e.target.value)}
+                  style={{ width: '100%', height: 40, borderRadius: 8, fontSize: 13, fontWeight: 600 }}
+                >
+                  <option value="all">All Classes ({visibleClasses.length} cohorts)</option>
+                  {visibleClasses.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.section ? `(${c.section})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ position: 'relative', flex: '2 1 240px' }}>
+                <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  placeholder="Search student name or admission number…"
+                  className="fx-select"
+                  style={{ width: '100%', height: 40, borderRadius: 8, paddingLeft: 36, fontSize: 13 }}
+                  value={studentSearch}
+                  onChange={e => setStudentSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Students List Table with Green "Collect Fee" Button */}
+            <div style={{ padding: '0 20px 20px', maxHeight: 380, overflowY: 'auto' }}>
+              {loadingStudents ? (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: '#64748b' }}>
+                  <RefreshCw size={18} className="spin" style={{ margin: '0 auto 8px', color: '#6366f1' }} />
+                  <div>Loading students for {activeCampus ? activeCampus.name : 'campus'}...</div>
+                </div>
+              ) : visibleStudents.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: '#94a3b8', fontSize: 13 }}>
+                  No students found matching current class and search criteria.
+                </div>
+              ) : (
                 <table className="data-table">
-                  <thead><tr><th>Name</th><th>Admission #</th><th style={{ textAlign: 'right' }}>Action</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Class</th>
+                      <th>Admission #</th>
+                      <th style={{ textAlign: 'right' }}>Action</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {searchedStudents.map(s => (
-                      <tr key={s.id}>
-                        <td><strong>{s.name || `${s.first_name} ${s.last_name}`}</strong></td>
-                        <td>{s.admission_number || '—'}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            className="sm-btn"
-                            onClick={() => selectStudentForPay(s)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              padding: '5px 12px',
-                              borderRadius: 8,
-                              background: '#eff6ff',
-                              color: '#2563eb',
-                              border: '1px solid #bfdbfe',
-                              fontWeight: 600,
-                              fontSize: 12,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Select <ChevronRight size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {visibleStudents.map(s => {
+                      const isSelected = selectedStudent?.id === s.id;
+                      const sName = s.full_name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || s.name || 'Student';
+                      const cName = s.class_name || (visibleClasses.find(c => String(c.id) === String(s.school_class || s.school_class_id))?.name) || 'Class';
+                      return (
+                        <tr key={s.id} style={{ background: isSelected ? '#f0fdf4' : undefined, transition: 'background 0.15s ease' }}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{
+                                width: 28, height: 28, borderRadius: 6,
+                                background: isSelected ? '#dcfce7' : '#f1f5f9',
+                                color: isSelected ? '#15803d' : '#475569',
+                                display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700
+                              }}>
+                                {sName.slice(0, 2).toUpperCase()}
+                              </div>
+                              <strong style={{ color: isSelected ? '#15803d' : '#0f172a', fontSize: 13 }}>
+                                {sName}
+                              </strong>
+                            </div>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 11.5, color: '#475569', background: '#f8fafc', padding: '2px 7px', borderRadius: 5, border: '1px solid #e2e8f0', fontWeight: 600 }}>
+                              {cName}
+                            </span>
+                          </td>
+                          <td style={{ color: '#64748b', fontSize: 12 }}>{s.admission_number || '—'}</td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              type="button"
+                              onClick={() => selectStudentForPay(s)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                padding: '6px 12px',
+                                borderRadius: 8,
+                                background: isSelected ? '#15803d' : '#16a34a',
+                                color: '#ffffff',
+                                border: 'none',
+                                fontWeight: 700,
+                                fontSize: 12,
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 5px rgba(22, 163, 74, 0.28)',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title={`Collect fee for ${sName}`}
+                            >
+                              <Receipt size={13} /> Collect Fee
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
-              </div>
-            )}
+              )}
+            </div>
 
             {selectedStudent && studentLedger && (
               <div style={{ padding: '0 20px 20px', borderTop: '1px solid #edf0f6', marginTop: 12 }}>

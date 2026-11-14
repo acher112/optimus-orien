@@ -490,6 +490,8 @@ class SchoolSerializer(DynamicSerializer):
  jurisdiction = serializers.SerializerMethodField()
  school_settings = serializers.SerializerMethodField()
  principal_name = serializers.SerializerMethodField()
+ academic_average = serializers.SerializerMethodField()
+ attendance_rate = serializers.SerializerMethodField()
 
  class Meta:
   model = School
@@ -497,7 +499,8 @@ class SchoolSerializer(DynamicSerializer):
    'id', 'organisation', 'name', 'code', 'city',
    'attendance_alert_threshold', 'grade_alert_threshold',
    'total_students', 'girls_count', 'boys_count', 'total_employees',
-   'country', 'jurisdiction', 'school_settings', 'principal_name'
+   'country', 'jurisdiction', 'school_settings', 'principal_name',
+   'academic_average', 'attendance_rate'
   ]
   read_only_fields = ['organisation']
 
@@ -527,6 +530,38 @@ class SchoolSerializer(DynamicSerializer):
 
  def get_principal_name(self, obj):
   return resolve_school_principal_name(obj)
+
+ def get_academic_average(self, obj):
+  try:
+   from .models import CalculatedSubjectResult
+   from django.db.models import Avg
+   c_res = CalculatedSubjectResult.objects.filter(school_class__school=obj)
+   if c_res.exists():
+    pct = c_res.aggregate(avg_pct=Avg('overall_percentage'))['avg_pct']
+    if pct is not None:
+     return round(float(pct), 1)
+    cur_pct = c_res.aggregate(avg_pct=Avg('current_percentage'))['avg_pct']
+    if cur_pct is not None:
+     return round(float(cur_pct), 1)
+   students = obj.student_set.filter(active=True)
+   stats = student_stats(students)
+   return stats.get('academic_average')
+  except Exception:
+   return None
+
+ def get_attendance_rate(self, obj):
+  try:
+   from .models import Attendance
+   att = Attendance.objects.filter(student__school=obj)
+   rec = att.count()
+   if rec > 0:
+    pres = att.filter(status__in=['present', 'late']).count()
+    return round((pres / rec) * 100, 1)
+   students = obj.student_set.filter(active=True)
+   stats = student_stats(students)
+   return stats.get('attendance_rate')
+  except Exception:
+   return None
 
  def update(self, instance, validated_data):
   req = self.context.get('request')

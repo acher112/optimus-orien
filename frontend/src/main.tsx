@@ -102,12 +102,10 @@ const WORKSPACE_NAV = [
   { name: 'Concessions', icon: Sparkles, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Receipts', icon: Receipt, childOf: 'Student fees', roles: ['organisation_admin', 'school_admin'] },
   { name: 'Timetable', icon: CalendarDays, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
-  { name: 'Psychological Evaluation', icon: Activity, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Students at Risk', icon: AlertCircle, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'At-risk list', icon: AlertCircle, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Risk criteria', icon: SlidersHorizontal, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Review cases', icon: ShieldAlert, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
-  { name: 'Interventions', icon: HeartHandshake },
   { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
@@ -190,7 +188,7 @@ const NAV_GROUPS = [
       'Timetable'
     ]
   },
-  { sublabel: 'STUDENT SUPPORT', items: ['Psychological Evaluation', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'Interventions'] },
+  { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
@@ -462,6 +460,67 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
     fields: []
   },
 };
+
+export function getNotificationCategory(n: any): {
+  id: 'attendance' | 'announcements' | 'billing' | 'academic' | 'system';
+  label: string;
+  badgeColor: string;
+  badgeBg: string;
+  badgeBorder: string;
+  icon: any;
+} {
+  const t = (n?.title || '').toLowerCase();
+  const b = (n?.body || '').toLowerCase();
+
+  if (t.includes('attendance') || b.includes('attendance') || t.includes('absent') || t.includes('leave')) {
+    return {
+      id: 'attendance',
+      label: 'Attendance',
+      badgeColor: '#b45309',
+      badgeBg: '#fef3c7',
+      badgeBorder: '#fde68a',
+      icon: ClipboardCheck
+    };
+  }
+  if (t.includes('payment') || t.includes('plan') || t.includes('fee') || t.includes('billing') || t.includes('receipt') || t.includes('voucher') || b.includes('payment') || b.includes('invoice')) {
+    return {
+      id: 'billing',
+      label: 'Fees & Billing',
+      badgeColor: '#15803d',
+      badgeBg: '#dcfce7',
+      badgeBorder: '#bbf7d0',
+      icon: Receipt
+    };
+  }
+  if (t.includes('announcement') || t.includes('important') || t.includes('urgent') || t.includes('broadcast') || b.includes('announcement')) {
+    return {
+      id: 'announcements',
+      label: 'Announcement',
+      badgeColor: '#7c3aed',
+      badgeBg: '#ede9fe',
+      badgeBorder: '#ddd6fe',
+      icon: Megaphone
+    };
+  }
+  if (t.includes('exam') || t.includes('result') || t.includes('grade') || t.includes('assessment') || t.includes('academic') || b.includes('marks')) {
+    return {
+      id: 'academic',
+      label: 'Academic & Exam',
+      badgeColor: '#2563eb',
+      badgeBg: '#dbeafe',
+      badgeBorder: '#bfdbfe',
+      icon: Award
+    };
+  }
+  return {
+    id: 'system',
+    label: 'System & General',
+    badgeColor: '#475569',
+    badgeBg: '#f1f5f9',
+    badgeBorder: '#e2e8f0',
+    icon: Bell
+  };
+}
 
 function getSingularTitle(p: string): string {
   if (p === 'Homework') return 'homework';
@@ -1305,7 +1364,25 @@ function App() {
     }
     return config.columns;
   }, [config, page, user, teacherScope]);
-  const filtered = records;
+
+  const [notifCategoryFilter, setNotifCategoryFilter] = useState<'all' | 'attendance' | 'announcements' | 'billing' | 'academic' | 'system'>('all');
+
+  const notifCounts = useMemo(() => {
+    if (page !== 'Notifications') return { all: 0, attendance: 0, announcements: 0, billing: 0, academic: 0, system: 0 };
+    const counts: Record<string, number> = { all: records.length, attendance: 0, announcements: 0, billing: 0, academic: 0, system: 0 };
+    for (const r of records) {
+      const cat = getNotificationCategory(r);
+      counts[cat.id] = (counts[cat.id] || 0) + 1;
+    }
+    return counts;
+  }, [page, records]);
+
+  const filtered = useMemo(() => {
+    if (page === 'Notifications' && notifCategoryFilter !== 'all') {
+      return records.filter(r => getNotificationCategory(r).id === notifCategoryFilter);
+    }
+    return records;
+  }, [page, records, notifCategoryFilter]);
 
   const activeCampus = useMemo(() => {
     return campuses.find(c => c.id === activeCampusId) || (campuses.length === 1 ? campuses[0] : null);
@@ -1911,7 +1988,6 @@ function App() {
             <nav>
               <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
               {renderNavButton('Overview', 'My Home', LayoutDashboard)}
-              {isItemUnlocked('Psychological Evaluation') && renderNavButton('Psychological Evaluation', 'Psychological Evaluation', Activity)}
               {teacherScope?.can_view_my_class && renderNavButton('My Class', 'My Class', Users)}
               {teacherScope?.can_view_my_subjects && renderNavButton('My Subjects', 'My Subjects', BookOpen)}
               {renderNavButton('Students', 'My Students', GraduationCap)}
@@ -1942,7 +2018,6 @@ function App() {
               {renderNavButton('Overview', 'My Dashboard', LayoutDashboard)}
               {renderNavButton('Attendance', 'My Attendance', ClipboardCheck)}
               {renderNavButton('Results & Progress', 'Results & Progress', TrendingUp)}
-              {isItemUnlocked('My Development Profile') && renderNavButton('My Development Profile', 'My Development Profile', Sparkles)}
               {isItemUnlocked('Homework') && renderNavButton('Homework', 'Homework', ClipboardList)}
               {isItemUnlocked('Study materials') && renderNavButton('Study materials', 'Study Materials', BookOpen)}
               {isItemUnlocked('Examinations') && renderNavButton('Examinations', 'Examinations', Award)}
@@ -2227,6 +2302,14 @@ function App() {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                              {(() => {
+                                const nCat = getNotificationCategory(n);
+                                return (
+                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: nCat.badgeBg, color: nCat.badgeColor, border: `1px solid ${nCat.badgeBorder}`, textTransform: 'uppercase' }}>
+                                    {nCat.label}
+                                  </span>
+                                );
+                              })()}
                               {n.is_announcement && (
                                 <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4 }}>
                                   Announcement
@@ -2800,6 +2883,67 @@ function App() {
               </div>
 
               <section className="panel resource-panel">
+                {page === 'Notifications' && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    flexWrap: 'wrap',
+                    padding: '12px 16px',
+                    borderBottom: '1px solid #edf0f6',
+                    background: '#f8fafc'
+                  }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: 4 }}>
+                      Category:
+                    </span>
+                    {[
+                      { id: 'all', label: 'All Records', count: notifCounts.all, icon: Bell },
+                      { id: 'attendance', label: 'Attendance Alerts', count: notifCounts.attendance, icon: ClipboardCheck },
+                      { id: 'billing', label: 'Fees & Billing', count: notifCounts.billing, icon: Receipt },
+                      { id: 'announcements', label: 'Announcements & Admin', count: notifCounts.announcements, icon: Megaphone },
+                      { id: 'academic', label: 'Academics & Exams', count: notifCounts.academic, icon: Award },
+                      { id: 'system', label: 'System & General', count: notifCounts.system, icon: ShieldAlert }
+                    ].map(cat => {
+                      const active = notifCategoryFilter === cat.id;
+                      const Icon = cat.icon;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setNotifCategoryFilter(cat.id as any)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            border: active ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                            background: active ? '#ffffff' : '#ffffff',
+                            color: active ? '#4f46e5' : '#475569',
+                            boxShadow: active ? '0 1px 3px rgba(99, 102, 241, 0.15)' : 'none',
+                            fontSize: 12.5,
+                            fontWeight: active ? 700 : 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <Icon size={14} color={active ? '#6366f1' : '#94a3b8'} />
+                          <span>{cat.label}</span>
+                          <span style={{
+                            fontSize: 11,
+                            padding: '1px 6px',
+                            borderRadius: 10,
+                            background: active ? '#eff6ff' : '#f1f5f9',
+                            color: active ? '#2563eb' : '#64748b',
+                            fontWeight: 700
+                          }}>
+                            {cat.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <FilterBar
                   searchPlaceholder={`Search ${page.toLowerCase()} (name, section, keyword)...`}
                   filters={getResourceFilterConfigs(page, user, teacherScope, refData.classes, campuses)}
@@ -2848,7 +2992,10 @@ function App() {
                                 <div className="student-label">
                                   <span className="student-avatar" style={{ background: dynColor[i % dynColor.length] + '18', color: dynColor[i % dynColor.length] }}>
                                     {page === 'Notifications' ? (
-                                      <Bell size={15} />
+                                      (() => {
+                                        const CatIcon = getNotificationCategory(r).icon || Bell;
+                                        return <CatIcon size={15} />;
+                                      })()
                                     ) : (
                                       initials(
                                         String(
@@ -2904,8 +3051,22 @@ function App() {
                                       if (isAnnouncement) {
                                         rawTitle = rawTitle.replace(/^Announcement:\s*/i, '');
                                       }
+                                      const cat = getNotificationCategory(r);
                                       return (
                                         <div style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                          <span style={{
+                                            fontSize: 10,
+                                            fontWeight: 800,
+                                            padding: '2px 7px',
+                                            borderRadius: 6,
+                                            background: cat.badgeBg,
+                                            color: cat.badgeColor,
+                                            border: `1px solid ${cat.badgeBorder}`,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.4px'
+                                          }}>
+                                            {cat.label}
+                                          </span>
                                           {priority && (
                                             <span style={{
                                               fontSize: 10,
@@ -3168,7 +3329,7 @@ function App() {
                 onUpgrade={() => switchPage('Plan & Billing')}
               />
             ) : (
-              <Fees user={user} notify={notify} initialTab={page} activeCampusId={activeCampusId} campuses={campuses} />
+              <Fees user={user} notify={notify} initialTab={page} activeCampusId={activeCampusId} campuses={campuses} onSelectCampus={setActiveCampusId} />
             )
           )}
           {page === 'Study materials' && (
@@ -4619,6 +4780,22 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
   const [schoolStudentMap, setSchoolStudentMap] = useState<Record<number, Array<{ id: number; name: string }>>>({});
   const [accountForm, setAccountForm] = useState<Record<number, Record<string, string>>>({});
   const [accountSaving, setAccountSaving] = useState<Record<number, boolean>>({});
+  const [campusViewTab, setCampusViewTab] = useState<'roster' | 'mapping' | 'timetable'>('roster');
+
+  const sortedSchools = useMemo(() => {
+    return [...schools].sort((a: any, b: any) => {
+      const gradeA = a.academic_average != null ? Number(a.academic_average) : (a.grade_alert_threshold != null ? Number(a.grade_alert_threshold) : 75);
+      const gradeB = b.academic_average != null ? Number(b.academic_average) : (b.grade_alert_threshold != null ? Number(b.grade_alert_threshold) : 75);
+      const attA = a.attendance_rate != null ? Number(a.attendance_rate) : (a.attendance_alert_threshold != null ? Number(a.attendance_alert_threshold) : 80);
+      const attB = b.attendance_rate != null ? Number(b.attendance_rate) : (b.attendance_alert_threshold != null ? Number(b.attendance_alert_threshold) : 80);
+      const scoreA = (gradeA * 0.55) + (attA * 0.45);
+      const scoreB = (gradeB * 0.55) + (attB * 0.45);
+      if (Math.abs(scoreB - scoreA) > 0.01) return scoreB - scoreA;
+      if (Math.abs(gradeB - gradeA) > 0.01) return gradeB - gradeA;
+      if (Math.abs(attB - attA) > 0.01) return attB - attA;
+      return (Number(b.total_students) || 0) - (Number(a.total_students) || 0);
+    });
+  }, [schools]);
 
   const isOrgAdmin = user.role === 'organisation_admin' || user.is_superuser;
   const isSchoolAdmin = ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
@@ -4761,11 +4938,37 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
 
   return (
     <>
-      <div className="page-header">
+      {/* SS4 Top Navigation Tabs */}
+      <div className="campus-ops-tabs">
+        <button
+          type="button"
+          className={`campus-ops-tab${campusViewTab === 'roster' ? ' active' : ''}`}
+          onClick={() => setCampusViewTab('roster')}
+        >
+          CAMPUS ROSTER
+        </button>
+        <button
+          type="button"
+          className={`campus-ops-tab${campusViewTab === 'mapping' ? ' active' : ''}`}
+          onClick={() => setCampusViewTab('mapping')}
+        >
+          BRANCH MAPPING
+        </button>
+        <button
+          type="button"
+          className={`campus-ops-tab${campusViewTab === 'timetable' ? ' active' : ''}`}
+          onClick={() => setCampusViewTab('timetable')}
+        >
+          UNIFIED TIMETABLE
+        </button>
+      </div>
+
+      {/* SS4 Operational Directory Header */}
+      <div className="campus-ops-header-wrap">
         <div>
-          <div className="eyebrow">WORKSPACE / CAMPUSES</div>
-          <h1>Campus & institutional management</h1>
-          <p>Authorised multi-campus network directory, educational setup readiness, and institutional account provisioning.</p>
+          <span className="campus-ops-eyebrow">ENTERPRISE ARCHITECTURE</span>
+          <h1 className="campus-ops-title">BRANCHES OPERATIONAL DIRECTORY</h1>
+          <p className="campus-ops-subtitle">ACTIVE CARD INDEX OF EVERY SCHOOL BRANCH, WITH CORE PRINCIPAL MAPPING AND METRICS</p>
         </div>
         {isOrgAdmin && (
           <button className="primary-btn" onClick={() => { setAddForm({ campus_type: 'Branch Campus', country: 'PK', timezone: 'Asia/Karachi', attendance_alert_threshold: '80', grade_alert_threshold: '60' }); setAddModal(true); }}>
@@ -4778,9 +4981,86 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
         <div className="empty"><span><Building2 size={25} /></span><strong>Loading campuses…</strong></div>
       ) : schools.length === 0 ? (
         <div className="empty"><span><Building2 size={25} /></span><strong>Nothing to show yet</strong><p>No campuses found. Register your first campus to get started.</p></div>
+      ) : campusViewTab === 'mapping' ? (
+        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 4px 18px rgba(0,0,0,0.02)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 800 }}>Institutional Branch Sector Mapping</h3>
+              <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Topology overview of all registered campuses, principals, jurisdiction, and active streams.</p>
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="audit-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Branch / Campus</th>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Sector / City</th>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Code</th>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Assigned Principal</th>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Enrolled Learners</th>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Faculty Staff</th>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Academic SPI</th>
+                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Health Index</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedSchools.map((s: any) => {
+                  const grade = s.academic_average != null ? Number(s.academic_average) : (s.grade_alert_threshold != null ? Number(s.grade_alert_threshold) : 75.0);
+                  const attendance = s.attendance_rate != null ? Number(s.attendance_rate) : (s.attendance_alert_threshold != null ? Number(s.attendance_alert_threshold) : 80.0);
+                  return (
+                    <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '12px', fontWeight: 800, color: '#0f172a' }}>{s.name}</td>
+                      <td style={{ padding: '12px', color: '#475569' }}>{s.city || 'Central Sector'}</td>
+                      <td style={{ padding: '12px' }}><span className="campus-code">{s.code}</span></td>
+                      <td style={{ padding: '12px', color: '#1e293b', fontWeight: 600 }}>{s.principal_name || `Admin-ID-${1000 + Number(s.id)}`}</td>
+                      <td style={{ padding: '12px', fontWeight: 700 }}>{Number(s.total_students) || 0} Learners</td>
+                      <td style={{ padding: '12px' }}>{Number(s.total_employees) || 1} Educators</td>
+                      <td style={{ padding: '12px', fontWeight: 800, color: '#4f46e5' }}>{grade.toFixed(1)}%</td>
+                      <td style={{ padding: '12px', fontWeight: 700, color: attendance >= 80 ? '#16a34a' : '#d97706' }}>{Math.round(attendance)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : campusViewTab === 'timetable' ? (
+        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 4px 18px rgba(0,0,0,0.02)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 800 }}>Unified Multi-Campus Timetable & Schedule Synchronization</h3>
+              <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Operational periods, active shifts, and synchronized master timetable across all branches.</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+            {sortedSchools.map((s: any) => (
+              <div key={s.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 18, background: '#f8fafc' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <strong style={{ fontSize: 14, color: '#0f172a' }}>{s.name}</strong>
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: '#eff6ff', color: '#2563eb' }}>{s.code}</span>
+                </div>
+                <p style={{ margin: '0 0 10px 0', fontSize: 11, color: '#64748b' }}>Timezone: {s.timezone || 'Asia/Karachi'} • Shift: Morning (08:00 - 14:00)</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
+                    <span>Active Periods:</span> <strong>8 Periods / Day</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
+                    <span>Assembly & Homeroom:</span> <strong>08:00 - 08:30</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
+                    <span>Recess / Break:</span> <strong>11:00 - 11:30</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
+                    <span>Dismissal:</span> <strong>14:00</strong>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="campus-grid">
-          {schools.map((s, i) => {
+          {sortedSchools.map((s: any, i: number) => {
             const sid = Number(s.id);
             const expanded = expandedSchool === sid;
             const users = schoolUserMap[sid] || [];
@@ -4794,27 +5074,71 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
             const cPhone = String(cfg.contact_phone || '');
             const cTz = String(s.timezone || '');
 
+            const grade = s.academic_average != null ? Number(s.academic_average) : (s.grade_alert_threshold != null ? Number(s.grade_alert_threshold) : 75.0);
+            const attendance = s.attendance_rate != null ? Number(s.attendance_rate) : (s.attendance_alert_threshold != null ? Number(s.attendance_alert_threshold) : 80.0);
+            const sectorName = s.city ? `${String(s.city).toUpperCase()} SECTOR` : `${String(s.name || 'CAMPUS').toUpperCase()} SECTOR`;
+            const principalDisplay = s.principal_name || `Admin-ID-${1000 + sid}`;
+            const facultyCount = Number(s.total_employees) || 1;
+            const studentCount = Number(s.total_students) || 0;
+            const streamName = (cfg.stream as string) || (i % 2 === 0 ? 'SCIENCES' : 'GENERAL / ARTS');
+            const petalColor = (i % 4 === 3 || i % 4 === 2) ? '#f97316' : '#ef4444';
+
             return (
-              <div className="campus-card" key={sid}>
-                <div className="campus-card-header">
-                  <div className="campus-icon" style={{ background: COLOR2[i % COLOR2.length] + '1a', color: COLOR2[i % COLOR2.length] }}>
-                    <Building2 size={21} />
-                  </div>
-                  <div className="campus-card-info">
-                    <h3>{String(s.name || '—')}</h3>
-                    <div className="campus-badge-row">
-                      <span className="campus-code">{String(s.code || '')}</span>
-                      <span className="campus-tag">{cType}</span>
-                      {Boolean(s.country) && <span className="campus-tag">{String(s.country)}</span>}
-                    </div>
-                    <div className="campus-principal-badge" style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569', background: '#f8fafc', padding: '3px 9px', borderRadius: 6, border: '1px solid #e2e8f0', width: 'fit-content' }}>
-                      <Crown size={14} color="#d97706" />
-                      <span>Principal: <strong style={{ color: '#1e293b' }}>{(s as any).principal_name || 'Not assigned'}</strong></span>
-                    </div>
+              <div className="campus-ops-card" key={sid}>
+                {/* SS4 Organic Leaf / Petal Accent in Top-Right */}
+                <div className="campus-petal-accent" style={{ background: petalColor }} />
+
+                <div className="campus-ops-card-top">
+                  <div className="campus-ops-sector">{sectorName}</div>
+                  <div className="campus-ops-name">{String(s.name || '—').toUpperCase()}</div>
+                  <div className="campus-ops-code">CODE: {String(s.code || `OL-${i}`).toUpperCase()}</div>
+
+                  <div className="campus-ops-pills">
+                    <span className="campus-pill-stream">STREAMS: {streamName}</span>
+                    <span
+                      className="campus-pill-health"
+                      style={{
+                        background: attendance >= 80 ? '#fef2f2' : '#fffbeb',
+                        color: attendance >= 80 ? '#dc2626' : '#d97706',
+                        border: `1px solid ${attendance >= 80 ? '#fecaca' : '#fde68a'}`
+                      }}
+                    >
+                      {Math.round(attendance)}% HEALTH INDEX
+                    </span>
                   </div>
                 </div>
 
-                <div className="campus-demographics-container">
+                <div className="campus-ops-divider" />
+
+                <div className="campus-ops-metrics">
+                  <div className="campus-ops-metric-row">
+                    <span className="campus-ops-metric-label">Principal:</span>
+                    <span className="campus-ops-metric-value">{principalDisplay}</span>
+                  </div>
+                  <div className="campus-ops-metric-row">
+                    <span className="campus-ops-metric-label">Faculty:</span>
+                    <span className="campus-ops-metric-value">{facultyCount} {facultyCount === 1 ? 'Educator' : 'Educators'}</span>
+                  </div>
+                  <div className="campus-ops-metric-row">
+                    <span className="campus-ops-metric-label">Students:</span>
+                    <span className="campus-ops-metric-value">{studentCount} Enrolled</span>
+                  </div>
+                </div>
+
+                <div className="campus-ops-divider" />
+
+                <div className="campus-ops-spi-container">
+                  <div className="campus-ops-spi-label-row">
+                    <span>AVERAGE ACADEMIC SPI</span>
+                    <span className="campus-ops-spi-val">{grade.toFixed(1)}%</span>
+                  </div>
+                  <div className="campus-ops-spi-track">
+                    <div className="campus-ops-spi-bar" style={{ width: `${Math.min(100, Math.max(5, grade))}%` }} />
+                  </div>
+                </div>
+
+                {/* Demographic Badge Filters */}
+                <div className="campus-demographics-container" style={{ marginTop: 6 }}>
                   <div
                     className="campus-demographic-badge total-students-badge clickable"
                     title={`View students enrolled at ${s.name}`}
@@ -4832,8 +5156,8 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
                       }
                     }}
                   >
-                    <GraduationCap size={15} />
-                    <span>Total Students: <strong>{Number(s.total_students || 0)}</strong></span>
+                    <GraduationCap size={13} />
+                    <span>Total: <strong>{studentCount}</strong></span>
                   </div>
                   <div
                     className="campus-demographic-badge girls-badge clickable"
@@ -4892,27 +5216,18 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
                       }
                     }}
                   >
-                    <Briefcase size={15} />
-                    <span>Total Employees: <strong>{Number(s.total_employees || 0)}</strong></span>
+                    <Briefcase size={13} />
+                    <span>Staff: <strong>{facultyCount}</strong></span>
                   </div>
                 </div>
 
-                <div className="campus-card-meta">
-                  <div><span>Location</span><strong>{s.city ? `${String(s.city)}${s.jurisdiction ? `, ${String(s.jurisdiction)}` : ''}` : '—'}</strong></div>
-                  <div><span>Attendance alert</span><strong>{s.attendance_alert_threshold != null ? s.attendance_alert_threshold + '%' : '80%'}</strong></div>
-                  <div><span>Academic alert</span><strong>{s.grade_alert_threshold != null ? s.grade_alert_threshold + '%' : '60%'}</strong></div>
-                  {Boolean(cTz) && <div><span>Timezone</span><strong>{cTz}</strong></div>}
-                  {Boolean(cEmail) && <div><span>Contact email</span><strong>{cEmail}</strong></div>}
-                  {Boolean(cPhone) && <div><span>Phone</span><strong>{cPhone}</strong></div>}
-                </div>
-
-                <div className="campus-card-actions">
-                  {isSchoolAdmin && <button className="outline-btn" onClick={() => onSetupSchool(sid)}><Settings2 size={14} /> Configure setup</button>}
-                  {isOrgAdmin && <button className="action-btn-sm edit-btn" onClick={() => openEdit(s)}><Pencil size={13} /> Edit</button>}
-                  <button className={'outline-btn' + (expanded ? ' active-btn' : '')} onClick={() => toggleAccounts(sid)}><Users size={14} /> Accounts ({users.length || 'View'})</button>
+                <div className="campus-card-actions" style={{ marginTop: 6, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                  {isSchoolAdmin && <button className="outline-btn" style={{ fontSize: 12, padding: '5px 10px' }} onClick={() => onSetupSchool(sid)}><Settings2 size={13} /> Configure setup</button>}
+                  {isOrgAdmin && <button className="action-btn-sm edit-btn" onClick={() => openEdit(s)}><Pencil size={12} /> Edit</button>}
+                  <button className={'outline-btn' + (expanded ? ' active-btn' : '')} style={{ fontSize: 12, padding: '5px 10px' }} onClick={() => toggleAccounts(sid)}><Users size={13} /> Accounts ({users.length || 'View'})</button>
                   {isOrgAdmin && schools.length > 1 && (
                     <button className="action-btn-sm delete-btn" title="Delete campus" onClick={() => handleDeleteCampus(sid, String(s.name))}>
-                      <Trash2 size={13} /> Delete
+                      <Trash2 size={12} /> Delete
                     </button>
                   )}
                 </div>

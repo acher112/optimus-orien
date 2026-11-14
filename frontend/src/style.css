@@ -52,6 +52,45 @@
 
 @media(max-width:760px){.campus-grid{grid-template-columns:1fr}.acf-row{grid-template-columns:1fr}}
 
+/* Campus Operational Directory (Screenshot 4 Redesign) */
+.campus-ops-tabs { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+.campus-ops-tab { padding: 8px 20px; border-radius: 9999px; font-size: 11px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; border: 1px solid #e2e8f0; background: #ffffff; color: #64748b; cursor: pointer; transition: all 0.2s ease; }
+.campus-ops-tab:hover { border-color: #cbd5e1; color: #1e293b; }
+.campus-ops-tab.active { background: #ede9fe; color: #6366f1; border-color: #c7d2fe; box-shadow: 0 1px 3px rgba(99, 102, 241, 0.12); }
+.campus-ops-header-wrap { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.campus-ops-eyebrow { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; color: #2563eb; background: #eff6ff; border: 1px solid #dbeafe; padding: 3px 12px; border-radius: 9999px; margin-bottom: 8px; }
+.campus-ops-title { font-size: 26px; font-weight: 900; font-style: italic; letter-spacing: -0.5px; text-transform: uppercase; color: #0f172a; margin: 0 0 4px 0; }
+.campus-ops-subtitle { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #64748b; margin: 0; }
+.campus-ops-card { position: relative; overflow: hidden; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; padding: 24px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.03); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.campus-ops-card:hover { transform: translateY(-2px); box-shadow: 0 8px 26px rgba(99, 102, 241, 0.08); }
+.campus-petal-accent { position: absolute; top: 0; right: 0; width: 44px; height: 54px; border-top-right-radius: 24px; border-bottom-left-radius: 40px; border-top-left-radius: 4px; border-bottom-right-radius: 6px; pointer-events: none; z-index: 1; }
+.campus-ops-card-top { display: flex; flex-direction: column; gap: 3px; padding-right: 36px; }
+.campus-ops-sector { font-size: 11px; font-weight: 800; letter-spacing: 0.6px; color: #64748b; text-transform: uppercase; }
+.campus-ops-name { font-size: 18px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.3px; line-height: 1.2; }
+.campus-ops-code { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+.campus-ops-pills { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.campus-pill-stream { font-size: 10px; font-weight: 800; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 9999px; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+.campus-pill-health { font-size: 10px; font-weight: 800; border-radius: 9999px; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+.campus-ops-divider { border: 0; border-top: 1px dashed #cbd5e1; margin: 4px 0; }
+.campus-ops-metrics { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.campus-ops-metric-row { display: flex; justify-content: space-between; align-items: center; }
+.campus-ops-metric-label { color: #64748b; font-weight: 600; }
+.campus-ops-metric-value { color: #0f172a; font-weight: 800; }
+.campus-ops-spi-container { display: flex; flex-direction: column; gap: 4px; }
+.campus-ops-spi-label-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #64748b; }
+.campus-ops-spi-val { color: #0f172a; font-weight: 900; font-size: 11px; }
+.campus-ops-spi-track { width: 100%; height: 4px; background: #e2e8f0; border-radius: 9999px; overflow: hidden; }
+.campus-ops-spi-bar { height: 100%; background: #4f46e5; border-radius: 9999px; transition: width 0.4s ease; }
+
+.dark .campus-ops-tab { background: #232538; border-color: #35374c; color: #94a3b8; }
+.dark .campus-ops-tab.active { background: #2e285c; color: #a5b4fc; border-color: #4f46e5; }
+.dark .campus-ops-card { background: #232538; border-color: #35374c; }
+.dark .campus-ops-title { color: #f1f5f9; }
+.dark .campus-ops-name { color: #f8fafc; }
+.dark .campus-ops-metric-value, .dark .campus-ops-spi-val { color: #f8fafc; }
+.dark .campus-ops-divider { border-top-color: #35374c; }
+.dark .campus-ops-spi-track { background: #35374c; }
+
 .modal-fields-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .modal-section-title{grid-column:1 / -1;font-size:10px;font-weight:800;color:var(--brand-primary-text, var(--brand-primary));letter-spacing:1px;text-transform:uppercase;margin-top:10px;padding-bottom:5px;border-bottom:1px solid #edf0f8}
 .dark .modal-section-title{color:#a295f5;border-bottom-color:#35374c}
