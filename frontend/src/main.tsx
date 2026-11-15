@@ -361,7 +361,8 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
       { key: 'curriculum', label: 'Curriculum' },
       { key: 'teacher_name', label: 'Class teacher' },
       { key: 'school_name', label: 'Campus' },
-      { key: 'academic_year_name', label: 'Academic Year' }
+      { key: 'academic_year_name', label: 'Academic Year' },
+      { key: 'active', label: 'Status' }
     ],
     fields: [
       { key: 'name', label: 'Class name', required: true },
@@ -607,6 +608,14 @@ function getResourceFilterConfigs(
             { label: 'Grade 9', value: 'Grade 9' },
             { label: 'Grade 10', value: 'Grade 10' },
           ]
+        },
+        {
+          key: 'active',
+          label: 'Status',
+          options: [
+            { label: 'Active Session', value: 'true' },
+            { label: 'Closed Session', value: 'false' },
+          ]
         }
       ];
     case 'Academic years':
@@ -628,8 +637,8 @@ function getResourceFilterConfigs(
           key: 'active',
           label: 'Status',
           options: [
-            { label: 'Active', value: 'true' },
-            { label: 'Inactive', value: 'false' },
+            { label: 'Active (Assigned)', value: 'true' },
+            { label: 'Inactive (Unassigned)', value: 'false' },
           ]
         }
       ];

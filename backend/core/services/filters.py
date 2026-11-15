@@ -11,7 +11,8 @@ from rest_framework.exceptions import ValidationError
 STANDARD_PARAMS = {
     'q', 'ordering', 'sort_by', 'order', 'page', 'page_size',
     'format', 'export', 'school', 'campus', 'month', 'period',
-    'csrfToken', 'v'
+    'csrfToken', 'v', 'active', 'status', 'published', 'is_active',
+    'limit', 'offset', 'search', 'tab', '_', 'cache_bust'
 }
 
 
@@ -113,6 +114,26 @@ def apply_query_filters(
             queryset = queryset.filter(**{f"{lookup}__in": values})
         else:
             queryset = queryset.filter(**{lookup: values[0]})
+
+    # 3b. Automatic model-level active / is_active filtering if param sent and not in filter_map
+    model = getattr(queryset, 'model', None)
+    if model and 'active' not in filter_map and 'status' not in filter_map:
+        try:
+            field_names = {f.name for f in model._meta.get_fields()}
+            target_param = 'active' if 'active' in request.query_params else ('status' if 'status' in request.query_params else None)
+            if target_param:
+                raw_val = request.query_params.get(target_param)
+                val_str = str(raw_val or '').strip().lower()
+                if val_str not in ('', 'all', 'none'):
+                    bool_val = val_str in ('active', 'true', '1', 'yes', 'published')
+                    if 'active' in field_names:
+                        queryset = queryset.filter(active=bool_val)
+                        filters_applied['active'] = val_str
+                    elif 'is_active' in field_names:
+                        queryset = queryset.filter(is_active=bool_val)
+                        filters_applied['active'] = val_str
+        except Exception:
+            pass
 
     # 4. Apply Ordering
     ordering_param = (request.query_params.get('ordering') or '').strip()

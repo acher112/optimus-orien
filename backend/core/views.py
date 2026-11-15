@@ -581,6 +581,9 @@ class ClassSerializer(DynamicSerializer):
  teacher_name=serializers.SerializerMethodField()
  display_name=serializers.CharField(read_only=True)
  full_display_name=serializers.SerializerMethodField()
+ active=serializers.SerializerMethodField(read_only=True)
+ def get_active(self,o):
+  return bool(o.academic_year and o.academic_year.active)
  def get_teacher_name(self,o):
   if o.teacher:
    return o.teacher.get_full_name() or o.teacher.username
@@ -699,11 +702,14 @@ class SubjectSerializer(DynamicSerializer):
  classes=serializers.ListField(child=serializers.IntegerField(),required=False,write_only=True)
  assigned_classes=serializers.SerializerMethodField(read_only=True)
  assigned_class_names=serializers.SerializerMethodField(read_only=True)
+ active=serializers.SerializerMethodField(read_only=True)
  class Meta:model=Subject;fields='__all__'
  def get_assigned_classes(self,obj):
   return list(obj.class_subjects.values_list('school_class_id',flat=True))
  def get_assigned_class_names(self,obj):
   return [cs.school_class.display_name for cs in obj.class_subjects.select_related('school_class').all()]
+ def get_active(self,obj):
+  return obj.class_subjects.exists()
  def create(self,validated_data):
   classes=validated_data.pop('classes',None)
   subject=super().create(validated_data)
@@ -780,6 +786,22 @@ def _filter_student_section(qs, val):
   return qs.filter(enrollments__school_class__section__in=val, enrollments__end_date__isnull=True)
  return qs.filter(enrollments__school_class__section__iexact=str(val).strip(), enrollments__end_date__isnull=True)
 
+def _filter_subject_active(qs, val):
+ v = str(val).strip().lower()
+ if v in ('true', '1', 'active'):
+  return qs.filter(class_subjects__isnull=False).distinct()
+ elif v in ('false', '0', 'inactive'):
+  return qs.filter(class_subjects__isnull=True).distinct()
+ return qs
+
+def _filter_class_active(qs, val):
+ v = str(val).strip().lower()
+ if v in ('true', '1', 'active'):
+  return qs.filter(academic_year__active=True).distinct()
+ elif v in ('false', '0', 'inactive'):
+  return qs.filter(academic_year__active=False).distinct()
+ return qs
+
 MODEL_FILTER_SPECS = {
  Student: {
   'search_fields': ['first_name', 'last_name', 'admission_number', 'father_name', 'mother_name', 'guardian_phone'],
@@ -815,6 +837,8 @@ MODEL_FILTER_SPECS = {
    'grade_level': 'grade_level',
    'school': 'school_id',
    'campus': 'school_id',
+   'active': _filter_class_active,
+   'status': _filter_class_active,
   },
   'allowed_orderings': ['name', 'section'],
   'default_ordering': ['name', 'section']
@@ -824,6 +848,8 @@ MODEL_FILTER_SPECS = {
   'filter_map': {
    'name': 'name',
    'code': 'code',
+   'active': _filter_subject_active,
+   'status': _filter_subject_active,
    'school': 'school_id',
    'campus': 'school_id',
   },
@@ -836,6 +862,8 @@ MODEL_FILTER_SPECS = {
    'name': 'name',
    'code': 'code',
    'city': 'city',
+   'active': lambda qs, val: qs,
+   'status': lambda qs, val: qs,
   },
   'allowed_orderings': ['name', 'code', 'city'],
   'default_ordering': ['name']
@@ -845,6 +873,7 @@ MODEL_FILTER_SPECS = {
   'filter_map': {
    'name': 'name',
    'active': 'active',
+   'status': 'active',
    'school': 'school_id',
    'campus': 'school_id',
    'start_date_from': 'start_date__gte',
@@ -862,6 +891,7 @@ MODEL_FILTER_SPECS = {
    'school_class': 'school_class_id',
    'class': 'school_class_id',
    'status': 'status',
+   'active': lambda qs, val: qs,
    'date': 'date',
    'date_from': 'date__gte',
    'date_to': 'date__lte',
@@ -877,6 +907,8 @@ MODEL_FILTER_SPECS = {
    'school_class': 'school_class_id',
    'class': 'school_class_id',
    'subject': 'subject_id',
+   'active': lambda qs, val: qs,
+   'status': lambda qs, val: qs,
    'due_date_from': 'due_date__gte',
    'due_date_to': 'due_date__lte',
   },
@@ -889,6 +921,7 @@ MODEL_FILTER_SPECS = {
    'homework': 'homework_id',
    'student': 'student_id',
    'status': 'status',
+   'active': lambda qs, val: qs,
    'submitted_from': 'submitted_at__gte',
    'submitted_to': 'submitted_at__lte',
   },
@@ -903,6 +936,9 @@ MODEL_FILTER_SPECS = {
    'subject': 'subject_id',
    'school_class': 'school_class_id',
    'class': 'school_class_id',
+   'published': 'published',
+   'active': 'published',
+   'status': 'published',
    'date_from': 'date__gte',
    'date_to': 'date__lte',
   },
@@ -916,6 +952,8 @@ MODEL_FILTER_SPECS = {
    'student': 'student_id',
    'class': 'assessment__school_class_id',
    'school_class': 'assessment__school_class_id',
+   'active': lambda qs, val: qs,
+   'status': lambda qs, val: qs,
   },
   'allowed_orderings': ['marks'],
   'default_ordering': ['-marks']
@@ -926,6 +964,7 @@ MODEL_FILTER_SPECS = {
    'student': 'student_id',
    'status': 'status',
    'priority': 'priority',
+   'active': lambda qs, val: qs.filter(status__in=['open', 'in_progress']) if str(val).lower() in ('true', '1', 'active') else qs.filter(status__in=['resolved', 'closed']),
   },
   'allowed_orderings': ['created_at', 'priority', 'status'],
   'default_ordering': ['-created_at']
@@ -936,6 +975,7 @@ MODEL_FILTER_SPECS = {
    'case': 'case_id',
    'status': 'status',
    'kind': 'kind',
+   'active': lambda qs, val: qs.filter(status__in=['open', 'in_progress']) if str(val).lower() in ('true', '1', 'active') else qs.filter(status__in=['completed', 'closed']),
   },
   'allowed_orderings': ['created_at', 'status'],
   'default_ordering': ['-created_at']
@@ -945,6 +985,8 @@ MODEL_FILTER_SPECS = {
   'filter_map': {
    'read': 'read',
    'user': 'user_id',
+   'active': lambda qs, val: qs.filter(read=False) if str(val).lower() in ('true', '1', 'active') else qs.filter(read=True),
+   'status': lambda qs, val: qs.filter(read=False) if str(val).lower() in ('true', '1', 'active') else qs.filter(read=True),
   },
   'allowed_orderings': ['created_at'],
   'default_ordering': ['-created_at']
@@ -954,6 +996,8 @@ MODEL_FILTER_SPECS = {
   'filter_map': {
    'action': 'action',
    'resource': 'resource',
+   'active': lambda qs, val: qs,
+   'status': lambda qs, val: qs,
    'date_from': 'created_at__gte',
    'date_to': 'created_at__lte',
   },
