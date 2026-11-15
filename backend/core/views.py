@@ -1561,6 +1561,43 @@ class Students(ScopedViewSet):
   res_data['receipt'] = receipt
   headers = self.get_success_headers(res_data)
   return Response(res_data, status=status.HTTP_201_CREATED, headers=headers)
+
+ @transaction.atomic
+ def update(self, request, *args, **kwargs):
+  response = super().update(request, *args, **kwargs)
+  self._sync_class_enrollment(self.get_object(), request.data)
+  return response
+
+ @transaction.atomic
+ def partial_update(self, request, *args, **kwargs):
+  response = super().partial_update(request, *args, **kwargs)
+  self._sync_class_enrollment(self.get_object(), request.data)
+  return response
+
+ def _sync_class_enrollment(self, student, data):
+  class_id = data.get('school_class') or data.get('class_id') or data.get('class')
+  if class_id:
+   try:
+    cid = int(str(class_id).strip())
+    school_class = SchoolClass.objects.filter(pk=cid, school=student.school).first()
+    if school_class:
+     active_enr = student.enrollments.filter(end_date__isnull=True).first()
+     if not active_enr:
+      Enrollment.objects.create(
+       student=student,
+       school_class=school_class,
+       start_date=timezone.localdate()
+      )
+     elif active_enr.school_class_id != school_class.id:
+      active_enr.end_date = timezone.localdate()
+      active_enr.save(update_fields=['end_date'])
+      Enrollment.objects.create(
+       student=student,
+       school_class=school_class,
+       start_date=timezone.localdate()
+      )
+   except (ValueError, TypeError):
+    pass
 class Subjects(ScopedViewSet):queryset=Subject.objects.all();serializer_class=SubjectSerializer
 class Years(ScopedViewSet):queryset=AcademicYear.objects.all();serializer_class=YearSerializer
 class Enrollments(ScopedViewSet):queryset=Enrollment.objects.all();serializer_class=EnrollmentSerializer

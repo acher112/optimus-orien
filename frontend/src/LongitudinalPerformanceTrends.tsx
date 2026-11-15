@@ -24,68 +24,24 @@ interface LongitudinalPerformanceTrendsProps {
   campuses?: any[];
 }
 
-const DEFAULT_DIVISIONS: DivisionTrendData[] = [
-  {
-    city: 'Chicago',
-    divisionName: 'Chicago Division',
-    campusesCount: 4,
-    academicSpi: 77.5,
-    dailyAttendance: 88.2,
-  },
-  {
-    city: 'San Jose',
-    divisionName: 'San Jose Division',
-    campusesCount: 4,
-    academicSpi: 77.2,
-    dailyAttendance: 84.3,
-  },
-  {
-    city: 'New York',
-    divisionName: 'New York Division',
-    campusesCount: 4,
-    academicSpi: 77.1,
-    dailyAttendance: 86.5,
-  },
-  {
-    city: 'San Antonio',
-    divisionName: 'San Antonio Division',
-    campusesCount: 4,
-    academicSpi: 77.1,
-    dailyAttendance: 86.8,
-  },
-  {
-    city: 'Philadelphia',
-    divisionName: 'Philadelphia Division',
-    campusesCount: 4,
-    academicSpi: 77.0,
-    dailyAttendance: 87.0,
-  },
-  {
-    city: 'Dallas',
-    divisionName: 'Dallas Division',
-    campusesCount: 3,
-    academicSpi: 76.8,
-    dailyAttendance: 85.9,
-  },
-];
-
 export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTrendsProps> = ({
   data,
   title = 'LONGITUDINAL PERFORMANCE TRENDS',
-  subtitle = 'ORGANIZATION-WIDE COMPARATIVE AVERAGES ACROSS METROPOLIS SECTORS',
+  subtitle = 'ORGANIZATION-WIDE COMPARATIVE AVERAGES ACROSS CAMPUS BRANCHES',
   campuses,
 }) => {
-  // If campuses are provided and have at least 2 items, we can derive dynamic division data
-  let displayData: DivisionTrendData[] = DEFAULT_DIVISIONS;
+  let displayData: DivisionTrendData[] = [];
   if (data && data.length > 0) {
     displayData = data;
-  } else if (campuses && campuses.length >= 2) {
+  } else if (campuses && campuses.length > 0) {
     displayData = campuses.map((c: any) => {
-      const spi = c.academic_average != null ? Number(c.academic_average) : (c.grade_alert_threshold ? Number(c.grade_alert_threshold) : 76.5);
-      const att = c.attendance_rate != null ? Number(c.attendance_rate) : (c.attendance_alert_threshold ? Number(c.attendance_alert_threshold) : 85.0);
+      const spi = c.academic_average != null ? Number(c.academic_average) : 0;
+      const att = c.attendance_rate != null ? Number(c.attendance_rate) : 0;
+      const rawName = c.name || c.city || 'Campus';
+      const city = c.city || rawName;
       return {
-        city: c.city || c.name || 'Campus',
-        divisionName: `${c.city || c.name} Division`,
+        city: city.length > 15 ? city.slice(0, 15) + '…' : city,
+        divisionName: `${rawName}${c.city && c.city !== rawName ? ` (${c.city})` : ''}`,
         campusesCount: 1,
         academicSpi: spi,
         dailyAttendance: att,
@@ -116,10 +72,10 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
             {label}
           </div>
           <div style={{ color: '#4338ca', fontWeight: 700 }}>
-            Aggregate Academic SPI % : {Number(spiVal).toFixed(1)}
+            Aggregate Academic SPI % : {Number(spiVal).toFixed(1)}%
           </div>
           <div style={{ color: '#0284c7', fontWeight: 700 }}>
-            Daily Attendance % : {Number(attVal).toFixed(1)}
+            Daily Attendance % : {Number(attVal).toFixed(1)}%
           </div>
         </div>
       );
@@ -162,135 +118,143 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
       </div>
 
       <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20 }}>
-        <div className="longitudinal-trends-grid">
-          {/* Left Column: Bar Chart */}
-          <div style={{ minWidth: 0, width: '100%' }}>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: '0.8px',
-                textTransform: 'uppercase',
-                color: '#64748b',
-                marginBottom: 16,
-              }}
-            >
-              SPI PERFORMANCE INDEX BY CITY
-            </div>
-
-            <div style={{ width: '100%', height: 280, minWidth: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={displayData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
-                  barGap={4}
-                >
-                  <XAxis
-                    dataKey="city"
-                    axisLine={{ stroke: '#cbd5e1' }}
-                    tickLine={false}
-                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }}
-                    dy={8}
-                  />
-                  <YAxis
-                    domain={[0, 100]}
-                    ticks={[0, 25, 50, 75, 100]}
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
-                  />
-                  <Tooltip content={<CustomBarTooltip />} />
-                  <Bar
-                    dataKey="academicSpi"
-                    name="Aggregate Academic SPI %"
-                    fill="#6366f1"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={28}
-                  />
-                  <Bar
-                    dataKey="dailyAttendance"
-                    name="Daily Attendance %"
-                    fill="#0ea5e9"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={28}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        {displayData.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b' }}>
+            <TrendingUp size={36} style={{ color: '#94a3b8', margin: '0 auto 12px', display: 'block' }} />
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#334155' }}>No campus performance data recorded yet</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>When teachers, learners, and academic assessments are recorded, longitudinal performance trends will appear here.</div>
           </div>
+        ) : (
+          <div className="longitudinal-trends-grid">
+            {/* Left Column: Bar Chart */}
+            <div style={{ minWidth: 0, width: '100%' }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.8px',
+                  textTransform: 'uppercase',
+                  color: '#64748b',
+                  marginBottom: 16,
+                }}
+              >
+                SPI PERFORMANCE INDEX BY CAMPUS
+              </div>
 
-          {/* Right Column: Standings List */}
-          <div style={{ minWidth: 0, width: '100%' }}>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: '0.8px',
-                textTransform: 'uppercase',
-                color: '#64748b',
-                marginBottom: 16,
-              }}
-            >
-              NATIONAL OPERATIONAL COMPLIANCE STANDINGS
+              <div style={{ width: '100%', height: 280, minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={displayData}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                    barGap={4}
+                  >
+                    <XAxis
+                      dataKey="city"
+                      axisLine={{ stroke: '#cbd5e1' }}
+                      tickLine={false}
+                      tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }}
+                      dy={8}
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      ticks={[0, 25, 50, 75, 100]}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                    />
+                    <Tooltip content={<CustomBarTooltip />} />
+                    <Bar
+                      dataKey="academicSpi"
+                      name="Aggregate Academic SPI %"
+                      fill="#6366f1"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={28}
+                    />
+                    <Bar
+                      dataKey="dailyAttendance"
+                      name="Daily Attendance %"
+                      fill="#0ea5e9"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={28}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {displayData.slice(0, 5).map((divItem) => (
-                <div key={divItem.city} className="standing-row-card">
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 800,
-                        color: '#0f172a',
-                        letterSpacing: '-0.2px',
-                      }}
-                    >
-                      {divItem.divisionName}
+            {/* Right Column: Standings List */}
+            <div style={{ minWidth: 0, width: '100%' }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.8px',
+                  textTransform: 'uppercase',
+                  color: '#64748b',
+                  marginBottom: 16,
+                }}
+              >
+                CAMPUS OPERATIONAL COMPLIANCE STANDINGS
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {displayData.slice(0, 5).map((divItem) => (
+                  <div key={divItem.divisionName} className="standing-row-card">
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 800,
+                          color: '#0f172a',
+                          letterSpacing: '-0.2px',
+                        }}
+                      >
+                        {divItem.divisionName}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: '0.6px',
+                          textTransform: 'uppercase',
+                          color: '#64748b',
+                          marginTop: 2,
+                        }}
+                      >
+                        {divItem.campusesCount} {divItem.campusesCount === 1 ? 'CAMPUS' : 'CAMPUSES'} GOVERNED
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: '0.6px',
-                        textTransform: 'uppercase',
-                        color: '#64748b',
-                        marginTop: 2,
-                      }}
-                    >
-                      {divItem.campusesCount} CAMPUSES GOVERNED
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 900,
+                          color: '#0f172a',
+                          letterSpacing: '-0.2px',
+                        }}
+                      >
+                        {divItem.academicSpi.toFixed(1)}% Average SPI
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          letterSpacing: '0.5px',
+                          textTransform: 'uppercase',
+                          color: '#2563eb',
+                          marginTop: 2,
+                        }}
+                      >
+                        {divItem.dailyAttendance.toFixed(1)}% ATTENDANCE CONSISTENCY
+                      </div>
                     </div>
                   </div>
-
-                  <div style={{ textAlign: 'right' }}>
-                    <div
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 900,
-                        color: '#0f172a',
-                        letterSpacing: '-0.2px',
-                      }}
-                    >
-                      {divItem.academicSpi.toFixed(1)}% Average SPI
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 800,
-                        letterSpacing: '0.5px',
-                        textTransform: 'uppercase',
-                        color: '#2563eb',
-                        marginTop: 2,
-                      }}
-                    >
-                      {divItem.dailyAttendance.toFixed(1)}% ATTENDANCE CONSISTENCY
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -430,8 +430,10 @@ def student_voucher_create(request):
                 defaults={'amount_due': monthly_fee, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
             )
             v_m.amount_due = monthly_fee
-            v_m.save(update_fields=['amount_due'])
+            v_m.due_date = due_date
+            v_m.save(update_fields=['amount_due', 'due_date'])
             created_vouchers.append(v_m)
+            StudentFee.objects.filter(student=student, head=head_m, status='unpaid').exclude(pk=v_m.pk).update(amount_due=monthly_fee, due_date=due_date)
             if sc and sc.academic_year:
                 FeeStructure.objects.update_or_create(
                     school=student.school, academic_year=sc.academic_year, school_class=sc, head=head_m,
@@ -446,9 +448,12 @@ def student_voucher_create(request):
                 defaults={'amount_due': admission_fee, 'discount': Decimal('0.00'), 'status': 'waived' if is_waived else 'unpaid', 'due_date': due_date}
             )
             v_a.amount_due = admission_fee
+            v_a.due_date = due_date
             if is_waived:
                 v_a.status = 'waived'
-            v_a.save(update_fields=['amount_due', 'status'])
+            elif v_a.status == 'waived' and admission_fee > Decimal('0.00'):
+                v_a.status = 'unpaid'
+            v_a.save(update_fields=['amount_due', 'due_date', 'status'])
             created_vouchers.append(v_a)
 
             # 3. Annual Fee (Optional)
@@ -459,7 +464,8 @@ def student_voucher_create(request):
                     defaults={'amount_due': annual_fee, 'discount': Decimal('0.00'), 'status': 'unpaid', 'due_date': due_date}
                 )
                 v_ann.amount_due = annual_fee
-                v_ann.save(update_fields=['amount_due'])
+                v_ann.due_date = due_date
+                v_ann.save(update_fields=['amount_due', 'due_date'])
                 created_vouchers.append(v_ann)
                 if sc and sc.academic_year:
                     FeeStructure.objects.update_or_create(
@@ -617,6 +623,61 @@ def student_voucher_create(request):
         'payment_id': payment.id if payment else None,
         'receipt_number': payment.receipt_number if payment else None
     }, status=201 if created else 200)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+def voucher_detail(request, pk):
+    user = request.user
+    _require_manager(user)
+    school_ids = resolve_campus(request)
+    voucher = StudentFee.objects.filter(pk=pk, student__school_id__in=school_ids).select_related('student', 'head').first()
+    if not voucher:
+        raise NotFound('Voucher not found or outside your scope.')
+    if request.method == 'GET':
+        return Response({
+            'id': voucher.id,
+            'student_id': voucher.student_id,
+            'student_name': voucher.student.full_name,
+            'head_id': voucher.head_id,
+            'head_name': voucher.head.name,
+            'period': voucher.period,
+            'amount_due': str(voucher.amount_due),
+            'discount': str(voucher.discount),
+            'net_due': str(voucher.net_due),
+            'status': voucher.status,
+            'due_date': str(voucher.due_date),
+        })
+    if request.method == 'DELETE':
+        if voucher.status == 'paid':
+            raise ValidationError({'detail': 'Paid vouchers cannot be deleted. Void or refund payment first.'})
+        voucher.delete()
+        return Response({'success': True, 'detail': 'Voucher deleted successfully.'})
+    # PATCH
+    data = request.data
+    update_fields = []
+    if 'amount_due' in data:
+        voucher.amount_due = _money(data['amount_due'], 'amount_due', allow_zero=True)
+        update_fields.append('amount_due')
+    if 'discount' in data:
+        voucher.discount = _money(data['discount'], 'discount', allow_zero=True)
+        update_fields.append('discount')
+    if 'due_date' in data and data['due_date']:
+        voucher.due_date = date.fromisoformat(str(data['due_date']))
+        update_fields.append('due_date')
+    if 'status' in data and data['status'] in ('unpaid', 'waived', 'void'):
+        voucher.status = data['status']
+        update_fields.append('status')
+    if update_fields:
+        voucher.save(update_fields=update_fields)
+        record_event(actor=user, action='update', obj=voucher)
+    return Response({
+        'id': voucher.id,
+        'amount_due': str(voucher.amount_due),
+        'discount': str(voucher.discount),
+        'net_due': str(voucher.net_due),
+        'status': voucher.status,
+        'due_date': str(voucher.due_date),
+    })
 
 
 # ------------------------------------------------------------------ Student Ledger

@@ -1058,6 +1058,9 @@ function App() {
   const [dueDateMode, setDueDateMode] = useState<'standard' | 'custom'>('standard');
   const [customDueDate, setCustomDueDate] = useState<string>('');
   const [dynamicCharges, setDynamicCharges] = useState<Array<{ id: string; name: string; amount: string }>>([]);
+  const [editDueDateMode, setEditDueDateMode] = useState<'standard' | 'custom'>('standard');
+  const [editCustomDueDate, setEditCustomDueDate] = useState<string>('');
+  const [editDynamicCharges, setEditDynamicCharges] = useState<Array<{ id: string; name: string; amount: string }>>([]);
   const [setupSchool, setSetupSchool] = useState<number | null>(null);
   const [refData, setRefData] = useState<{
     schools: Array<{ id: number; name: string }>;
@@ -1642,6 +1645,70 @@ function App() {
         : [];
       setSubjectAssignedClasses(assigned);
     }
+    if (page === 'Students') {
+      setEditDueDateMode('standard');
+      setEditCustomDueDate(new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10));
+      setEditDynamicCharges([]);
+      initial.monthly_fee = '';
+      initial.admission_fee = '0';
+      initial.annual_fee = '';
+      initial.extra_charges = '';
+      initial.extra_charges_reason = '';
+
+      request<{ fee_lines?: any[] }>(`fees/ledger/${r.id}/`).then(ledger => {
+        if (ledger && Array.isArray(ledger.fee_lines)) {
+          let foundMonthly = false;
+          let foundAdmission = false;
+          let foundAnnual = false;
+          const dynCharges: Array<{ id: string; name: string; amount: string }> = [];
+
+          for (const line of ledger.fee_lines) {
+            const hName = (line.head_name || '').toLowerCase();
+            const amtStr = String(line.amount_due || '0');
+            if (line.due_date) {
+              setEditCustomDueDate(line.due_date);
+              setEditDueDateMode('custom');
+            }
+            if (!foundMonthly && (hName.includes('monthly') || hName.includes('tuition'))) {
+              foundMonthly = true;
+              setEditForm(prev => ({ ...prev, monthly_fee: amtStr }));
+            } else if (!foundAdmission && hName.includes('admission')) {
+              foundAdmission = true;
+              setEditForm(prev => ({ ...prev, admission_fee: amtStr }));
+            } else if (!foundAnnual && hName.includes('annual')) {
+              foundAnnual = true;
+              setEditForm(prev => ({ ...prev, annual_fee: amtStr }));
+            } else if (hName.includes('extra')) {
+              const parts = (line.head_name || '').split(' - ');
+              setEditForm(prev => ({
+                ...prev,
+                extra_charges: amtStr,
+                extra_charges_reason: parts[1] || 'Extra charges'
+              }));
+            } else {
+              dynCharges.push({
+                id: String(line.id || Math.random().toString(36).slice(2)),
+                name: line.head_name || 'Fee Head',
+                amount: amtStr
+              });
+            }
+          }
+          if (dynCharges.length > 0) {
+            setEditDynamicCharges(dynCharges);
+          }
+          const classId = (r as any).school_class_id || (r as any).school_class;
+          if (!foundMonthly && classId) {
+            request<{ results?: any[] }>(`fees/structures/?school_class=${classId}`).then(st => {
+              const res = st?.results || (Array.isArray(st) ? st : []);
+              const mStruct = res.find((s: any) => (s.head_name || '').toLowerCase().includes('monthly') || (s.head_name || '').toLowerCase().includes('tuition'));
+              if (mStruct) {
+                setEditForm(prev => ({ ...prev, monthly_fee: String(mStruct.amount) }));
+              }
+            }).catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    }
     setEditForm(initial);
     setEditModal(true);
   };
@@ -1664,7 +1731,71 @@ function App() {
       if (page === 'Subjects') {
         data.classes = subjectAssignedClasses;
       }
+      if (page === 'Students') {
+        const selectedCampus = editForm.school || (user?.school ? String(user.school) : (activeCampusId ? String(activeCampusId) : ''));
+        if (!selectedCampus) {
+          notify('Please select a campus.');
+          setSaving(false);
+          return;
+        }
+        data.school = Number(selectedCampus);
+
+        if (!editForm.school_class) {
+          notify('Class is mandatory. Please select a class.');
+          setSaving(false);
+          return;
+        }
+        data.school_class = Number(editForm.school_class);
+
+        if (!editForm.monthly_fee || Number(editForm.monthly_fee) <= 0) {
+          notify('Monthly tuition fee is mandatory and must be greater than zero.');
+          setSaving(false);
+          return;
+        }
+
+        const admFeeStr = editForm.admission_fee !== undefined ? String(editForm.admission_fee).trim() : '';
+        if (admFeeStr === '') {
+          notify('Enter the admission fee (0 if there is none)');
+          setSaving(false);
+          return;
+        }
+        const admFeeNum = Number(admFeeStr);
+        if (isNaN(admFeeNum) || admFeeNum < 0) {
+          notify('Fee cannot be negative');
+          setSaving(false);
+          return;
+        }
+
+        if (editForm.extra_charges && Number(editForm.extra_charges) > 0 && !editForm.extra_charges_reason?.trim()) {
+          notify('Please provide a reason for the extra charges.');
+          setSaving(false);
+          return;
+        }
+      }
       await update(config.api, editingRecord.id, data);
+      if (page === 'Students') {
+        try {
+          await request('fees/student-voucher/', {
+            method: 'POST',
+            body: JSON.stringify({
+              student: editingRecord.id,
+              monthly_fee: Number(editForm.monthly_fee || 0),
+              admission_fee: Number(editForm.admission_fee !== undefined ? editForm.admission_fee : 0),
+              annual_fee: editForm.annual_fee ? Number(editForm.annual_fee) : 0,
+              extra_charges: editForm.extra_charges ? Number(editForm.extra_charges) : 0,
+              extra_charges_reason: editForm.extra_charges_reason || '',
+              custom_charges: editDynamicCharges
+                .filter(c => c.name.trim() && Number(c.amount) > 0)
+                .map(c => ({ name: c.name.trim(), amount: Number(c.amount) })),
+              due_date: editDueDateMode === 'custom' && editCustomDueDate ? editCustomDueDate : undefined,
+              school_class: Number(editForm.school_class || (editingRecord as any).school_class_id || (editingRecord as any).school_class),
+              reference: `CHALLAN-${(editingRecord as any).admission_number || editingRecord.id}`
+            })
+          });
+        } catch (feeErr) {
+          console.error('Update student fee error:', feeErr);
+        }
+      }
       setEditModal(false);
       setEditingRecord(null);
       notify('Record updated successfully');
@@ -4520,6 +4651,224 @@ function App() {
                     })()}
                   </div>
                 )}
+                {page === 'Students' && (
+                  <>
+                    <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e2e8f0', marginTop: 12, paddingTop: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Receipt size={18} color="#6366f1" />
+                        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#1e293b' }}>
+                          Fee Billing & Challan Information
+                        </h4>
+                      </div>
+                      <p style={{ margin: '0 0 14px 0', fontSize: 12, color: '#64748b' }}>
+                        Modify monthly tuition fee rate, admission charges, annual fee, and due dates.
+                      </p>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                        <label>
+                          Monthly Tuition Fee (Rs) <span className="required">*</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="1"
+                            required
+                            placeholder="e.g. 5000 (Mandatory > 0)"
+                            value={editForm.monthly_fee || ''}
+                            onChange={e => setEditForm(s => ({ ...s, monthly_fee: e.target.value }))}
+                          />
+                        </label>
+
+                        <label>
+                          New Admission Fee (Rs) <span className="required">*</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            required
+                            placeholder="e.g. 5000 (0 if free / waived)"
+                            value={editForm.admission_fee !== undefined ? editForm.admission_fee : ''}
+                            onChange={e => setEditForm(s => ({ ...s, admission_fee: e.target.value }))}
+                          />
+                        </label>
+
+                        <label>
+                          Annual Fee (Rs) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="e.g. 2500 (Optional)"
+                            value={editForm.annual_fee || ''}
+                            onChange={e => setEditForm(s => ({ ...s, annual_fee: e.target.value }))}
+                          />
+                        </label>
+
+                        <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                            Extra Charges & Miscellaneous (Optional)
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 10 }}>
+                            <label style={{ margin: 0 }}>
+                              Extra Amount (Rs)
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="e.g. 1500"
+                                value={editForm.extra_charges || ''}
+                                onChange={e => setEditForm(s => ({ ...s, extra_charges: e.target.value }))}
+                              />
+                            </label>
+                            <label style={{ margin: 0 }}>
+                              Reason for Extra Charges {Number(editForm.extra_charges) > 0 && <span className="required">*</span>}
+                              <input
+                                type="text"
+                                placeholder="e.g. Uniform, Lab Security, Registration Books…"
+                                value={editForm.extra_charges_reason || ''}
+                                onChange={e => setEditForm(s => ({ ...s, extra_charges_reason: e.target.value }))}
+                                required={Number(editForm.extra_charges) > 0}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Due Date Options */}
+                        <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 10 }}>
+                            Fee Due Date Option
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: editDueDateMode === 'custom' ? 12 : 0 }}>
+                            <label style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              margin: 0,
+                              padding: '10px 14px',
+                              borderRadius: 8,
+                              border: editDueDateMode === 'standard' ? '1.5px solid #6366f1' : '1px solid #cbd5e1',
+                              background: editDueDateMode === 'standard' ? '#eef2ff' : '#ffffff',
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: editDueDateMode === 'standard' ? '#4338ca' : '#475569'
+                            }}>
+                              <input
+                                type="radio"
+                                name="edit_due_date_mode"
+                                value="standard"
+                                checked={editDueDateMode === 'standard'}
+                                onChange={() => setEditDueDateMode('standard')}
+                                style={{ width: 16, height: 16, margin: 0, padding: 0, flexShrink: 0, cursor: 'pointer' }}
+                              />
+                              <span>Standard (Default 10 days)</span>
+                            </label>
+                            <label style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              margin: 0,
+                              padding: '10px 14px',
+                              borderRadius: 8,
+                              border: editDueDateMode === 'custom' ? '1.5px solid #6366f1' : '1px solid #cbd5e1',
+                              background: editDueDateMode === 'custom' ? '#eef2ff' : '#ffffff',
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: editDueDateMode === 'custom' ? '#4338ca' : '#475569'
+                            }}>
+                              <input
+                                type="radio"
+                                name="edit_due_date_mode"
+                                value="custom"
+                                checked={editDueDateMode === 'custom'}
+                                onChange={() => setEditDueDateMode('custom')}
+                                style={{ width: 16, height: 16, margin: 0, padding: 0, flexShrink: 0, cursor: 'pointer' }}
+                              />
+                              <span>Custom due date for this student</span>
+                            </label>
+                          </div>
+                          {editDueDateMode === 'custom' && (
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
+                              <label style={{ margin: 0, maxWidth: 220, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                                <span>Custom Due Date <span className="required" style={{ color: '#ef4444' }}>*</span></span>
+                                <input
+                                  type="date"
+                                  required={editDueDateMode === 'custom'}
+                                  value={editCustomDueDate}
+                                  onChange={e => setEditCustomDueDate(e.target.value)}
+                                  style={{ width: '100%', marginTop: 0 }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Dynamic Custom Charges */}
+                        <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                              Additional Fee Categories
+                            </div>
+                            <button
+                              type="button"
+                              className="outline-btn"
+                              style={{ fontSize: 12, padding: '4px 10px', height: 'auto', gap: 4 }}
+                              onClick={() => setEditDynamicCharges(prev => [...prev, { id: Math.random().toString(36).slice(2), name: '', amount: '' }])}
+                            >
+                              <Plus size={13} /> Add Fee Item
+                            </button>
+                          </div>
+
+                          {editDynamicCharges.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                              {editDynamicCharges.map((charge, idx) => (
+                                <div key={charge.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 36px', gap: 8, alignItems: 'center' }}>
+                                  <input
+                                    type="text"
+                                    placeholder="Charge category name (e.g. Science Lab, Sports)"
+                                    value={charge.name}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setEditDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, name: val } : item));
+                                    }}
+                                  />
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="Amount (Rs)"
+                                    value={charge.amount}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setEditDynamicCharges(prev => prev.map((item, i) => i === idx ? { ...item, amount: val } : item));
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditDynamicCharges(prev => prev.filter((_, i) => i !== idx))}
+                                    style={{
+                                      background: '#fee2e2',
+                                      color: '#dc2626',
+                                      border: 'none',
+                                      borderRadius: 8,
+                                      height: 38,
+                                      display: 'grid',
+                                      placeItems: 'center',
+                                      cursor: 'pointer'
+                                    }}
+                                    title="Remove charge"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="outline-btn" onClick={() => setEditModal(false)}>Cancel</button>
@@ -4544,9 +4893,55 @@ function App() {
             </div>
             <div style={{ padding: '20px 24px' }}>
               <div style={{ fontSize: 13, color: '#475569', marginBottom: 14, lineHeight: 1.5 }}>
-                Please select a specific campus to open <b>{campusPromptModal.cardLabel}</b>:
+                Please select a campus or choose All Campuses to open <b>{campusPromptModal.cardLabel}</b>:
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
+                {/* All Campuses Option */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveCampusId(null);
+                    localStorage.removeItem('optimus_active_campus_id');
+                    setCampusPromptModal(null);
+                    notify('Showing data across all campuses');
+                    switchPage(campusPromptModal.targetPage);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 18px',
+                    background: activeCampusId === null ? '#eff6ff' : '#f8fafc',
+                    border: activeCampusId === null ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 10,
+                      background: '#e0e7ff',
+                      border: '1px solid #c7d2fe',
+                      color: '#4338ca',
+                      display: 'grid',
+                      placeItems: 'center'
+                    }}>
+                      <Building2 size={18} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>All Campuses</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                        Network-wide aggregated view • Across all {campuses.length} branches
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} color="#94a3b8" />
+                </button>
+
                 {campuses.map(c => (
                   <button
                     key={c.id}
@@ -5346,10 +5741,10 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
 
   const sortedSchools = useMemo(() => {
     return [...schools].sort((a: any, b: any) => {
-      const gradeA = a.academic_average != null ? Number(a.academic_average) : (a.grade_alert_threshold != null ? Number(a.grade_alert_threshold) : 75);
-      const gradeB = b.academic_average != null ? Number(b.academic_average) : (b.grade_alert_threshold != null ? Number(b.grade_alert_threshold) : 75);
-      const attA = a.attendance_rate != null ? Number(a.attendance_rate) : (a.attendance_alert_threshold != null ? Number(a.attendance_alert_threshold) : 80);
-      const attB = b.attendance_rate != null ? Number(b.attendance_rate) : (b.attendance_alert_threshold != null ? Number(b.attendance_alert_threshold) : 80);
+      const gradeA = a.academic_average != null ? Number(a.academic_average) : 0;
+      const gradeB = b.academic_average != null ? Number(b.academic_average) : 0;
+      const attA = a.attendance_rate != null ? Number(a.attendance_rate) : 0;
+      const attB = b.attendance_rate != null ? Number(b.attendance_rate) : 0;
       const scoreA = (gradeA * 0.55) + (attA * 0.45);
       const scoreB = (gradeB * 0.55) + (attB * 0.45);
       if (Math.abs(scoreB - scoreA) > 0.01) return scoreB - scoreA;
@@ -5567,18 +5962,18 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
               </thead>
               <tbody>
                 {sortedSchools.map((s: any) => {
-                  const grade = s.academic_average != null ? Number(s.academic_average) : (s.grade_alert_threshold != null ? Number(s.grade_alert_threshold) : 75.0);
-                  const attendance = s.attendance_rate != null ? Number(s.attendance_rate) : (s.attendance_alert_threshold != null ? Number(s.attendance_alert_threshold) : 80.0);
+                  const grade = s.academic_average != null ? Number(s.academic_average) : 0;
+                  const attendance = s.attendance_rate != null ? Number(s.attendance_rate) : 0;
                   return (
                     <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '12px', fontWeight: 800, color: '#0f172a' }}>{s.name}</td>
                       <td style={{ padding: '12px', color: '#475569' }}>{s.city || 'Central Sector'}</td>
                       <td style={{ padding: '12px' }}><span className="campus-code">{s.code}</span></td>
-                      <td style={{ padding: '12px', color: '#1e293b', fontWeight: 600 }}>{s.principal_name || `Admin-ID-${1000 + Number(s.id)}`}</td>
+                      <td style={{ padding: '12px', color: '#1e293b', fontWeight: 600 }}>{s.principal_name || 'Unassigned'}</td>
                       <td style={{ padding: '12px', fontWeight: 700 }}>{Number(s.total_students) || 0} Learners</td>
-                      <td style={{ padding: '12px' }}>{Number(s.total_employees) || 1} Educators</td>
+                      <td style={{ padding: '12px' }}>{Number(s.total_employees) || 0} Educators</td>
                       <td style={{ padding: '12px', fontWeight: 800, color: '#4f46e5' }}>{grade.toFixed(1)}%</td>
-                      <td style={{ padding: '12px', fontWeight: 700, color: attendance >= 80 ? '#16a34a' : '#d97706' }}>{Math.round(attendance)}%</td>
+                      <td style={{ padding: '12px', fontWeight: 700, color: attendance >= 80 ? '#16a34a' : (attendance > 0 ? '#d97706' : '#64748b') }}>{Math.round(attendance)}%</td>
                     </tr>
                   );
                 })}
@@ -5636,13 +6031,13 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
             const cPhone = String(cfg.contact_phone || '');
             const cTz = String(s.timezone || '');
 
-            const grade = s.academic_average != null ? Number(s.academic_average) : (s.grade_alert_threshold != null ? Number(s.grade_alert_threshold) : 75.0);
-            const attendance = s.attendance_rate != null ? Number(s.attendance_rate) : (s.attendance_alert_threshold != null ? Number(s.attendance_alert_threshold) : 80.0);
+            const grade = s.academic_average != null ? Number(s.academic_average) : 0;
+            const attendance = s.attendance_rate != null ? Number(s.attendance_rate) : 0;
             const sectorName = s.city ? `${String(s.city).toUpperCase()} SECTOR` : `${String(s.name || 'CAMPUS').toUpperCase()} SECTOR`;
-            const principalDisplay = s.principal_name || `Admin-ID-${1000 + sid}`;
-            const facultyCount = Number(s.total_employees) || 1;
+            const principalDisplay = s.principal_name || 'Unassigned';
+            const facultyCount = Number(s.total_employees) || 0;
             const studentCount = Number(s.total_students) || 0;
-            const streamName = (cfg.stream as string) || (i % 2 === 0 ? 'SCIENCES' : 'GENERAL / ARTS');
+            const streamName = (cfg.stream as string) || 'GENERAL / ALL';
             const petalColor = (i % 4 === 3 || i % 4 === 2) ? '#f97316' : '#ef4444';
 
             return (
@@ -5660,12 +6055,12 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
                     <span
                       className="campus-pill-health"
                       style={{
-                        background: attendance >= 80 ? '#fef2f2' : '#fffbeb',
-                        color: attendance >= 80 ? '#dc2626' : '#d97706',
-                        border: `1px solid ${attendance >= 80 ? '#fecaca' : '#fde68a'}`
+                        background: attendance >= 80 ? '#fef2f2' : (attendance > 0 ? '#fffbeb' : '#f1f5f9'),
+                        color: attendance >= 80 ? '#dc2626' : (attendance > 0 ? '#d97706' : '#64748b'),
+                        border: `1px solid ${attendance >= 80 ? '#fecaca' : (attendance > 0 ? '#fde68a' : '#e2e8f0')}`
                       }}
                     >
-                      {Math.round(attendance)}% HEALTH INDEX
+                      {attendance > 0 ? `${Math.round(attendance)}% HEALTH INDEX` : '0% HEALTH INDEX'}
                     </span>
                   </div>
                 </div>
@@ -5695,7 +6090,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
                     <span className="campus-ops-spi-val">{grade.toFixed(1)}%</span>
                   </div>
                   <div className="campus-ops-spi-track">
-                    <div className="campus-ops-spi-bar" style={{ width: `${Math.min(100, Math.max(5, grade))}%` }} />
+                    <div className="campus-ops-spi-bar" style={{ width: `${Math.min(100, Math.max(0, grade))}%` }} />
                   </div>
                 </div>
 

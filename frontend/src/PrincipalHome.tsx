@@ -252,7 +252,15 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
       </div>
 
       {/* SS1 Longitudinal Performance Trends */}
-      <LongitudinalPerformanceTrends />
+      <LongitudinalPerformanceTrends
+        campuses={data?.campus ? [{
+          id: data.campus.id,
+          name: data.campus.name,
+          city: data.campus.city,
+          academic_average: kpi?.academic_average,
+          attendance_rate: kpi?.today_attendance_rate,
+        }] : []}
+      />
 
       {/* Needs Attention Panel */}
       <div className="panel" style={{ background: 'var(--card-bg, #fff)', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)', padding: '1.5rem' }}>
