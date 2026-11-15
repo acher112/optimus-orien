@@ -423,17 +423,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
               </button>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', width: '100%', maxWidth: '100%' }}>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '100%' }}>
                 {/* Campus Filter (Org Admin) */}
                 {schools.length > 1 && user.role === 'organisation_admin' && (
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569', maxWidth: '100%' }}>
                     CAMPUS:
                     <select
                       className="fx-select"
                       value={schoolId}
                       onChange={e => setSchoolId(e.target.value)}
-                      style={{ height: 38, padding: '4px 10px', fontSize: '0.88rem', borderRadius: 8 }}
+                      style={{ height: 38, padding: '4px 10px', fontSize: '0.88rem', borderRadius: 8, maxWidth: '100%', boxSizing: 'border-box' }}
                     >
                       {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
@@ -441,13 +441,13 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 )}
 
                 {/* Class Selector Filter (e.g. Class 9th, 10th, etc.) */}
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569', maxWidth: '100%' }}>
                   CLASSROOM:
                   <select
                     className="fx-select"
                     value={selectedClassId}
                     onChange={e => setSelectedClassId(e.target.value)}
-                    style={{ height: 38, padding: '4px 10px', fontSize: '0.88rem', borderRadius: 8, minWidth: 200, fontWeight: 700 }}
+                    style={{ height: 38, padding: '4px 10px', fontSize: '0.88rem', borderRadius: 8, minWidth: 160, maxWidth: '100%', fontWeight: 700, boxSizing: 'border-box' }}
                   >
                     {classes.map(c => (
                       <option key={c.id} value={c.id}>
@@ -459,34 +459,36 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 </label>
 
                 {/* Date Filter */}
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569', maxWidth: '100%' }}>
                   ATTENDANCE DATE:
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
                     <input
                       type="date"
                       className="fx-select"
                       value={dateVal}
                       onChange={e => setDateVal(e.target.value)}
-                      style={{ height: 38, padding: '4px 10px', fontSize: '0.88rem', borderRadius: 8 }}
+                      style={{ height: 38, padding: '4px 8px', fontSize: '0.85rem', borderRadius: 8, flex: '1 1 120px', minWidth: 115, maxWidth: '100%', boxSizing: 'border-box' }}
                     />
-                    <button
-                      type="button"
-                      className="outline-btn"
-                      onClick={() => setQuickDate(0)}
-                      style={{ height: 38, padding: '0 10px', fontSize: '0.8rem' }}
-                      title="Today's attendance"
-                    >
-                      Today
-                    </button>
-                    <button
-                      type="button"
-                      className="outline-btn"
-                      onClick={() => setQuickDate(1)}
-                      style={{ height: 38, padding: '0 10px', fontSize: '0.8rem' }}
-                      title="Yesterday's attendance"
-                    >
-                      Yesterday
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        onClick={() => setQuickDate(0)}
+                        style={{ height: 38, padding: '0 9px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                        title="Today's attendance"
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        onClick={() => setQuickDate(1)}
+                        style={{ height: 38, padding: '0 9px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                        title="Yesterday's attendance"
+                      >
+                        Yesterday
+                      </button>
+                    </div>
                   </div>
                 </label>
               </div>

@@ -530,7 +530,7 @@ export default function Examinations({
         </div>
         <div className="fx-filters">
           {!isSingleCampusRole ? (
-            <label>Campus
+            <label className="fx-filter-item">Campus
               <select
                 className="fx-select"
                 value={activeCampusId || ''}
@@ -552,7 +552,7 @@ export default function Examinations({
             </div>
           )}
 
-          <label>Configuration
+          <label className="fx-filter-item">Configuration
             <select
               className="fx-select"
               value={selectedConfigId || ''}
@@ -571,14 +571,17 @@ export default function Examinations({
               ))}
             </select>
           </label>
-          {isManager && (
-            <button className="primary-btn" onClick={() => setConfigModal(true)} title="Create new examination structure">
-              <Plus size={14} /> New Structure
+
+          <div className="fx-filter-actions">
+            {isManager && (
+              <button className="primary-btn" onClick={() => setConfigModal(true)} title="Create new examination structure">
+                <Plus size={14} /> New Structure
+              </button>
+            )}
+            <button className="outline-btn" onClick={() => setBump(b => b + 1)} title="Refresh data">
+              <RefreshCw size={15} /> Refresh
             </button>
-          )}
-          <button className="outline-btn" onClick={() => setBump(b => b + 1)} title="Refresh data">
-            <RefreshCw size={15} /> Refresh
-          </button>
+          </div>
         </div>
       </div>
 
@@ -628,13 +631,13 @@ export default function Examinations({
               <p style={{ maxWidth: 520, margin: '0 auto 24px', color: '#64748b', fontSize: 14, lineHeight: 1.6 }}>
                 Create your school's examination structure to configure term weightages (summing to 100%), subject maximum marks, and start recording marks with automated analytics.
               </p>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <div className="exam-empty-actions" style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
                 {isManager && (
-                  <button className="primary-btn" onClick={() => setConfigModal(true)}>
+                  <button className="primary-btn" onClick={() => setConfigModal(true)} style={{ maxWidth: '100%', boxSizing: 'border-box' }}>
                     <Plus size={16} /> Create Examination Structure
                   </button>
                 )}
-                <button className="outline-btn" onClick={() => setTab('configurations')}>
+                <button className="outline-btn" onClick={() => setTab('configurations')} style={{ maxWidth: '100%', boxSizing: 'border-box' }}>
                   View Examination Structures
                 </button>
               </div>

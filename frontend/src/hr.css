@@ -52,10 +52,13 @@
   .panel-head > div:last-child{width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .panel-head > div:last-child .outline-btn,.panel-head > div:last-child .primary-btn,.panel-head > div:last-child .export-menu-container{flex:1;min-width:120px}
   .panel-head > div:last-child .outline-btn,.panel-head > div:last-child .primary-btn{width:100%;justify-content:center}
-  .page-header .fx-filters{width:100%;display:flex;align-items:flex-end !important;gap:8px}
-  .page-header .fx-filters label{flex:1;min-width:0}
-  .page-header .fx-filters label .fx-select{width:100%}
-  .page-header .fx-filters .outline-btn,.page-header .fx-filters .primary-btn,.page-header .fx-filters .export-menu-container{flex-shrink:0}
+  .page-header .fx-filters{width:100% !important;display:flex !important;flex-direction:column !important;align-items:stretch !important;gap:10px !important}
+  .page-header .fx-filters label,.page-header .fx-filters .fx-filter-item{width:100% !important;min-width:100% !important;flex:1 1 100% !important;box-sizing:border-box !important}
+  .page-header .fx-filters label .fx-select,.page-header .fx-filters .fx-filter-item .fx-select{width:100% !important;min-width:100% !important;box-sizing:border-box !important}
+  .page-header .fx-filters .fx-filter-actions,.page-header .fx-filters > div:last-child{display:flex !important;align-items:center !important;gap:8px !important;width:100% !important;flex-wrap:wrap !important}
+  .page-header .fx-filters .fx-filter-actions .primary-btn,.page-header .fx-filters .fx-filter-actions .outline-btn,.page-header .fx-filters .outline-btn,.page-header .fx-filters .primary-btn,.page-header .fx-filters .export-menu-container{flex:1 1 120px !important;justify-content:center !important;white-space:nowrap !important;max-width:100% !important;box-sizing:border-box !important}
+  .exam-empty-actions{flex-direction:column !important;align-items:stretch !important}
+  .exam-empty-actions .primary-btn,.exam-empty-actions .outline-btn{width:100% !important;justify-content:center !important;box-sizing:border-box !important}
   .fx-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;flex-wrap:nowrap}
   .fx-tabs button{flex-shrink:0;white-space:nowrap}
 }
