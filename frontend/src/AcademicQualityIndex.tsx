@@ -463,11 +463,11 @@ export default function AcademicQualityIndex({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: '100%', maxWidth: '100%' }}>
           {/* Admin Global Campus Filter */}
           {isOrgAdmin && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Campus:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 240px', maxWidth: '100%', boxSizing: 'border-box' }}>
+              <span style={{ fontSize: 13, color: '#475569', fontWeight: 600, flexShrink: 0 }}>Campus:</span>
               <select
                 value={currentLevel === 1 ? 'all' : (selectedSchoolId || '')}
                 onChange={(e) => {
@@ -489,7 +489,11 @@ export default function AcademicQualityIndex({
                   background: '#fff',
                   fontSize: 13,
                   fontWeight: 500,
-                  color: '#1e293b'
+                  color: '#1e293b',
+                  flex: '1 1 auto',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box'
                 }}
               >
                 <option value="all">🌐 All Campuses</option>

@@ -26,6 +26,7 @@
 .fx-filters > *{margin:0}
 .fx-filters .outline-btn,.fx-filters .primary-btn,.fx-filters .export-trigger-btn{height:38px !important;min-height:38px !important;max-height:38px !important;box-sizing:border-box !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;vertical-align:middle !important}
 .fx-select{height:38px !important;min-height:38px !important;max-height:38px !important;box-sizing:border-box !important;padding:0 12px !important;border:1px solid #e4e7f0;border-radius:9px;background:#fff;color:#3c435c;font-size:12px;font-family:inherit}
+.fx-select.search-input-with-icon, input.fx-select.search-input-with-icon{padding-left:38px !important}
 .fx-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
 .fx-tabs button{display:inline-flex;align-items:center;gap:7px;border:1px solid #e7e8f0;background:#fff;color:#6c7489;border-radius:10px;padding:10px 14px;font-weight:800;font-size:12px}
 .fx-tabs button.on{background:#f0edff;border-color:#cfc6ff;color:#6a55e0}
@@ -50,8 +51,8 @@
 @media(max-width:640px){
   .panel-head{padding:14px 16px;flex-direction:column !important;align-items:flex-start !important;gap:12px !important}
   .panel-head > div:last-child{width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .panel-head > div:last-child .outline-btn,.panel-head > div:last-child .primary-btn,.panel-head > div:last-child .export-menu-container{flex:1;min-width:120px}
-  .panel-head > div:last-child .outline-btn,.panel-head > div:last-child .primary-btn{width:100%;justify-content:center}
+  .panel-head > div:last-child .outline-btn,.panel-head > div:last-child .primary-btn,.panel-head > div:last-child .export-menu-container{width:100% !important;min-width:100% !important;flex:1 1 100% !important;box-sizing:border-box !important;justify-content:center !important}
+  .panel-head > div:last-child .export-trigger-btn{width:100% !important;justify-content:center !important}
   .page-header .fx-filters{width:100% !important;display:flex !important;flex-direction:column !important;align-items:stretch !important;gap:10px !important}
   .page-header .fx-filters label,.page-header .fx-filters .fx-filter-item{width:100% !important;min-width:100% !important;flex:1 1 100% !important;box-sizing:border-box !important}
   .page-header .fx-filters label .fx-select,.page-header .fx-filters .fx-filter-item .fx-select{width:100% !important;min-width:100% !important;box-sizing:border-box !important}

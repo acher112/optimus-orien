@@ -310,19 +310,22 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
       )}
 
       {/* 2. ONLY 2 PLANS DETAILS (Standard & Premium) as Requested */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 20 }}>
 
         {/* 1. STANDARD PLAN CARD */}
         <div
           style={{
             backgroundColor: '#ffffff',
             borderRadius: 18,
-            padding: '28px 24px',
+            padding: 'clamp(20px, 4vw, 28px) clamp(14px, 3.5vw, 24px)',
             border: currentSub?.plan?.code === 'standard' ? '2px solid #2563eb' : '1px solid #e2e8f0',
             boxShadow: currentSub?.plan?.code === 'standard' ? '0 12px 30px -4px rgba(37, 99, 235, 0.15)' : '0 2px 10px rgba(0, 0, 0, 0.04)',
             display: 'flex',
             flexDirection: 'column',
-            position: 'relative'
+            position: 'relative',
+            boxSizing: 'border-box',
+            maxWidth: '100%',
+            overflow: 'hidden'
           }}
         >
           {/* Header */}
@@ -359,12 +362,16 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
             fontSize: 11,
             color: '#475569',
             display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 6,
             marginBottom: 18,
-            border: '1px solid #f1f5f9'
+            border: '1px solid #f1f5f9',
+            boxSizing: 'border-box'
           }}>
             <span>Duration terms:</span>
-            <strong style={{ color: '#0f172a' }}>1 Mo (0%) · 6 Mo (5% OFF) · 1 Yr (10% OFF)</strong>
+            <strong style={{ color: '#0f172a', wordBreak: 'break-word' }}>1 Mo (0%) · 6 Mo (5% OFF) · 1 Yr (10% OFF)</strong>
           </div>
 
           {/* Upgrade Button on Card (Opens dedicated checkout modal) */}
@@ -442,12 +449,15 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
           style={{
             backgroundColor: '#ffffff',
             borderRadius: 18,
-            padding: '28px 24px',
+            padding: 'clamp(20px, 4vw, 28px) clamp(14px, 3.5vw, 24px)',
             border: currentSub?.plan?.code === 'premium' ? '2px solid #7c3aed' : '2px solid #ddd6fe',
             boxShadow: currentSub?.plan?.code === 'premium' ? '0 12px 30px -4px rgba(124, 58, 237, 0.2)' : '0 4px 18px rgba(124, 58, 237, 0.08)',
             display: 'flex',
             flexDirection: 'column',
-            position: 'relative'
+            position: 'relative',
+            boxSizing: 'border-box',
+            maxWidth: '100%',
+            overflow: 'hidden'
           }}
         >
           {/* Recommended Badge */}
@@ -501,12 +511,16 @@ export const PlanAndBilling: React.FC<PlanAndBillingProps> = ({
             fontSize: 11,
             color: '#6d28d9',
             display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 6,
             marginBottom: 18,
-            border: '1px solid #ede9fe'
+            border: '1px solid #ede9fe',
+            boxSizing: 'border-box'
           }}>
             <span>Duration terms:</span>
-            <strong style={{ color: '#5b21b6' }}>1 Mo (0%) · 6 Mo (5% OFF) · 1 Yr (10% OFF)</strong>
+            <strong style={{ color: '#5b21b6', wordBreak: 'break-word' }}>1 Mo (0%) · 6 Mo (5% OFF) · 1 Yr (10% OFF)</strong>
           </div>
 
           {/* Upgrade Button on Card (Opens dedicated checkout modal) */}

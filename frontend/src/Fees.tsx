@@ -647,13 +647,13 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 </select>
               </div>
 
-              <div style={{ position: 'relative', flex: '2 1 240px' }}>
-                <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+              <div style={{ position: 'relative', flex: '2 1 240px', width: '100%', maxWidth: '100%' }}>
+                <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                 <input
                   type="text"
                   placeholder="Search student name or admission number…"
-                  className="fx-select"
-                  style={{ width: '100%', height: 40, borderRadius: 8, paddingLeft: 36, fontSize: 13 }}
+                  className="fx-select search-input-with-icon"
+                  style={{ width: '100%', height: 40, borderRadius: 8, paddingLeft: 38, fontSize: 13 }}
                   value={studentSearch}
                   onChange={e => setStudentSearch(e.target.value)}
                 />
