@@ -412,7 +412,7 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
                     value={form.school}
                     onChange={e => setForm(s => ({ ...s, school: e.target.value }))}
                   >
-                    <option value="">All Campuses (Organisation-wide)</option>
+                    <option value="">All Campuses</option>
                     {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </label>

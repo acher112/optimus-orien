@@ -2042,7 +2042,7 @@ function App() {
               >
                 <div className="campus-item-icon"><Building2 size={15} /></div>
                 <div className="campus-item-info">
-                  <b>All Campuses (Consolidated)</b>
+                  <b>All Campuses</b>
                   <small>Network-wide aggregated view</small>
                 </div>
                 {activeCampusId === null && <Check size={16} color="var(--brand-primary, #715ee8)" />}
@@ -2349,7 +2349,7 @@ function App() {
                     }
                   }}
                 >
-                  <option value="all">All Campuses (Consolidated)</option>
+                  <option value="all">All Campuses</option>
                   {campuses.map(c => (
                     <option key={c.id} value={c.id}>
                       {c.name} {c.city ? `(${c.city})` : ''}
@@ -2936,7 +2936,7 @@ function App() {
                           }
                         }}
                       >
-                        <option value="all">All Campuses (Entire Organisation)</option>
+                        <option value="all">All Campuses</option>
                         {campuses.map(c => (
                           <option key={c.id} value={c.id}>
                             {c.name}{c.principal_name ? ` (Principal: ${c.principal_name})` : ''}
@@ -3012,7 +3012,7 @@ function App() {
                     <div className="resource-scope-badge">
                       <Building2 size={14} className="scope-icon" />
                       <span className="scope-text">
-                        Campus Scope: <strong>{activeCampus ? activeCampus.name : (campuses.length === 1 ? campuses[0].name : 'All Campuses (Entire Organisation)')}</strong>
+                        Campus Scope: <strong>{activeCampus ? activeCampus.name : (campuses.length === 1 ? campuses[0].name : 'All Campuses')}</strong>
                       </span>
                       {(activeCampus?.principal_name || (campuses.length === 1 && campuses[0].principal_name)) && (
                         <span className="scope-principal-chip">
@@ -3102,24 +3102,29 @@ function App() {
                   rightActions={
                     <>
                       <span className="result-count">{filtered.length} records found</span>
-                      <button className="outline-btn" onClick={() => load()}><RefreshCw size={15} /> Refresh</button>
-                      {!(user?.role === 'teacher' && teacherScope?.can_export === false) && (
-                        <ExportMenu
-                          title={`${page} Directory`}
-                          filename={`${page.toLowerCase().replace(/\s+/g, '-')}-list`}
-                          columns={effectiveColumns.map(c => ({ key: c.key, label: c.label }))}
-                          rows={() => filtered.map(r => {
-                            const obj: Record<string, any> = {};
-                            for (const col of effectiveColumns) {
-                              if (col.key === 'name') obj[col.key] = page === 'Students' ? (r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || '—') : (r.name || r.title || r.full_name || '—');
-                              else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
-                              else obj[col.key] = r[col.key] ?? '—';
-                            }
-                            return obj;
-                          })}
-                          notify={notify}
-                        />
-                      )}
+                      <div className="filter-actions-group">
+                        <button className="outline-btn" onClick={() => load()} title="Refresh records" aria-label="Refresh records">
+                          <RefreshCw size={14} />
+                          <span className="btn-label-text"> Refresh</span>
+                        </button>
+                        {!(user?.role === 'teacher' && teacherScope?.can_export === false) && (
+                          <ExportMenu
+                            title={`${page} Directory`}
+                            filename={`${page.toLowerCase().replace(/\s+/g, '-')}-list`}
+                            columns={effectiveColumns.map(c => ({ key: c.key, label: c.label }))}
+                            rows={() => filtered.map(r => {
+                              const obj: Record<string, any> = {};
+                              for (const col of effectiveColumns) {
+                                if (col.key === 'name') obj[col.key] = page === 'Students' ? (r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.name || '—') : (r.name || r.title || r.full_name || '—');
+                                else if (col.key === 'gender') obj[col.key] = r.gender === 'male' ? 'Boy' : r.gender === 'female' ? 'Girl' : (r.gender || '—');
+                                else obj[col.key] = r[col.key] ?? '—';
+                              }
+                              return obj;
+                            })}
+                            notify={notify}
+                          />
+                        )}
+                      </div>
                     </>
                   }
                 />
@@ -5804,7 +5809,7 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
                               <div>
                                 <div className="account-meta">
                                   <b>{u.name}</b>
-                                  <span className={'account-role-pill ' + rClass}>{u.role === 'organisation_admin' ? 'Organisation Co-Admin' : u.role.replace('_', ' ')}</span>
+                                  <span className={'account-role-pill ' + rClass}>{u.role === 'organisation_admin' ? 'Organisation Co-Admin' : nice(u.role)}</span>
                                 </div>
                                 <small>@{u.username}{u.email ? ` • ${u.email}` : ''}{u.admission_number ? ` • ID: ${u.admission_number}` : ''}{u.date_joined ? ` • Joined ${u.date_joined}` : ''}</small>
                               </div>
@@ -6285,26 +6290,31 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
           rightActions={
             <>
               <span className="result-count">{filtered.length} events</span>
-              <button className="outline-btn" onClick={loadAudit}><RefreshCw size={15} /> Refresh</button>
-              <ExportMenu
-                title="Security Audit Trail"
-                filename="security-audit-trail"
-                columns={[
-                  { key: 'created_at', label: 'Timestamp' },
-                  { key: 'action', label: 'Action' },
-                  { key: 'resource', label: 'Resource' },
-                  { key: 'resource_id', label: 'Target ID' },
-                  { key: 'changes', label: 'Changes Summary' },
-                ]}
-                rows={() => filtered.map(l => ({
-                  created_at: l.created_at ? formatCleanDateTime(l.created_at) : '—',
-                  action: String(l.action || '—'),
-                  resource: String(l.resource || '—'),
-                  resource_id: String(l.resource_id || '—'),
-                  changes: formatChangesSummary(l.changes, l.action),
-                }))}
-                notify={notify}
-              />
+              <div className="filter-actions-group">
+                <button className="outline-btn" onClick={loadAudit} title="Refresh records" aria-label="Refresh records">
+                  <RefreshCw size={14} />
+                  <span className="btn-label-text"> Refresh</span>
+                </button>
+                <ExportMenu
+                  title="Security Audit Trail"
+                  filename="security-audit-trail"
+                  columns={[
+                    { key: 'created_at', label: 'Timestamp' },
+                    { key: 'action', label: 'Action' },
+                    { key: 'resource', label: 'Resource' },
+                    { key: 'resource_id', label: 'Target ID' },
+                    { key: 'changes', label: 'Changes Summary' },
+                  ]}
+                  rows={() => filtered.map(l => ({
+                    created_at: l.created_at ? formatCleanDateTime(l.created_at) : '—',
+                    action: String(l.action || '—'),
+                    resource: String(l.resource || '—'),
+                    resource_id: String(l.resource_id || '—'),
+                    changes: formatChangesSummary(l.changes, l.action),
+                  }))}
+                  notify={notify}
+                />
+              </div>
             </>
           }
         />
@@ -6327,7 +6337,7 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
                 return (
                   <tr key={l.id}>
                     <td><Clock size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />{l.created_at ? formatCleanDateTime(l.created_at) : '—'}</td>
-                    <td><span className={'action-pill ' + aClass}>{act.replace('_', ' ')}</span></td>
+                    <td><span className={'action-pill ' + aClass}>{nice(act)}</span></td>
                     <td><strong>{String(l.resource || '—')}</strong></td>
                     <td>#{String(l.resource_id || '—')}</td>
                     <td style={{ minWidth: 260, maxWidth: 450 }}><AuditChangesCell changes={l.changes} action={l.action} /></td>

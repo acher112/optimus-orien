@@ -321,7 +321,7 @@ export default function Salaries({
           <p>Compensation structures, monthly payroll sheets, bulk approvals, and auto-linked finance expenses.</p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#eef2ff', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#4338ca', marginTop: 8 }}>
             <Building2 size={15} />
-            <span>{currentCampus ? `${currentCampus.name}${currentCampus.principal_name ? ` • Principal: ${currentCampus.principal_name}` : ''}` : '🌐 All Campuses (Consolidated)'}</span>
+            <span>{currentCampus ? `${currentCampus.name}${currentCampus.principal_name ? ` • Principal: ${currentCampus.principal_name}` : ''}` : '🌐 All Campuses'}</span>
           </div>
         </div>
         <div className="fx-filters">
@@ -341,7 +341,7 @@ export default function Salaries({
                       if (onSelectCampus) onSelectCampus(val ? Number(val) : null);
                     }}
                   >
-                    <option value="">🌐 All Campuses (Overall)</option>
+                    <option value="">🌐 All Campuses</option>
                     {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </label>

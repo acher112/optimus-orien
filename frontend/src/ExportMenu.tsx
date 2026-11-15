@@ -154,6 +154,7 @@ export default function ExportMenu({
         onClick={() => setOpen(prev => !prev)}
         disabled={loading}
         title="Download / Export data"
+        aria-label="Download / Export data"
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -164,14 +165,14 @@ export default function ExportMenu({
       >
         {loading ? (
           <>
-            <RefreshCw size={size === 'sm' ? 13 : 15} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
-            <span>Exporting {activeFmt?.toUpperCase()}...</span>
+            <RefreshCw size={size === 'sm' ? 12 : 14} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+            <span className="export-btn-label">Exporting...</span>
           </>
         ) : (
           <>
-            <Download size={size === 'sm' ? 14 : 16} />
-            <span>{label}</span>
-            <ChevronDown size={13} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            <Download size={size === 'sm' ? 13 : 15} />
+            <span className="export-btn-label">{label}</span>
+            <ChevronDown size={12} className="export-chevron" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
           </>
         )}
       </button>
@@ -185,6 +186,7 @@ export default function ExportMenu({
             [align === 'right' ? 'right' : 'left']: 0,
             zIndex: 1050,
             minWidth: '220px',
+            maxWidth: 'min(300px, calc(100vw - 32px))',
             background: 'var(--panel-bg, #ffffff)',
             color: 'var(--text-color, #1e293b)',
             border: '1px solid var(--border-color, #e2e8f0)',

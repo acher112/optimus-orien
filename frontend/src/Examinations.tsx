@@ -539,7 +539,7 @@ export default function Examinations({
                   if (onSelectCampus) onSelectCampus(val);
                 }}
               >
-                <option value="">All Campuses (Overall)</option>
+                <option value="">All Campuses</option>
                 {effectiveCampuses.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}

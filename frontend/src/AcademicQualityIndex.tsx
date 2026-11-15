@@ -492,7 +492,7 @@ export default function AcademicQualityIndex({
                   color: '#1e293b'
                 }}
               >
-                <option value="all">🌐 All Campuses (Consolidated)</option>
+                <option value="all">🌐 All Campuses</option>
                 {(Array.isArray(campusList) ? campusList : []).map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}

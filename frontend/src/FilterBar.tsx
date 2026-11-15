@@ -27,6 +27,11 @@ export interface FilterBarProps {
   rightActions?: React.ReactNode;
 }
 
+const cleanWord = (s: string) => {
+  if (!s) return '';
+  return s.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
 export const FilterBar: React.FC<FilterBarProps> = ({
   searchPlaceholder = 'Search records...',
   searchField = 'q',
@@ -179,7 +184,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                   className="filter-select"
                   aria-label={filter.label}
                 >
-                  <option value="">{filter.placeholder || `All ${filter.label}`}</option>
+                  <option value="">{filter.placeholder || `All ${cleanWord(filter.label)}`}</option>
                   {filter.options?.map(opt => (
                     <option key={String(opt.value)} value={opt.value}>
                       {opt.label}
@@ -226,10 +231,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               const opt = filterDef.options.find(o => String(o.value) === String(v));
               if (opt) displayVal = opt.label;
             }
-            const label = k === searchField ? 'Search' : (filterDef?.label || k);
+            const rawLabel = k === searchField ? 'Search' : (filterDef?.label || k);
+            const label = cleanWord(rawLabel);
+            const cleanDisplay = displayVal.includes('_') ? cleanWord(displayVal) : displayVal;
             return (
               <span key={k} className="filter-chip">
-                <span>{label}: <strong>{displayVal}</strong></span>
+                <span>{label}: <strong>{cleanDisplay}</strong></span>
                 <button
                   type="button"
                   onClick={() => handleFilterChange(k, '')}

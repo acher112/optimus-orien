@@ -297,6 +297,13 @@
   margin-left: auto;
 }
 
+.filter-actions-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .filter-bar-actions .result-count {
   font-size: 11.5px;
   font-weight: 600;
@@ -427,12 +434,72 @@
   }
   .filter-bar-actions {
     width: 100%;
+    display: flex;
+    align-items: center;
     justify-content: space-between;
+    gap: 8px;
     margin-left: 0;
-    padding-top: 8px;
+    padding-top: 10px;
     border-top: 1px solid #eff0f6;
+    box-sizing: border-box;
   }
   .dark .filter-bar-actions {
     border-top-color: #35374c;
+  }
+  .filter-bar-actions .result-count {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #858da0;
+    white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .filter-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .filter-bar-actions .outline-btn,
+  .filter-bar-actions .primary-btn,
+  .filter-bar-actions .export-trigger-btn {
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    gap: 5px !important;
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 500px) {
+  /* On compact mobile screens, make action buttons sleek and icon-first so they NEVER cut off */
+  .export-trigger-btn .export-btn-label,
+  .filter-bar-actions .btn-label-text,
+  .filter-actions-group .btn-label-text {
+    display: none !important;
+  }
+
+  .filter-bar-actions .outline-btn,
+  .filter-actions-group .outline-btn {
+    padding: 0 9px !important;
+    min-width: 34px !important;
+  }
+
+  .export-trigger-btn {
+    padding: 0 8px 0 9px !important;
+    min-width: 38px !important;
+  }
+
+  .export-dropdown-popover {
+    right: 0 !important;
+    left: auto !important;
+    max-width: calc(100vw - 32px) !important;
   }
 }
