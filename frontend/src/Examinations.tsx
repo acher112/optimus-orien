@@ -716,6 +716,30 @@ export default function Examinations({
                     <span className="pill" style={{ fontSize: 12 }}>
                       Pass Threshold: {analyticsData.summary?.passing_threshold || '40.00'}%
                     </span>
+                    {selectedConfigId && (
+                      <button
+                        className="outline-btn"
+                        style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        title="Force recalculate all results for this structure"
+                        onClick={async () => {
+                          try {
+                            setLoading(true);
+                            const res = await request<{ summary: { student_results_updated: number; subject_results_updated: number } }>(
+                              `exams/engine/configurations/${selectedConfigId}/recalculate/`,
+                              { method: 'POST' }
+                            );
+                            notify(`Recalculated: ${res.summary?.student_results_updated ?? 0} students updated.`);
+                            setBump(b => b + 1);
+                          } catch (err) {
+                            notify(err instanceof Error ? err.message : 'Recalculation failed');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                      >
+                        <RefreshCw size={13} /> Recalculate
+                      </button>
+                    )}
                   </div>
                 </div>
               </section>

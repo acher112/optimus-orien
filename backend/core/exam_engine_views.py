@@ -712,8 +712,11 @@ def engine_analytics(request):
                 configuration=config,
                 school_class__in=target_classes
             ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
-        except Exception:
-            pass
+        except Exception as _auto_recalc_err:
+            import logging as _log
+            _log.getLogger(__name__).error(
+                "Auto-recalculate failed for config %s: %s", config.id, _auto_recalc_err, exc_info=True
+            )
 
     # Build student list
     student_records = []

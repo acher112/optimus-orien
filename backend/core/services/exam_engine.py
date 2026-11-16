@@ -504,7 +504,7 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
     )
 
     with transaction.atomic():
-        config = ExamConfiguration.objects.select_for_update().filter(pk=config_id).first()
+        config = ExamConfiguration.objects.filter(pk=config_id).first()
         if not config:
             raise ValidationError(f"Configuration #{config_id} not found.")
 
