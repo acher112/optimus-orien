@@ -729,6 +729,7 @@ export default function Examinations({
                               { method: 'POST' }
                             );
                             notify(`Recalculated: ${res.summary?.student_results_updated ?? 0} students updated.`);
+                            await loadAnalytics();
                             setBump(b => b + 1);
                           } catch (err) {
                             notify(err instanceof Error ? err.message : 'Recalculation failed');
@@ -838,7 +839,7 @@ export default function Examinations({
               </div>
 
               {/* No Marks Banner */}
-              {analyticsData.summary && ((analyticsData.summary.eligible_students_count ?? analyticsData.summary.eligible_count ?? 0) === 0) && (
+              {analyticsData.summary && ((analyticsData.summary.eligible_students_count ?? analyticsData.summary.eligible_count ?? 0) === 0) && ((analyticsData.summary.pending_students_count ?? analyticsData.summary.pending_count ?? 0) === 0) && (
                 <div style={{ padding: '14px 18px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 22 }}>💡</span>

@@ -529,20 +529,16 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
         ]
 
         # Scope classes: include config.school_class, plus any classes with marks or enrollments in this school/year
+        extra_class_ids = list(ExamStudentMark.objects.filter(
+            component__in=components
+        ).values_list('school_class_id', flat=True).distinct())
+        grade_class_ids = list(Grade.objects.filter(
+            assessment__school_class__school=config.school
+        ).values_list('assessment__school_class_id', flat=True).distinct())
+        all_extra_ids = set(extra_class_ids + grade_class_ids)
+
         if config.school_class:
             target_classes = [config.school_class]
-            extra_class_ids = list(ExamStudentMark.objects.filter(
-                component__in=components
-            ).values_list('school_class_id', flat=True).distinct())
-            grade_class_ids = list(Grade.objects.filter(
-                assessment__school_class__school=config.school
-            ).values_list('assessment__school_class_id', flat=True).distinct())
-            all_extra_ids = set(extra_class_ids + grade_class_ids)
-            if all_extra_ids:
-                extra_classes = list(SchoolClass.objects.filter(id__in=all_extra_ids, school=config.school))
-                for ec in extra_classes:
-                    if ec not in target_classes:
-                        target_classes.append(ec)
         else:
             target_classes = list(SchoolClass.objects.filter(
                 school=config.school,
@@ -551,11 +547,29 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
             if not target_classes:
                 target_classes = list(SchoolClass.objects.filter(school=config.school))
 
+        if all_extra_ids:
+            extra_classes = list(SchoolClass.objects.filter(id__in=all_extra_ids))
+            for ec in extra_classes:
+                if ec not in target_classes:
+                    target_classes.append(ec)
+
+        # Sort target_classes so classes with marks/grades are processed first
+        classes_with_marks_set = set(extra_class_ids)
+        target_classes.sort(key=lambda c: 0 if c.id in classes_with_marks_set else 1)
+
         # Scope subjects
         if config.subject:
             target_subjects = [config.subject]
         else:
             target_subjects = list(Subject.objects.filter(school=config.school))
+
+        extra_subj_ids = list(ExamStudentMark.objects.filter(
+            component__in=components
+        ).values_list('subject_id', flat=True).distinct())
+        if extra_subj_ids:
+            for s in Subject.objects.filter(id__in=extra_subj_ids):
+                if s not in target_subjects:
+                    target_subjects.append(s)
 
         subjects_by_id = {s.id: s for s in target_subjects}
         passing_threshold = config.passing_threshold
@@ -590,9 +604,9 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
                 school_class=klass
             ).values_list('student_id', flat=True).distinct())
             for s in Student.objects.filter(id__in=mark_student_ids):
-                if s.id not in seen_student_ids:
-                    seen_student_ids.add(s.id)
+                if s not in students:
                     students.append(s)
+                seen_student_ids.add(s.id)
 
             # Fetch all existing marks for this scope
             marks_qs = ExamStudentMark.objects.filter(
@@ -816,6 +830,13 @@ def recalculate_student(student_id: int, configuration_id: int, target_school_cl
                     subject_weights.append({'subject_id': s.id, 'weight': Decimal('1.00')})
 
         target_subjects = list(Subject.objects.filter(school=config.school)) if not config.subject else [config.subject]
+        extra_subj_ids = list(ExamStudentMark.objects.filter(
+            component__in=components
+        ).values_list('subject_id', flat=True).distinct())
+        if extra_subj_ids:
+            for s in Subject.objects.filter(id__in=extra_subj_ids):
+                if s not in target_subjects:
+                    target_subjects.append(s)
         subjects_by_id = {s.id: s for s in target_subjects}
 
         marks_qs = ExamStudentMark.objects.filter(

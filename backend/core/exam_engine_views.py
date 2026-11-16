@@ -405,7 +405,24 @@ def engine_configuration_recalculate(request, pk):
     sync_exam_marks_to_assessments_and_aqi(config)
     from core.services.cache_service import invalidate_school_cache
     invalidate_school_cache(config.school_id)
-    return Response({'id': config.id, 'summary': summary})
+
+    # Debug: return student result snapshots so we can verify DB state
+    from core.models import CalculatedStudentResult, CalculatedSubjectResult
+    student_snapshots = list(
+        CalculatedStudentResult.objects.filter(configuration=config)
+        .select_related('student', 'school_class')
+        .values(
+            'student__full_name', 'school_class__name',
+            'overall_percentage', 'current_overall_percentage',
+            'completed', 'passed'
+        )
+    )
+    subject_snapshots = list(
+        CalculatedSubjectResult.objects.filter(configuration=config)
+        .select_related('subject')
+        .values('student_id', 'subject__name', 'final_percentage', 'current_percentage', 'completed', 'assessed_weight')
+    )
+    return Response({'id': config.id, 'summary': summary, 'debug_students': student_snapshots, 'debug_subjects': subject_snapshots})
 
 
 # ------------------------------------------------------------------ Mark Entry Grid
@@ -666,24 +683,47 @@ def engine_analytics(request):
     if is_multi_campus and not request.query_params.get('class'):
         target_classes_qs = SchoolClass.objects.filter(school_id__in=school_ids)
 
+    # Any classes that have marks or results under this configuration must ALWAYS be in scope
+    extra_cids = list(
+        ExamStudentMark.objects.filter(component__configuration=config)
+        .values_list('school_class_id', flat=True).distinct()
+    )
+    result_cids = list(
+        CalculatedStudentResult.objects.filter(configuration=config)
+        .values_list('school_class_id', flat=True).distinct()
+    )
+    all_extra_cids = set(extra_cids + result_cids)
+
     if request.query_params.get('class'):
         target_classes_qs = target_classes_qs.filter(pk=request.query_params['class'])
     elif config.school_class:
-        # Include config's designated class plus any other classes with marks under this structure
-        extra_cids = list(ExamStudentMark.objects.filter(component__configuration=config).values_list('school_class_id', flat=True).distinct())
-        if extra_cids:
-            target_classes_qs = target_classes_qs.filter(Q(pk=config.school_class_id) | Q(pk__in=extra_cids))
+        if all_extra_cids:
+            target_classes_qs = target_classes_qs.filter(Q(pk=config.school_class_id) | Q(pk__in=all_extra_cids))
         else:
             target_classes_qs = target_classes_qs.filter(pk=config.school_class_id)
     elif config.academic_year:
-        ay_filtered = target_classes_qs.filter(academic_year=config.academic_year)
+        ay_filtered = target_classes_qs.filter(
+            Q(academic_year=config.academic_year) | Q(pk__in=all_extra_cids)
+        )
         if ay_filtered.exists():
             target_classes_qs = ay_filtered
+        elif all_extra_cids:
+            target_classes_qs = SchoolClass.objects.filter(id__in=all_extra_cids)
+    elif all_extra_cids:
+        target_classes_qs = target_classes_qs.filter(Q(school=config.school) | Q(pk__in=all_extra_cids))
 
     if request.query_params.get('section'):
         target_classes_qs = target_classes_qs.filter(section=request.query_params['section'])
 
-    target_classes = list(target_classes_qs.select_related('school', 'academic_year').order_by('school__name', 'name', 'section'))
+    if all_extra_cids and not request.query_params.get('class'):
+        missing_classes = list(SchoolClass.objects.filter(id__in=all_extra_cids).select_related('school', 'academic_year'))
+        target_classes_list = list(target_classes_qs.select_related('school', 'academic_year'))
+        for mc in missing_classes:
+            if mc not in target_classes_list:
+                target_classes_list.append(mc)
+        target_classes = target_classes_list
+    else:
+        target_classes = list(target_classes_qs.select_related('school', 'academic_year').order_by('school__name', 'name', 'section'))
 
     # Identify target subjects in scope
     if config.subject:
@@ -692,6 +732,15 @@ def engine_analytics(request):
         target_subjects = list(Subject.objects.filter(school_id__in=school_ids).select_related('school').order_by('school__name', 'name'))
     else:
         target_subjects = list(Subject.objects.filter(school=config.school).select_related('school').order_by('name'))
+
+    extra_sids = list(
+        ExamStudentMark.objects.filter(component__configuration=config)
+        .values_list('subject_id', flat=True).distinct()
+    )
+    if extra_sids:
+        for es in Subject.objects.filter(id__in=extra_sids).select_related('school'):
+            if es not in target_subjects:
+                target_subjects.append(es)
 
     # Fetch calculated student results for this configuration and class scope
     student_results_qs = CalculatedStudentResult.objects.filter(
