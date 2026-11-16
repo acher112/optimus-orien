@@ -290,6 +290,11 @@ def user_payload(u):
   st = getattr(u, 'student_record', None)
   if st:
    student_id = st.id
+ school_currency = getattr(u.school, 'currency', '') if u.school else ''
+ if not school_currency and u.organisation:
+  first_sch = u.organisation.schools.first()
+  if first_sch:
+   school_currency = getattr(first_sch, 'currency', '')
  return {
   'id': u.id,
   'name': u.get_full_name() or u.username,
@@ -305,6 +310,7 @@ def user_payload(u):
   'allow_org_admin_student_access': getattr(u.organisation, 'allow_org_admin_student_access', False) if u.organisation else False,
   'school': u.school_id,
   'school_name': u.school.name if u.school else None,
+  'currency': school_currency or 'PKR',
   'is_staff': u.is_staff,
   'must_change_password': getattr(u, 'must_change_password', False),
   'student_id': student_id,
@@ -496,7 +502,7 @@ class SchoolSerializer(DynamicSerializer):
  class Meta:
   model = School
   fields = [
-   'id', 'organisation', 'name', 'code', 'city',
+   'id', 'organisation', 'name', 'code', 'city', 'currency',
    'attendance_alert_threshold', 'grade_alert_threshold',
    'total_students', 'girls_count', 'boys_count', 'total_employees',
    'country', 'jurisdiction', 'school_settings', 'principal_name',
@@ -1464,6 +1470,8 @@ class Classes(ScopedViewSet):
     start_date=date.today(),
     created_by=self.request.user if getattr(self, 'request', None) and self.request.user.is_authenticated else None
    )
+  from core.services.cache_service import invalidate_school_cache
+  invalidate_school_cache(instance.school_id)
 
  def perform_update(self, serializer):
   old_teacher = serializer.instance.teacher
@@ -1478,6 +1486,14 @@ class Classes(ScopedViewSet):
      start_date=date.today(),
      created_by=self.request.user if getattr(self, 'request', None) and self.request.user.is_authenticated else None
     )
+  from core.services.cache_service import invalidate_school_cache
+  invalidate_school_cache(instance.school_id)
+
+ def perform_destroy(self, instance):
+  sid = instance.school_id
+  super().perform_destroy(instance)
+  from core.services.cache_service import invalidate_school_cache
+  invalidate_school_cache(sid)
 class Students(ScopedViewSet):
  queryset=Student.objects.select_related('school', 'user')
  serializer_class=StudentSerializer
@@ -1555,6 +1571,8 @@ class Students(ScopedViewSet):
   receipt = make_credentials_receipt(student, school_class, username, temp_password, issued_by)
 
   record_event(actor=request.user, action='student_admission', obj=student)
+  from core.services.cache_service import invalidate_school_cache
+  invalidate_school_cache(school.id)
 
   out_serializer = self.get_serializer(student)
   res_data = dict(out_serializer.data)
@@ -1565,14 +1583,26 @@ class Students(ScopedViewSet):
  @transaction.atomic
  def update(self, request, *args, **kwargs):
   response = super().update(request, *args, **kwargs)
-  self._sync_class_enrollment(self.get_object(), request.data)
+  st = self.get_object()
+  self._sync_class_enrollment(st, request.data)
+  from core.services.cache_service import invalidate_school_cache
+  invalidate_school_cache(st.school_id)
   return response
 
  @transaction.atomic
  def partial_update(self, request, *args, **kwargs):
   response = super().partial_update(request, *args, **kwargs)
-  self._sync_class_enrollment(self.get_object(), request.data)
+  st = self.get_object()
+  self._sync_class_enrollment(st, request.data)
+  from core.services.cache_service import invalidate_school_cache
+  invalidate_school_cache(st.school_id)
   return response
+
+ def perform_destroy(self, instance):
+  sid = instance.school_id
+  super().perform_destroy(instance)
+  from core.services.cache_service import invalidate_school_cache
+  invalidate_school_cache(sid)
 
  def _sync_class_enrollment(self, student, data):
   class_id = data.get('school_class') or data.get('class_id') or data.get('class')

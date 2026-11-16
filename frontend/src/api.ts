@@ -17,6 +17,7 @@ export type User = {
   is_superuser?: boolean;
   must_change_password?: boolean;
   student_id?: number | null;
+  currency?: string;
   csrfToken?: string;
 };
 

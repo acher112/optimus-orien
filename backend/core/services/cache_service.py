@@ -10,7 +10,7 @@ Guarantees:
 from django.core.cache import cache
 import hashlib
 
-CACHE_TTL_DASHBOARD = 300   # 5 minutes
+CACHE_TTL_DASHBOARD = 60    # 1 minute (fast refresh)
 CACHE_TTL_AQI = 600         # 10 minutes
 
 def get_school_cache_version(school_id: int) -> int:
@@ -25,17 +25,18 @@ def get_school_cache_version(school_id: int) -> int:
 def invalidate_school_cache(school_id: int):
     """
     Increment the school cache version, instantly and atomically invalidating
-    all cached dashboards, AQI indicators, and stats for this school.
+    all cached dashboards, AQI indicators, and stats for this school and overall org dashboard.
     """
-    if not school_id:
-        return
-    version_key = f"optimus:v_gen:school:{school_id}"
-    try:
-        cache.incr(version_key)
-    except Exception:
-        # If cache key does not exist or incr fails
-        current = cache.get(version_key) or 1
-        cache.set(version_key, current + 1, timeout=86400 * 30)
+    targets = set([0])
+    if school_id:
+        targets.add(school_id)
+    for sid in targets:
+        version_key = f"optimus:v_gen:school:{sid}"
+        try:
+            cache.incr(version_key)
+        except Exception:
+            current = cache.get(version_key) or 1
+            cache.set(version_key, current + 1, timeout=86400 * 30)
 
 def build_cache_key(org_id: int, school_id: int, scope: str, identifier: str) -> str:
     """Construct an isolated multi-tenant cache key."""

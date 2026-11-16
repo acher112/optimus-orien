@@ -273,7 +273,7 @@ def attendance_history(request):
         absent_cnt = sum(1 for r in records if r['status'] == 'absent')
         excused_cnt = sum(1 for r in records if r['status'] in ('excused', 'leave'))
         denom = max(total_days - excused_cnt, 0)
-        rate = round(((present_cnt + late_cnt) / denom * 100), 1) if denom > 0 else (100.0 if total_days == 0 else 0.0)
+        rate = round(((present_cnt + late_cnt) / denom * 100), 1) if denom > 0 else 0.0
 
         return Response({
             'user_info': {
@@ -330,7 +330,7 @@ def attendance_history(request):
         absent_cnt = sum(1 for r in records if r['status'] == 'absent')
         excused_cnt = sum(1 for r in records if r['status'] in ('excused', 'leave'))
         denom = max(total_days - excused_cnt, 0)
-        rate = round(((present_cnt + late_cnt) / denom * 100), 1) if denom > 0 else (100.0 if total_days == 0 else 0.0)
+        rate = round(((present_cnt + late_cnt) / denom * 100), 1) if denom > 0 else 0.0
 
         return Response({
             'user_info': {

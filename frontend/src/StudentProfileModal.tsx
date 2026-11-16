@@ -275,7 +275,7 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                 whiteSpace: 'nowrap'
               }}
             >
-              <TrendingUp size={15} /> 360° Profile & Trajectory
+              <User size={15} /> 360° Profile
             </button>
             <button
               onClick={() => setActiveTab('bio')}
@@ -652,10 +652,16 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
               {activeTab === 'attendance' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div style={{
-                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                    background: (profile.attendance_summary?.held_days || 0) === 0
+                      ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+                      : (profile.attendance_summary.rate >= 75
+                        ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+                        : 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'),
                     borderRadius: 16,
                     padding: '20px 24px',
-                    border: '1px solid #bbf7d0',
+                    border: (profile.attendance_summary?.held_days || 0) === 0
+                      ? '1px solid #e2e8f0'
+                      : (profile.attendance_summary.rate >= 75 ? '1px solid #bbf7d0' : '1px solid #fde68a'),
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -663,14 +669,38 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                     gap: 16
                   }}>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: (profile.attendance_summary?.held_days || 0) === 0
+                          ? '#64748b'
+                          : (profile.attendance_summary.rate >= 75 ? '#16a34a' : '#d97706'),
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
                         Attendance Standing
                       </div>
-                      <div style={{ fontSize: 32, fontWeight: 900, color: '#14532d', marginTop: 4 }}>
+                      <div style={{
+                        fontSize: 32,
+                        fontWeight: 900,
+                        color: (profile.attendance_summary?.held_days || 0) === 0
+                          ? '#475569'
+                          : (profile.attendance_summary.rate >= 75 ? '#14532d' : '#92400e'),
+                        marginTop: 4
+                      }}>
                         {profile.attendance_summary.rate}%
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#15803d', marginTop: 2 }}>
-                        {profile.attendance_summary.formula}
+                      <div style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: (profile.attendance_summary?.held_days || 0) === 0
+                          ? '#64748b'
+                          : (profile.attendance_summary.rate >= 75 ? '#15803d' : '#b45309'),
+                        marginTop: 2
+                      }}>
+                        {(profile.attendance_summary?.held_days || 0) === 0
+                          ? '0 of 0 days attended (No attendance marked yet)'
+                          : profile.attendance_summary.formula}
                       </div>
                     </div>
 

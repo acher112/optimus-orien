@@ -18,6 +18,7 @@ import {
   type User, type Dashboard, type Resource
 } from './api';
 import { queryCache } from './queryCache';
+import { getCurrencySymbol, formatMoney } from './currency';
 import PlanAndBilling from './PlanAndBilling';
 import FeatureLockedScreen from './FeatureLockedScreen';
 import RegistrationPlanSelection from './RegistrationPlanSelection';
@@ -1601,7 +1602,10 @@ function App() {
       setModal(false);
       setForm({});
       notify(page === 'Students' ? 'Student registered & fee record created successfully' : 'Record created successfully');
+      queryCache.clear();
       await load();
+      list<any>('schools').then(setCampuses).catch(() => {});
+      request<Dashboard>('dashboard/').then(setDash).catch(() => {});
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not save record');
     } finally {
@@ -1799,7 +1803,10 @@ function App() {
       setEditModal(false);
       setEditingRecord(null);
       notify('Record updated successfully');
+      queryCache.clear();
       await load();
+      list<any>('schools').then(setCampuses).catch(() => {});
+      request<Dashboard>('dashboard/').then(setDash).catch(() => {});
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Could not update record');
     } finally {
@@ -1814,7 +1821,10 @@ function App() {
     try {
       await destroy(config.api, r.id);
       notify('Record deleted successfully');
+      queryCache.clear();
       await load();
+      list<any>('schools').then(setCampuses).catch(() => {});
+      request<Dashboard>('dashboard/').then(setDash).catch(() => {});
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Could not delete record');
     }
@@ -3866,7 +3876,10 @@ function App() {
             </div>
             <form onSubmit={handleCreate}>
               <div className="modal-fields">
-                {page === 'Students' ? (
+                {page === 'Students' ? (() => {
+                  const createModalCampus = campuses.find(c => String(c.id) === String(form.school)) || activeCampus;
+                  const createModalCurSym = getCurrencySymbol((createModalCampus as any)?.currency || user?.currency || 'USD');
+                  return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16, gridColumn: '1 / -1' }}>
                     {/* 1. Campus Selection */}
                     {!isSingleCampusRole ? (
@@ -4025,38 +4038,38 @@ function App() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <label>
-                          Monthly Tuition Fee (Rs) <span className="required">*</span>
+                          Monthly Tuition Fee ({createModalCurSym}) <span className="required">*</span>
                           <input
                             type="number"
                             step="0.01"
                             min="1"
                             required
-                            placeholder="e.g. 5000 (Mandatory > 0)"
+                            placeholder={`e.g. 5000 (Mandatory > 0)`}
                             value={form.monthly_fee || ''}
                             onChange={e => setForm(s => ({ ...s, monthly_fee: e.target.value }))}
                           />
                         </label>
 
                         <label>
-                          New Admission Fee (Rs) <span className="required">*</span>
+                          New Admission Fee ({createModalCurSym}) <span className="required">*</span>
                           <input
                             type="number"
                             step="0.01"
                             min="0"
                             required
-                            placeholder="e.g. 5000 (0 if free / waived)"
+                            placeholder={`e.g. 5000 (0 if free / waived)`}
                             value={form.admission_fee !== undefined ? form.admission_fee : ''}
                             onChange={e => setForm(s => ({ ...s, admission_fee: e.target.value }))}
                           />
                         </label>
 
                         <label>
-                          Annual Fee (Rs) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
+                          Annual Fee ({createModalCurSym}) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
                           <input
                             type="number"
                             step="0.01"
                             min="0"
-                            placeholder="e.g. 2500 (Optional)"
+                            placeholder={`e.g. 2500 (Optional)`}
                             value={form.annual_fee || ''}
                             onChange={e => setForm(s => ({ ...s, annual_fee: e.target.value }))}
                           />
@@ -4068,7 +4081,7 @@ function App() {
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 10 }}>
                             <label style={{ margin: 0 }}>
-                              Extra Amount (Rs)
+                              Extra Amount ({createModalCurSym})
                               <input
                                 type="number"
                                 step="0.01"
@@ -4195,7 +4208,7 @@ function App() {
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    placeholder="Amount (Rs)"
+                                    placeholder={`Amount (${createModalCurSym})`}
                                     value={dc.amount}
                                     onChange={e => {
                                       const val = e.target.value;
@@ -4218,12 +4231,13 @@ function App() {
                         </div>
 
                         <div style={{ gridColumn: '1 / -1', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 14px', borderRadius: 8, fontSize: 11, lineHeight: 1.5 }}>
-                          <strong>Challan Workflow:</strong> Saving this student registers them in the chosen class and generates their fee voucher. When admission fee is Rs 0, a waived voucher (Rs 0.00) is recorded without marking them as a defaulter.
+                          <strong>Challan Workflow:</strong> Saving this student registers them in the chosen class and generates their fee voucher. When admission fee is {createModalCurSym}0, a waived voucher ({createModalCurSym}0.00) is recorded without marking them as a defaulter.
                         </div>
                       </div>
                     </div>
                   </div>
-                ) : (
+                  );
+                })() : (
                   config.fields.map(f => {
                     if (f.key === 'school') return (
                       <label key={f.key}>
@@ -4651,8 +4665,10 @@ function App() {
                     })()}
                   </div>
                 )}
-                {page === 'Students' && (
-                  <>
+                {page === 'Students' && (() => {
+                  const editModalCampus = campuses.find(c => String(c.id) === String(editForm.school || (editingRecord as any)?.school)) || activeCampus;
+                  const editModalCurSym = getCurrencySymbol((editModalCampus as any)?.currency || user?.currency || 'USD');
+                  return (
                     <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e2e8f0', marginTop: 12, paddingTop: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <Receipt size={18} color="#6366f1" />
@@ -4666,7 +4682,7 @@ function App() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
                         <label>
-                          Monthly Tuition Fee (Rs) <span className="required">*</span>
+                          Monthly Tuition Fee ({editModalCurSym}) <span className="required">*</span>
                           <input
                             type="number"
                             step="0.01"
@@ -4679,7 +4695,7 @@ function App() {
                         </label>
 
                         <label>
-                          New Admission Fee (Rs) <span className="required">*</span>
+                          New Admission Fee ({editModalCurSym}) <span className="required">*</span>
                           <input
                             type="number"
                             step="0.01"
@@ -4692,7 +4708,7 @@ function App() {
                         </label>
 
                         <label>
-                          Annual Fee (Rs) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
+                          Annual Fee ({editModalCurSym}) <span style={{ fontSize: 11, color: '#9ba2b4', fontWeight: 400 }}>(Optional)</span>
                           <input
                             type="number"
                             step="0.01"
@@ -4709,7 +4725,7 @@ function App() {
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 10 }}>
                             <label style={{ margin: 0 }}>
-                              Extra Amount (Rs)
+                              Extra Amount ({editModalCurSym})
                               <input
                                 type="number"
                                 step="0.01"
@@ -4836,7 +4852,7 @@ function App() {
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    placeholder="Amount (Rs)"
+                                    placeholder={`Amount (${editModalCurSym})`}
                                     value={charge.amount}
                                     onChange={e => {
                                       const val = e.target.value;
@@ -4867,8 +4883,8 @@ function App() {
                         </div>
                       </div>
                     </div>
-                  </>
-                )}
+                  );
+                })()}
               </div>
               <div className="modal-footer">
                 <button type="button" className="outline-btn" onClick={() => setEditModal(false)}>Cancel</button>

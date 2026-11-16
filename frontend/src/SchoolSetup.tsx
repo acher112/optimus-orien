@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  AlertCircle, ArrowLeft, ArrowRight, BookOpenCheck, CalendarDays, Check, CheckCircle2,
+  AlertCircle, ArrowLeft, ArrowRight, BookOpenCheck, Calendar, CalendarDays, Check, CheckCircle2,
   ChevronDown, ClipboardCheck, Clock3, Crown, FileCheck2, Globe2, GraduationCap, Info, LoaderCircle,
   MapPin, Plus, Save, School, ShieldCheck, Trash2
 } from 'lucide-react';
@@ -148,6 +148,46 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
     });
   const setPeriod = (idx: number, k: keyof Period, v: string) =>
     field('reporting_periods', form.reporting_periods.map((p, i) => (i === idx ? { ...p, [k]: v } : p)));
+
+  const autoAlignPeriodsToAcademicYear = () => {
+    if (!form.academic_start || !form.academic_end) {
+      setError('Please set Academic year start and end dates first.');
+      return;
+    }
+    const start = new Date(form.academic_start);
+    const end = new Date(form.academic_end);
+    if (end <= start) {
+      setError('Academic year end date must be after start date.');
+      return;
+    }
+    const count = Math.max(1, form.reporting_periods.length || 3);
+    const totalMs = end.getTime() - start.getTime();
+    const sliceMs = totalMs / count;
+    const defaultNames = ['First Term', 'Second Term', 'Third Term', 'Fourth Term'];
+
+    const newPeriods = Array.from({ length: count }, (_, i) => {
+      const pStart = new Date(start.getTime() + i * sliceMs);
+      const pEnd = i === count - 1 ? end : new Date(start.getTime() + (i + 1) * sliceMs - 86400000);
+      const existing = form.reporting_periods[i];
+      return {
+        name: existing?.name?.trim() ? existing.name : (defaultNames[i] || `Term ${i + 1}`),
+        start: pStart.toISOString().slice(0, 10),
+        end: pEnd.toISOString().slice(0, 10),
+      };
+    });
+
+    field('reporting_periods', newPeriods);
+    setMessage('Reporting periods aligned evenly within academic year dates.');
+  };
+
+  const getStepForIssue = (issueKey: string): number => {
+    if (['school', 'country', 'jurisdiction'].includes(issueKey)) return 0;
+    if (['timezone', 'language', 'locale', 'currency'].includes(issueKey)) return 1;
+    if (['programmes'].includes(issueKey)) return 2;
+    if (['academic_year_name', 'academic_dates', 'reporting_periods'].includes(issueKey)) return 3;
+    if (['grading_policy', 'attendance_policy'].includes(issueKey)) return 4;
+    return 0;
+  };
 
   const save = async () => {
     if (!schoolId) return;
@@ -467,20 +507,50 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
                         <b>Reporting periods *</b>
                         <small>Term, semester, quarter or your school-defined period for report cards. Dates must not overlap.</small>
                       </div>
-                      <button onClick={() => field('reporting_periods', [...form.reporting_periods, { name: '', start: '', end: '' }])}>
-                        <Plus size={16} /> Add period
-                      </button>
-                    </div>
-                    {form.reporting_periods.map((p, i) => (
-                      <div className="setup-period-row" key={i}>
-                        <input aria-label={`Period ${i + 1} name`} placeholder="Term name (e.g. First Term)" value={p.name} onChange={e => setPeriod(i, 'name', e.target.value)} />
-                        <input aria-label={`Period ${i + 1} start`} type="date" value={p.start} onChange={e => setPeriod(i, 'start', e.target.value)} />
-                        <input aria-label={`Period ${i + 1} end`} type="date" value={p.end} onChange={e => setPeriod(i, 'end', e.target.value)} />
-                        <button aria-label={`Remove period ${i + 1}`} onClick={() => field('reporting_periods', form.reporting_periods.filter((_, j) => i !== j))}>
-                          <Trash2 size={17} />
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {form.academic_start && form.academic_end && (
+                          <button
+                            type="button"
+                            className="setup-btn outline"
+                            style={{ padding: '6px 12px', fontSize: 12, height: 'auto' }}
+                            onClick={autoAlignPeriodsToAcademicYear}
+                            title="Distribute period dates automatically within the academic year"
+                          >
+                            <Calendar size={14} /> Auto-align to Academic Year
+                          </button>
+                        )}
+                        <button onClick={() => field('reporting_periods', [...form.reporting_periods, { name: '', start: '', end: '' }])}>
+                          <Plus size={16} /> Add period
                         </button>
                       </div>
-                    ))}
+                    </div>
+                    {form.academic_start && form.academic_end && (
+                      <div style={{ fontSize: 12, color: '#4338ca', background: '#eef2ff', padding: '6px 12px', borderRadius: 8, marginBottom: 8 }}>
+                        📅 <strong>Academic Year Boundary:</strong> All reporting periods must fall between <b>{form.academic_start}</b> and <b>{form.academic_end}</b>.
+                      </div>
+                    )}
+                    {form.reporting_periods.map((p, i) => {
+                      const isOutOfRange = (form.academic_start && p.start && p.start < form.academic_start) ||
+                        (form.academic_end && p.end && p.end > form.academic_end) ||
+                        (p.start && p.end && p.start > p.end);
+                      return (
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                          <div className="setup-period-row">
+                            <input aria-label={`Period ${i + 1} name`} placeholder="Term name (e.g. First Term)" value={p.name} onChange={e => setPeriod(i, 'name', e.target.value)} />
+                            <input aria-label={`Period ${i + 1} start`} type="date" value={p.start} onChange={e => setPeriod(i, 'start', e.target.value)} />
+                            <input aria-label={`Period ${i + 1} end`} type="date" value={p.end} onChange={e => setPeriod(i, 'end', e.target.value)} />
+                            <button aria-label={`Remove period ${i + 1}`} onClick={() => field('reporting_periods', form.reporting_periods.filter((_, j) => i !== j))}>
+                              <Trash2 size={17} />
+                            </button>
+                          </div>
+                          {isOutOfRange && (
+                            <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, paddingLeft: 4 }}>
+                              ⚠️ Period {i + 1} ({p.name || 'Term'}) dates must be within academic year ({form.academic_start} to {form.academic_end}).
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                     {!form.reporting_periods.length && (
                       <p className="setup-period-empty">No reporting periods added. Add the school's actual reporting structure.</p>
                     )}
@@ -594,15 +664,81 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
                       <div className="setup-valid"><CheckCircle2 size={18} /> All required fields were valid when this draft was last saved.</div>
                     ) : (
                       <div className="setup-issues">
-                        {Object.entries(data?.readiness.issues || {}).map(([k, v]) => (
-                          <div key={k}>
-                            <AlertCircle size={15} />
-                            <span><b>{k.replaceAll('_', ' ')}</b> — {v}</span>
-                          </div>
-                        ))}
+                        {Object.entries(data?.readiness.issues || {}).map(([k, v]) => {
+                          const targetStep = getStepForIssue(k);
+                          return (
+                            <div key={k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 10, marginBottom: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                <AlertCircle size={17} color="#dc2626" style={{ marginTop: 2, flexShrink: 0 }} />
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#991b1b', textTransform: 'capitalize' }}>{k.replaceAll('_', ' ')}</div>
+                                  <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 2 }}>{v}</div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setStep(targetStep)}
+                                style={{
+                                  background: '#dc2626',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: 8,
+                                  padding: '6px 12px',
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4
+                                }}
+                              >
+                                Fix in Step {targetStep + 1}: {STEPS[targetStep].name} <ArrowRight size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     <p>Unsaved changes are not checked until you save the draft.</p>
+                  </div>
+
+                  {/* Configured Reporting Periods Detailed Review */}
+                  <div style={{ marginTop: 16, padding: '16px 20px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <strong style={{ fontSize: 13, color: '#1e293b' }}>Configured Reporting Periods:</strong>
+                        <span style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                          Academic Year: <b>{form.academic_start || 'Not set'}</b> to <b>{form.academic_end || 'Not set'}</b>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setStep(3)}
+                        style={{ background: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Edit in Academic Calendar (Step 4) →
+                      </button>
+                    </div>
+                    {form.reporting_periods.length === 0 ? (
+                      <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>No reporting periods configured.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {form.reporting_periods.map((p, idx) => {
+                          const isOutOfRange = (form.academic_start && p.start && p.start < form.academic_start) ||
+                            (form.academic_end && p.end && p.end > form.academic_end) ||
+                            (p.start && p.end && p.start > p.end);
+                          return (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '8px 12px', background: isOutOfRange ? '#fef2f2' : '#ffffff', border: isOutOfRange ? '1px solid #fecaca' : '1px solid #e2e8f0', borderRadius: 8 }}>
+                              <span><strong>Period {idx + 1}:</strong> {p.name || 'Unnamed Period'}</span>
+                              <span style={{ color: isOutOfRange ? '#dc2626' : '#64748b', fontWeight: isOutOfRange ? 700 : 500 }}>
+                                {p.start || '—'} to {p.end || '—'} {isOutOfRange && '(⚠️ Out of Academic Year range)'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div className="setup-activation">
                     <div>

@@ -766,7 +766,7 @@ def student_report_card(request):
     att_qs = Attendance.objects.filter(student=student, date__gte=session.start_date, date__lte=session.end_date)
     total_days = att_qs.count()
     present_days = att_qs.filter(status='present').count()
-    att_pct = round(float((present_days / total_days * 100) if total_days > 0 else 100.0), 1)
+    att_pct = round(float((present_days / total_days * 100) if total_days > 0 else 0.0), 1)
 
     return Response({
         'student': {

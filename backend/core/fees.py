@@ -1366,7 +1366,11 @@ def fees_summary(request):
         m = p.paid_on.strftime('%Y-%m')
         monthly[m] = monthly.get(m, Decimal('0.00')) + p.amount
 
+    primary_school = schools.first()
+    curr = primary_school.currency if primary_school and primary_school.currency else 'PKR'
+
     return Response({
+        'currency': curr,
         'total_students': total_students,
         'expected': str(expected),
         'collected': str(collected),

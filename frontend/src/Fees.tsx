@@ -10,6 +10,7 @@ import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Toolti
 import { list, request, type User } from './api';
 import ExportMenu, { type ExportColumn } from './ExportMenu';
 import { FilterBar } from './FilterBar';
+import { formatMoney, getCurrencySymbol } from './currency';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -76,6 +77,8 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
   const [payAutoApprove, setPayAutoApprove] = useState(true);
   const [recentReceipt, setRecentReceipt] = useState<R | null>(null);
   const [receiptModal, setReceiptModal] = useState<R | null>(null);
+  const activeFeeCurrency = summary?.currency || defaulterCurrency || (campuses?.find(c => String(c.id) === String(school || activeCampusId)) as any)?.currency || (user as any)?.currency || 'USD';
+  const feeSym = getCurrencySymbol(activeFeeCurrency);
 
   // Modals
   const [voucherModal, setVoucherModal] = useState(false);
@@ -542,22 +545,22 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
             </div>
             <div className="fx-kpi">
               <span>Estimated Total Income</span>
-              <strong style={{ color: '#2563eb' }}>Rs {Number(summary.expected).toLocaleString()}</strong>
-              <small>~Rs {Math.round(summary.avg_per_student || 0).toLocaleString()} / student</small>
+              <strong style={{ color: '#2563eb' }}>{formatMoney(summary.expected, activeFeeCurrency)}</strong>
+              <small>~{formatMoney(summary.avg_per_student || 0, activeFeeCurrency)} / student</small>
             </div>
             <div className="fx-kpi">
               <span>Collected (Approved)</span>
-              <strong style={{ color: '#16a34a' }}>Rs {Number(summary.collected).toLocaleString()}</strong>
+              <strong style={{ color: '#16a34a' }}>{formatMoney(summary.collected, activeFeeCurrency)}</strong>
               <small>{summary.collection_rate}% realized in Income</small>
             </div>
             <div className="fx-kpi">
               <span>Remaining to Collect</span>
-              <strong style={{ color: '#dc2626' }}>Rs {Number(summary.outstanding).toLocaleString()}</strong>
+              <strong style={{ color: '#dc2626' }}>{formatMoney(summary.outstanding, activeFeeCurrency)}</strong>
               <small>Outstanding balance</small>
             </div>
             <div className="fx-kpi">
               <span>Pending Admin Approval</span>
-              <strong style={{ color: '#d97706' }}>Rs {Number(summary.pending_approval || 0).toLocaleString()}</strong>
+              <strong style={{ color: '#d97706' }}>{formatMoney(summary.pending_approval || 0, activeFeeCurrency)}</strong>
               <small>Challans submitted</small>
             </div>
           </div>
@@ -571,7 +574,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   filename="monthly-fee-collections"
                   columns={[
                     { key: 'month', label: 'Month' },
-                    { key: 'collected', label: 'Collected Amount (Rs)' }
+                    { key: 'collected', label: `Collected Amount (${feeSym})` }
                   ]}
                   rows={summary.monthly || []}
                   size="sm"
@@ -584,7 +587,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                     <CartesianGrid vertical={false} stroke="#edf0f6" strokeDasharray="4 6" />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} />
                     <YAxis tickLine={false} axisLine={false} />
-                    <Tooltip formatter={(v: number) => `Rs ${v.toLocaleString()}`} />
+                    <Tooltip formatter={(v: number) => formatMoney(v, activeFeeCurrency)} />
                     <Bar dataKey="collected" name="Collected" fill="#2563eb" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -749,15 +752,15 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 <div className="fx-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
                   <div className="fx-kpi" style={{ padding: '12px 14px' }}>
                     <small style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Total Billed</small>
-                    <strong style={{ fontSize: 17 }}>Rs {Number(studentLedger.summary?.total_billed || 0).toLocaleString()}</strong>
+                    <strong style={{ fontSize: 17 }}>{formatMoney(studentLedger.summary?.total_billed, activeFeeCurrency)}</strong>
                   </div>
                   <div className="fx-kpi" style={{ padding: '12px 14px' }}>
                     <small style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Total Paid</small>
-                    <strong style={{ fontSize: 17, color: '#16a34a' }}>Rs {Number(studentLedger.summary?.total_paid || 0).toLocaleString()}</strong>
+                    <strong style={{ fontSize: 17, color: '#16a34a' }}>{formatMoney(studentLedger.summary?.total_paid, activeFeeCurrency)}</strong>
                   </div>
                   <div className="fx-kpi" style={{ padding: '12px 14px' }}>
                     <small style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Outstanding</small>
-                    <strong style={{ fontSize: 17, color: '#dc2626' }}>Rs {Number(studentLedger.summary?.outstanding_balance || 0).toLocaleString()}</strong>
+                    <strong style={{ fontSize: 17, color: '#dc2626' }}>{formatMoney(studentLedger.summary?.outstanding_balance, activeFeeCurrency)}</strong>
                   </div>
                 </div>
 
@@ -771,7 +774,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                           <tr key={l.id}>
                             <td>{l.period}</td>
                             <td>{l.head_name}</td>
-                            <td>Rs {l.net_due}</td>
+                            <td>{formatMoney(l.net_due, activeFeeCurrency)}</td>
                             <td><span className={`pill ${l.status === 'paid' ? 'green' : l.status === 'partial' ? 'orange' : 'red'}`}>{l.status}</span></td>
                           </tr>
                         ))}
@@ -845,7 +848,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
               {/* Payment Amount Field */}
               <div className="fee-form-field">
                 <label>
-                  <span>Payment Amount (Rs) *</span>
+                  <span>Payment Amount ({feeSym}) *</span>
                   {studentLedger?.summary?.outstanding_balance > 0 && (
                     <button
                       type="button"
@@ -862,7 +865,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                       }}
                       title="Click to fill total outstanding balance"
                     >
-                      Fill Outstanding: Rs {Number(studentLedger?.summary?.outstanding_balance || 0).toLocaleString()}
+                      Fill Outstanding: {formatMoney(studentLedger?.summary?.outstanding_balance || 0, activeFeeCurrency)}
                     </button>
                   )}
                 </label>
@@ -934,7 +937,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   </button>
                 </div>
                 <p style={{ margin: '8px 0 0', fontSize: 13, color: '#166534' }}>
-                  Receipt <b>#{recentReceipt.receipt_number}</b> issued to <b>{recentReceipt.student_name}</b> for <b>Rs {recentReceipt.amount}</b> ({recentReceipt.method}).
+                  Receipt <b>#{recentReceipt.receipt_number}</b> issued to <b>{recentReceipt.student_name}</b> for <b>{formatMoney(recentReceipt.amount, activeFeeCurrency)}</b> ({recentReceipt.method}).
                 </p>
               </div>
             )}
@@ -1248,7 +1251,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                     <td><strong>{s.head_name}</strong></td>
                     <td>{s.school_class_name}</td>
                     <td>{s.school_name}</td>
-                    <td><strong>Rs {s.amount}</strong></td>
+                    <td><strong>{formatMoney(s.amount, activeFeeCurrency)}</strong></td>
                     <td><span className="pill purple">{s.frequency}</span></td>
                     <td>Day {s.due_day} of month</td>
                     <td style={{ textAlign: 'right' }}>
@@ -1305,7 +1308,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   <tr key={c.id}>
                     <td><strong>{c.student_name}</strong></td>
                     <td>{c.head_name}</td>
-                    <td><strong style={{ color: '#16a34a' }}>{c.discount_type === 'percent' ? `${c.discount_value}%` : `Rs ${c.discount_value}`}</strong></td>
+                    <td><strong style={{ color: '#16a34a' }}>{c.discount_type === 'percent' ? `${c.discount_value}%` : formatMoney(c.discount_value, activeFeeCurrency)}</strong></td>
                     <td>{c.reason}</td>
                     <td>{c.approved_by}</td>
                     <td>{c.valid_from} {c.valid_to ? `to ${c.valid_to}` : '(ongoing)'}</td>
@@ -1441,7 +1444,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                         <td><strong>{p.student_name}</strong></td>
                         <td>{p.admission_number || '—'}</td>
                         <td>{p.school_name}</td>
-                        <td><strong style={{ color: '#16a34a' }}>Rs {p.amount}</strong></td>
+                        <td><strong style={{ color: '#16a34a' }}>{formatMoney(p.amount, activeFeeCurrency)}</strong></td>
                         <td><span className="pill purple" style={{ textTransform: 'capitalize' }}>{p.method.replace('_', ' ')}</span></td>
                         <td>
                           {isPending ? (
@@ -1633,7 +1636,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                     {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </label>
-                <label>Amount (Rs) *
+                <label>Amount ({feeSym}) *
                   <input type="number" step="0.01" min="1" required value={structAmount} onChange={e => setStructAmount(e.target.value)} />
                 </label>
                 <label>Frequency
@@ -1720,7 +1723,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 <label>Discount Type
                   <select value={concType} onChange={e => setConcType(e.target.value)}>
                     <option value="percent">Percentage (%)</option>
-                    <option value="fixed">Fixed Amount (Rs)</option>
+                    <option value="fixed">Fixed Amount ({feeSym})</option>
                   </select>
                 </label>
                 <label>Discount Value *
@@ -1820,7 +1823,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
 
                 <div style={{ background: '#f1f5f9', padding: '12px 16px', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>Amount Received:</span>
-                  <strong style={{ fontSize: 18, color: '#16a34a' }}>Rs {receiptModal.amount}</strong>
+                  <strong style={{ fontSize: 18, color: '#16a34a' }}>{formatMoney(receiptModal.amount, activeFeeCurrency)}</strong>
                 </div>
               </div>
             </div>

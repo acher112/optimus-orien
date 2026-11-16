@@ -61,7 +61,8 @@ def readiness(config):
     start=date.fromisoformat(p.get('start',''))
     end=date.fromisoformat(p.get('end',''))
     if not isinstance(name,str) or not name.strip():raise ValueError('Missing period name')
-    if not config.academic_start<=start<=end<=config.academic_end:raise ValueError('Period must be within the academic year')
+    if not (config.academic_start <= start <= end <= config.academic_end):
+        raise ValueError(f'Period dates ({start} to {end}) must be within the academic year ({config.academic_start} to {config.academic_end})')
     for other_start,other_end in found:
      if start<=other_end and end>=other_start:raise ValueError('Reporting periods must not overlap')
     found.append((start,end))

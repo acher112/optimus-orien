@@ -29,6 +29,7 @@ import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import { GenderPanel } from './GenderCharts';
 import { getStoredTheme } from './theme';
+import { formatMoney, getCurrencySymbol } from './currency';
 import './reports.css';
 import './hr.css';
 
@@ -43,10 +44,8 @@ type View =
 const COLOR = ['#715ee8', '#23b7a0', '#f29d50', '#6c9eff', '#e477a1', '#b4a0e9'];
 const PIE_INCOME = ['#10b981', '#06b6d4', '#3b82f6', '#14b8a6', '#f59e0b', '#8b5cf6', '#6366f1', '#22c55e', '#eab308', '#0284c7'];
 const PIE_COLORS = ['#e11d48', '#f97316', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#b91c1c', '#d97706'];
-const CUR = 'Rs';
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? '—' : `${n}%`);
 const num = (n: number | null | undefined) => (n === null || n === undefined ? '—' : String(n));
-const money = (n: number) => `${CUR} ${Math.round(n).toLocaleString()}`;
 const tick = { fontSize: 12, fill: '#8c96a7' };
 
 function periodToDates(p: string): { from?: string; to?: string } {
@@ -118,11 +117,11 @@ function AvgChart({ rows, label, field = 'average' }: { rows: R[]; label: string
   );
 }
 
-function CatTable({ rows, title = 'CATEGORY' }: { rows: R[]; title?: string }) {
+function CatTable({ rows, title = 'CATEGORY', currency = 'USD' }: { rows: R[]; title?: string; currency?: string }) {
   return (
     <div className="table-scroll"><table className="data-table">
       <thead><tr><th>{title}</th><th>AMOUNT</th><th>SHARE</th></tr></thead>
-      <tbody>{rows.map(r => <tr key={r.name}><td>{r.name}</td><td>{money(r.amount)}</td><td>{r.share}%</td></tr>)}</tbody>
+      <tbody>{rows.map(r => <tr key={r.name}><td>{r.name}</td><td>{formatMoney(r.amount, currency)}</td><td>{r.share}%</td></tr>)}</tbody>
     </table></div>
   );
 }
@@ -237,6 +236,10 @@ export default function Reports({
       }
     }).catch(() => {});
   }, [isPrincipal, user.school, campuses]);
+
+  const currentCampus = (campuses.length ? campuses : schools).find(c => String(c.id) === String(financeSchool)) || (activeCampusId ? (campuses.length ? campuses : schools).find(c => c.id === activeCampusId) : null);
+  const reportsCurrency = (financeSum as any)?.currency || (currentCampus as any)?.currency || (user as any)?.currency || 'USD';
+  const money = (n: number) => formatMoney(n, reportsCurrency);
 
   const path = useCallback((v: View) => {
     const q = period && !['this_month', 'last_30_days', 'last_3_months', 'last_6_months', 'this_year'].includes(period)
@@ -367,9 +370,9 @@ export default function Reports({
               ]
             ) : [
               { key: 'month', label: 'Month' },
-              { key: 'income', label: 'Income (Rs)' },
-              { key: 'expense', label: 'Expense (Rs)' },
-              { key: 'net', label: 'Net Surplus / Deficit (Rs)' }
+              { key: 'income', label: `Income (${getCurrencySymbol(reportsCurrency)})` },
+              { key: 'expense', label: `Expense (${getCurrencySymbol(reportsCurrency)})` },
+              { key: 'net', label: `Net Surplus / Deficit (${getCurrencySymbol(reportsCurrency)})` }
             ]}
             rows={() => {
               if (domain === 'academic') {
@@ -673,7 +676,7 @@ export default function Reports({
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer></div>
-                        <CatTable rows={financeSum.income_by_category} title="INCOME STREAM" />
+                        <CatTable rows={financeSum.income_by_category} title="INCOME STREAM" currency={reportsCurrency} />
                       </>
                     ) : <div className="rp-empty">No income recorded for this selection.</div>}
                   </section>
@@ -724,7 +727,7 @@ export default function Reports({
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer></div>
-                        <CatTable rows={financeSum.expense_by_category} title="EXPENSE CATEGORY" />
+                        <CatTable rows={financeSum.expense_by_category} title="EXPENSE CATEGORY" currency={reportsCurrency} />
                       </>
                     ) : <div className="rp-empty">No expenses recorded for this selection.</div>}
                   </section>

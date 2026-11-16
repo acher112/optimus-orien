@@ -5,17 +5,16 @@ import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import FilterBar from './FilterBar';
 import { getStoredTheme } from './theme';
+import { formatMoney, getCurrencySymbol } from './currency';
 import './hr.css';
 
 type R = Record<string, any>;
 type Tab = 'overview' | 'income' | 'expense' | 'categories';
-const CUR = 'Rs';
 const INCOME = '#22a06b';
 const EXPENSE = '#e5484d';
 const PIE_INCOME = ['#10b981', '#06b6d4', '#3b82f6', '#14b8a6', '#f59e0b', '#8b5cf6', '#6366f1', '#22c55e', '#eab308', '#0284c7'];
 const PIE_EXPENSE = ['#e11d48', '#f97316', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#b91c1c', '#d97706', '#be123c'];
 const PIE = PIE_EXPENSE;
-const money = (n: number) => `${CUR} ${Math.round(n).toLocaleString()}`;
 const tick = { fontSize: 12, fill: '#8c96a7' };
 
 function LockedChartCard({
@@ -246,15 +245,17 @@ export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgra
 
       {error && <div className="error-bar"><AlertCircle size={17} /> {error}</div>}
 
-      {tab === 'overview' && sum && <Overview sum={sum} isPrincipal={isPrincipal} hasPremium={hasPremium} onUpgrade={onUpgrade} />}
-      {(tab === 'income' || tab === 'expense') && <Entries kind={tab} school={school} schools={schools} user={user} qs={qs} bump={bump} onChanged={changed} hasPremium={hasPremium} onUpgrade={onUpgrade} activeCampusId={activeCampusId} />}
+      {tab === 'overview' && sum && <Overview sum={sum} isPrincipal={isPrincipal} hasPremium={hasPremium} onUpgrade={onUpgrade} currency={sum?.currency || sum?.active_currency || (campuses?.find(c => String(c.id) === String(school || activeCampusId)) as any)?.currency || (user as any)?.currency} />}
+      {(tab === 'income' || tab === 'expense') && <Entries kind={tab} school={school} schools={schools} user={user} qs={qs} bump={bump} onChanged={changed} hasPremium={hasPremium} onUpgrade={onUpgrade} activeCampusId={activeCampusId} currency={sum?.currency || sum?.active_currency || (campuses?.find(c => String(c.id) === String(school || activeCampusId)) as any)?.currency || (user as any)?.currency} />}
       {tab === 'categories' && <Categories school={school} schools={schools} user={user} onChanged={changed} />}
     </>
   );
 }
 
-function Overview({ sum, isPrincipal, hasPremium, onUpgrade }: { sum: R; isPrincipal?: boolean; hasPremium?: boolean; onUpgrade?: () => void }) {
+function Overview({ sum, isPrincipal, hasPremium, onUpgrade, currency }: { sum: R; isPrincipal?: boolean; hasPremium?: boolean; onUpgrade?: () => void; currency?: string }) {
   const exp: R[] = sum.expense_by_category, inc: R[] = sum.income_by_category, months: R[] = sum.monthly;
+  const activeCur = currency || sum?.currency || sum?.active_currency || 'USD';
+  const money = (n: number) => formatMoney(n, activeCur);
   const [campusSortCol, setCampusSortCol] = useState<'income' | 'expense' | 'net' | 'name'>('income');
   const [campusSortDir, setCampusSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -350,7 +351,7 @@ function Overview({ sum, isPrincipal, hasPremium, onUpgrade }: { sum: R; isPrinc
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer></div>
-                <CatTable rows={exp} />
+                <CatTable rows={exp} currency={activeCur} />
               </>
             ) : <div className="rp-empty">No expenses recorded for this selection.</div>
           ) : (
@@ -360,7 +361,7 @@ function Overview({ sum, isPrincipal, hasPremium, onUpgrade }: { sum: R; isPrinc
                 subtitle="Visual category distribution charts and expense analytics require the Premium plan."
                 onUpgrade={onUpgrade}
               />
-              {exp.length > 0 && <CatTable rows={exp} />}
+              {exp.length > 0 && <CatTable rows={exp} currency={activeCur} />}
             </>
           )}
         </section>
@@ -386,7 +387,7 @@ function Overview({ sum, isPrincipal, hasPremium, onUpgrade }: { sum: R; isPrinc
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer></div>
-                <CatTable rows={inc} />
+                <CatTable rows={inc} currency={activeCur} />
               </>
             ) : <div className="rp-empty">No income recorded for this selection.</div>
           ) : (
@@ -396,7 +397,7 @@ function Overview({ sum, isPrincipal, hasPremium, onUpgrade }: { sum: R; isPrinc
                 subtitle="Visual revenue stream charts and category analytics require the Premium plan."
                 onUpgrade={onUpgrade}
               />
-              {inc.length > 0 && <CatTable rows={inc} />}
+              {inc.length > 0 && <CatTable rows={inc} currency={activeCur} />}
             </>
           )}
         </section>
@@ -460,7 +461,8 @@ function Overview({ sum, isPrincipal, hasPremium, onUpgrade }: { sum: R; isPrinc
   );
 }
 
-function CatTable({ rows }: { rows: R[] }) {
+function CatTable({ rows, currency }: { rows: R[]; currency?: string }) {
+  const money = (n: number) => formatMoney(n, currency);
   return (
     <div className="table-scroll"><table className="data-table">
       <thead><tr><th>CATEGORY</th><th>AMOUNT</th><th>SHARE</th></tr></thead>
@@ -469,13 +471,16 @@ function CatTable({ rows }: { rows: R[] }) {
   );
 }
 
-function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium, onUpgrade, activeCampusId }: { kind: 'income' | 'expense'; school: string; schools: R[]; user: User; qs: string; bump: number; onChanged: (m: string) => void; hasPremium?: boolean; onUpgrade?: () => void; activeCampusId?: number | null }) {
+function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium, onUpgrade, activeCampusId, currency }: { kind: 'income' | 'expense'; school: string; schools: R[]; user: User; qs: string; bump: number; onChanged: (m: string) => void; hasPremium?: boolean; onUpgrade?: () => void; activeCampusId?: number | null; currency?: string }) {
   const [rows, setRows] = useState<R[]>([]);
   const [cats, setCats] = useState<R[]>(() => DEFAULT_CATEGORIES[kind]);
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [f, setF] = useState<R>({ date: new Date().toISOString().slice(0, 10) });
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const target = school || (activeCampusId ? String(activeCampusId) : '') || f.school || (user.role !== 'organisation_admin' ? String(user.school || '') : '') || String(schools[0]?.id || '');
+  const activeCur = currency || (schools.find(s => String(s.id) === String(target || activeCampusId)) as any)?.currency || (user as any)?.currency || 'USD';
+  const curSym = getCurrencySymbol(activeCur);
+  const money = (n: number) => formatMoney(n, activeCur);
 
   useEffect(() => {
     setCats(DEFAULT_CATEGORIES[kind]);
@@ -533,7 +538,7 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium,
         <form className="fx-form" onSubmit={add}>
           {!school && schools.length > 1 && <label>Campus<select className="fx-select" required value={target} onChange={e => setF(s => ({ ...s, school: e.target.value, category: '' }))}>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
           <label>Category<select className="fx-select" required value={f.category || ''} onChange={e => setF(s => ({ ...s, category: e.target.value }))}><option value="">Select…</option>{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-          <label>Amount ({CUR})<input className="fx-select" required type="number" min="0.01" step="0.01" value={f.amount || ''} onChange={e => setF(s => ({ ...s, amount: e.target.value }))} /></label>
+          <label>Amount ({curSym})<input className="fx-select" required type="number" min="0.01" step="0.01" value={f.amount || ''} onChange={e => setF(s => ({ ...s, amount: e.target.value }))} /></label>
           <label>Date<input className="fx-select" type="date" required value={f.date} onChange={e => setF(s => ({ ...s, date: e.target.value }))} /></label>
           <label className="grow">Description<input className="fx-select" value={f.description || ''} onChange={e => setF(s => ({ ...s, description: e.target.value }))} /></label>
           <button className="primary-btn" disabled={busy}><Plus size={15} /> {busy ? 'Saving…' : `Add ${label}`}</button>
@@ -555,7 +560,7 @@ function Entries({ kind, school, schools, user, qs, bump, onChanged, hasPremium,
                   { key: 'category_name', label: 'Category' },
                   { key: 'description', label: 'Description' },
                   { key: 'school_name', label: 'Campus' },
-                  { key: 'amount', label: 'Amount (Rs)' },
+                  { key: 'amount', label: `Amount (${curSym})` },
                   { key: 'voided', label: 'Status' }
                 ]}
                 rows={() => rows.map(r => ({

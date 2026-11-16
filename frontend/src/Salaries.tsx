@@ -8,6 +8,7 @@ import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Toolti
 import { list, request, type User as ApiUser } from './api';
 import ExportMenu from './ExportMenu';
 import { FilterBar } from './FilterBar';
+import { formatMoney, getCurrencySymbol } from './currency';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -62,6 +63,8 @@ export default function Salaries({
   const [myPayslips, setMyPayslips] = useState<R[]>([]);
   const [summary, setSummary] = useState<R | null>(null);
   const [overallSummary, setOverallSummary] = useState<R | null>(null);
+  const activeSalaryCurrency = summary?.currency || overallSummary?.currency || (campuses?.find(c => String(c.id) === String(school || activeCampusId)) as any)?.currency || (user as any)?.currency || 'USD';
+  const salarySym = getCurrencySymbol(activeSalaryCurrency);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [bump, setBump] = useState(0);
@@ -483,10 +486,10 @@ export default function Salaries({
                 Overall Total Salaries (All Campuses)
               </div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#4338ca', margin: '6px 0 2px' }}>
-                Rs {overallTotalAllCampuses.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatMoney(overallTotalAllCampuses, activeSalaryCurrency)}
               </div>
               <div style={{ fontSize: 11, color: '#64748b' }}>
-                Paid: Rs {Number(overallSummary?.total_paid || 0).toLocaleString()} • Pending: Rs {Number(overallSummary?.total_pending || 0).toLocaleString()}
+                Paid: {formatMoney(Number(overallSummary?.total_paid || 0), activeSalaryCurrency)} • Pending: {formatMoney(Number(overallSummary?.total_pending || 0), activeSalaryCurrency)}
               </div>
             </div>
 
@@ -496,10 +499,10 @@ export default function Salaries({
                 {currentCampus ? `${currentCampus.name} Total` : 'Filtered Payroll Total'}
               </div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#0369a1', margin: '6px 0 2px' }}>
-                Rs {totalCalculations.net.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatMoney(totalCalculations.net, activeSalaryCurrency)}
               </div>
               <div style={{ fontSize: 11, color: '#64748b' }}>
-                {totalCalculations.totalStaff} staff in view (Gross: Rs {totalCalculations.gross.toLocaleString()})
+                {totalCalculations.totalStaff} staff in view (Gross: {formatMoney(totalCalculations.gross, activeSalaryCurrency)})
               </div>
             </div>
 
@@ -600,26 +603,26 @@ export default function Salaries({
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginTop: 12 }}>
                       <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Basic Pay</span>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Rs {Number(r.basic).toLocaleString()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{formatMoney(Number(r.basic), activeSalaryCurrency)}</div>
                       </div>
                       <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, textTransform: 'uppercase' }}>Allowances</span>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>+Rs {Number(r.allowances_total).toLocaleString()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>+{formatMoney(Number(r.allowances_total), activeSalaryCurrency)}</div>
                       </div>
                       <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, textTransform: 'uppercase' }}>Additions</span>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>+Rs {Number(r.additions_total).toLocaleString()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>+{formatMoney(Number(r.additions_total), activeSalaryCurrency)}</div>
                       </div>
                       <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600, textTransform: 'uppercase' }}>Deductions</span>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>-Rs {Number(r.deductions_total).toLocaleString()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>-{formatMoney(Number(r.deductions_total), activeSalaryCurrency)}</div>
                       </div>
                     </div>
 
                     {/* Net Pay Box */}
                     <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8, padding: '10px 12px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#065f46', textTransform: 'uppercase' }}>Net Pay</span>
-                      <strong style={{ fontSize: 17, fontWeight: 800, color: '#047857' }}>Rs {Number(r.net).toLocaleString()}</strong>
+                      <strong style={{ fontSize: 17, fontWeight: 800, color: '#047857' }}>{formatMoney(Number(r.net), activeSalaryCurrency)}</strong>
                     </div>
 
                     {r.due_date && (
@@ -714,12 +717,12 @@ export default function Salaries({
                       <td><strong>{r.staff_name}</strong></td>
                       <td>{r.position}</td>
                       <td><span style={{ fontSize: 12, color: '#64748b' }}>{r.due_date || '—'}</span></td>
-                      <td>Rs {r.basic}</td>
-                      <td>Rs {r.allowances_total}</td>
-                      <td><span style={{ color: '#16a34a' }}>+Rs {r.additions_total}</span></td>
-                      <td><span style={{ color: '#dc2626' }}>-Rs {r.deductions_total}</span></td>
-                      <td>Rs {r.gross}</td>
-                      <td><strong style={{ fontSize: 14 }}>Rs {r.net}</strong></td>
+                      <td>{formatMoney(Number(r.basic), activeSalaryCurrency)}</td>
+                      <td>{formatMoney(Number(r.allowances_total), activeSalaryCurrency)}</td>
+                      <td><span style={{ color: '#16a34a' }}>+{formatMoney(Number(r.additions_total), activeSalaryCurrency)}</span></td>
+                      <td><span style={{ color: '#dc2626' }}>-{formatMoney(Number(r.deductions_total), activeSalaryCurrency)}</span></td>
+                      <td>{formatMoney(Number(r.gross), activeSalaryCurrency)}</td>
+                      <td><strong style={{ fontSize: 14 }}>{formatMoney(Number(r.net), activeSalaryCurrency)}</strong></td>
                       <td>
                         <span className={`pill ${r.status === 'paid' ? 'green' : r.status === 'approved' ? 'blue' : r.status === 'cancelled' || r.status === 'void' ? 'red' : 'amber'}`}>
                           {r.status}
@@ -799,28 +802,28 @@ export default function Salaries({
               <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Basic</span>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#334155', marginTop: 4 }}>
-                  Rs {totalCalculations.basic.toLocaleString()}
+                  {formatMoney(totalCalculations.basic, activeSalaryCurrency)}
                 </div>
               </div>
 
               <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#16a34a', textTransform: 'uppercase' }}>Total Allowances</span>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>
-                  +Rs {totalCalculations.allowances.toLocaleString()}
+                  +{formatMoney(totalCalculations.allowances, activeSalaryCurrency)}
                 </div>
               </div>
 
               <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>Total Deductions</span>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#dc2626', marginTop: 4 }}>
-                  -Rs {totalCalculations.deductions.toLocaleString()}
+                  -{formatMoney(totalCalculations.deductions, activeSalaryCurrency)}
                 </div>
               </div>
 
               <div style={{ background: '#4338ca', borderRadius: 10, padding: '12px 14px', color: '#fff', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(67, 56, 202, 0.3)' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#c7d2fe', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grand Total Net Pay</span>
                 <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 4 }}>
-                  Rs {totalCalculations.net.toLocaleString()}
+                  {formatMoney(totalCalculations.net, activeSalaryCurrency)}
                 </div>
               </div>
             </div>
@@ -832,8 +835,8 @@ export default function Salaries({
       {tab === 'overview' && summary && !isTeacher && (
         <div className="fx-body">
           <div className="fx-kpis">
-            <div className="fx-kpi"><span>Total Paid Out</span><strong style={{ color: '#16a34a' }}>Rs {Number(summary.total_paid).toLocaleString()}</strong></div>
-            <div className="fx-kpi"><span>Pending / Approved</span><strong style={{ color: '#f59e0b' }}>Rs {Number(summary.total_pending).toLocaleString()}</strong></div>
+            <div className="fx-kpi"><span>Total Paid Out</span><strong style={{ color: '#16a34a' }}>{formatMoney(Number(summary.total_paid), activeSalaryCurrency)}</strong></div>
+            <div className="fx-kpi"><span>Pending / Approved</span><strong style={{ color: '#f59e0b' }}>{formatMoney(Number(summary.total_pending), activeSalaryCurrency)}</strong></div>
           </div>
           <section className="panel hr-panel fx-card" style={{ marginTop: 20 }}>
             <div className="panel-head">
@@ -845,7 +848,7 @@ export default function Salaries({
                   <CartesianGrid vertical={false} stroke="#edf0f6" strokeDasharray="4 6" />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} />
-                  <Tooltip formatter={(v: number) => `Rs ${v.toLocaleString()}`} />
+                  <Tooltip formatter={(v: number) => formatMoney(v, activeSalaryCurrency)} />
                   <Bar dataKey="paid" name="Paid Out" fill="#16a34a" radius={[6, 6, 0, 0]} />
                   <Bar dataKey="pending" name="Pending" fill="#f59e0b" radius={[6, 6, 0, 0]} />
                 </BarChart>
@@ -875,8 +878,8 @@ export default function Salaries({
                     {summary.campuses.map((c: any) => (
                       <tr key={c.id}>
                         <td><strong>{c.name}</strong></td>
-                        <td><strong style={{ color: '#16a34a' }}>Rs {Number(c.paid).toLocaleString()}</strong></td>
-                        <td><span style={{ color: '#f59e0b' }}>Rs {Number(c.pending).toLocaleString()}</span></td>
+                        <td><strong style={{ color: '#16a34a' }}>{formatMoney(Number(c.paid), activeSalaryCurrency)}</strong></td>
+                        <td><span style={{ color: '#f59e0b' }}>{formatMoney(Number(c.pending), activeSalaryCurrency)}</span></td>
                         <td>{c.staff_count}</td>
                       </tr>
                     ))}
@@ -914,9 +917,9 @@ export default function Salaries({
                     <td><strong>{s.staff_name}</strong></td>
                     <td>{s.school_name}</td>
                     <td>{s.effective_from}</td>
-                    <td><strong>Rs {s.basic}</strong></td>
-                    <td>{s.allowances?.map((a: R) => `${a.name}: Rs ${a.amount}`).join(', ') || 'None'}</td>
-                    <td>{s.fixed_deductions?.map((d: R) => `${d.name}: Rs ${d.amount}`).join(', ') || 'None'}</td>
+                    <td><strong>{formatMoney(Number(s.basic), s.currency || activeSalaryCurrency)}</strong></td>
+                    <td>{s.allowances?.map((a: R) => `${a.name}: ${formatMoney(Number(a.amount), s.currency || activeSalaryCurrency)}`).join(', ') || 'None'}</td>
+                    <td>{s.fixed_deductions?.map((d: R) => `${d.name}: ${formatMoney(Number(d.amount), s.currency || activeSalaryCurrency)}`).join(', ') || 'None'}</td>
                     <td>{s.currency}</td>
                   </tr>
                 ))}
@@ -955,7 +958,7 @@ export default function Salaries({
                     <td>{a.school_name}</td>
                     <td>{a.month}</td>
                     <td><span className={`pill ${a.kind === 'bonus' ? 'green' : 'amber'}`}>{a.kind_display}</span></td>
-                    <td><strong>Rs {a.amount}</strong></td>
+                    <td><strong>{formatMoney(Number(a.amount), activeSalaryCurrency)}</strong></td>
                     <td>{a.reason}</td>
                   </tr>
                 ))}
@@ -991,8 +994,8 @@ export default function Salaries({
                 {myPayslips.map(p => (
                   <tr key={p.id}>
                     <td><strong>{p.month}</strong></td>
-                    <td>Rs {p.gross}</td>
-                    <td><strong style={{ color: '#16a34a' }}>Rs {p.net}</strong></td>
+                    <td>{formatMoney(Number(p.gross), (p as any).currency || activeSalaryCurrency)}</td>
+                    <td><strong style={{ color: '#16a34a' }}>{formatMoney(Number(p.net), (p as any).currency || activeSalaryCurrency)}</strong></td>
                     <td>{p.paid_on || 'Pending'}</td>
                     <td>{p.method}</td>
                     <td><span className="pill green">{p.status}</span></td>
@@ -1050,7 +1053,7 @@ export default function Salaries({
             <form onSubmit={handlePaySalary}>
               <div className="modal-fields">
                 <label>Net Payout Amount
-                  <input type="text" disabled value={`Rs ${activePayRecord.net}`} />
+                  <input type="text" disabled value={formatMoney(Number(activePayRecord.net), activeSalaryCurrency)} />
                 </label>
                 <label>Payment Date *
                   <input type="date" required value={payDate} onChange={e => setPayDate(e.target.value)} />
@@ -1127,42 +1130,49 @@ export default function Salaries({
                 <div><strong>Payment Status:</strong> {activePayslip.status.toUpperCase()}</div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, margin: '16px 0', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                <div>
-                  <h5 style={{ margin: '0 0 8px', color: '#16a34a' }}>EARNINGS</h5>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                    <span>Basic Salary:</span><strong>Rs {activePayslip.basic}</strong>
-                  </div>
-                  {activePayslip.details?.allowances?.map((a: R, idx: number) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                      <span>{a.name}:</span><strong>Rs {a.amount}</strong>
-                    </div>
-                  ))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                    <span>Bonus Additions:</span><strong>Rs {activePayslip.additions_total}</strong>
-                  </div>
-                </div>
+              {(() => {
+                const payslipCur = activePayslip.currency || activeSalaryCurrency;
+                return (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, margin: '16px 0', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                      <div>
+                        <h5 style={{ margin: '0 0 8px', color: '#16a34a' }}>EARNINGS</h5>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>Basic Salary:</span><strong>{formatMoney(Number(activePayslip.basic), payslipCur)}</strong>
+                        </div>
+                        {activePayslip.details?.allowances?.map((a: R, idx: number) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                            <span>{a.name}:</span><strong>{formatMoney(Number(a.amount), payslipCur)}</strong>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>Bonus Additions:</span><strong>{formatMoney(Number(activePayslip.additions_total), payslipCur)}</strong>
+                        </div>
+                      </div>
 
-                <div>
-                  <h5 style={{ margin: '0 0 8px', color: '#dc2626' }}>DEDUCTIONS</h5>
-                  {activePayslip.details?.deductions?.map((d: R, idx: number) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                      <span>{d.name}:</span><strong>Rs {d.amount}</strong>
+                      <div>
+                        <h5 style={{ margin: '0 0 8px', color: '#dc2626' }}>DEDUCTIONS</h5>
+                        {activePayslip.details?.deductions?.map((d: R, idx: number) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                            <span>{d.name}:</span><strong>{formatMoney(Number(d.amount), payslipCur)}</strong>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>Deductions / Fines:</span><strong>{formatMoney(Number(activePayslip.deductions_total), payslipCur)}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>Advance Recovery:</span><strong>{formatMoney(Number(activePayslip.advance_recovered), payslipCur)}</strong>
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                    <span>Deductions / Fines:</span><strong>Rs {activePayslip.deductions_total}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                    <span>Advance Recovery:</span><strong>Rs {activePayslip.advance_recovered}</strong>
-                  </div>
-                </div>
-              </div>
 
-              <div style={{ borderTop: '2px dashed #94a3b8', marginTop: 16, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 16, fontWeight: 700 }}>NET PAYABLE</span>
-                <span style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>Rs {activePayslip.net}</span>
-              </div>
+                    <div style={{ borderTop: '2px dashed #94a3b8', marginTop: 16, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 16, fontWeight: 700 }}>NET PAYABLE</span>
+                      <span style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>{formatMoney(Number(activePayslip.net), payslipCur)}</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1184,7 +1194,7 @@ export default function Salaries({
                     {staffList.map(s => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.position})</option>)}
                   </select>
                 </label>
-                <label>Basic Salary (Rs) *
+                <label>Basic Salary ({salarySym}) *
                   <input type="number" step="0.01" min="1" required value={structBasic} onChange={e => setStructBasic(e.target.value)} />
                 </label>
                 <label>Effective Date *
@@ -1226,7 +1236,7 @@ export default function Salaries({
                     <option value="advance">Salary Advance (Recovered from net)</option>
                   </select>
                 </label>
-                <label>Amount (Rs) *
+                <label>Amount ({salarySym}) *
                   <input type="number" step="0.01" min="1" required value={adjAmount} onChange={e => setAdjAmount(e.target.value)} />
                 </label>
                 <label>Reason *
