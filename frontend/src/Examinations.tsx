@@ -780,7 +780,7 @@ export default function Examinations({
                     </span>
                   </div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>
-                    {analyticsData.summary?.eligible_boys_count ?? 0} boys / {analyticsData.summary?.eligible_girls_count ?? 0} girls assessed
+                    {(analyticsData.summary?.eligible_boys_count ?? analyticsData.summary?.boys_assessed) ?? 0} boys / {(analyticsData.summary?.eligible_girls_count ?? analyticsData.summary?.girls_assessed) ?? 0} girls assessed
                   </div>
                 </div>
 
@@ -805,13 +805,37 @@ export default function Examinations({
                     Completion & Coverage
                   </div>
                   <div style={{ fontSize: 24, fontWeight: 800, color: '#1e293b', margin: '8px 0 4px' }}>
-                    {analyticsData.summary?.eligible_students_count ?? 0} <span style={{ fontSize: 13, fontWeight: 400, color: '#64748b' }}>Complete</span> / {analyticsData.summary?.pending_students_count ?? 0} <span style={{ fontSize: 13, fontWeight: 400, color: '#f59e0b' }}>Pending</span>
+                    {(analyticsData.summary?.eligible_students_count ?? analyticsData.summary?.eligible_count) ?? 0} <span style={{ fontSize: 13, fontWeight: 400, color: '#64748b' }}>Complete</span> / {(analyticsData.summary?.pending_students_count ?? analyticsData.summary?.pending_count) ?? 0} <span style={{ fontSize: 13, fontWeight: 400, color: '#f59e0b' }}>Pending</span>
                   </div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>
                     Missing marks are null (never treated as 0)
                   </div>
                 </div>
               </div>
+
+              {/* No Marks Banner */}
+              {analyticsData.summary && ((analyticsData.summary.eligible_students_count ?? analyticsData.summary.eligible_count ?? 0) === 0) && (
+                <div style={{ padding: '14px 18px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 22 }}>💡</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1e40af' }}>
+                        No marks recorded for this examination structure yet
+                      </div>
+                      <div style={{ fontSize: 12, color: '#3b82f6' }}>
+                        Marks entered in the <strong>Marks Entry Grid</strong> will automatically calculate normalized percentages, student &amp; class averages, gender analytics, and score distributions.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="primary-btn"
+                    style={{ fontSize: 12, padding: '7px 16px' }}
+                    onClick={() => setTab('engine_marks')}
+                  >
+                    Enter Marks in Grid &rarr;
+                  </button>
+                </div>
+              )}
 
               {/* Per-Campus Performance Breakdown (Admin All-Campus Mode, Spec §1.2 & §8) */}
               {activeCampusId === null && analyticsData.campus_performance && analyticsData.campus_performance.length > 0 && (

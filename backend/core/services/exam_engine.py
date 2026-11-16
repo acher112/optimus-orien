@@ -255,16 +255,22 @@ def calculate_student_average(
     all_completed = all(r.get('completed', False) for r in results)
 
     # Calculate current overall percentage across available subjects
-    active_current_items = [r for r in results if r.get('current_percentage') is not None]
+    active_current_items = [
+        r for r in results
+        if r.get('final_percentage') is not None or r.get('current_percentage') is not None
+    ]
     current_overall = None
     if active_current_items:
+        def _get_eff(item):
+            return to_decimal(item['final_percentage'] if item.get('final_percentage') is not None else item['current_percentage'])
+
         if method == 'equal':
-            curr_sum = sum(to_decimal(r['current_percentage']) for r in active_current_items)
+            curr_sum = sum(_get_eff(r) for r in active_current_items)
             current_overall = curr_sum / Decimal(len(active_current_items))
         else:
             total_w = sum(weight_map[r['subject_id']] for r in active_current_items)
             if total_w > Decimal('0.00'):
-                curr_w_sum = sum(to_decimal(r['current_percentage']) * weight_map[r['subject_id']] for r in active_current_items)
+                curr_w_sum = sum(_get_eff(r) * weight_map[r['subject_id']] for r in active_current_items)
                 current_overall = curr_w_sum / total_w
 
     if not all_completed:
@@ -561,17 +567,32 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
 
         for klass in target_classes:
             # Active enrolled students deduplicated by student ID (Spec §8, §14 #19)
-            enrollments = Enrollment.objects.filter(
-                school_class=klass
-            ).filter(
-                Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
-            ).select_related('student').order_by('student_id', '-start_date')
+            ay_start = getattr(config.academic_year, 'start_date', None) if config.academic_year else None
+            enr_qs = Enrollment.objects.filter(school_class=klass)
+            if ay_start:
+                enr_active = enr_qs.filter(Q(end_date__isnull=True) | Q(end_date__gte=ay_start))
+                if not enr_active.exists():
+                    enr_active = enr_qs
+            else:
+                enr_active = enr_qs.filter(end_date__isnull=True)
+                if not enr_active.exists():
+                    enr_active = enr_qs
 
             students = []
-            for en in enrollments:
+            for en in enr_active.select_related('student').order_by('student_id', '-start_date'):
                 if en.student_id not in seen_student_ids:
                     seen_student_ids.add(en.student_id)
                     students.append(en.student)
+
+            # Also include any students with marks recorded in this class
+            mark_student_ids = list(ExamStudentMark.objects.filter(
+                component__in=components,
+                school_class=klass
+            ).values_list('student_id', flat=True).distinct())
+            for s in Student.objects.filter(id__in=mark_student_ids):
+                if s.id not in seen_student_ids:
+                    seen_student_ids.add(s.id)
+                    students.append(s)
 
             # Fetch all existing marks for this scope
             marks_qs = ExamStudentMark.objects.filter(

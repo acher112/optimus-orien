@@ -699,8 +699,13 @@ def engine_analytics(request):
         school_class__in=target_classes
     ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
 
-    if not student_results_qs.exists() and config:
-        # Safe recalculation if not yet calculated
+    has_marks = ExamStudentMark.objects.filter(component__configuration=config).exists()
+    has_valid_results = student_results_qs.filter(
+        Q(overall_percentage__isnull=False) | Q(current_overall_percentage__isnull=False)
+    ).exists()
+
+    if (not student_results_qs.exists() or (has_marks and not has_valid_results)) and config:
+        # Safe recalculation if not yet calculated or missing evaluated results
         try:
             recalculate_configuration(config.id)
             student_results_qs = CalculatedStudentResult.objects.filter(
@@ -1072,9 +1077,14 @@ def engine_analytics(request):
             'gender_gap_student_weighted': round(float(gender_gap_student_weighted), 2) if gender_gap_student_weighted is not None else None,
             'gender_gap_class_weighted': round(float(gender_gap_class_weighted), 2) if gender_gap_class_weighted is not None else None,
             'eligible_students_count': len(eligible_students),
+            'eligible_count': len(eligible_students),
             'eligible_boys_count': len(boys_eligible),
+            'boys_assessed': len(boys_eligible),
             'eligible_girls_count': len(girls_eligible),
+            'girls_assessed': len(girls_eligible),
             'pending_students_count': pending_count,
+            'pending_count': pending_count,
+            'total_assessed': len(eligible_students),
             'pass_rate': pass_rate,
             'passing_threshold': str(config.passing_threshold),
             'is_in_progress': any(s.get('overall_percentage') is None and s.get('current_percentage') is not None for s in eligible_students)
