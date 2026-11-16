@@ -560,7 +560,7 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
 
               {/* STEP 4: POLICIES */}
               {step === 4 && (
-                <div className="setup-form-grid">
+                <div className="setup-form-grid setup-policies-grid">
                   <div className="setup-policy">
                     <span className="setup-policy-icon lavender"><GraduationCap size={22} /></span>
                     <h3>Passing Grade Criteria *</h3>
