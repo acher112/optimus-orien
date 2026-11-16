@@ -301,6 +301,9 @@ const NAV_ITEM_FEATURE_KEYS: Record<string, string> = {
   'Audit log': 'audit_log',
 };
 
+// Global toggle to hide plan selection & payment methods from the UI while keeping underlying packages intact
+const HIDE_PAYMENT_AND_PLANS = true;
+
 const initials = (name: string) => name.split(/\s+/).map(s => s[0]).join('').slice(0, 2).toUpperCase();
 const fmt = (n: number | null | undefined, suffix = '%') => n === null || n === undefined ? '—' : `${n}${suffix}`;
 const nice = (s: string) => s.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -782,7 +785,9 @@ function App() {
       const storedUserStr = localStorage.getItem('optimus_user');
       if (storedUserStr) {
         const u = JSON.parse(storedUserStr);
-        if (u?.id && localStorage.getItem(`optimus_pending_plan_${u.id}`) === 'true') {
+        if (HIDE_PAYMENT_AND_PLANS && u?.id) {
+          try { localStorage.removeItem(`optimus_pending_plan_${u.id}`); } catch {}
+        } else if (u?.id && localStorage.getItem(`optimus_pending_plan_${u.id}`) === 'true') {
           return 'PlanSelection';
         }
       }
@@ -922,9 +927,14 @@ function App() {
     if (tier.includes('standard')) return 'standard';
     return 'free';
   }, [user, entitlements, subscription, activeCampusId]);
-  const isFreePlan = orgPlan === 'free';
+  const isFreePlan = HIDE_PAYMENT_AND_PLANS ? false : (orgPlan === 'free');
 
   const isFeatureUnlocked = useCallback((key: string) => {
+    // When plans/payments are hidden, all features remain unlocked without paywall gates
+    if (HIDE_PAYMENT_AND_PLANS) {
+      return true;
+    }
+
     // 1. Platform superadmin without school assignment bypasses tenant feature gating
     if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) {
       return true;
@@ -982,6 +992,9 @@ function App() {
   }, [user, entitlements, subscription, activeCampusId, orgPlan]);
 
   const getNavBadge = useCallback((name: string): { tier: 'standard' | 'premium'; label: string } | null => {
+    if (HIDE_PAYMENT_AND_PLANS) {
+      return null;
+    }
     // Only platform superadmin without any school assignment bypasses tenant feature gating
     if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) {
       return null;
@@ -1416,6 +1429,7 @@ function App() {
   }, [page]);
 
   const isItemUnlocked = useCallback((name: string): boolean => {
+    if (HIDE_PAYMENT_AND_PLANS) return true;
     if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) return true;
     if (orgPlan === 'premium' || orgPlan === 'custom') return true;
     const tier = NAV_ITEM_TIERS[name] || 'free';
@@ -1977,12 +1991,15 @@ function App() {
           setCampusDropdownOpen(false);
           setOpenDropdowns({});
           setShowNotifications(false);
-          if (isNewRegistration) {
+          if (isNewRegistration && !HIDE_PAYMENT_AND_PLANS) {
             try {
               localStorage.setItem(`optimus_pending_plan_${u.id}`, 'true');
             } catch {}
             setPage('PlanSelection');
           } else {
+            try {
+              localStorage.removeItem(`optimus_pending_plan_${u.id}`);
+            } catch {}
             setPage('Overview');
           }
           try { queryCache.clear(); } catch {}
@@ -2014,12 +2031,15 @@ function App() {
         setCampusDropdownOpen(false);
         setOpenDropdowns({});
         setShowNotifications(false);
-        if (isNewRegistration) {
+        if (isNewRegistration && !HIDE_PAYMENT_AND_PLANS) {
           try {
             localStorage.setItem(`optimus_pending_plan_${u.id}`, 'true');
           } catch {}
           setPage('PlanSelection');
         } else {
+          try {
+            localStorage.removeItem(`optimus_pending_plan_${u.id}`);
+          } catch {}
           setPage('Overview');
         }
         try { queryCache.clear(); } catch {}
@@ -2033,6 +2053,13 @@ function App() {
   );
 
   if (user && page === 'PlanSelection') {
+    if (HIDE_PAYMENT_AND_PLANS) {
+      try {
+        localStorage.removeItem(`optimus_pending_plan_${user.id}`);
+      } catch {}
+      setPage('Overview');
+      return null;
+    }
     return (
       <div className={dark ? 'dark' : ''}>
         <ErrorBoundary
@@ -2381,7 +2408,7 @@ function App() {
         )}
 
         <div className="sidebar-bottom">
-          {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
+          {!HIDE_PAYMENT_AND_PLANS && ['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
             <div className="sidebar-upgrade-wrap">
               <button
                 type="button"
@@ -2658,7 +2685,7 @@ function App() {
           </div>
         </header>
 
-        {subscription?.is_limited && ['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
+        {!HIDE_PAYMENT_AND_PLANS && subscription?.is_limited && ['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
           <div style={{
             background: 'linear-gradient(90deg, #fffbeb, #fef3c7)',
             borderBottom: '1px solid #fde68a',
