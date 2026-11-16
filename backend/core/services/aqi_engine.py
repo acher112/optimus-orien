@@ -232,17 +232,14 @@ def calculate_student_overall_average(
 
     effective_required = required_subject_count if required_subject_count is not None else (eligible_count + pending_count)
 
-    # Incomplete annual result remains pending
-    if pending_count > 0 or effective_required == 0 or (eligible_count < effective_required):
-        overall_percentage = None
-        status = 'pending'
-    else:
-        divisor = Decimal(str(eligible_count))
-        overall_percentage = (total_percentage / divisor) if divisor > D_ZERO else None
-        status = 'complete'
+    divisor = Decimal(str(eligible_count))
+    overall_percentage = (total_percentage / divisor) if (divisor > D_ZERO and pending_count == 0 and (effective_required == 0 or eligible_count >= effective_required)) else None
+    current_overall = (total_percentage / divisor) if divisor > D_ZERO else None
+    status = 'complete' if overall_percentage is not None else 'pending'
 
     return {
         'overall_percentage': overall_percentage,
+        'current_overall_percentage': current_overall,
         'status': status,
         'eligible_subjects': eligible_count,
         'pending_subjects': pending_count,
@@ -414,6 +411,42 @@ def compute_student_subject_result_from_db(
     school_class = enrollment.school_class
     student = enrollment.student
 
+    # Check authoritative central calculation engine record first
+    from core.models import CalculatedSubjectResult
+    csr = CalculatedSubjectResult.objects.filter(
+        student=student,
+        subject=subject,
+        school_class=school_class
+    ).order_by('-configuration__version', '-id').first()
+
+    if csr and (csr.completed or csr.current_percentage is not None):
+        terms_trace = []
+        if isinstance(csr.term_results, list):
+            for t in csr.term_results:
+                terms_trace.append({
+                    'term': t.get('component_name') or f"Term {t.get('component_id')}",
+                    'obtained': to_decimal(t.get('marks_obtained')) if t.get('marks_obtained') is not None else None,
+                    'max': to_decimal(t.get('maximum_marks', '100.00')),
+                    'contribution': to_decimal(t.get('weight_percentage', '0.00')),
+                    'term_percentage': to_decimal(t.get('term_percentage')) if t.get('term_percentage') is not None else None,
+                    'points_earned': to_decimal(t.get('contribution')) if t.get('contribution') is not None else None,
+                    'status': t.get('status', 'recorded'),
+                })
+        return {
+            'subject_id': subject.id,
+            'subject_name': subject.name,
+            'subject_code': subject.code,
+            'required': True,
+            'status': 'complete' if csr.completed else 'pending',
+            'final_percentage': csr.final_percentage,
+            'scaled_marks': csr.scaled_marks,
+            'current_performance': csr.current_percentage,
+            'accumulated_points': csr.accumulated_contribution,
+            'assessed_weight': csr.assessed_weight,
+            'remaining_weight': Decimal('100.0000') - (csr.assessed_weight or Decimal('0.0000')),
+            'terms_trace': terms_trace,
+        }
+
     if not structure:
         structure = ExamStructure.objects.filter(
             classes=school_class,
@@ -553,6 +586,8 @@ def compute_student_full_profile(
         overall_res = calculate_student_overall_average(all_s_results, required_subject_count=len(all_subjects))
         student_overall = overall_res['overall_percentage']
         student_status = overall_res['status']
+        if student_overall is None and overall_res.get('current_overall_percentage') is not None:
+            student_overall = overall_res['current_overall_percentage']
     else:
         student_overall = None
         student_status = subject_results[0]['status'] if subject_results else 'pending'

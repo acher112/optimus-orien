@@ -22,7 +22,8 @@ from core.services.exam_engine import (
     calculate_subject_average, calculate_class_average,
     calculate_class_weighted_average, calculate_student_weighted_average,
     validate_configuration_for_publication,
-    recalculate_configuration, recalculate_student, to_decimal, EPSILON
+    recalculate_configuration, recalculate_student,
+    sync_exam_marks_to_assessments_and_aqi, to_decimal, EPSILON
 )
 
 MANAGERS = ('organisation_admin', 'school_admin', 'principal')
@@ -358,6 +359,7 @@ def engine_configuration_publish(request, pk):
 
         # Run recalculation engine
         recalc_res = recalculate_configuration(config.id)
+        sync_exam_marks_to_assessments_and_aqi(config)
 
         # Record publication snapshot
         weights_snap = {
@@ -399,6 +401,9 @@ def engine_configuration_recalculate(request, pk):
         raise NotFound('Configuration not found or outside authorized scope.')
 
     summary = recalculate_configuration(config.id)
+    sync_exam_marks_to_assessments_and_aqi(config)
+    from core.services.cache_service import invalidate_school_cache
+    invalidate_school_cache(config.school_id)
     return Response({'id': config.id, 'summary': summary})
 
 
@@ -567,6 +572,15 @@ def engine_marks_grid(request, config_id):
         for s_id in affected_students:
             recalculate_student(s_id, config.id, target_school_class=school_class)
 
+        # Recalculate entire configuration for updated class/school-wide averages
+        recalculate_configuration(config.id)
+
+        # Synchronize to Assessment, Grade, and AQI structures
+        sync_exam_marks_to_assessments_and_aqi(config, school_class=school_class, subject=subject)
+
+        from core.services.cache_service import invalidate_school_cache
+        invalidate_school_cache(config.school_id)
+
     return Response({
         'updated_marks': updated_count,
         'affected_students': len(affected_students)
@@ -597,9 +611,13 @@ def engine_analytics(request):
         if not config:
             raise NotFound('Examination configuration not found or outside authorized scope.')
     else:
-        config = ExamConfiguration.objects.filter(school_id__in=school_ids, status='published').first()
-        if not config:
-            config = ExamConfiguration.objects.filter(school_id__in=school_ids).first()
+        # Prefer configuration that has calculated results or student marks, then published, then most recent
+        config = (
+            ExamConfiguration.objects.filter(school_id__in=school_ids, calculated_student_results__isnull=False).distinct().order_by('-status', '-id').first()
+            or ExamConfiguration.objects.filter(school_id__in=school_ids, components__student_marks__isnull=False).distinct().order_by('-status', '-id').first()
+            or ExamConfiguration.objects.filter(school_id__in=school_ids, status='published').order_by('-id').first()
+            or ExamConfiguration.objects.filter(school_id__in=school_ids).order_by('-id').first()
+        )
 
     # Available configs for filter dropdown (strictly within resolved campus scope)
     available_configs = [{
@@ -648,8 +666,10 @@ def engine_analytics(request):
         target_classes_qs = target_classes_qs.filter(pk=request.query_params['class'])
     elif config.school_class:
         target_classes_qs = target_classes_qs.filter(pk=config.school_class_id)
-    else:
-        target_classes_qs = target_classes_qs.filter(academic_year__name=config.academic_year.name)
+    elif config.academic_year:
+        ay_filtered = target_classes_qs.filter(academic_year=config.academic_year)
+        if ay_filtered.exists():
+            target_classes_qs = ay_filtered
     if request.query_params.get('section'):
         target_classes_qs = target_classes_qs.filter(section=request.query_params['section'])
     target_classes = list(target_classes_qs.select_related('school', 'academic_year').order_by('school__name', 'name', 'section'))
@@ -663,22 +683,18 @@ def engine_analytics(request):
         target_subjects = list(Subject.objects.filter(school=config.school).select_related('school').order_by('name'))
 
     # Fetch calculated student results for this configuration and class scope
-    if config_id:
+    student_results_qs = CalculatedStudentResult.objects.filter(
+        configuration=config,
+        school_class__in=target_classes
+    ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
+
+    if not student_results_qs.exists() and config:
+        # Auto-recalculate configuration if not yet calculated
+        recalculate_configuration(config.id)
         student_results_qs = CalculatedStudentResult.objects.filter(
-            configuration_id=config_id,
+            configuration=config,
             school_class__in=target_classes
         ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
-    else:
-        student_results_qs = CalculatedStudentResult.objects.filter(
-            configuration__school_id__in=school_ids,
-            configuration__status='published',
-            school_class__in=target_classes
-        ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
-        if not student_results_qs.exists() and config:
-            student_results_qs = CalculatedStudentResult.objects.filter(
-                configuration=config,
-                school_class__in=target_classes
-            ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
 
     # Build student list
     student_records = []
@@ -726,14 +742,11 @@ def engine_analytics(request):
         klass_student_ids = set(en.student_id for en in klass_enrollments)
         klass_enrolled_count = len(klass_student_ids)
 
-        klass_sub_results_qs = CalculatedSubjectResult.objects.filter(school_class=klass)
-        if config_id:
-            klass_sub_results_qs = klass_sub_results_qs.filter(configuration_id=config_id)
-        else:
-            klass_sub_results_qs = klass_sub_results_qs.filter(configuration__status='published')
-            if not klass_sub_results_qs.exists() and config:
-                klass_sub_results_qs = CalculatedSubjectResult.objects.filter(configuration=config, school_class=klass)
-        klass_sub_results = list(klass_sub_results_qs.select_related('subject', 'student'))
+        klass_sub_results_qs = CalculatedSubjectResult.objects.filter(
+            configuration=config,
+            school_class=klass
+        ).select_related('subject', 'student')
+        klass_sub_results = list(klass_sub_results_qs)
 
         included_subject_averages = []
         included_boys_subject_averages = []
@@ -916,22 +929,10 @@ def engine_analytics(request):
         )
     ))
 
-    if config_id:
-        all_subject_results = list(CalculatedSubjectResult.objects.filter(
-            configuration_id=config_id,
-            school_class__in=target_classes
-        ).select_related('subject', 'subject__school', 'student'))
-    else:
-        all_subject_results = list(CalculatedSubjectResult.objects.filter(
-            configuration__school_id__in=school_ids,
-            configuration__status='published',
-            school_class__in=target_classes
-        ).select_related('subject', 'subject__school', 'student'))
-        if not all_subject_results and config:
-            all_subject_results = list(CalculatedSubjectResult.objects.filter(
-                configuration=config,
-                school_class__in=target_classes
-            ).select_related('subject', 'subject__school', 'student'))
+    all_subject_results = list(CalculatedSubjectResult.objects.filter(
+        configuration=config,
+        school_class__in=target_classes
+    ).select_related('subject', 'subject__school', 'student'))
 
     subject_performance = []
     for subj in target_subjects:

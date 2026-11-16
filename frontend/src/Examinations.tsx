@@ -443,6 +443,7 @@ export default function Examinations({
       });
       notify(`Saved ${res.updated_marks} marks records across terms. Recalculated ${res.affected_students} students.`);
       loadMarksGridData();
+      setBump(b => b + 1);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Failed to save marks');
     } finally {
@@ -651,6 +652,23 @@ export default function Examinations({
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Filter size={15} /> FILTERS:
                     </span>
+                    <label style={{ fontSize: 13 }}>Structure
+                      <select
+                        className="fx-select"
+                        style={{ marginLeft: 6, fontSize: 13 }}
+                        value={selectedConfigId || ''}
+                        onChange={e => {
+                          setSelectedConfigId(Number(e.target.value));
+                          setBump(b => b + 1);
+                        }}
+                      >
+                        {engineConfigs.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.status}){activeCampusId === null && c.school_name ? ` – ${c.school_name}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <label style={{ fontSize: 13 }}>Averaging Method
                       <select
                         className="fx-select"
@@ -1191,7 +1209,24 @@ export default function Examinations({
           </div>
 
           {/* Grid Selectors */}
-          <div style={{ display: 'flex', gap: 16, padding: '12px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, padding: '12px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>Structure:
+              <select
+                className="fx-select"
+                style={{ marginLeft: 6 }}
+                value={selectedConfigId || ''}
+                onChange={e => {
+                  setSelectedConfigId(Number(e.target.value));
+                  setBump(b => b + 1);
+                }}
+              >
+                {engineConfigs.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.status}){activeCampusId === null && c.school_name ? ` – ${c.school_name}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label style={{ fontSize: 13, fontWeight: 600 }}>Class:
               <select
                 className="fx-select"

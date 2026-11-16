@@ -733,6 +733,12 @@ def recalculate_student(student_id: int, configuration_id: int, target_school_cl
             {'subject_id': sw.subject_id, 'weight': sw.weight}
             for sw in config.subject_weights.all()
         ]
+        if config.subject_weighting_mode == 'custom':
+            configured_ids = {sw['subject_id'] for sw in subject_weights}
+            target_subs_list = list(Subject.objects.filter(school=config.school)) if not config.subject else [config.subject]
+            for s in target_subs_list:
+                if s.id not in configured_ids:
+                    subject_weights.append({'subject_id': s.id, 'weight': Decimal('1.00')})
 
         target_subjects = list(Subject.objects.filter(school=config.school)) if not config.subject else [config.subject]
         subjects_by_id = {s.id: s for s in target_subjects}
@@ -839,3 +845,107 @@ def recalculate_student(student_id: int, configuration_id: int, target_school_cl
         )
 
         return {'success': True, 'student_id': student.id}
+
+
+def sync_exam_marks_to_assessments_and_aqi(config, school_class=None, subject=None):
+    """Synchronizes ExamStudentMark and ExamConfiguration to Assessment, Grade, and ExamStructure.
+    Ensures that marks entered in the examination grid immediately appear across all AQI levels,
+    student profiles, and student/parent portals.
+    """
+    from django.utils import timezone
+    from core.models import (
+        ExamStructure, ExamTerm, TermSubjectMax, Assessment, Grade,
+        ExamStudentMark, SchoolClass, Subject
+    )
+
+    components = list(config.components.all().order_by('sequence', 'id'))
+    if not components:
+        return
+
+    # 1. Ensure a matching published ExamStructure exists
+    struct, _ = ExamStructure.objects.get_or_create(
+        school=config.school,
+        academic_year=config.academic_year,
+        defaults={
+            'name': config.name,
+            'organisation': config.school.organisation,
+            'reporting_scale': config.reporting_scale,
+            'pass_percentage': config.passing_threshold,
+            'status': 'published',
+            'version': config.version
+        }
+    )
+    if struct.status != 'published':
+        struct.status = 'published'
+        struct.save(update_fields=['status'])
+
+    # Link applicable class
+    if school_class and not struct.classes.filter(id=school_class.id).exists():
+        struct.classes.add(school_class)
+
+    # 2. Ensure ExamTerms exist and match components
+    term_map = {}
+    for comp in components:
+        term, _ = ExamTerm.objects.get_or_create(
+            structure=struct,
+            name=comp.name,
+            defaults={
+                'order': comp.sequence,
+                'contribution': comp.weight_percentage
+            }
+        )
+        if term.contribution != comp.weight_percentage or term.order != comp.sequence:
+            term.contribution = comp.weight_percentage
+            term.order = comp.sequence
+            term.save(update_fields=['contribution', 'order'])
+        term_map[comp.id] = term
+
+    # Target classes and subjects to sync
+    classes_to_sync = [school_class] if school_class else list(SchoolClass.objects.filter(school=config.school))
+    subjects_to_sync = [subject] if subject else list(Subject.objects.filter(school=config.school))
+
+    for cl in classes_to_sync:
+        if not struct.classes.filter(id=cl.id).exists():
+            struct.classes.add(cl)
+        for subj in subjects_to_sync:
+            for comp in components:
+                term = term_map.get(comp.id)
+                if not term:
+                    continue
+
+                TermSubjectMax.objects.update_or_create(
+                    term=term,
+                    subject=subj,
+                    defaults={'max_marks': comp.default_max_marks}
+                )
+
+                a, _ = Assessment.objects.update_or_create(
+                    school_class=cl,
+                    subject=subj,
+                    title=comp.name,
+                    defaults={
+                        'date': config.academic_year.start_date if config.academic_year else timezone.localdate(),
+                        'max_marks': comp.default_max_marks,
+                        'weight': comp.weight_percentage,
+                        'published': True,
+                        'exam_term': term
+                    }
+                )
+
+                marks_for_comp = ExamStudentMark.objects.filter(
+                    component=comp,
+                    subject=subj,
+                    school_class=cl
+                ).select_related('student')
+
+                for m in marks_for_comp:
+                    Grade.objects.update_or_create(
+                        assessment=a,
+                        student=m.student,
+                        defaults={
+                            'marks': m.marks_obtained,
+                            'result_status': m.result_status,
+                            'feedback': m.feedback or ''
+                        }
+                    )
+
