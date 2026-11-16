@@ -165,7 +165,7 @@ export default function Examinations({
   // Load Configurable Engine Configurations
   const loadEngineConfigs = useCallback(async () => {
     try {
-      const qs = activeCampusId ? `?school=${activeCampusId}` : '';
+      const qs = activeCampusId ? `?school=${activeCampusId}` : (!isSingleCampusRole ? '?school=all' : '');
       const res = await request<R>(`exams/engine/configurations/${qs}`);
       const list = res.results || [];
       setEngineConfigs(list);
@@ -177,12 +177,12 @@ export default function Examinations({
     } catch (err) {
       console.error('Failed to load exam configurations', err);
     }
-  }, [activeCampusId]);
+  }, [activeCampusId, isSingleCampusRole]);
 
   // Load Legacy Sessions & Scales
   const loadSessionsAndPapers = useCallback(async () => {
     try {
-      const qs = activeCampusId ? `?school=${activeCampusId}` : '';
+      const qs = activeCampusId ? `?school=${activeCampusId}` : (!isSingleCampusRole ? '?school=all' : '');
       const [sessRes, scaleRes] = await Promise.all([
         request<R>(`exams/sessions/${qs}`),
         request<R>(`exams/grading-scales/${qs}`)
@@ -198,7 +198,7 @@ export default function Examinations({
     } catch (err) {
       console.error('Failed to load exam sessions', err);
     }
-  }, [activeCampusId]);
+  }, [activeCampusId, isSingleCampusRole]);
 
   useEffect(() => {
     if (activeSessionId) {
@@ -227,6 +227,9 @@ export default function Examinations({
 
       const res = await request<R>(url);
       setAnalyticsData(res);
+      if (res.configuration?.id && !selectedConfigId) {
+        setSelectedConfigId(res.configuration.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load analytics');
     } finally {

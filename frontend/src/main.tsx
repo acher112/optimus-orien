@@ -1722,6 +1722,19 @@ function App() {
       list<{ id: number; name: string; school_id?: number }>('teachers', { school: campusId }).then(tchs => {
         setRefData(prev => ({ ...prev, teachers: tchs || [] }));
       }).catch(() => {});
+      list<{ id: number; name: string; school?: number; section?: string; display_name?: string }>('classes', { school: campusId }).then(cls => {
+        if (cls && cls.length > 0) {
+          setRefData(prev => {
+            const merged = [...prev.classes];
+            cls.forEach(c => {
+              const idx = merged.findIndex(m => m.id === c.id);
+              if (idx >= 0) merged[idx] = c;
+              else merged.push(c);
+            });
+            return { ...prev, classes: merged };
+          });
+        }
+      }).catch(() => {});
     }
     if (page === 'Subjects') {
       const assigned = Array.isArray((r as any).assigned_classes)
@@ -4003,6 +4016,21 @@ function App() {
                           onChange={e => {
                             const sc = e.target.value;
                             setForm(s => ({ ...s, school: sc, school_class: '' }));
+                            if (sc) {
+                              list<{ id: number; name: string; school?: number; section?: string; display_name?: string }>('classes', { school: sc }).then(cls => {
+                                if (cls && cls.length > 0) {
+                                  setRefData(prev => {
+                                    const merged = [...prev.classes];
+                                    cls.forEach(c => {
+                                      const idx = merged.findIndex(m => m.id === c.id);
+                                      if (idx >= 0) merged[idx] = c;
+                                      else merged.push(c);
+                                    });
+                                    return { ...prev, classes: merged };
+                                  });
+                                }
+                              }).catch(() => {});
+                            }
                           }}
                         >
                           <option value="">Select campus…</option>
@@ -4026,13 +4054,16 @@ function App() {
                         onChange={e => setForm(s => ({ ...s, school_class: e.target.value }))}
                       >
                         <option value="">{form.school || isSingleCampusRole ? 'Select class…' : 'Select campus first'}</option>
-                        {refData.classes
-                          .filter(c => !form.school || !c.school || String(c.school) === form.school)
-                          .map(c => (
+                        {(() => {
+                          const targetCampus = form.school || String(activeCampusId || '');
+                          let cls = targetCampus ? refData.classes.filter(c => !c.school || String(c.school) === String(targetCampus)) : refData.classes;
+                          if (cls.length === 0 && refData.classes.length > 0) cls = refData.classes;
+                          return cls.map(c => (
                             <option key={c.id} value={c.id}>
                               {(c as any).display_name || ((c as any).section ? `${c.name} – ${(c as any).section}` : c.name)}
                             </option>
-                          ))}
+                          ));
+                        })()}
                       </select>
                     </label>
 
@@ -4583,6 +4614,21 @@ function App() {
                         onChange={e => {
                           const sc = e.target.value;
                           setEditForm(s => ({ ...s, school: sc, school_class: '', subject: '' }));
+                          if (sc) {
+                            list<{ id: number; name: string; school?: number; section?: string; display_name?: string }>('classes', { school: sc }).then(cls => {
+                              if (cls && cls.length > 0) {
+                                setRefData(prev => {
+                                  const merged = [...prev.classes];
+                                  cls.forEach(c => {
+                                    const idx = merged.findIndex(m => m.id === c.id);
+                                    if (idx >= 0) merged[idx] = c;
+                                    else merged.push(c);
+                                  });
+                                  return { ...prev, classes: merged };
+                                });
+                              }
+                            }).catch(() => {});
+                          }
                         }}
                       >
                         <option value="">Select campus…</option>
@@ -4592,7 +4638,10 @@ function App() {
                   );
                   if (f.key === 'school_class') {
                     const currentCampus = editForm.school || String(activeCampusId || '');
-                    const cls = currentCampus ? refData.classes.filter(c => !c.school || String(c.school) === currentCampus) : refData.classes;
+                    let cls = currentCampus ? refData.classes.filter(c => !c.school || String(c.school) === String(currentCampus)) : refData.classes;
+                    if (cls.length === 0 && refData.classes.length > 0) {
+                      cls = refData.classes;
+                    }
                     return (
                       <label key={f.key}>
                         {f.label}{f.required && <span className="required"> *</span>}

@@ -226,15 +226,22 @@ export const logout = async () => {
 };
 
 export const list = async <T>(name: string, params?: Record<string, string | number>) => {
-  let url = name.includes('?') ? name : `${name}/`;
+  let [base, existingQuery] = name.split('?');
+  base = base.replace(/\/+$/, '') + '/';
+  const q = new URLSearchParams(existingQuery || '');
   if (params) {
-    const q = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null && v !== '') q.set(k, String(v));
     }
-    const qs = q.toString();
-    if (qs) url += (url.includes('?') ? '&' : '?') + qs;
   }
+  // For core reference collections used in dropdowns (classes, subjects, schools, years, teachers),
+  // ensure page_size=500 so dropdowns are never truncated by the default 25 pagination limit.
+  const cleanBase = base.replace(/^\/+|\/+$/g, '');
+  if (['classes', 'subjects', 'schools', 'years', 'teachers'].includes(cleanBase) && !q.has('page_size') && !q.has('page')) {
+    q.set('page_size', '500');
+  }
+  const qs = q.toString();
+  const url = qs ? `${base}?${qs}` : base;
   const x = await request<{ results: T[] } | T[]>(url);
   return Array.isArray(x) ? x : x.results;
 };

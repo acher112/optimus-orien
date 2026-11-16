@@ -59,6 +59,7 @@ def engine_configurations(request):
             qs = qs.filter(school_class_id=request.query_params['class'])
         if request.query_params.get('status'):
             qs = qs.filter(status=request.query_params['status'])
+        qs = qs.order_by('-status', '-id')
 
         results = []
         for c in qs:
@@ -68,9 +69,9 @@ def engine_configurations(request):
                 'id': c.id,
                 'name': c.name,
                 'school_id': c.school_id,
-                'school_name': c.school.name,
+                'school_name': c.school.name if c.school else 'Campus',
                 'academic_year_id': c.academic_year_id,
-                'academic_year_name': c.academic_year.name,
+                'academic_year_name': c.academic_year.name if c.academic_year else 'Academic Year',
                 'class_id': c.school_class_id,
                 'class_name': c.school_class.name if c.school_class else 'All classes (School default)',
                 'subject_id': c.subject_id,
@@ -606,11 +607,15 @@ def engine_analytics(request):
     is_multi_campus = len(school_ids) > 1 or is_overall_mode(request)
 
     config_id = request.query_params.get('configuration')
+    config = None
     if config_id:
-        config = ExamConfiguration.objects.filter(pk=config_id, school_id__in=school_ids).first()
-        if not config:
-            raise NotFound('Examination configuration not found or outside authorized scope.')
-    else:
+        try:
+            cfg_pk = int(config_id)
+            config = ExamConfiguration.objects.filter(pk=cfg_pk, school_id__in=school_ids).first()
+        except (ValueError, TypeError):
+            pass
+
+    if not config:
         # Prefer configuration that has calculated results or student marks, then published, then most recent
         config = (
             ExamConfiguration.objects.filter(school_id__in=school_ids, calculated_student_results__isnull=False).distinct().order_by('-status', '-id').first()
@@ -624,10 +629,10 @@ def engine_analytics(request):
         'id': c.id,
         'name': c.name,
         'school_id': c.school_id,
-        'school_name': c.school.name,
-        'academic_year_name': c.academic_year.name,
+        'school_name': c.school.name if c.school else 'Campus',
+        'academic_year_name': c.academic_year.name if c.academic_year else 'Academic Year',
         'status': c.status
-    } for c in ExamConfiguration.objects.filter(school_id__in=school_ids)]
+    } for c in ExamConfiguration.objects.filter(school_id__in=school_ids).select_related('school', 'academic_year')]
 
     if not config:
         return Response({
@@ -657,21 +662,27 @@ def engine_analytics(request):
         })
 
     # Identify target classes in scope
-    if is_multi_campus:
+    target_classes_qs = SchoolClass.objects.filter(school=config.school)
+    if is_multi_campus and not request.query_params.get('class'):
         target_classes_qs = SchoolClass.objects.filter(school_id__in=school_ids)
-    else:
-        target_classes_qs = SchoolClass.objects.filter(school=config.school)
 
     if request.query_params.get('class'):
         target_classes_qs = target_classes_qs.filter(pk=request.query_params['class'])
     elif config.school_class:
-        target_classes_qs = target_classes_qs.filter(pk=config.school_class_id)
+        # Include config's designated class plus any other classes with marks under this structure
+        extra_cids = list(ExamStudentMark.objects.filter(component__configuration=config).values_list('school_class_id', flat=True).distinct())
+        if extra_cids:
+            target_classes_qs = target_classes_qs.filter(Q(pk=config.school_class_id) | Q(pk__in=extra_cids))
+        else:
+            target_classes_qs = target_classes_qs.filter(pk=config.school_class_id)
     elif config.academic_year:
         ay_filtered = target_classes_qs.filter(academic_year=config.academic_year)
         if ay_filtered.exists():
             target_classes_qs = ay_filtered
+
     if request.query_params.get('section'):
         target_classes_qs = target_classes_qs.filter(section=request.query_params['section'])
+
     target_classes = list(target_classes_qs.select_related('school', 'academic_year').order_by('school__name', 'name', 'section'))
 
     # Identify target subjects in scope
@@ -689,12 +700,15 @@ def engine_analytics(request):
     ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
 
     if not student_results_qs.exists() and config:
-        # Auto-recalculate configuration if not yet calculated
-        recalculate_configuration(config.id)
-        student_results_qs = CalculatedStudentResult.objects.filter(
-            configuration=config,
-            school_class__in=target_classes
-        ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
+        # Safe recalculation if not yet calculated
+        try:
+            recalculate_configuration(config.id)
+            student_results_qs = CalculatedStudentResult.objects.filter(
+                configuration=config,
+                school_class__in=target_classes
+            ).select_related('student', 'school_class', 'school_class__school', 'highest_subject', 'lowest_subject')
+        except Exception:
+            pass
 
     # Build student list
     student_records = []
@@ -729,34 +743,45 @@ def engine_analytics(request):
     eligible_students = [s for s in student_records if s['effective_percentage'] is not None]
     pending_count = sum(1 for s in student_records if s['effective_percentage'] is None)
 
+    # High performance bulk prefetching: prefetch all active enrollments and calculated subject results
+    ay_start = config.academic_year.start_date if (config and config.academic_year) else None
+    enrollment_qs = Enrollment.objects.filter(school_class__in=target_classes)
+    if ay_start:
+        enrollment_qs = enrollment_qs.filter(Q(end_date__isnull=True) | Q(end_date__gte=ay_start))
+    else:
+        enrollment_qs = enrollment_qs.filter(end_date__isnull=True)
+    all_enrollments = list(enrollment_qs.select_related('student'))
+
+    enrollments_by_class = {}
+    for en in all_enrollments:
+        enrollments_by_class.setdefault(en.school_class_id, set()).add(en.student_id)
+
+    all_sub_results = list(CalculatedSubjectResult.objects.filter(
+        configuration=config,
+        school_class__in=target_classes
+    ).select_related('subject', 'student'))
+
+    sub_results_by_class_subject = {}
+    for sr in all_sub_results:
+        sub_results_by_class_subject.setdefault((sr.school_class_id, sr.subject_id), []).append(sr)
+
     # Class performance table (Spec §7: Official Class Average = Equal-Subject Model)
     # SUM(Included Subject Averages) / Number of Included Subjects
     class_performance = []
     for klass in target_classes:
-        # Active enrollments for this class
-        klass_enrollments = Enrollment.objects.filter(
-            school_class=klass
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
-        ).select_related('student')
-        klass_student_ids = set(en.student_id for en in klass_enrollments)
+        klass_student_ids = enrollments_by_class.get(klass.id, set())
         klass_enrolled_count = len(klass_student_ids)
-
-        klass_sub_results_qs = CalculatedSubjectResult.objects.filter(
-            configuration=config,
-            school_class=klass
-        ).select_related('subject', 'student')
-        klass_sub_results = list(klass_sub_results_qs)
 
         included_subject_averages = []
         included_boys_subject_averages = []
         included_girls_subject_averages = []
 
         for subj in target_subjects:
+            subj_results = sub_results_by_class_subject.get((klass.id, subj.id), [])
             subj_scores = [
                 to_decimal(sr.final_percentage if sr.final_percentage is not None else sr.current_percentage)
-                for sr in klass_sub_results
-                if sr.subject_id == subj.id and (sr.final_percentage is not None or sr.current_percentage is not None)
+                for sr in subj_results
+                if (sr.final_percentage is not None or sr.current_percentage is not None)
             ]
             subj_avg = calculate_group_average(subj_scores)
             if subj_avg is not None:
@@ -765,8 +790,8 @@ def engine_analytics(request):
             # Gender-specific subject averages in this class (Spec §9)
             boys_scores = [
                 to_decimal(sr.final_percentage if sr.final_percentage is not None else sr.current_percentage)
-                for sr in klass_sub_results
-                if sr.subject_id == subj.id and (sr.final_percentage is not None or sr.current_percentage is not None) and sr.student.gender == 'male'
+                for sr in subj_results
+                if (sr.final_percentage is not None or sr.current_percentage is not None) and sr.student.gender == 'male'
             ]
             boys_subj_avg = calculate_group_average(boys_scores)
             if boys_subj_avg is not None:
@@ -774,8 +799,8 @@ def engine_analytics(request):
 
             girls_scores = [
                 to_decimal(sr.final_percentage if sr.final_percentage is not None else sr.current_percentage)
-                for sr in klass_sub_results
-                if sr.subject_id == subj.id and (sr.final_percentage is not None or sr.current_percentage is not None) and sr.student.gender == 'female'
+                for sr in subj_results
+                if (sr.final_percentage is not None or sr.current_percentage is not None) and sr.student.gender == 'female'
             ]
             girls_subj_avg = calculate_group_average(girls_scores)
             if girls_subj_avg is not None:
@@ -920,24 +945,12 @@ def engine_analytics(request):
             bins[6]['count'] += 1
 
     # Subject performance with coverage metrics (Spec §6)
-    total_enrolled_students = len(set(
-        en.student_id
-        for en in Enrollment.objects.filter(
-            school_class__in=target_classes
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
-        )
-    ))
-
-    all_subject_results = list(CalculatedSubjectResult.objects.filter(
-        configuration=config,
-        school_class__in=target_classes
-    ).select_related('subject', 'subject__school', 'student'))
+    total_enrolled_students = len(set.union(*enrollments_by_class.values())) if enrollments_by_class else 0
 
     subject_performance = []
     for subj in target_subjects:
         subj_results = [
-            sr for sr in all_subject_results
+            sr for sr in all_sub_results
             if sr.subject_id == subj.id and (sr.final_percentage is not None or sr.current_percentage is not None)
         ]
         eligible_scores = [
@@ -960,12 +973,12 @@ def engine_analytics(request):
         s_girls_avg = calculate_group_average(girls_scores)
         s_gap = (s_girls_avg - s_boys_avg) if (s_girls_avg is not None and s_boys_avg is not None) else None
 
-        subj_name_str = f"{subj.name} ({subj.school.name})" if is_multi_campus else subj.name
+        subj_name_str = f"{subj.name} ({subj.school.name})" if is_multi_campus and subj.school else subj.name
         subject_performance.append({
             'subject_id': subj.id,
             'subject_name': subj_name_str,
             'school_id': subj.school_id,
-            'school_name': subj.school.name,
+            'school_name': subj.school.name if subj.school else 'Campus',
             'subject_code': subj.code,
             'average_percentage': round(float(sub_stats['average_percentage']), 2) if sub_stats['average_percentage'] is not None else None,
             'overall_average': round(float(sub_stats['average_percentage']), 2) if sub_stats['average_percentage'] is not None else None,
@@ -1012,11 +1025,9 @@ def engine_analytics(request):
             sch_passed = sum(1 for s in sch_students if s['passed'] is True)
             sch_pass_rate = round(float(sch_passed / len(sch_students) * 100), 1) if sch_students else None
 
-            sch_enrolled = len(set(
-                en.student_id for en in Enrollment.objects.filter(school_class__school=sch).filter(
-                    Q(end_date__isnull=True) | Q(end_date__gte=config.academic_year.start_date)
-                )
-            ))
+            sch_classes = [c.id for c in target_classes if c.school_id == sch.id]
+            sch_enrolled = len(set.union(*[enrollments_by_class.get(cid, set()) for cid in sch_classes])) if sch_classes else 0
+
             campus_performance.append({
                 'campus_id': sch.id,
                 'campus_name': sch.name,
@@ -1041,8 +1052,8 @@ def engine_analytics(request):
             'passing_threshold': str(config.passing_threshold),
             'subject_weighting_mode': config.subject_weighting_mode,
             'school_id': config.school_id,
-            'school_name': config.school.name,
-            'academic_year_name': config.academic_year.name
+            'school_name': config.school.name if config.school else 'Campus',
+            'academic_year_name': config.academic_year.name if config.academic_year else 'Academic Year'
         },
         'available_configurations': available_configs,
         'summary': {

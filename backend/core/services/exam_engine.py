@@ -494,7 +494,7 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
         ExamConfiguration, ExamComponent, ExamComponentSubjectConfig,
         ExamSubjectWeight, ExamStudentMark, CalculatedSubjectResult,
         CalculatedStudentResult, ResultPublicationHistory, SchoolClass,
-        Subject, Enrollment, Student
+        Subject, Enrollment, Student, Grade
     )
 
     with transaction.atomic():
@@ -522,14 +522,28 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
             for sw in config.subject_weights.all()
         ]
 
-        # Scope classes
+        # Scope classes: include config.school_class, plus any classes with marks or enrollments in this school/year
         if config.school_class:
             target_classes = [config.school_class]
+            extra_class_ids = list(ExamStudentMark.objects.filter(
+                component__in=components
+            ).values_list('school_class_id', flat=True).distinct())
+            grade_class_ids = list(Grade.objects.filter(
+                assessment__school_class__school=config.school
+            ).values_list('assessment__school_class_id', flat=True).distinct())
+            all_extra_ids = set(extra_class_ids + grade_class_ids)
+            if all_extra_ids:
+                extra_classes = list(SchoolClass.objects.filter(id__in=all_extra_ids, school=config.school))
+                for ec in extra_classes:
+                    if ec not in target_classes:
+                        target_classes.append(ec)
         else:
             target_classes = list(SchoolClass.objects.filter(
                 school=config.school,
                 academic_year=config.academic_year
             ))
+            if not target_classes:
+                target_classes = list(SchoolClass.objects.filter(school=config.school))
 
         # Scope subjects
         if config.subject:
@@ -568,6 +582,46 @@ def recalculate_configuration(config_id: int) -> Dict[str, Any]:
             marks_lookup = {}
             for m in marks_qs:
                 marks_lookup[(m.student_id, m.subject_id, m.component_id)] = m
+
+            # If marks_lookup is empty or missing terms, check for recorded Grade records
+            # so grades entered in the Overview / Assessment portal are automatically counted
+            existing_grades = list(Grade.objects.filter(
+                student__in=students,
+                assessment__school_class=klass,
+                assessment__subject__in=target_subjects
+            ).select_related('assessment', 'student'))
+
+            if existing_grades:
+                for comp in components:
+                    c_name_clean = comp.name.lower().strip()
+                    for g in existing_grades:
+                        g_title = (g.assessment.title or '').lower().strip()
+                        is_match = (
+                            c_name_clean in g_title or
+                            g_title in c_name_clean or
+                            (c_name_clean.startswith('first') and ('first' in g_title or 'term 1' in g_title or '1st' in g_title)) or
+                            (c_name_clean.startswith('second') and ('second' in g_title or 'term 2' in g_title or '2nd' in g_title)) or
+                            (c_name_clean.startswith('third') and ('third' in g_title or 'term 3' in g_title or '3rd' in g_title)) or
+                            (c_name_clean.startswith('final') and ('final' in g_title or 'annual' in g_title)) or
+                            (c_name_clean.startswith('mid') and ('mid' in g_title)) or
+                            len(components) == 1
+                        )
+                        key = (g.student_id, g.assessment.subject_id, comp.id)
+                        if is_match and key not in marks_lookup:
+                            esm, _ = ExamStudentMark.objects.update_or_create(
+                                student=g.student,
+                                component=comp,
+                                subject=g.assessment.subject,
+                                defaults={
+                                    'school_class': klass,
+                                    'academic_year': config.academic_year,
+                                    'marks_obtained': g.marks,
+                                    'result_status': g.result_status or 'recorded',
+                                    'is_exempt': False,
+                                    'feedback': ''
+                                }
+                            )
+                            marks_lookup[key] = esm
 
             for student in students:
                 student_subject_summaries = []
