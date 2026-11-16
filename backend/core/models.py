@@ -867,11 +867,30 @@ class AssessmentCategory(models.Model):
 
 
 class GradingScale(models.Model):
-    """Institutional grading scale (e.g. Letter Grade A-F, GPA 4.0)."""
+    """Institutional grading scale (e.g. Letter Grade A-F, GPA 4.0) and campus assessment weightage criteria."""
     school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='grading_scales')
     name = models.CharField(max_length=80)
     is_default = models.BooleanField(default=False)
+    passing_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('40.00'))
+
+    # Campus Assessment Weightage Criteria (must sum to 100%)
+    exam_weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('60.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+    homework_weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('20.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+    classwork_weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('15.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+    attendance_weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('5.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+
+    description = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        total_weight = (self.exam_weight or Decimal('0.00')) + \
+                       (self.homework_weight or Decimal('0.00')) + \
+                       (self.classwork_weight or Decimal('0.00')) + \
+                       (self.attendance_weight or Decimal('0.00'))
+        if abs(total_weight - Decimal('100.00')) > Decimal('0.01'):
+            raise ValidationError(f"Total assessment criteria weightage must equal 100.00%. Current sum: {total_weight}%")
 
     def __str__(self):
         return f"{self.name} ({self.school.name})"

@@ -797,22 +797,57 @@ def student_report_card(request):
     })
 
 
-# ------------------------------------------------------------------ Grading Scales CRUD
+# ------------------------------------------------------------------ Grading Scales & Assessment Criteria CRUD
+DEFAULT_GRADE_BANDS = [
+    {'letter': 'A+', 'min_percent': Decimal('90.00'), 'max_percent': Decimal('100.00'), 'grade_point': Decimal('4.00'), 'description': 'Outstanding'},
+    {'letter': 'A',  'min_percent': Decimal('80.00'), 'max_percent': Decimal('89.99'),  'grade_point': Decimal('3.70'), 'description': 'Excellent'},
+    {'letter': 'B',  'min_percent': Decimal('70.00'), 'max_percent': Decimal('79.99'),  'grade_point': Decimal('3.00'), 'description': 'Good'},
+    {'letter': 'C',  'min_percent': Decimal('60.00'), 'max_percent': Decimal('69.99'),  'grade_point': Decimal('2.00'), 'description': 'Satisfactory'},
+    {'letter': 'D',  'min_percent': Decimal('40.00'), 'max_percent': Decimal('59.99'),  'grade_point': Decimal('1.00'), 'description': 'Pass'},
+    {'letter': 'F',  'min_percent': Decimal('0.00'),  'max_percent': Decimal('39.99'),  'grade_point': Decimal('0.00'), 'description': 'Fail'},
+]
+
+
+def _sync_scale_to_school_configuration(scale):
+    """Synchronizes active campus grading scale and assessment weightage criteria to SchoolConfiguration."""
+    from core.models import SchoolConfiguration
+    config, _ = SchoolConfiguration.objects.get_or_create(school=scale.school)
+    config.grading_policy = {
+        'approach': 'weighted',
+        'passing_percentage': float(scale.passing_percentage),
+        'exam_weight': float(scale.exam_weight),
+        'homework_weight': float(scale.homework_weight),
+        'classwork_weight': float(scale.classwork_weight),
+        'attendance_weight': float(scale.attendance_weight),
+        'grading_scale_id': scale.id,
+        'grading_scale_name': scale.name,
+        'description': f"Exams {scale.exam_weight}%, Homework {scale.homework_weight}%, Classwork {scale.classwork_weight}%, Attendance {scale.attendance_weight}%. Passing threshold: {scale.passing_percentage}%"
+    }
+    config.save(update_fields=['grading_policy'])
+
+
 @api_view(['GET', 'POST'])
 def grading_scales(request):
+    """List or create institutional grading scales and campus assessment weightage criteria."""
     user = request.user
     _require_manager(user)
 
     school_ids = resolve_campus(request)
 
     if request.method == 'GET':
-        qs = GradingScale.objects.filter(school_id__in=school_ids).prefetch_related('bands')
+        qs = GradingScale.objects.filter(school_id__in=school_ids).prefetch_related('bands').order_by('-is_default', 'name')
         results = [{
             'id': s.id,
             'name': s.name,
             'school_id': s.school_id,
             'school_name': s.school.name,
             'is_default': s.is_default,
+            'passing_percentage': str(s.passing_percentage),
+            'exam_weight': str(s.exam_weight),
+            'homework_weight': str(s.homework_weight),
+            'classwork_weight': str(s.classwork_weight),
+            'attendance_weight': str(s.attendance_weight),
+            'description': s.description,
             'bands': [{
                 'id': b.id,
                 'min_percent': str(b.min_percent),
@@ -820,7 +855,8 @@ def grading_scales(request):
                 'letter': b.letter,
                 'grade_point': str(b.grade_point),
                 'description': b.description
-            } for b in s.bands.all()]
+            } for b in s.bands.all().order_by('-min_percent')],
+            'updated_at': s.updated_at.isoformat() if hasattr(s, 'updated_at') and s.updated_at else None
         } for s in qs]
         return Response({'results': results})
 
@@ -832,14 +868,38 @@ def grading_scales(request):
         raise ValidationError({'name': 'Scale name required.'})
 
     is_default = bool(request.data.get('is_default', False))
+    pass_pct = Decimal(str(request.data.get('passing_percentage', '40.00')))
+    exam_w = Decimal(str(request.data.get('exam_weight', '60.00')))
+    hw_w = Decimal(str(request.data.get('homework_weight', '20.00')))
+    cw_w = Decimal(str(request.data.get('classwork_weight', '15.00')))
+    att_w = Decimal(str(request.data.get('attendance_weight', '5.00')))
+    desc = (request.data.get('description') or '').strip()[:255]
+
+    total_weight = exam_w + hw_w + cw_w + att_w
+    if abs(total_weight - Decimal('100.00')) > Decimal('0.01'):
+        raise ValidationError({'weights': f"Total assessment weightage must equal 100.00%. Current sum: {total_weight}%"})
 
     with transaction.atomic():
         if is_default:
             GradingScale.objects.filter(school=school, is_default=True).update(is_default=False)
+        elif not GradingScale.objects.filter(school=school).exists():
+            is_default = True
 
-        scale = GradingScale.objects.create(school=school, name=name, is_default=is_default)
-        raw_bands = request.data.get('bands', [])
-        for b in raw_bands:
+        scale = GradingScale.objects.create(
+            school=school,
+            name=name,
+            is_default=is_default,
+            passing_percentage=pass_pct,
+            exam_weight=exam_w,
+            homework_weight=hw_w,
+            classwork_weight=cw_w,
+            attendance_weight=att_w,
+            description=desc
+        )
+
+        raw_bands = request.data.get('bands')
+        bands_to_create = raw_bands if (isinstance(raw_bands, list) and len(raw_bands) > 0) else DEFAULT_GRADE_BANDS
+        for b in bands_to_create:
             GradeBand.objects.create(
                 grading_scale=scale,
                 min_percent=Decimal(str(b.get('min_percent', 0))),
@@ -848,6 +908,309 @@ def grading_scales(request):
                 grade_point=Decimal(str(b.get('grade_point', 0.0))),
                 description=str(b.get('description', ''))[:60]
             )
+
+        if is_default:
+            _sync_scale_to_school_configuration(scale)
+
         record_event(actor=user, action='create', obj=scale)
 
-    return Response({'id': scale.id, 'name': scale.name}, status=201)
+    return Response({
+        'id': scale.id,
+        'name': scale.name,
+        'is_default': scale.is_default,
+        'exam_weight': str(scale.exam_weight),
+        'homework_weight': str(scale.homework_weight),
+        'classwork_weight': str(scale.classwork_weight),
+        'attendance_weight': str(scale.attendance_weight),
+        'passing_percentage': str(scale.passing_percentage)
+    }, status=201)
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+def grading_scale_detail(request, pk):
+    """Retrieve, update, or delete a grading scale and assessment criteria."""
+    user = request.user
+    _require_manager(user)
+
+    school_ids = resolve_campus(request)
+    scale = GradingScale.objects.filter(pk=pk, school_id__in=school_ids).prefetch_related('bands').first()
+    if not scale:
+        raise NotFound('Grading scale not found.')
+
+    if request.method == 'GET':
+        return Response({
+            'id': scale.id,
+            'name': scale.name,
+            'school_id': scale.school_id,
+            'school_name': scale.school.name,
+            'is_default': scale.is_default,
+            'passing_percentage': str(scale.passing_percentage),
+            'exam_weight': str(scale.exam_weight),
+            'homework_weight': str(scale.homework_weight),
+            'classwork_weight': str(scale.classwork_weight),
+            'attendance_weight': str(scale.attendance_weight),
+            'description': scale.description,
+            'bands': [{
+                'id': b.id,
+                'min_percent': str(b.min_percent),
+                'max_percent': str(b.max_percent),
+                'letter': b.letter,
+                'grade_point': str(b.grade_point),
+                'description': b.description
+            } for b in scale.bands.all().order_by('-min_percent')],
+            'updated_at': scale.updated_at.isoformat() if hasattr(scale, 'updated_at') and scale.updated_at else None
+        })
+
+    if request.method == 'DELETE':
+        with transaction.atomic():
+            was_default = scale.is_default
+            school = scale.school
+            scale.delete()
+            if was_default:
+                fallback = GradingScale.objects.filter(school=school).first()
+                if fallback:
+                    fallback.is_default = True
+                    fallback.save(update_fields=['is_default'])
+                    _sync_scale_to_school_configuration(fallback)
+            record_event(actor=user, action='delete', obj=scale)
+        return Response({'success': True})
+
+    # PUT update
+    name = (request.data.get('name') or scale.name).strip()[:80]
+    is_default = bool(request.data.get('is_default', scale.is_default))
+    pass_pct = Decimal(str(request.data.get('passing_percentage', scale.passing_percentage)))
+    exam_w = Decimal(str(request.data.get('exam_weight', scale.exam_weight)))
+    hw_w = Decimal(str(request.data.get('homework_weight', scale.homework_weight)))
+    cw_w = Decimal(str(request.data.get('classwork_weight', scale.classwork_weight)))
+    att_w = Decimal(str(request.data.get('attendance_weight', scale.attendance_weight)))
+    desc = (request.data.get('description') or scale.description or '').strip()[:255]
+
+    total_weight = exam_w + hw_w + cw_w + att_w
+    if abs(total_weight - Decimal('100.00')) > Decimal('0.01'):
+        raise ValidationError({'weights': f"Total assessment weightage must equal 100.00%. Current sum: {total_weight}%"})
+
+    with transaction.atomic():
+        if is_default and not scale.is_default:
+            GradingScale.objects.filter(school=scale.school, is_default=True).update(is_default=False)
+
+        scale.name = name
+        scale.is_default = is_default
+        scale.passing_percentage = pass_pct
+        scale.exam_weight = exam_w
+        scale.homework_weight = hw_w
+        scale.classwork_weight = cw_w
+        scale.attendance_weight = att_w
+        scale.description = desc
+        scale.save()
+
+        # Update bands if passed
+        raw_bands = request.data.get('bands')
+        if isinstance(raw_bands, list) and len(raw_bands) > 0:
+            scale.bands.all().delete()
+            for b in raw_bands:
+                GradeBand.objects.create(
+                    grading_scale=scale,
+                    min_percent=Decimal(str(b.get('min_percent', 0))),
+                    max_percent=Decimal(str(b.get('max_percent', 100))),
+                    letter=str(b.get('letter', 'P'))[:8],
+                    grade_point=Decimal(str(b.get('grade_point', 0.0))),
+                    description=str(b.get('description', ''))[:60]
+                )
+
+        if scale.is_default:
+            _sync_scale_to_school_configuration(scale)
+
+        record_event(actor=user, action='update', obj=scale)
+
+    return Response({
+        'id': scale.id,
+        'name': scale.name,
+        'is_default': scale.is_default,
+        'exam_weight': str(scale.exam_weight),
+        'homework_weight': str(scale.homework_weight),
+        'classwork_weight': str(scale.classwork_weight),
+        'attendance_weight': str(scale.attendance_weight),
+        'passing_percentage': str(scale.passing_percentage)
+    })
+
+
+@api_view(['POST'])
+def grading_scale_set_default(request, pk):
+    """Sets a grading scale as the default institutional scale for its campus."""
+    user = request.user
+    _require_manager(user)
+
+    school_ids = resolve_campus(request)
+    scale = GradingScale.objects.filter(pk=pk, school_id__in=school_ids).first()
+    if not scale:
+        raise NotFound('Grading scale not found.')
+
+    with transaction.atomic():
+        GradingScale.objects.filter(school=scale.school, is_default=True).update(is_default=False)
+        scale.is_default = True
+        scale.save(update_fields=['is_default'])
+        _sync_scale_to_school_configuration(scale)
+        record_event(actor=user, action='set_default', obj=scale)
+
+    return Response({'id': scale.id, 'name': scale.name, 'is_default': True})
+
+
+@api_view(['GET', 'POST'])
+def grading_scale_composite_evaluation(request):
+    """Live assessment composite calculation: combines exams, homework, classwork, and attendance
+
+    using the campus's active criteria weights and maps to the active institutional GradingScale.
+    """
+    user = request.user
+    _require_manager(user)
+
+    school_ids = resolve_campus(request)
+    student_id = request.data.get('student') if request.method == 'POST' else request.query_params.get('student')
+    scale_id = request.data.get('scale') if request.method == 'POST' else request.query_params.get('scale')
+    class_id = request.data.get('class') if request.method == 'POST' else request.query_params.get('class')
+
+    from core.models import CalculatedStudentResult, Homework, HomeworkSubmission, Attendance
+
+    target_students = []
+    if student_id:
+        st = Student.objects.filter(pk=student_id, school_id__in=school_ids).select_related('school').first()
+        if not st:
+            raise NotFound('Student not found.')
+        target_students = [st]
+    elif class_id:
+        enrs = Enrollment.objects.filter(
+            school_class_id=class_id,
+            school_class__school_id__in=school_ids,
+            end_date__isnull=True
+        ).select_related('student', 'student__school')
+        target_students = [e.student for e in enrs]
+    else:
+        # Sample first student in scope for quick testing
+        first_st = Student.objects.filter(school_id__in=school_ids).select_related('school').first()
+        if first_st:
+            target_students = [first_st]
+
+    if not target_students:
+        return Response({'results': [], 'message': 'No eligible students found in scope.'})
+
+    results = []
+    for student in target_students:
+        scale = None
+        if scale_id:
+            scale = GradingScale.objects.filter(pk=scale_id, school=student.school).first()
+        if not scale:
+            scale = GradingScale.objects.filter(school=student.school, is_default=True).first() or \
+                    GradingScale.objects.filter(school=student.school).first()
+
+        exam_w = scale.exam_weight if scale else Decimal('60.00')
+        hw_w = scale.homework_weight if scale else Decimal('20.00')
+        cw_w = scale.classwork_weight if scale else Decimal('15.00')
+        att_w = scale.attendance_weight if scale else Decimal('5.00')
+
+        # 1. Exam Score
+        csr = CalculatedStudentResult.objects.filter(student=student).order_by('-configuration__version', '-id').first()
+        if csr and (csr.overall_percentage is not None or csr.current_overall_percentage is not None):
+            exam_score = csr.overall_percentage if csr.overall_percentage is not None else csr.current_overall_percentage
+        else:
+            exam_grades = Grade.objects.filter(student=student, assessment__exam_term__isnull=False).select_related('assessment')
+            if exam_grades.exists():
+                pcts = [g.percentage for g in exam_grades if g.percentage is not None]
+                exam_score = sum(pcts) / Decimal(len(pcts)) if pcts else None
+            else:
+                exam_score = None
+
+        # 2. Homework Score
+        enr = student.enrollments.filter(end_date__isnull=True).first()
+        if enr:
+            total_hw = Homework.objects.filter(school_class=enr.school_class).count()
+            completed_hw = HomeworkSubmission.objects.filter(student=student, status='completed').count()
+            hw_score = Decimal(str(round(completed_hw / total_hw * 100, 2))) if total_hw > 0 else None
+        else:
+            total_hw = 0
+            completed_hw = 0
+            hw_score = None
+
+        # 3. Classwork Score
+        cw_grades = Grade.objects.filter(student=student, assessment__exam_term__isnull=True)
+        if cw_grades.exists():
+            cw_pcts = [g.percentage for g in cw_grades if g.percentage is not None]
+            classwork_score = sum(cw_pcts) / Decimal(len(cw_pcts)) if cw_pcts else None
+        else:
+            classwork_score = None
+
+        # 4. Attendance Score
+        att_qs = Attendance.objects.filter(student=student)
+        total_att = att_qs.count()
+        if total_att > 0:
+            present_count = att_qs.filter(status__in=['present', 'late']).count()
+            att_score = Decimal(str(round(present_count / total_att * 100, 2)))
+        else:
+            att_score = None
+
+        components = []
+        if exam_score is not None:
+            components.append({
+                'component': 'Examinations',
+                'score': float(exam_score),
+                'weight': float(exam_w),
+                'contribution': float(exam_score * exam_w / Decimal('100.00'))
+            })
+        if hw_score is not None:
+            components.append({
+                'component': 'Homework & Assignments',
+                'score': float(hw_score),
+                'weight': float(hw_w),
+                'contribution': float(hw_score * hw_w / Decimal('100.00'))
+            })
+        if classwork_score is not None:
+            components.append({
+                'component': 'Class Assessments',
+                'score': float(classwork_score),
+                'weight': float(cw_w),
+                'contribution': float(classwork_score * cw_w / Decimal('100.00'))
+            })
+        if att_score is not None:
+            components.append({
+                'component': 'Attendance & Standing',
+                'score': float(att_score),
+                'weight': float(att_w),
+                'contribution': float(att_score * att_w / Decimal('100.00'))
+            })
+
+        if components:
+            tot_assessed_w = sum(c['weight'] for c in components)
+            if tot_assessed_w > 0:
+                composite_percentage = round(sum(c['contribution'] for c in components) * (100.0 / tot_assessed_w), 2)
+            else:
+                composite_percentage = None
+        else:
+            composite_percentage = None
+
+        grade_info = _calculate_grade_band(student.school, composite_percentage) if composite_percentage is not None else None
+        pass_thresh = scale.passing_percentage if scale else Decimal('40.00')
+        passed = (composite_percentage >= float(pass_thresh)) if composite_percentage is not None else None
+
+        results.append({
+            'student_id': student.id,
+            'student_name': student.full_name,
+            'admission_number': student.admission_number,
+            'school_id': student.school_id,
+            'school_name': student.school.name,
+            'scale_id': scale.id if scale else None,
+            'scale_name': scale.name if scale else 'Standard Criteria',
+            'composite_percentage': composite_percentage,
+            'letter_grade': grade_info['letter'] if grade_info else 'N/A',
+            'grade_point': grade_info['grade_point'] if grade_info else '0.00',
+            'description': grade_info['description'] if grade_info else 'Pending Assessment',
+            'passed': passed,
+            'passing_threshold': float(pass_thresh),
+            'components': components,
+            'weights_configured': {
+                'exam_weight': float(exam_w),
+                'homework_weight': float(hw_w),
+                'classwork_weight': float(cw_w),
+                'attendance_weight': float(att_w)
+            }
+        })
+
+    return Response({'results': results})

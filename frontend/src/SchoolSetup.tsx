@@ -594,6 +594,11 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
                         <option value="weighted">Weighted assessments</option>
                         <option value="custom">School-defined / custom</option>
                       </select>
+                      {form.grading_policy.description && (
+                        <div style={{ fontSize: 11, color: '#6366f1', marginTop: 6, fontWeight: 500 }}>
+                          Criteria: {form.grading_policy.description}
+                        </div>
+                      )}
                     </Input>
                   </div>
                   <div className="setup-policy">

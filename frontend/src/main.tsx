@@ -32,6 +32,7 @@ const Finance = React.lazy(() => import('./Finance'));
 const Fees = React.lazy(() => import('./Fees'));
 const Salaries = React.lazy(() => import('./Salaries'));
 const Examinations = React.lazy(() => import('./Examinations'));
+const GradingScalePage = React.lazy(() => import('./GradingScalePage'));
 const AcademicQualityIndex = React.lazy(() => import('./AcademicQualityIndex'));
 const PlatformOwner = React.lazy(() => import('./PlatformOwner'));
 import AdminPortal, { AdminLogin, AdminUnauthorized } from './AdminPortal';
@@ -92,6 +93,7 @@ const WORKSPACE_NAV = [
   { name: 'Attendance', icon: ClipboardCheck },
   { name: 'Homework', icon: ClipboardList },
   { name: 'Academics', icon: FileBarChart },
+  { name: 'Grading Scale', icon: SlidersHorizontal, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Examinations', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Academic Quality Index', icon: TrendingUp, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Study materials', icon: BookOpen, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
@@ -184,7 +186,7 @@ const NAV_GROUPS = [
   {
     sublabel: 'STUDENTS & LEARNING',
     items: [
-      'Students', 'Attendance', 'Homework', 'Academics', 'Examinations', 'Academic Quality Index',
+      'Students', 'Attendance', 'Homework', 'Academics', 'Grading Scale', 'Examinations', 'Academic Quality Index',
       'Study materials', 'Student fees', 'Fee overview', 'Fee structure',
       'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts',
       'Timetable'
@@ -229,6 +231,7 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
 
   // Standard tier additions
   'Homework': 'standard',
+  'Grading Scale': 'standard',
   'Examinations': 'standard',
   'Academics / Exams': 'standard',
   'Study materials': 'standard',
@@ -267,6 +270,7 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
 
 const NAV_ITEM_FEATURE_KEYS: Record<string, string> = {
   'Homework': 'homework',
+  'Grading Scale': 'examinations',
   'Examinations': 'examinations',
   'Academics / Exams': 'examinations',
   'Study materials': 'study_materials',
@@ -1299,7 +1303,7 @@ function App() {
           const campusQs = safeCampusId ? `?school=${safeCampusId}` : '';
           setDash(await request<Dashboard>(`dashboard/${campusQs}`));
         }
-      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Plan & Billing', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Academic Quality Index', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'My Class', 'My Subjects'].includes(page)) {
+      } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Plan & Billing', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Grading Scale', 'Academic Quality Index', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'My Class', 'My Subjects'].includes(page)) {
         // subcomponents handle own data
       } else if (resourceInfo[page]) {
         setRecords(await list<Resource>(`${resourceInfo[page].api}/${qs}`));
@@ -3742,6 +3746,25 @@ function App() {
                 campuses={campuses}
               />
             )
+          )}
+          {page === 'Grading Scale' && (
+            <ErrorBoundary fallbackTitle="Grading Scale & Assessment Criteria">
+              <GradingScalePage
+                user={user}
+                notify={notify}
+                activeCampusId={activeCampusId}
+                onSelectCampus={(newId) => {
+                  setActiveCampusId(newId);
+                  if (newId) {
+                    localStorage.setItem('optimus_active_campus_id', String(newId));
+                  } else {
+                    localStorage.removeItem('optimus_active_campus_id');
+                  }
+                }}
+                campuses={campuses}
+                onNavigate={switchPage}
+              />
+            </ErrorBoundary>
           )}
           {page === 'Examinations' && (
             !isFeatureUnlocked('exams_datesheets') ? (

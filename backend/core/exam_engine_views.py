@@ -1119,11 +1119,17 @@ def engine_student_transcript(request):
         configuration=config
     ).select_related('subject')
 
+    from core.exams import _calculate_grade_band
+    default_scale = student.school.grading_scales.filter(is_default=True).first() or student.school.grading_scales.first()
+
     subjects_data = []
     for sr in subject_results:
         final_pct = round(float(sr.final_percentage), config.rounding_precision) if sr.final_percentage is not None else None
         curr_pct = round(float(sr.current_percentage), config.rounding_precision) if sr.current_percentage is not None else None
         scaled = round(float(sr.scaled_marks), config.rounding_precision) if sr.scaled_marks is not None else None
+        sub_eff = final_pct if final_pct is not None else curr_pct
+        sub_band = _calculate_grade_band(student.school, sub_eff) if sub_eff is not None else None
+
         subjects_data.append({
             'subject_id': sr.subject_id,
             'subject_name': sr.subject.name,
@@ -1134,11 +1140,16 @@ def engine_student_transcript(request):
             'current_percentage': curr_pct,
             'accumulated_contribution': round(float(sr.accumulated_contribution), config.rounding_precision),
             'assessed_weight': str(sr.assessed_weight),
-            'term_results': sr.term_results
+            'term_results': sr.term_results,
+            'letter_grade': sub_band['letter'] if sub_band else 'N/A',
+            'grade_point': sub_band['grade_point'] if sub_band else '0.00',
+            'grade_description': sub_band['description'] if sub_band else ''
         })
 
     overall_pct = round(float(calc_student.overall_percentage), config.rounding_precision) if calc_student and calc_student.overall_percentage is not None else None
     current_overall_pct = round(float(calc_student.current_overall_percentage), config.rounding_precision) if calc_student and calc_student.current_overall_percentage is not None else None
+    eff_overall = overall_pct if overall_pct is not None else current_overall_pct
+    overall_band = _calculate_grade_band(student.school, eff_overall) if eff_overall is not None else None
 
     return Response({
         'student': {
@@ -1168,6 +1179,10 @@ def engine_student_transcript(request):
             'weighting_method_used': calc_student.weighting_method if calc_student else config.subject_weighting_mode,
             'highest_subject': calc_student.highest_subject.name if calc_student and calc_student.highest_subject else None,
             'lowest_subject': calc_student.lowest_subject.name if calc_student and calc_student.lowest_subject else None,
+            'letter_grade': overall_band['letter'] if overall_band else 'N/A',
+            'grade_point': overall_band['grade_point'] if overall_band else '0.00',
+            'grade_description': overall_band['description'] if overall_band else 'Pending',
+            'grading_scale_name': default_scale.name if default_scale else 'Standard Grading Scale'
         },
         'subjects': subjects_data
     })

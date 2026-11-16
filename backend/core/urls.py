@@ -108,6 +108,9 @@ urlpatterns = [
     path('exams/results-sheet/', exams.exam_results_sheet),
     path('exams/report-card/', exams.student_report_card),
     path('exams/grading-scales/', exams.grading_scales),
+    path('exams/grading-scales/<int:pk>/', exams.grading_scale_detail),
+    path('exams/grading-scales/<int:pk>/set-default/', exams.grading_scale_set_default),
+    path('exams/grading-scales/composite-evaluation/', exams.grading_scale_composite_evaluation),
 
     # Configurable Examination Engine & Academic Performance
     path('exams/engine/configurations/', exam_engine_views.engine_configurations),
