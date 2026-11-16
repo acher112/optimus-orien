@@ -23,10 +23,14 @@ interface AcademicQualityIndexProps {
 interface CampusComparisonRow {
   campus_id: number;
   campus_name: string;
-  class_weighted_average: number | null;
-  student_weighted_average: number | null;
+  classes?: number;
   active_classes: number;
   total_students: number;
+  eligible_students?: number;
+  class_weighted_average: number | null;
+  student_weighted_average: number | null;
+  boys_average?: number | null;
+  girls_average?: number | null;
   difference_from_school_avg: number | null;
   difference_from_school_display: string | null;
   gender_gap_pp: number | null;
@@ -38,6 +42,9 @@ interface SchoolWideOverviewData {
   total_campuses: number;
   total_classes: number;
   total_students: number;
+  total_enrolled_students?: number;
+  eligible_students_count?: number;
+  pending_results_count?: number;
   boys_average: number | null;
   boys_count: number;
   girls_average: number | null;
@@ -51,7 +58,10 @@ interface ClassComparisonRow {
   class_name: string;
   sections: string;
   total_students: number;
+  eligible_students?: number;
   class_average: number | null;
+  boys_average?: number | null;
+  girls_average?: number | null;
   difference_from_campus_avg: number | null;
   difference_from_campus_display: string | null;
   coverage: number | null;
@@ -66,6 +76,9 @@ interface CampusDashboardData {
   total_classes: number;
   eligible_classes_count: number;
   total_students: number;
+  total_enrolled_students?: number;
+  eligible_students_count?: number;
+  pending_results_count?: number;
   boys_average: number | null;
   boys_count: number;
   girls_average: number | null;
@@ -85,6 +98,7 @@ interface SubjectPerformanceRow {
   gender_gap_pp: number | null;
   eligible_students_count: number;
   total_enrolled: number;
+  pending_students_count?: number;
   status: string;
 }
 
@@ -113,6 +127,9 @@ interface ClassDashboardData {
   included_subjects_count: number;
   total_required_subjects: number;
   total_students: number;
+  total_enrolled_students?: number;
+  eligible_students_count?: number;
+  pending_results_count?: number;
   difference_from_campus_avg: number | null;
   difference_from_campus_display: string | null;
   boys_average: number | null;
@@ -163,6 +180,13 @@ interface SubjectDashboardData {
   average_scaled_marks: number | null;
   eligible_students_count: number;
   total_enrolled: number;
+  total_enrolled_students?: number;
+  pending_results_count?: number;
+  pending_count?: number;
+  highest_percentage?: number | null;
+  lowest_percentage?: number | null;
+  passing_percentage?: number | null;
+  pass_rate?: number | null;
   boys_average: number | null;
   boys_count: number;
   girls_average: number | null;
@@ -441,6 +465,19 @@ export default function AcademicQualityIndex({
     window.open(`/api/v1/aqi/export/?${q.toString()}`, '_blank');
   };
 
+  // Dynamic distinct term names derived from the student's evaluated terms
+  const dynamicTermNames = useMemo(() => {
+    const termOrderMap = new Map<string, number>();
+    (level5Data?.subjects || []).forEach(subj => {
+      (subj.terms_trace || []).forEach((t, idx) => {
+        if (t.term && !termOrderMap.has(t.term)) {
+          termOrderMap.set(t.term, idx);
+        }
+      });
+    });
+    return Array.from(termOrderMap.keys());
+  }, [level5Data]);
+
   return (
     <div className="aqi-container" style={{ padding: 'clamp(10px, 3vw, 24px)', maxWidth: '1440px', margin: '0 auto', boxSizing: 'border-box', width: '100%', overflowX: 'hidden' }}>
       {/* --------------------------------------------------------------------- */}
@@ -624,39 +661,48 @@ export default function AcademicQualityIndex({
           {/* Top Metric Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Class-Weighted Avg</div>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Class-Weighted School Avg</div>
               <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
                 {level1Data.class_weighted_average !== null ? `${level1Data.class_weighted_average.toFixed(2)}%` : '—'}
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Mean across all classes directly</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Official headline class-weighted metric</div>
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Student-Weighted Avg</div>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Student-Weighted School Avg</div>
               <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
                 {level1Data.student_weighted_average !== null ? `${level1Data.student_weighted_average.toFixed(2)}%` : '—'}
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Mean across all students directly</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Direct arithmetic mean across all students</div>
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Network Scale</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
-                {level1Data.total_campuses} <span style={{ fontSize: 14, fontWeight: 500, color: '#64748b' }}>Campuses</span>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Network Scale & Coverage</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
+                {level1Data.total_campuses} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Campuses</span> • {level1Data.total_classes} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Classes</span>
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{level1Data.total_classes} Classes • {level1Data.total_students} Students</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                <b>{level1Data.eligible_students_count ?? level1Data.total_students}</b> eligible of <b>{level1Data.total_enrolled_students ?? level1Data.total_students}</b> enrolled
+                {(level1Data.pending_results_count ?? 0) > 0 && (
+                  <span style={{ color: '#d97706', fontWeight: 600, marginLeft: 4 }}>
+                    ({level1Data.pending_results_count} pending)
+                  </span>
+                )}
+              </div>
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Gender Performance</div>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Gender Analytics</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
                 <div>
                   <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>BOYS: </span>
                   <span style={{ fontSize: 16, fontWeight: 700 }}>{level1Data.boys_average !== null ? `${level1Data.boys_average.toFixed(1)}%` : '—'}</span>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({level1Data.boys_count})</span>
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: '#ec4899', fontWeight: 600 }}>GIRLS: </span>
                   <span style={{ fontSize: 16, fontWeight: 700 }}>{level1Data.girls_average !== null ? `${level1Data.girls_average.toFixed(1)}%` : '—'}</span>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({level1Data.girls_count})</span>
                 </div>
               </div>
               <div style={{ fontSize: 12, marginTop: 4 }}>
@@ -674,17 +720,18 @@ export default function AcademicQualityIndex({
               <span style={{ fontSize: 12, color: '#64748b' }}>Sorted descending by Class-Weighted Average</span>
             </div>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 780 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
-                  <th style={{ padding: '12px 16px' }}>Campus Name</th>
+                  <th style={{ padding: '12px 16px' }}>Campus</th>
+                  <th style={{ padding: '12px 16px' }}>Classes</th>
+                  <th style={{ padding: '12px 16px' }}>Eligible Students</th>
                   <th style={{ padding: '12px 16px' }}>Class-Weighted Avg %</th>
                   <th style={{ padding: '12px 16px' }}>Student-Weighted Avg %</th>
-                  <th style={{ padding: '12px 16px' }}>Diff from School Avg</th>
-                  <th style={{ padding: '12px 16px' }}>Active Classes</th>
-                  <th style={{ padding: '12px 16px' }}>Students</th>
+                  <th style={{ padding: '12px 16px' }}>Boys' Avg %</th>
+                  <th style={{ padding: '12px 16px' }}>Girls' Avg %</th>
                   <th style={{ padding: '12px 16px' }}>Gender Gap (pp)</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Action</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -696,25 +743,20 @@ export default function AcademicQualityIndex({
                     className="hover:bg-slate-50"
                   >
                     <td style={{ padding: '14px 16px', fontWeight: 600, color: '#2563eb' }}>{c.campus_name}</td>
+                    <td style={{ padding: '14px 16px' }}>{c.classes ?? c.active_classes}</td>
+                    <td style={{ padding: '14px 16px' }}>{c.eligible_students ?? c.total_students}</td>
                     <td style={{ padding: '14px 16px', fontWeight: 700 }}>
                       {c.class_weighted_average !== null ? `${c.class_weighted_average.toFixed(2)}%` : '—'}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       {c.student_weighted_average !== null ? `${c.student_weighted_average.toFixed(2)}%` : '—'}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      {c.difference_from_school_display ? (
-                        <span style={{
-                          padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                          background: (c.difference_from_school_avg || 0) >= 0 ? '#dcfce7' : '#fee2e2',
-                          color: (c.difference_from_school_avg || 0) >= 0 ? '#15803d' : '#b91c1c'
-                        }}>
-                          {c.difference_from_school_display}
-                        </span>
-                      ) : '—'}
+                    <td style={{ padding: '14px 16px', color: '#2563eb', fontWeight: 600 }}>
+                      {c.boys_average !== null && c.boys_average !== undefined ? `${c.boys_average.toFixed(1)}%` : '—'}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>{c.active_classes}</td>
-                    <td style={{ padding: '14px 16px' }}>{c.total_students}</td>
+                    <td style={{ padding: '14px 16px', color: '#ec4899', fontWeight: 600 }}>
+                      {c.girls_average !== null && c.girls_average !== undefined ? `${c.girls_average.toFixed(1)}%` : '—'}
+                    </td>
                     <td style={{ padding: '14px 16px' }}>
                       {c.gender_gap_pp !== null ? `${c.gender_gap_pp > 0 ? '+' : ''}${c.gender_gap_pp.toFixed(2)} pp` : '—'}
                     </td>
@@ -752,15 +794,22 @@ export default function AcademicQualityIndex({
               <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
                 {level2Data.student_weighted_average !== null ? `${level2Data.student_weighted_average.toFixed(2)}%` : '—'}
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Mean of student overalls</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Direct mean across student overalls</div>
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Campus Reach</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
-                {level2Data.total_classes} <span style={{ fontSize: 14, fontWeight: 500, color: '#64748b' }}>Classes</span>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Campus Scale & Coverage</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
+                {level2Data.total_classes} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Classes</span>
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{level2Data.total_students} Enrolled Students</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                <b>{level2Data.eligible_students_count ?? level2Data.total_students}</b> eligible of <b>{level2Data.total_enrolled_students ?? level2Data.total_students}</b> enrolled
+                {(level2Data.pending_results_count ?? 0) > 0 && (
+                  <span style={{ color: '#d97706', fontWeight: 600, marginLeft: 4 }}>
+                    ({level2Data.pending_results_count} pending)
+                  </span>
+                )}
+              </div>
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
@@ -769,10 +818,12 @@ export default function AcademicQualityIndex({
                 <div>
                   <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>BOYS: </span>
                   <span style={{ fontSize: 16, fontWeight: 700 }}>{level2Data.boys_average !== null ? `${level2Data.boys_average.toFixed(1)}%` : '—'}</span>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({level2Data.boys_count})</span>
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: '#ec4899', fontWeight: 600 }}>GIRLS: </span>
                   <span style={{ fontSize: 16, fontWeight: 700 }}>{level2Data.girls_average !== null ? `${level2Data.girls_average.toFixed(1)}%` : '—'}</span>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({level2Data.girls_count})</span>
                 </div>
               </div>
               <div style={{ fontSize: 12, marginTop: 4 }}>
@@ -790,17 +841,18 @@ export default function AcademicQualityIndex({
               <span style={{ fontSize: 12, color: '#64748b' }}>Sorted descending by Class Average</span>
             </div>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 780 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
-                  <th style={{ padding: '12px 16px' }}>Class Name</th>
+                  <th style={{ padding: '12px 16px' }}>Class</th>
                   <th style={{ padding: '12px 16px' }}>Sections</th>
-                  <th style={{ padding: '12px 16px' }}>Students</th>
+                  <th style={{ padding: '12px 16px' }}>Eligible Students</th>
                   <th style={{ padding: '12px 16px' }}>Class Average %</th>
-                  <th style={{ padding: '12px 16px' }}>Diff from Campus Avg</th>
+                  <th style={{ padding: '12px 16px' }}>Boys' Average %</th>
+                  <th style={{ padding: '12px 16px' }}>Girls' Average %</th>
                   <th style={{ padding: '12px 16px' }}>Coverage %</th>
                   <th style={{ padding: '12px 16px' }}>Gender Gap (pp)</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Action</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -813,20 +865,15 @@ export default function AcademicQualityIndex({
                   >
                     <td style={{ padding: '14px 16px', fontWeight: 600, color: '#2563eb' }}>{cls.class_name}</td>
                     <td style={{ padding: '14px 16px', color: '#64748b' }}>{cls.sections}</td>
-                    <td style={{ padding: '14px 16px' }}>{cls.total_students}</td>
+                    <td style={{ padding: '14px 16px' }}>{cls.eligible_students ?? cls.total_students}</td>
                     <td style={{ padding: '14px 16px', fontWeight: 700 }}>
                       {cls.class_average !== null ? `${cls.class_average.toFixed(2)}%` : '—'}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      {cls.difference_from_campus_display ? (
-                        <span style={{
-                          padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                          background: (cls.difference_from_campus_avg || 0) >= 0 ? '#dcfce7' : '#fee2e2',
-                          color: (cls.difference_from_campus_avg || 0) >= 0 ? '#15803d' : '#b91c1c'
-                        }}>
-                          {cls.difference_from_campus_display}
-                        </span>
-                      ) : '—'}
+                    <td style={{ padding: '14px 16px', color: '#2563eb', fontWeight: 600 }}>
+                      {cls.boys_average !== null && cls.boys_average !== undefined ? `${cls.boys_average.toFixed(1)}%` : '—'}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#ec4899', fontWeight: 600 }}>
+                      {cls.girls_average !== null && cls.girls_average !== undefined ? `${cls.girls_average.toFixed(1)}%` : '—'}
                     </td>
                     <td style={{ padding: '14px 16px' }}>{cls.coverage !== null ? `${cls.coverage.toFixed(0)}%` : '—'}</td>
                     <td style={{ padding: '14px 16px' }}>
@@ -874,12 +921,17 @@ export default function AcademicQualityIndex({
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Enrolled Students</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
-                {level3Data.total_students}
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Students & Results</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
+                {level3Data.eligible_students_count ?? level3Data.total_students} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Eligible</span> / {level3Data.total_enrolled_students ?? level3Data.total_students} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Enrolled</span>
               </div>
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
                 {level3Data.boys_count} Boys • {level3Data.girls_count} Girls
+                {(level3Data.pending_results_count ?? 0) > 0 && (
+                  <span style={{ color: '#d97706', fontWeight: 600, marginLeft: 4 }}>
+                    • {level3Data.pending_results_count} Pending
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1124,29 +1176,54 @@ export default function AcademicQualityIndex({
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
               <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Students Assessed</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
-                {level4Data.eligible_students_count} / {level4Data.total_enrolled}
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
+                {level4Data.eligible_students_count} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>/ {level4Data.total_enrolled_students ?? level4Data.total_enrolled}</span>
               </div>
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-                {((level4Data.eligible_students_count / Math.max(1, level4Data.total_enrolled)) * 100).toFixed(0)}% Completion rate
+                {((level4Data.eligible_students_count / Math.max(1, (level4Data.total_enrolled_students ?? level4Data.total_enrolled))) * 100).toFixed(0)}% completion
+                {(level4Data.pending_results_count ?? 0) > 0 && (
+                  <span style={{ color: '#d97706', fontWeight: 600, marginLeft: 4 }}>
+                    • {level4Data.pending_results_count} pending
+                  </span>
+                )}
               </div>
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Boys Average</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>
-                {level4Data.boys_average !== null ? `${level4Data.boys_average.toFixed(1)}%` : '—'}
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Performance Range</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>HIGH: </span>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>{level4Data.highest_percentage !== null && level4Data.highest_percentage !== undefined ? `${level4Data.highest_percentage.toFixed(1)}%` : '—'}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>LOW: </span>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>{level4Data.lowest_percentage !== null && level4Data.lowest_percentage !== undefined ? `${level4Data.lowest_percentage.toFixed(1)}%` : '—'}</span>
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{level4Data.boys_count} Boys assessed</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                Pass Rate: <b style={{ color: '#0f172a' }}>{level4Data.pass_rate !== null && level4Data.pass_rate !== undefined ? `${level4Data.pass_rate.toFixed(1)}%` : '—'}</b> (Pass criteria: {level4Data.passing_percentage ?? 40}%)
+              </div>
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Girls Average</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#ec4899', marginTop: 4 }}>
-                {level4Data.girls_average !== null ? `${level4Data.girls_average.toFixed(1)}%` : '—'}
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Gender Performance</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>BOYS: </span>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>{level4Data.boys_average !== null ? `${level4Data.boys_average.toFixed(1)}%` : '—'}</span>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({level4Data.boys_count})</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: 11, color: '#ec4899', fontWeight: 600 }}>GIRLS: </span>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>{level4Data.girls_average !== null ? `${level4Data.girls_average.toFixed(1)}%` : '—'}</span>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({level4Data.girls_count})</span>
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-                Gap: {level4Data.gender_gap_pp !== null ? `${level4Data.gender_gap_pp > 0 ? '+' : ''}${level4Data.gender_gap_pp.toFixed(2)} pp` : '—'}
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                Gender Gap: <span style={{ fontWeight: 600, color: level4Data.gender_gap_pp && level4Data.gender_gap_pp >= 0 ? '#16a34a' : '#dc2626' }}>
+                  {level4Data.gender_gap_pp !== null ? `${level4Data.gender_gap_pp > 0 ? '+' : ''}${level4Data.gender_gap_pp.toFixed(2)} pp` : '—'}
+                </span>
               </div>
             </div>
           </div>
@@ -1173,15 +1250,15 @@ export default function AcademicQualityIndex({
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Student Results in {level4Data.subject_name}</h3>
             </div>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 780 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                   <th style={{ padding: '12px 16px' }}>Student Name</th>
-                  <th style={{ padding: '12px 16px' }}>Admission #</th>
+                  <th style={{ padding: '12px 16px' }}>Student ID</th>
                   <th style={{ padding: '12px 16px' }}>Gender</th>
                   <th style={{ padding: '12px 16px' }}>Final %</th>
-                  <th style={{ padding: '12px 16px' }}>Scaled Marks</th>
-                  <th style={{ padding: '12px 16px' }}>Diff from Subj Avg</th>
+                  <th style={{ padding: '12px 16px' }}>Class Subject Avg %</th>
+                  <th style={{ padding: '12px 16px' }}>Diff from Avg</th>
                   <th style={{ padding: '12px 16px' }}>Status</th>
                   <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -1214,8 +1291,8 @@ export default function AcademicQualityIndex({
                     <td style={{ padding: '14px 16px', fontWeight: 700 }}>
                       {st.final_percentage !== null ? `${st.final_percentage.toFixed(2)}%` : '—'}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      {st.scaled_marks !== null ? st.scaled_marks.toFixed(1) : '—'}
+                    <td style={{ padding: '14px 16px', color: '#64748b' }}>
+                      {level4Data.subject_average !== null ? `${level4Data.subject_average.toFixed(2)}%` : '—'}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       {st.difference_display ? (
@@ -1238,24 +1315,41 @@ export default function AcademicQualityIndex({
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <button
-                        onClick={() => openExplainDrawer('student_subject', { student_id: st.student_id, subject_id: level4Data.subject_id })}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '5px 10px',
-                          borderRadius: 4,
-                          border: '1px solid #cbd5e1',
-                          background: '#fff',
-                          fontSize: 12,
-                          fontWeight: 500,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <HelpCircle size={13} color="#2563eb" />
-                        Explain
-                      </button>
+                      <div style={{ display: 'inline-flex', gap: 6 }}>
+                        <button
+                          onClick={() => drillToLevel5(st.student_id, st.student_name)}
+                          style={{
+                            padding: '5px 10px',
+                            borderRadius: 4,
+                            border: '1px solid #cbd5e1',
+                            background: '#fff',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: '#2563eb',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Profile
+                        </button>
+                        <button
+                          onClick={() => openExplainDrawer('student_subject', { student_id: st.student_id, subject_id: level4Data.subject_id })}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '5px 10px',
+                            borderRadius: 4,
+                            border: '1px solid #cbd5e1',
+                            background: '#fff',
+                            fontSize: 12,
+                            fontWeight: 500,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <HelpCircle size={13} color="#2563eb" />
+                          Explain
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1333,6 +1427,30 @@ export default function AcademicQualityIndex({
                 )}
               </div>
             )}
+
+            {level5Data.overall_percentage !== null && level5Data.class_average !== null && (
+              <div style={{
+                marginTop: 14,
+                padding: '10px 16px',
+                borderRadius: 6,
+                background: 'rgba(255,255,255,0.08)',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%'
+              }}>
+                <Award size={16} color="#38bdf8" />
+                <span>
+                  Relative Performance: <b>{level5Data.student_name}</b> is{' '}
+                  <b>
+                    {Math.abs(level5Data.overall_percentage - level5Data.class_average).toFixed(2)} percentage points{' '}
+                    {level5Data.overall_percentage >= level5Data.class_average ? 'above' : 'below'}
+                  </b>{' '}
+                  the class average ({level5Data.class_average.toFixed(2)}%).
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Visual Benchmark Comparison Chart */}
@@ -1342,8 +1460,8 @@ export default function AcademicQualityIndex({
             </h3>
             <div style={{ height: 260, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
+                {(() => {
+                  const benchmarkData = [
                     ...(level5Data.overall_percentage !== null ? [{
                       name: "Student's Result",
                       percentage: level5Data.overall_percentage,
@@ -1352,7 +1470,7 @@ export default function AcademicQualityIndex({
                     ...(level5Data.class_average !== null ? [{
                       name: "Class Average",
                       percentage: level5Data.class_average,
-                      fill: '#0284c7'
+                      fill: '#0284c7' // Class Average = Sky Blue (#0284c7)
                     }] : []),
                     ...(level5Data.boys_class_average !== null ? [{
                       name: "Boys Average",
@@ -1364,17 +1482,24 @@ export default function AcademicQualityIndex({
                       percentage: level5Data.girls_class_average,
                       fill: '#ec4899' // Girls = Pink (#ec4899)
                     }] : []),
-                  ]}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#64748b' }} unit="%" />
-                  <Tooltip formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Performance']} />
-                  <Bar dataKey="percentage" radius={[4, 4, 0, 0]}>
-                    {/* Dynamic fill by cell */}
-                  </Bar>
-                </BarChart>
+                  ];
+                  return (
+                    <BarChart
+                      data={benchmarkData}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#64748b' }} unit="%" />
+                      <Tooltip formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Performance']} />
+                      <Bar dataKey="percentage" radius={[4, 4, 0, 0]}>
+                        {benchmarkData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  );
+                })()}
               </ResponsiveContainer>
             </div>
 
@@ -1392,10 +1517,13 @@ export default function AcademicQualityIndex({
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Subject-wise Examination Performance</h3>
             </div>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 680 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 780 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
                   <th style={{ padding: '12px 16px' }}>Subject</th>
+                  {dynamicTermNames.map(termName => (
+                    <th key={termName} style={{ padding: '12px 16px' }}>{termName}</th>
+                  ))}
                   <th style={{ padding: '12px 16px' }}>Final Subject %</th>
                   <th style={{ padding: '12px 16px' }}>Scaled Marks</th>
                   <th style={{ padding: '12px 16px' }}>Class Benchmark %</th>
@@ -1409,6 +1537,38 @@ export default function AcademicQualityIndex({
                 {(Array.isArray(level5Data?.subjects) ? level5Data.subjects : []).map(s => (
                   <tr key={s.subject_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{s.subject_name}</td>
+                    {dynamicTermNames.map(termName => {
+                      const t = (s.terms_trace || []).find(item => item.term === termName);
+                      if (!t) return <td key={termName} style={{ padding: '14px 16px', color: '#94a3b8' }}>—</td>;
+                      if (t.status === 'exempt') {
+                        return (
+                          <td key={termName} style={{ padding: '14px 16px' }}>
+                            <span style={{ color: '#854d0e', background: '#fef9c3', padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                              Exempt
+                            </span>
+                          </td>
+                        );
+                      }
+                      if (t.status === 'missing' || t.obtained === null || t.obtained === undefined) {
+                        return (
+                          <td key={termName} style={{ padding: '14px 16px' }}>
+                            <span style={{ color: '#b91c1c', background: '#fee2e2', padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                              Missing
+                            </span>
+                          </td>
+                        );
+                      }
+                      return (
+                        <td key={termName} style={{ padding: '14px 16px' }}>
+                          <div style={{ fontWeight: 600, color: '#1e293b' }}>
+                            {t.obtained} <span style={{ fontSize: 11, color: '#64748b' }}>/ {t.max}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#2563eb' }}>
+                            {t.term_percentage !== null && t.term_percentage !== undefined ? `${t.term_percentage.toFixed(1)}%` : ''}
+                          </div>
+                        </td>
+                      );
+                    })}
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: '#2563eb' }}>
                       {s.final_percentage !== null ? `${s.final_percentage.toFixed(2)}%` : '—'}
                     </td>

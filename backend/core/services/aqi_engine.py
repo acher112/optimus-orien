@@ -749,6 +749,10 @@ def get_class_aqi(
     sec_name = school_class.section or ''
     class_label = f"{school_class.name} – {sec_name}" if sec_name else school_class.name
 
+    total_enrolled = len(enrollments)
+    eligible_count = len(student_overalls)
+    pending_count = max(0, total_enrolled - eligible_count)
+
     return {
         'class_id': school_class.id,
         'class_name': class_label,
@@ -761,7 +765,10 @@ def get_class_aqi(
         'coverage': round_display(class_avg_res['coverage']),
         'included_subjects_count': class_avg_res['included_subjects'],
         'total_required_subjects': class_avg_res['total_subjects'],
-        'total_students': len(enrollments),
+        'total_students': total_enrolled,
+        'total_enrolled_students': total_enrolled,
+        'eligible_students_count': eligible_count,
+        'pending_results_count': pending_count,
         'difference_from_campus_avg': round_display(diff_from_campus),
         'difference_from_campus_display': f"{round_display(diff_from_campus):+g} pp" if diff_from_campus is not None else None,
         'boys_average': round_display(class_gender_res['boys_average']),
@@ -844,7 +851,10 @@ def get_campus_aqi(
             'class_name': c.name,
             'sections': sections_str,
             'total_students': len(enrollments),
+            'eligible_students': len(c_boys_ov) + len(c_girls_ov),
             'class_average': c_avg,
+            'boys_average': round_display(c_gender['boys_average']),
+            'girls_average': round_display(c_gender['girls_average']),
             'coverage': c_avg_res['coverage'],
             'gender_gap_pp': c_gender['gender_gap_pp']
         })
@@ -867,6 +877,10 @@ def get_campus_aqi(
         reverse=True
     )
 
+    total_enrolled = sum(r['total_students'] for r in class_comparison_rows)
+    eligible_count = len(campus_student_overalls)
+    pending_count = max(0, total_enrolled - eligible_count)
+
     return {
         'campus_id': school.id,
         'campus_name': school.name,
@@ -874,7 +888,10 @@ def get_campus_aqi(
         'student_weighted_average': round_display(campus_avgs['student_weighted_average']),
         'total_classes': len(class_objs),
         'eligible_classes_count': campus_avgs['eligible_classes_count'],
-        'total_students': len(campus_student_overalls),
+        'total_students': total_enrolled,
+        'total_enrolled_students': total_enrolled,
+        'eligible_students_count': eligible_count,
+        'pending_results_count': pending_count,
         'boys_average': round_display(campus_gender['boys_average']),
         'boys_count': campus_gender['boys_count'],
         'girls_average': round_display(campus_gender['girls_average']),
@@ -938,7 +955,11 @@ def get_school_wide_aqi(
             'class_weighted_average': camp_res['class_weighted_average'],
             'student_weighted_average': camp_res['student_weighted_average'],
             'active_classes': camp_res['total_classes'],
-            'total_students': camp_res['total_students'],
+            'classes': camp_res['total_classes'],
+            'total_students': camp_res.get('total_enrolled_students', camp_res['total_students']),
+            'eligible_students': camp_res.get('eligible_students_count', camp_res['total_students']),
+            'boys_average': camp_res.get('boys_average'),
+            'girls_average': camp_res.get('girls_average'),
             'gender_gap_pp': camp_res['gender_gap_pp']
         })
 
@@ -958,12 +979,19 @@ def get_school_wide_aqi(
         reverse=True
     )
 
+    total_enrolled = sum(c['total_students'] for c in campus_rows)
+    eligible_count = len(all_eligible_student_overalls)
+    pending_count = max(0, total_enrolled - eligible_count)
+
     return {
         'class_weighted_average': round_display(sw_cw_avg),
         'student_weighted_average': round_display(school_avgs['student_weighted_average']),
         'total_campuses': len(schools),
         'total_classes': len(all_eligible_class_averages),
-        'total_students': len(all_eligible_student_overalls),
+        'total_students': total_enrolled,
+        'total_enrolled_students': total_enrolled,
+        'eligible_students_count': eligible_count,
+        'pending_results_count': pending_count,
         'boys_average': round_display(school_gender['boys_average']),
         'boys_count': school_gender['boys_count'],
         'girls_average': round_display(school_gender['girls_average']),
@@ -1049,6 +1077,14 @@ def get_subject_aqi(
     sec_name = school_class.section or ''
     class_label = f"{school_class.name} – {sec_name}" if sec_name else school_class.name
 
+    highest_percentage = round_display(max(pcts)) if pcts else None
+    lowest_percentage = round_display(min(pcts)) if pcts else None
+    passing_percentage = round_display(structure.pass_percentage) if structure else 40.0
+    pass_thresh_dec = to_decimal(passing_percentage)
+    passed_count = len([p for p in pcts if p >= pass_thresh_dec])
+    pass_rate = round_display((Decimal(str(passed_count)) / Decimal(str(len(pcts))) * D_HUNDRED)) if pcts else None
+    pending_count = max(0, len(enrollments) - s_avg_res['eligible_count'])
+
     return {
         'class_id': school_class.id,
         'class_name': class_label,
@@ -1061,6 +1097,13 @@ def get_subject_aqi(
         'average_scaled_marks': round_display(s_avg * (reporting_scale / Decimal('100.00'))) if s_avg is not None else None,
         'eligible_students_count': s_avg_res['eligible_count'],
         'total_enrolled': len(enrollments),
+        'total_enrolled_students': len(enrollments),
+        'pending_results_count': pending_count,
+        'pending_count': pending_count,
+        'highest_percentage': highest_percentage,
+        'lowest_percentage': lowest_percentage,
+        'passing_percentage': passing_percentage,
+        'pass_rate': pass_rate,
         'boys_average': round_display(gender_res['boys_average']),
         'boys_count': gender_res['boys_count'],
         'girls_average': round_display(gender_res['girls_average']),
