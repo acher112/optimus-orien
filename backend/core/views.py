@@ -14,12 +14,13 @@ from django.db.models import Avg,Count,Q,ProtectedError
 from django.http import JsonResponse,HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
+from django.views.decorators.cache import never_cache
 from rest_framework import serializers,status,viewsets
 from rest_framework.decorators import api_view,permission_classes,throttle_classes
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied, ValidationError as APIValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError as APIValidationError, NotAuthenticated
 from .models import *
 import csv
 
@@ -77,9 +78,14 @@ def health_ready(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@never_cache
 def csrf(request):
  from django.middleware.csrf import get_token
- return Response({'csrfToken':get_token(request)})
+ resp = Response({'csrfToken':get_token(request)})
+ resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+ resp['Pragma'] = 'no-cache'
+ resp['Expires'] = '0'
+ return resp
 
 from core.throttles import (
     LoginThrottle,
@@ -316,11 +322,12 @@ def user_payload(u):
   'student_id': student_id,
  }
 @api_view(['GET', 'PATCH'])
+@never_cache
 def me(request):
  from django.middleware.csrf import get_token
  u = request.user
  if not u.is_authenticated:
-  raise PermissionDenied('Authentication required')
+  raise NotAuthenticated('Authentication credentials were not provided.')
  if request.method == 'PATCH':
   data = request.data
   if 'first_name' in data:
@@ -354,7 +361,11 @@ def me(request):
   u.save()
  payload=user_payload(u)
  payload['csrfToken']=get_token(request)
- return Response(payload)
+ resp = Response(payload)
+ resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+ resp['Pragma'] = 'no-cache'
+ resp['Expires'] = '0'
+ return resp
 
 @api_view(['POST'])
 def change_password(request):
@@ -1778,6 +1789,7 @@ def student_stats(students,classes=None):
  return {'academic_average':round(sum(percents)/len(percents),1) if percents else None,'grade_records':len(percents),'attendance_rate':round(present/recorded*100,1) if recorded else None,'attendance_records':recorded}
 
 @api_view(['GET'])
+@never_cache
 def dashboard(request):
  u=request.user;students=students_scope(u);schools=schools_scope(u);classes=classes_scope(u)
  school_param=request.query_params.get('school') or request.query_params.get('campus')
@@ -1823,7 +1835,11 @@ def dashboard(request):
  base_data, _ = get_or_set_dashboard_cache(org_id, target_school_id, u.role, _compute_dashboard)
  resp = dict(base_data)
  resp['recent_notifications'] = list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))
- return Response(resp)
+ resp = Response(resp)
+ resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+ resp['Pragma'] = 'no-cache'
+ resp['Expires'] = '0'
+ return resp
 
 @api_view(['GET'])
 def export_students(request):

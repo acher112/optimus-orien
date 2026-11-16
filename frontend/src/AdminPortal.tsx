@@ -3380,6 +3380,25 @@ export function AdminLogin({
           </div>
         )}
 
+        {typeof window !== 'undefined' && window.location.search.includes('session_expired=1') && (
+          <div style={{
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            color: '#1e40af',
+            padding: '12px 14px',
+            borderRadius: 10,
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 20,
+            fontWeight: 500
+          }}>
+            <Clock size={16} color="#2563eb" style={{ flexShrink: 0 }} />
+            <span>Your session has expired. Please sign in again.</span>
+          </div>
+        )}
+
         {error && (
           <div style={{
             background: '#fef2f2',

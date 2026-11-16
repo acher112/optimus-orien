@@ -754,6 +754,31 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      try {
+        localStorage.removeItem('optimus_user');
+        localStorage.removeItem('optimus_active_campus_id');
+        localStorage.removeItem('optimus_subscription');
+        localStorage.removeItem('optimus_entitlements');
+        sessionStorage.clear();
+        queryCache.clear();
+      } catch {}
+      setUser(null);
+      setError('');
+      if (typeof window !== 'undefined') {
+        const path = window.location.pathname;
+        if (path !== '/login' && path !== '/register' && !path.startsWith('/admin')) {
+          window.history.replaceState(null, '', '/login?session_expired=1');
+          setCurrentPathname('/login');
+          setCurrentSearch('?session_expired=1');
+        }
+      }
+    };
+    window.addEventListener('optimus:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('optimus:session-expired', handleSessionExpired);
+  }, []);
+
   const [teacherScope, setTeacherScope] = useState<any>(null);
 
   useEffect(() => {
@@ -1276,8 +1301,20 @@ function App() {
     }).catch(() => {
       try {
         localStorage.removeItem('optimus_user');
+        localStorage.removeItem('optimus_active_campus_id');
+        localStorage.removeItem('optimus_subscription');
+        localStorage.removeItem('optimus_entitlements');
       } catch {}
       setUser(null);
+      setError('');
+      if (typeof window !== 'undefined') {
+        const p = window.location.pathname;
+        if (p === '/app' || p.startsWith('/app/')) {
+          window.history.replaceState(null, '', '/login?session_expired=1');
+          setCurrentPathname('/login');
+          setCurrentSearch('?session_expired=1');
+        }
+      }
     }).finally(() => setLoading(false));
   }, []);
 
@@ -1310,8 +1347,33 @@ function App() {
       }
       // Also refresh campus list
       list<{ id: number; name: string; code?: string; city?: string; principal_name?: string }>('schools').then(setCampuses).catch(() => {});
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load data');
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : 'Could not load data';
+      if (
+        msg.toLowerCase().includes('authentication') ||
+        msg.toLowerCase().includes('session') ||
+        msg.toLowerCase().includes('not authenticated')
+      ) {
+        try {
+          localStorage.removeItem('optimus_user');
+          localStorage.removeItem('optimus_active_campus_id');
+          localStorage.removeItem('optimus_subscription');
+          localStorage.removeItem('optimus_entitlements');
+          queryCache.clear();
+        } catch {}
+        setUser(null);
+        setError('');
+        if (typeof window !== 'undefined') {
+          const p = window.location.pathname;
+          if (p === '/app' || p.startsWith('/app/')) {
+            window.history.replaceState(null, '', '/login?session_expired=1');
+            setCurrentPathname('/login');
+            setCurrentSearch('?session_expired=1');
+          }
+        }
+        return;
+      }
+      setError(msg);
     }
   }, [page, user, activeCampusId, campuses, resourceFilters]);
 
@@ -5623,6 +5685,24 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
               <span className="eyebrow">WELCOME BACK</span>
               <h2>Your workspace awaits.</h2>
               <p className="login-subtitle">Sign in to your education workspace</p>
+              {window.location.search.includes('session_expired=1') && (
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: 8,
+                  padding: '10px 14px',
+                  fontSize: 13,
+                  color: '#1e40af',
+                  marginBottom: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontWeight: 500
+                }}>
+                  <Clock size={16} style={{ flexShrink: 0 }} />
+                  <span>Your session has expired. Please sign in again to continue.</span>
+                </div>
+              )}
               <form onSubmit={submitLogin}>
                 <label>
                   Username or Email

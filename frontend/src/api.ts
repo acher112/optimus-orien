@@ -91,12 +91,15 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
   }
 
   const cleanUrl = url.replace(/^\/?(api\/v1\/)?/, '');
+  const isAuthMe = cleanUrl.includes('auth/me');
   const makeReq = (token: string) => fetch('/api/v1/' + cleanUrl, {
     ...options,
     credentials: 'include',
+    cache: options.cache || (isAuthMe ? 'no-store' : 'default'),
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(method !== 'GET' && token ? { 'X-CSRFToken': token } : {}),
+      ...(isAuthMe ? { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } : {}),
       ...(options.headers || {})
     }
   });
@@ -115,13 +118,63 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
 
   if (!response.ok) {
     const ct = response.headers.get('content-type') || '';
+    let info: any = {};
+    if (ct.includes('application/json')) {
+      try { info = await response.json(); } catch {}
+    }
+
+    const detailStr = (typeof info === 'string' ? info : (info?.detail || info?.message || '')).toLowerCase();
+    const isLoginOrRegister = cleanUrl.includes('auth/login') || cleanUrl.includes('auth/register');
+    const isAuthFailure = !isLoginOrRegister && (
+      response.status === 401 ||
+      (response.status === 403 && (
+        detailStr.includes('authentication') ||
+        detailStr.includes('credentials were not provided') ||
+        detailStr.includes('not authenticated') ||
+        detailStr.includes('session') ||
+        info?.code === 'not_authenticated'
+      ))
+    );
+
+    if (isAuthFailure) {
+      try {
+        localStorage.removeItem('optimus_user');
+        localStorage.removeItem('optimus_active_campus_id');
+        localStorage.removeItem('optimus_subscription');
+        localStorage.removeItem('optimus_entitlements');
+        sessionStorage.clear();
+      } catch {}
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('optimus:session-expired', {
+          detail: { url, status: response.status }
+        }));
+
+        const path = window.location.pathname;
+        const isAuthOrPublic = path === '/login' || path === '/register' || path === '/signin' ||
+          path === '/' || path.startsWith('/about') || path.startsWith('/privacy') ||
+          path.startsWith('/terms') || path.startsWith('/contact') || path.startsWith('/platform') ||
+          path.startsWith('/portals');
+
+        if (!isAuthOrPublic) {
+          if (path === '/admin' || path.startsWith('/admin')) {
+            window.history.replaceState(null, '', '/admin?session_expired=1');
+          } else {
+            window.history.replaceState(null, '', '/login?session_expired=1');
+          }
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      }
+
+      throw new Error('Your session has expired. Please sign in again.');
+    }
+
     if (!ct.includes('application/json')) {
       if (response.status === 403) throw new Error('Access denied (403). Your session may have expired — please refresh and sign in again.');
       if (response.status === 401) throw new Error('Authentication required (401). Please sign in.');
       throw new Error(`Server error ${response.status}. Please try again or contact support.`);
     }
-    let info: any = {};
-    try { info = await response.json(); } catch {}
+
     if (info) {
       if (typeof info === 'string') throw new Error(info);
       if (info.detail) throw new Error(info.detail);

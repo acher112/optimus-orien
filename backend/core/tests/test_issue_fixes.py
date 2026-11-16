@@ -168,3 +168,31 @@ class IssueFixesTestCase(TestCase):
         self.assertIn('remaining_to_collect', fin_res.data)
         self.assertIn('total_billed', fin_res.data)
 
+    def test_session_expiry_authentication_and_no_cache_headers(self):
+        """Verify unauthenticated requests return 401/403 and auth endpoints enforce no-cache."""
+        # Unauthenticated me() should fail with 401/403 NotAuthenticated
+        unauth_client = APIClient()
+        res_unauth = unauth_client.get('/api/v1/auth/me/')
+        self.assertIn(res_unauth.status_code, (401, 403))
+
+        # Unauthenticated dashboard() should fail
+        res_dash_unauth = unauth_client.get('/api/v1/dashboard/')
+        self.assertIn(res_dash_unauth.status_code, (401, 403))
+
+        # CSRF endpoint should have no-cache headers
+        csrf_res = unauth_client.get('/api/v1/auth/csrf/')
+        self.assertEqual(csrf_res.status_code, 200)
+        self.assertIn('no-cache', csrf_res.headers.get('Cache-Control', ''))
+
+        # Authenticated me() should return 200 and include strict no-cache headers
+        self.client.force_authenticate(user=self.admin)
+        res_me = self.client.get('/api/v1/auth/me/')
+        self.assertEqual(res_me.status_code, 200)
+        self.assertIn('no-store', res_me.headers.get('Cache-Control', ''))
+
+        # Authenticated dashboard() should return 200 and include strict no-cache headers
+        res_dash = self.client.get('/api/v1/dashboard/')
+        self.assertEqual(res_dash.status_code, 200)
+        self.assertIn('no-store', res_dash.headers.get('Cache-Control', ''))
+
+
