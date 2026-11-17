@@ -405,24 +405,7 @@ def engine_configuration_recalculate(request, pk):
     sync_exam_marks_to_assessments_and_aqi(config)
     from core.services.cache_service import invalidate_school_cache
     invalidate_school_cache(config.school_id)
-
-    # Debug: return student result snapshots so we can verify DB state
-    from core.models import CalculatedStudentResult, CalculatedSubjectResult
-    student_snapshots = list(
-        CalculatedStudentResult.objects.filter(configuration=config)
-        .select_related('student', 'school_class')
-        .values(
-            'student__full_name', 'school_class__name',
-            'overall_percentage', 'current_overall_percentage',
-            'completed', 'passed'
-        )
-    )
-    subject_snapshots = list(
-        CalculatedSubjectResult.objects.filter(configuration=config)
-        .select_related('subject')
-        .values('student_id', 'subject__name', 'final_percentage', 'current_percentage', 'completed', 'assessed_weight')
-    )
-    return Response({'id': config.id, 'summary': summary, 'debug_students': student_snapshots, 'debug_subjects': subject_snapshots})
+    return Response({'id': config.id, 'summary': summary})
 
 
 # ------------------------------------------------------------------ Mark Entry Grid
@@ -1172,12 +1155,20 @@ def engine_student_transcript(request):
     if user.role == 'parent' and not student.parents.filter(id=user.id).exists():
         raise PermissionDenied('Access denied.')
 
+    config_id = request.query_params.get('configuration')
+    config = None
     if config_id:
-        config = ExamConfiguration.objects.filter(pk=config_id, school=student.school).first()
-    else:
-        config = ExamConfiguration.objects.filter(school=student.school, status='published').first()
-        if not config:
-            config = ExamConfiguration.objects.filter(school=student.school).first()
+        try:
+            config = ExamConfiguration.objects.filter(pk=int(config_id), school_id__in=school_ids).first()
+        except (ValueError, TypeError):
+            config = None
+    if not config:
+        config = (
+            ExamConfiguration.objects.filter(school_id__in=school_ids, components__student_marks__student=student).distinct().order_by('-status', '-id').first()
+            or ExamConfiguration.objects.filter(school_id__in=school_ids, calculated_student_results__student=student).distinct().order_by('-status', '-id').first()
+            or ExamConfiguration.objects.filter(school_id__in=school_ids, status='published').order_by('-id').first()
+            or ExamConfiguration.objects.filter(school_id__in=school_ids).order_by('-id').first()
+        )
 
     if not config:
         raise NotFound('No examination configuration found for campus.')
@@ -1191,6 +1182,22 @@ def engine_student_transcript(request):
         student=student,
         configuration=config
     ).select_related('subject')
+
+    has_marks = ExamStudentMark.objects.filter(student=student, component__configuration=config).exists()
+    has_valid = calc_student and (calc_student.overall_percentage is not None or calc_student.current_overall_percentage is not None)
+    if has_marks and not has_valid:
+        try:
+            recalculate_student(student.id, config.id)
+            calc_student = CalculatedStudentResult.objects.filter(
+                student=student,
+                configuration=config
+            ).select_related('school_class', 'highest_subject', 'lowest_subject').first()
+            subject_results = CalculatedSubjectResult.objects.filter(
+                student=student,
+                configuration=config
+            ).select_related('subject')
+        except Exception:
+            pass
 
     from core.exams import _calculate_grade_band
     default_scale = student.school.grading_scales.filter(is_default=True).first() or student.school.grading_scales.first()

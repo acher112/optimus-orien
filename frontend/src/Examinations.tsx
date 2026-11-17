@@ -318,11 +318,12 @@ export default function Examinations({
   }, [selectedConfigId, gridClassId, gridSubjectId, computeLiveStudentRow]);
 
   // Load Student Transcript
-  const loadTranscript = useCallback(async (stId: number) => {
+  const loadTranscript = useCallback(async (stId: number, overrideConfigId?: number) => {
     setLoading(true);
     try {
+      const cfgId = overrideConfigId || selectedConfigId;
       let url = `exams/engine/student-transcript/?student=${stId}`;
-      if (selectedConfigId) url += `&configuration=${selectedConfigId}`;
+      if (cfgId) url += `&configuration=${cfgId}`;
       const res = await request<R>(url);
       setTranscriptData(res);
       setTranscriptStudentId(stId);
@@ -1479,7 +1480,22 @@ export default function Examinations({
               <h3>Student Academic Transcript & Multi-Term Matrix</h3>
               <p>Individual student examination breakdown showing term normalized percentages, contributions, and pending progress.</p>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select
+                className="fx-select"
+                value={selectedConfigId || ''}
+                onChange={e => {
+                  const cfgId = Number(e.target.value);
+                  setSelectedConfigId(cfgId);
+                  if (transcriptStudentId) loadTranscript(transcriptStudentId, cfgId);
+                }}
+              >
+                {engineConfigs.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.status}){activeCampusId === null && c.school_name ? ` – ${c.school_name}` : ''}
+                  </option>
+                ))}
+              </select>
               <select
                 className="fx-select"
                 value={transcriptStudentId || ''}
