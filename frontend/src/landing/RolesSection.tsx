@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Shield, School, UserCheck, BookOpen, HeartHandshake } from 'lucide-react';
 
 interface RolesSectionProps {
-  locale: 'en' | 'ur';
+  locale?: string;
 }
 
 interface PortalSlide {
@@ -15,8 +15,7 @@ interface PortalSlide {
   icon: React.ReactNode;
 }
 
-export default function RolesSection({ locale }: RolesSectionProps) {
-  const isUr = locale === 'ur';
+export default function RolesSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const touchStartX = useRef<number | null>(null);
@@ -24,57 +23,47 @@ export default function RolesSection({ locale }: RolesSectionProps) {
   const slides: PortalSlide[] = [
     {
       id: 'admin',
-      roleName: isUr ? 'ایڈمن پورٹل' : 'Super Admin Portal',
-      badge: isUr ? 'کثیر کیمپس تنظیمی نگرانی' : 'Multi-Campus Executive Governance',
+      roleName: 'Super Admin Portal',
+      badge: 'Multi-Campus Executive Governance',
       url: 'portal.optimus-orien.io/super_admin',
       image: '/images/dashboard-admin.png',
-      description: isUr
-        ? 'کثیر کیمپس تنظیمی نگرانی، فیس، عملے اور جامع رپورٹس کا مرکزی ڈیش بورڈ۔'
-        : 'Comprehensive multi-campus oversight, institutional finances, staff directories, and systemic executive analytics in one unified cockpit.',
+      description: 'Comprehensive multi-campus oversight, institutional finances, staff directories, and systemic executive analytics in one unified cockpit.',
       icon: <Shield size={16} />,
     },
     {
       id: 'principal',
-      roleName: isUr ? 'پرنسپل پورٹل' : 'Principal Portal',
-      badge: isUr ? 'کیمپس قیادت اور رجحانات کا جائزہ' : 'Campus Leadership & Quality Oversight',
+      roleName: 'Principal Portal',
+      badge: 'Campus Leadership & Quality Oversight',
       url: 'portal.optimus-orien.io/principal',
       image: '/images/dashboard-principal.png',
-      description: isUr
-        ? 'کیمپس کی تعلیمی کارکردگی، اساتذہ کا جائزہ اور قبل از وقت انتباہی نظام۔'
-        : 'Real-time campus diagnostics, teacher efficacy analytics, early intervention triggers, and longitudinal student trajectory trends.',
+      description: 'Real-time campus diagnostics, teacher efficacy analytics, early intervention triggers, and longitudinal student trajectory trends.',
       icon: <School size={16} />,
     },
     {
       id: 'teacher',
-      roleName: isUr ? 'استاد پورٹل' : 'Teacher Portal',
-      badge: isUr ? 'کلاس روم تجزیات اور قبل از وقت الرٹس' : 'Classroom Analytics & Early Alerts',
+      roleName: 'Teacher Portal',
+      badge: 'Classroom Analytics & Early Alerts',
       url: 'portal.optimus-orien.io/teacher',
       image: '/images/dashboard-teacher.png',
-      description: isUr
-        ? 'روزانہ حاضری، امتحانی نتائج کا اندراج اور طلباء کی انفرادی پیش رفت۔'
-        : 'Streamlined daily attendance, frictionless gradebook entries, behavior observations, and proactive intervention notes.',
+      description: 'Streamlined daily attendance, frictionless gradebook entries, behavior observations, and proactive intervention notes.',
       icon: <UserCheck size={16} />,
     },
     {
       id: 'student',
-      roleName: isUr ? 'طالب علم پورٹل' : 'Student Portal',
-      badge: isUr ? 'ذاتی تعلیمی پیش رفت اور رہنمائی' : 'Personal Progress & Growth Profile',
+      roleName: 'Student Portal',
+      badge: 'Personal Progress & Growth Profile',
       url: 'portal.optimus-orien.io/student',
       image: '/images/dashboard-student.png',
-      description: isUr
-        ? 'طالب علم کے نمبر، ہوم ورک، امتحانی شیڈول اور ذاتی تعلیمی ترقی۔'
-        : 'Clear visibility into assignments, exam timetables, assessment feedback, and continuous academic growth metrics.',
+      description: 'Clear visibility into assignments, exam timetables, assessment feedback, and continuous academic growth metrics.',
       icon: <BookOpen size={16} />,
     },
     {
       id: 'parent',
-      roleName: isUr ? 'والدین پورٹل' : 'Parent Portal',
-      badge: isUr ? 'والدین کی رسائی اور کارکردگی کی نگرانی' : 'Parent Engagement & Real-Time Alerts',
+      roleName: 'Parent Portal',
+      badge: 'Parent Engagement & Real-Time Alerts',
       url: 'portal.optimus-orien.io/parent',
       image: '/images/dashboard-parent.png',
-      description: isUr
-        ? 'حاضری، فیس کے واؤچرز اور اسکول کے اعلانات کی فوری معلومات۔'
-        : 'Instant attendance verification, automated fee receipts, direct teacher communication, and holistic academic progress tracking.',
+      description: 'Instant attendance verification, automated fee receipts, direct teacher communication, and holistic academic progress tracking.',
       icon: <HeartHandshake size={16} />,
     },
   ];
@@ -133,15 +122,11 @@ export default function RolesSection({ locale }: RolesSectionProps) {
         {/* Section Header */}
         <div className="roles-header">
           <div className="roles-badge">
-            <span>{isUr ? 'کردار پر مبنی تجربہ' : 'Role-Based Experiences'}</span>
+            <span>Role-Based Experiences</span>
           </div>
-          <h2 className="roles-title">
-            {isUr ? 'ایک پلیٹ فارم۔ مختلف زاویے۔' : 'One Platform. Multiple Perspectives.'}
-          </h2>
+          <h2 className="roles-title">One Platform. Multiple Perspectives.</h2>
           <p className="roles-desc">
-            {isUr
-              ? 'ہر اسٹیک ہولڈر کو اپنی ضرورت کے مطابق جامع معلومات حاصل ہوتی ہیں، اعلیٰ انتظامی نگرانی سے لے کر طالب علم کی روزانہ کی ترقی تک۔'
-              : 'Every stakeholder sees exactly the intelligence they need from systemic executive oversight to daily student growth.'}
+            Every stakeholder sees exactly the intelligence they need from systemic executive oversight to daily student growth.
           </p>
         </div>
 
@@ -181,7 +166,7 @@ export default function RolesSection({ locale }: RolesSectionProps) {
             type="button"
             className="portal-nav-arrow portal-nav-arrow-left"
             onClick={prevSlide}
-            aria-label={isUr ? 'پچھلی تصویر' : 'Previous portal slide'}
+            aria-label="Previous portal slide"
           >
             <ChevronLeft size={28} />
           </button>
@@ -191,7 +176,7 @@ export default function RolesSection({ locale }: RolesSectionProps) {
             type="button"
             className="portal-nav-arrow portal-nav-arrow-right"
             onClick={nextSlide}
-            aria-label={isUr ? 'اگلی تصویر' : 'Next portal slide'}
+            aria-label="Next portal slide"
           >
             <ChevronRight size={28} />
           </button>

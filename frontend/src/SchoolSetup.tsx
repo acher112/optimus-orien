@@ -76,7 +76,6 @@ const Input = ({ label, description, children }: { label: string; description?: 
 
 const languageOptions = [
   ['en', 'English'],
-  ['ur', 'Urdu'],
   ['ar', 'Arabic'],
   ['fr', 'French'],
   ['es', 'Spanish'],

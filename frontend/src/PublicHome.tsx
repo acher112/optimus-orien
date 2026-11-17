@@ -20,7 +20,7 @@ interface PublicHomeProps {
 }
 
 interface LandingApiResponse {
-  locale: 'en' | 'ur';
+  locale?: string;
   is_rtl: boolean;
   hero_slides: Array<{
     id: number;
@@ -39,30 +39,21 @@ interface LandingApiResponse {
 }
 
 export default function PublicHome({ authenticated }: PublicHomeProps) {
-  const [locale, setLocale] = useState<'en' | 'ur'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('optimus_landing_locale');
-      if (saved === 'ur' || saved === 'en') return saved;
-    }
-    return 'en';
-  });
+  const locale = 'en';
 
   const [landingData, setLandingData] = useState<LandingApiResponse | null>(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
 
   useEffect(() => {
     // Sync document direction and title
-    document.documentElement.dir = locale === 'ur' ? 'rtl' : 'ltr';
-    document.documentElement.lang = locale;
-    document.title =
-      locale === 'ur'
-        ? 'آپٹیمس اورین - اسکول کارکردگی انٹیلی جنس اور قبل از وقت رہنمائی'
-        : 'Optimus Orien - School Performance Intelligence & Early Intervention';
+    document.documentElement.dir = 'ltr';
+    document.documentElement.lang = 'en';
+    document.title = 'Optimus Orien - School Performance Intelligence & Early Intervention';
 
-    localStorage.setItem('optimus_landing_locale', locale);
+    localStorage.setItem('optimus_landing_locale', 'en');
 
     // Fetch dynamic content from platform API
-    request<LandingApiResponse>(`public/landing/?locale=${locale}`)
+    request<LandingApiResponse>('public/landing/?locale=en')
       .then((data) => {
         if (data) {
           setLandingData(data);
@@ -71,11 +62,9 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
       .catch((err) => {
         console.warn('Could not fetch landing CMS content, using fallbacks:', err);
       });
-  }, [locale]);
+  }, []);
 
-  const toggleLocale = () => {
-    setLocale((prev) => (prev === 'en' ? 'ur' : 'en'));
-  };
+  const toggleLocale = () => {};
 
   const handleSelectPlan = (planSlug: string) => {
     try {
@@ -92,7 +81,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
   const plans = landingData?.plans || [];
 
   return (
-    <div className="landing-root" dir={locale === 'ur' ? 'rtl' : 'ltr'}>
+    <div className="landing-root" dir="ltr">
       {/* Floating Animated Orbs */}
       <div className="bg-orbs" aria-hidden="true">
         <div className="orb orb-1" />
@@ -121,10 +110,10 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
         <FeaturesSection features={features} locale={locale} />
 
         {/* Section 4: Role-Based Experiences (CtaSection tabs) */}
-        <RolesSection locale={locale} />
+        <RolesSection />
 
         {/* Section 5: Simple for Schools Steps with Interactive Text Particle Scatter */}
-        <StepsSection locale={locale} />
+        <StepsSection />
 
         {/* Section 6: Student-Based Pricing Carousel */}
         <PricingCarouselSection

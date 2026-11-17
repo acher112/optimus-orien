@@ -223,7 +223,6 @@ export default function Record({
             <h1>
               <FileText size={26} color="#6f42c1" />
               <span>Record & Archive</span>
-              <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: 500 }}>(ریکارڈ)</span>
             </h1>
             <p className="record-subtitle">
               Permanent, filterable operational archive and longitudinal reporting across campuses.
@@ -262,42 +261,42 @@ export default function Record({
             onClick={() => setActiveTab('overview')}
           >
             <TrendingUp size={16} />
-            <span>Overview (جائزہ)</span>
+            <span>Overview</span>
           </button>
           <button
             className={`record-nav-btn ${activeTab === 'staff' ? 'active' : ''}`}
             onClick={() => setActiveTab('staff')}
           >
             <Users size={16} />
-            <span>Staff (عملہ)</span>
+            <span>Staff</span>
           </button>
           <button
             className={`record-nav-btn ${activeTab === 'students' ? 'active' : ''}`}
             onClick={() => setActiveTab('students')}
           >
             <GraduationCap size={16} />
-            <span>Students (طلباء)</span>
+            <span>Students</span>
           </button>
           <button
             className={`record-nav-btn ${activeTab === 'fees' ? 'active' : ''}`}
             onClick={() => setActiveTab('fees')}
           >
             <Receipt size={16} />
-            <span>Fees (فیسیں)</span>
+            <span>Fees</span>
           </button>
           <button
             className={`record-nav-btn ${activeTab === 'finance' ? 'active' : ''}`}
             onClick={() => setActiveTab('finance')}
           >
             <Wallet size={16} />
-            <span>Income & Expenses (آمدن و اخراجات)</span>
+            <span>Income & Expenses</span>
           </button>
           <button
             className={`record-nav-btn ${activeTab === 'salaries' ? 'active' : ''}`}
             onClick={() => setActiveTab('salaries')}
           >
             <Banknote size={16} />
-            <span>Salaries (تنخواہیں)</span>
+            <span>Salaries</span>
           </button>
         </div>
 

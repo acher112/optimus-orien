@@ -4,7 +4,7 @@ import { navigate } from '../navigation';
 
 interface HeroSectionProps {
   authenticated: boolean;
-  locale: 'en' | 'ur';
+  locale?: string;
   headline?: string;
   subtitle?: string;
 }
@@ -15,17 +15,13 @@ export default function HeroSection({
   headline,
   subtitle,
 }: HeroSectionProps) {
-  const isUr = locale === 'ur';
-
-  const defaultHeadline = isUr ? 'آپٹیمس اورین' : 'OPTIMUS ORIEN';
-  const defaultSubtitle = isUr
-    ? 'سکول کارکردگی انٹیلی جنس اور قبل از وقت رہنمائی۔ ایک پلیٹ فارم، مختلف زاویے۔'
-    : 'School Performance Intelligence & Early Intervention. One platform, multiple perspectives.';
+  const defaultHeadline = 'OPTIMUS ORIEN';
+  const defaultSubtitle = 'School Performance Intelligence & Early Intervention. One platform, multiple perspectives.';
 
   const t = {
-    signIn: isUr ? 'لاگ ان' : 'Sign in',
-    register: isUr ? 'اپنا اسکول رجسٹر کریں' : 'Register your school',
-    dashboard: isUr ? 'ڈیش بورڈ پر جائیں' : 'Go to dashboard',
+    signIn: 'Sign in',
+    register: 'Register your school',
+    dashboard: 'Go to dashboard',
   };
 
   return (

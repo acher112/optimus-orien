@@ -267,7 +267,6 @@ export default function TeacherPerformance({
             <h1>
               <Award size={26} color="#6f42c1" />
               <span>Teacher Performance & Instructional Insights</span>
-              <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: 500 }}>(اساتذہ کی کارکردگی)</span>
             </h1>
             <p className="record-subtitle">
               Fair, evidence-based academic progress tracking and supportive leadership workflows.
@@ -331,10 +330,10 @@ export default function TeacherPerformance({
                 onChange={e => setStatusFilter(e.target.value)}
               >
                 <option value="all">All Performance Levels</option>
-                <option value="on_track">On Track (بہتر سمت میں)</option>
-                <option value="watch">Watch (زیرِ نگاہ)</option>
-                <option value="needs_support">Needs Support (معاونت کی ضرورت)</option>
-                <option value="insufficient_data">Insufficient Data (ناکافی ڈیٹا)</option>
+                <option value="on_track">On Track</option>
+                <option value="watch">Watch</option>
+                <option value="needs_support">Needs Support</option>
+                <option value="insufficient_data">Insufficient Data</option>
               </select>
             </div>
 

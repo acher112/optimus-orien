@@ -2,36 +2,29 @@ import React from 'react';
 
 interface FooterSectionProps {
   authenticated: boolean;
-  locale: 'en' | 'ur';
+  locale?: string;
   onOpenContact: () => void;
 }
 
 export default function FooterSection({
   authenticated,
-  locale,
   onOpenContact,
 }: FooterSectionProps) {
-  const isUr = locale === 'ur';
-
   const t = {
-    brandTagline: isUr
-      ? 'سکول کارکردگی انٹیلی جنس اور قبل از وقت رہنمائی کا جدید نظام۔'
-      : 'School Performance Intelligence & Early Intervention',
-    platform: isUr ? 'پلیٹ فارم' : 'Platform',
-    portals: isUr ? 'پورٹلز' : 'Portals',
-    company: isUr ? 'کمپنی' : 'Company',
-    contact: isUr ? 'رابطہ' : 'Contact',
-    signIn: isUr ? 'لاگ ان' : 'Sign in',
-    register: isUr ? 'اسکول رجسٹر کریں' : 'Register your school',
-    dashboard: isUr ? 'ڈیش بورڈ پر جائیں' : 'Go to dashboard',
-    requestAccess: isUr ? 'رسائی کی درخواست' : 'Request Access',
-    contactUs: isUr ? 'ہم سے رابطہ کریں' : 'Contact Us',
-    about: isUr ? 'ہمارے بارے میں' : 'About',
-    privacy: isUr ? 'پرائیویسی پالیسی' : 'Privacy Policy',
-    terms: isUr ? 'استعمال کی شرائط' : 'Terms of Service',
-    copyright: isUr
-      ? '© 2026 آپٹیمس اورین۔ جملہ حقوق محفوظ ہیں۔'
-      : '© 2026 Optimus Orien. All rights reserved.',
+    brandTagline: 'School Performance Intelligence & Early Intervention',
+    platform: 'Platform',
+    portals: 'Portals',
+    company: 'Company',
+    contact: 'Contact',
+    signIn: 'Sign in',
+    register: 'Register your school',
+    dashboard: 'Go to dashboard',
+    requestAccess: 'Request Access',
+    contactUs: 'Contact Us',
+    about: 'About',
+    privacy: 'Privacy Policy',
+    terms: 'Terms of Service',
+    copyright: '© 2026 Optimus Orien. All rights reserved.',
   };
 
   const handleLinkClick = (path: string, e: React.MouseEvent) => {

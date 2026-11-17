@@ -4,13 +4,12 @@ import { request } from '../api';
 
 interface ContactModalProps {
   isOpen: boolean;
-  locale: 'en' | 'ur';
+  locale?: string;
   onClose: () => void;
 }
 
 export default function ContactModal({
   isOpen,
-  locale,
   onClose,
 }: ContactModalProps) {
   const [formData, setFormData] = useState({
@@ -28,24 +27,18 @@ export default function ContactModal({
 
   if (!isOpen) return null;
 
-  const isUr = locale === 'ur';
-
   const t = {
-    title: isUr ? 'ہم سے رابطہ کریں' : 'Get in Touch',
-    subtitle: isUr
-      ? 'ہمیں اپنی ضروریات یا استفسارات کے بارے میں بتائیں، ہماری ٹیم 24 گھنٹوں میں رابطہ کرے گی۔'
-      : 'Tell us about your institution or inquiry, and our team will get back to you within 24 hours.',
-    name: isUr ? 'مکمل نام' : 'Full Name',
-    email: isUr ? 'ای میل ایڈریس' : 'Email Address',
-    phone: isUr ? 'ٹیلی فون نمبر' : 'Phone Number',
-    company: isUr ? 'اسکول / ادارے کا نام' : 'School / Institution',
-    subject: isUr ? 'مضمون' : 'Subject',
-    message: isUr ? 'پیغام' : 'Message',
-    submit: isUr ? 'پیغام بھیجیں' : 'Send Message',
-    submitting: isUr ? 'بھیجا جا رہا ہے...' : 'Sending...',
-    emailUsDirectly: isUr
-      ? 'یا آپ براہ راست ای میل کر سکتے ہیں:'
-      : 'Or email us directly at:',
+    title: 'Get in Touch',
+    subtitle: 'Tell us about your institution or inquiry, and our team will get back to you within 24 hours.',
+    name: 'Full Name',
+    email: 'Email Address',
+    phone: 'Phone Number',
+    company: 'School / Institution',
+    subject: 'Subject',
+    message: 'Message',
+    submit: 'Send Message',
+    submitting: 'Sending...',
+    emailUsDirectly: 'Or email us directly at:',
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,11 +56,7 @@ export default function ContactModal({
       if (res && res.message) {
         setSuccessMessage(res.message);
       } else {
-        setSuccessMessage(
-          isUr
-            ? 'آپ کا پیغام کامیابی سے موصول ہو گیا ہے!'
-            : 'Your message has been received successfully!'
-        );
+        setSuccessMessage('Your message has been received successfully!');
       }
       setFormData({
         name: '',
@@ -123,7 +112,7 @@ export default function ContactModal({
           >
             <CheckCircle size={36} color="#059669" style={{ margin: '0 auto 0.75rem auto' }} />
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#065f46', marginBottom: '0.5rem' }}>
-              {isUr ? 'شکریہ!' : 'Thank you!'}
+              Thank you!
             </h3>
             <p style={{ color: '#047857', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
               {successMessage}
@@ -133,7 +122,7 @@ export default function ContactModal({
               className="btn-submit-contact"
               onClick={onClose}
             >
-              {isUr ? 'بند کریں' : 'Close'}
+              Close
             </button>
           </div>
         ) : (

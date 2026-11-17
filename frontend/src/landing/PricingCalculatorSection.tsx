@@ -4,14 +4,13 @@ import { PlanItem } from './PricingCarouselSection';
 
 interface PricingCalculatorSectionProps {
   plans: PlanItem[];
-  locale: 'en' | 'ur';
+  locale?: string;
   onSelectPlan: (planSlug: string) => void;
   onOpenContact: () => void;
 }
 
 export default function PricingCalculatorSection({
   plans,
-  locale,
   onSelectPlan,
   onOpenContact,
 }: PricingCalculatorSectionProps) {
@@ -19,8 +18,6 @@ export default function PricingCalculatorSection({
   const [studentCountPremium, setStudentCountPremium] = useState(250);
   const [currencyStandard, setCurrencyStandard] = useState<'USD' | 'PKR'>('USD');
   const [currencyPremium, setCurrencyPremium] = useState<'USD' | 'PKR'>('USD');
-
-  const isUr = locale === 'ur';
 
   // Standard plan pricing
   const standardPlan = plans.find((p) => p.slug === 'standard');
@@ -54,18 +51,16 @@ export default function PricingCalculatorSection({
     <section className="pricing-section">
       <div className="pricing-container">
         <div className="pricing-calc-header">
-          <h2>{isUr ? 'انٹرایکٹو لاگت کا تخمینہ' : 'Investment Calculator'}</h2>
+          <h2>Investment Calculator</h2>
           <p style={{ color: '#6b7280', fontSize: '1.05rem', margin: 0 }}>
-            {isUr
-              ? 'اپنے اسکول کی طلباء کی تعداد کے مطابق ماہانہ سرمایہ کاری کا حساب لگائیں۔'
-              : 'Estimate your monthly or annual investment based on your active student population.'}
+            Estimate your monthly or annual investment based on your active student population.
           </p>
         </div>
 
         <div className="pricing-grid">
           {/* Standard Tier Card */}
           <div className="pricing-card">
-            <span className="plan-label">{isUr ? 'اسٹینڈرڈ پلان' : 'Standard Tier'}</span>
+            <span className="plan-label">Standard Tier</span>
 
             <div className="currency-toggle-wrapper">
               <span
@@ -94,22 +89,18 @@ export default function PricingCalculatorSection({
               <span className="price-amount">
                 {currencyStandard === 'USD' ? `$${standardUsd.toFixed(2)}` : `${Math.round(standardPkr)} PKR`}
               </span>
-              <span className="price-period">{isUr ? '/ طالب علم / ماہانہ' : '/ student / month'}</span>
+              <span className="price-period">/ student / month</span>
             </div>
 
             <p style={{ fontSize: '0.95rem', color: '#52525b', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-              {isUr
-                ? 'تمام بنیادی کرداروں کے پورٹل، حاضری ٹریکنگ اور اسکول کی عمومی کارکردگی کا جائزہ۔'
-                : 'Includes full access to the intelligence suite, all role portals, campus benchmarking, and early intervention tools.'}
+              Includes full access to the intelligence suite, all role portals, campus benchmarking, and early intervention tools.
             </p>
 
             <div className="calculator-box">
               <div className="calc-header">
-                <span style={{ fontWeight: 600 }}>
-                  {isUr ? 'اسکول کی طلباء کی آبادی:' : 'Institutional Student Population:'}
-                </span>
+                <span style={{ fontWeight: 600 }}>Institutional Student Population:</span>
                 <span style={{ fontWeight: 700 }}>
-                  {studentCountStandard} {isUr ? 'طلباء' : 'Students'}
+                  {studentCountStandard} Students
                 </span>
               </div>
               <input
@@ -122,9 +113,7 @@ export default function PricingCalculatorSection({
                 className="range-slider"
               />
               <div className="calc-footer">
-                <span style={{ color: '#71717a' }}>
-                  {isUr ? 'تخمینی ماہانہ سرمایہ کاری:' : 'Estimated Term Investment:'}
-                </span>
+                <span style={{ color: '#71717a' }}>Estimated Term Investment:</span>
                 <span className="calc-total">{calcStandardTotal()}</span>
               </div>
             </div>
@@ -135,7 +124,7 @@ export default function PricingCalculatorSection({
                 className="btn-select-plan"
                 onClick={() => onSelectPlan('standard')}
               >
-                <span>{isUr ? 'اسٹینڈرڈ کا انتخاب کریں' : 'Choose Standard Tier'}</span>
+                <span>Choose Standard Tier</span>
                 <ArrowRight size={16} />
               </button>
 
@@ -145,7 +134,7 @@ export default function PricingCalculatorSection({
                 style={{ justifyContent: 'center', fontSize: '0.9rem', padding: '0.65rem' }}
                 onClick={onOpenContact}
               >
-                {isUr ? 'ڈیمو بک کریں' : 'Book Standard Demo'}
+                Book Standard Demo
               </button>
             </div>
           </div>
@@ -153,7 +142,7 @@ export default function PricingCalculatorSection({
           {/* Premium Tier Card */}
           <div className="pricing-card" style={{ borderColor: 'var(--brand-purple-dark)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="plan-label">{isUr ? 'پریمیم پلان' : 'Premium Tier'}</span>
+              <span className="plan-label">Premium Tier</span>
               <span
                 style={{
                   background: 'var(--brand-purple-subtle)',
@@ -168,7 +157,7 @@ export default function PricingCalculatorSection({
                 }}
               >
                 <Sparkles size={12} />
-                {isUr ? 'سب سے مقبول' : 'Most Popular'}
+                Most Popular
               </span>
             </div>
 
@@ -199,22 +188,18 @@ export default function PricingCalculatorSection({
               <span className="price-amount" style={{ color: 'var(--brand-purple-dark)' }}>
                 {currencyPremium === 'USD' ? `$${premiumUsd.toFixed(2)}` : `${Math.round(premiumPkr)} PKR`}
               </span>
-              <span className="price-period">{isUr ? '/ طالب علم / ماہانہ' : '/ student / month'}</span>
+              <span className="price-period">/ student / month</span>
             </div>
 
             <p style={{ fontSize: '0.95rem', color: '#52525b', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-              {isUr
-                ? 'قبل از وقت رہنمائی کا نظام، 5 سالہ ترقیاتی تجزیہ، تعلیمی معیار انڈیکس (AQI) اور خودکار الرٹس۔'
-                : 'Advanced Performance Intelligence, Early Intervention System, 5-Year Analysis, AQI, and organization-wide governance.'}
+              Advanced Performance Intelligence, Early Intervention System, 5-Year Analysis, AQI, and organization-wide governance.
             </p>
 
             <div className="calculator-box">
               <div className="calc-header">
-                <span style={{ fontWeight: 600 }}>
-                  {isUr ? 'اسکول کی طلباء کی آبادی:' : 'Institutional Student Population:'}
-                </span>
+                <span style={{ fontWeight: 600 }}>Institutional Student Population:</span>
                 <span style={{ fontWeight: 700 }}>
-                  {studentCountPremium} {isUr ? 'طلباء' : 'Students'}
+                  {studentCountPremium} Students
                 </span>
               </div>
               <input
@@ -227,9 +212,7 @@ export default function PricingCalculatorSection({
                 className="range-slider"
               />
               <div className="calc-footer">
-                <span style={{ color: '#71717a' }}>
-                  {isUr ? 'تخمینی ماہانہ سرمایہ کاری:' : 'Estimated Term Investment:'}
-                </span>
+                <span style={{ color: '#71717a' }}>Estimated Term Investment:</span>
                 <span className="calc-total">{calcPremiumTotal()}</span>
               </div>
             </div>
@@ -240,7 +223,7 @@ export default function PricingCalculatorSection({
                 className="btn-select-plan"
                 onClick={() => onSelectPlan('premium')}
               >
-                <span>{isUr ? 'پریمیم کا انتخاب کریں' : 'Choose Premium Tier'}</span>
+                <span>Choose Premium Tier</span>
                 <ArrowRight size={16} />
               </button>
 
@@ -250,7 +233,7 @@ export default function PricingCalculatorSection({
                 style={{ justifyContent: 'center', fontSize: '0.9rem', padding: '0.65rem' }}
                 onClick={onOpenContact}
               >
-                {isUr ? 'ڈیمو بک کریں' : 'Book Premium Demo'}
+                Book Premium Demo
               </button>
             </div>
           </div>

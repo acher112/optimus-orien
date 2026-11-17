@@ -1977,13 +1977,13 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                       value={voucherCategory}
                       onChange={e => setVoucherCategory(e.target.value)}
                     >
-                      <option value="Examination Fee">Examination Fee (امتحانی فیس)</option>
-                      <option value="Sports Gala / Kit Fee">Sports Gala / Kit Fee (سپورٹس فیس)</option>
-                      <option value="Annual Charges">Annual Charges (سالانہ فیس)</option>
-                      <option value="Computer / Science Lab Fee">Computer / Lab Fee (لیب فیس)</option>
-                      <option value="Study Tour / Picnic Fee">Study Tour / Picnic (پکنک فیس)</option>
-                      <option value="Library / Book Bank Fee">Library / Book Bank (لائبریری فیس)</option>
-                      <option value="Identity Card Fee">Identity Card Fee (شناختی کارڈ)</option>
+                      <option value="Examination Fee">Examination Fee</option>
+                      <option value="Sports Gala / Kit Fee">Sports Gala / Kit Fee</option>
+                      <option value="Annual Charges">Annual Charges</option>
+                      <option value="Computer / Science Lab Fee">Computer / Science Lab Fee</option>
+                      <option value="Study Tour / Picnic Fee">Study Tour / Picnic Fee</option>
+                      <option value="Library / Book Bank Fee">Library / Book Bank Fee</option>
+                      <option value="Identity Card Fee">Identity Card Fee</option>
                       <option value="custom">+ Type Custom Category...</option>
                     </select>
                   </label>

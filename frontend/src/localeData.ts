@@ -11,7 +11,6 @@ export interface CurrencyOption {
 
 export const ALL_LOCALES: LocaleOption[] = [
   { value: 'en-PK', label: 'English - Pakistan' },
-  { value: 'ur-PK', label: 'Urdu - Pakistan' },
   { value: 'en-US', label: 'English - United States' },
   { value: 'en-GB', label: 'English - United Kingdom' },
   { value: 'en-CA', label: 'English - Canada' },

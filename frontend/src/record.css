@@ -390,7 +390,7 @@
   cursor: pointer;
 }
 
-/* RTL Support for Urdu */
+/* RTL Support */
 [dir="rtl"] .record-container, .rtl-mode .record-container {
   direction: rtl;
   text-align: right;

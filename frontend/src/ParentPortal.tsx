@@ -20,7 +20,6 @@ interface Props {
 type TabType = 'overview' | 'results' | 'attendance' | 'risk' | 'teachers' | 'homework' | 'fees';
 
 export default function ParentPortal({ user, notify, initialPage }: Props) {
-  const [lang, setLang] = useState<'en' | 'ur'>('en');
   const [children, setChildren] = useState<any[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -186,8 +185,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
     }
   };
 
-  // Urdu Translations map
-  const t = (en: string, ur: string) => lang === 'ur' ? ur : en;
+  const t = (en: string) => en;
 
   return (
     <div className="parent-portal-container" style={{ padding: '24px', maxWidth: '1280px', margin: '0 auto' }}>
@@ -195,33 +193,14 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted, #64748b)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            {t('Parent & Guardian Portal', 'والدین و سرپرست پورٹل')}
+            {t('Parent & Guardian Portal')}
           </div>
           <h1 style={{ fontSize: '26px', fontWeight: 700, margin: '4px 0 0 0', color: 'var(--text-primary, #0f172a)' }}>
-            {selectedChildId && activeChild ? `${activeChild.full_name}'s Progress` : t('Family Overview', 'خاندانی جائزہ')}
+            {selectedChildId && activeChild ? `${activeChild.full_name}'s Progress` : t('Family Overview')}
           </h1>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Language Toggle */}
-          <button
-            onClick={() => setLang(l => l === 'en' ? 'ur' : 'en')}
-            style={{
-              padding: '6px 14px',
-              borderRadius: '20px',
-              border: '1px solid var(--border-color, #cbd5e1)',
-              background: '#fff',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <span>{lang === 'en' ? 'اردو (Urdu)' : 'English'}</span>
-          </button>
-
           {/* If inside a child view, back to Family Home */}
           {selectedChildId && (
             <button
@@ -240,7 +219,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               }}
             >
               <Users size={15} />
-              <span>{t('All Children', 'تمام بچے')}</span>
+              <span>{t('All Children')}</span>
             </button>
           )}
         </div>
@@ -249,7 +228,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
       {loading && (
         <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
           <RefreshCw className="animate-spin" size={28} style={{ margin: '0 auto 12px auto' }} />
-          <p>{t('Loading your family profile...', 'معلومات لوڈ کی جا رہی ہیں...')}</p>
+          <p>{t('Loading your family profile...')}</p>
         </div>
       )}
 
@@ -266,16 +245,16 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
         <div>
           <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>
-              {t(`Linked Children (${children.length})`, `منسلک طلباء (${children.length})`)}
+              {t(`Linked Children (${children.length})`)}
             </span>
           </div>
 
           {children.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <Users size={40} color="#94a3b8" style={{ margin: '0 auto 12px auto' }} />
-              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b' }}>{t('No Linked Students Found', 'کوئی منسلک طالب علم نہیں ملا')}</h3>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b' }}>{t('No Linked Students Found')}</h3>
               <p style={{ color: '#64748b', maxWidth: '400px', margin: '8px auto 0 auto', fontSize: '14px' }}>
-                {t('Please contact your school administration or campus principal to verify and link your children.', 'براہ کرم اسکول کے پرنسپل سے رابطہ کریں۔')}
+                {t('Please contact your school administration or campus principal to verify and link your children.')}
               </p>
             </div>
           ) : (
@@ -336,15 +315,15 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                             gap: '4px'
                           }}>
                             <AlertTriangle size={12} />
-                            {t('Needs Attention', 'توجہ طلب')}
+                            {t('Needs Attention')}
                           </span>
                         )}
                       </div>
 
                       {/* Campus & Homeroom info */}
                       <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px' }}>
-                        <div><b>{t('Campus:', 'کیمپس:')}</b> {child.campus_name}</div>
-                        <div><b>{t('Homeroom Teacher:', 'کلاس ٹیچر:')}</b> {child.class_teacher_name}</div>
+                        <div><b>{t('Campus:')}</b> {child.campus_name}</div>
+                        <div><b>{t('Homeroom Teacher:')}</b> {child.class_teacher_name}</div>
                       </div>
 
                       {/* 3-Stat Strip */}
@@ -359,7 +338,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                         marginBottom: '16px'
                       }}>
                         <div>
-                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{t('ATTENDANCE', 'حاضری')}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{t('ATTENDANCE')}</div>
                           <div style={{
                             fontSize: '15px',
                             fontWeight: 700,
@@ -372,19 +351,19 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                         </div>
 
                         <div>
-                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{t('ACADEMICS', 'تعلیمی')}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{t('ACADEMICS')}</div>
                           <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '4px', color: '#2563eb' }}>
                             {child.academic_standing}
                           </div>
-                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>{t('Overall', 'مجموعی')}</span>
+                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>{t('Overall')}</span>
                         </div>
 
                         <div>
-                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{t('ALERTS', 'انتباہ')}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{t('ALERTS')}</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: child.active_alerts_count > 0 ? '#dc2626' : '#16a34a' }}>
                             {child.active_alerts_count > 0 ? `${child.active_alerts_count} Active` : (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#16a34a', fontSize: '12px' }}>
-                                <Check size={14} /> {t('On track', 'تسلی بخش')}
+                                <Check size={14} /> {t('On track')}
                               </span>
                             )}
                           </div>
@@ -417,7 +396,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                         }}
                       >
                         <TrendingUp size={15} />
-                        <span>{t('View Progress', 'مکمل پیشرفت')}</span>
+                        <span>{t('View Progress')}</span>
                       </button>
 
                       <button
@@ -438,7 +417,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                         }}
                       >
                         <Printer size={15} />
-                        <span>{t('Report', 'رپورٹ')}</span>
+                        <span>{t('Report')}</span>
                       </button>
                     </div>
                   </div>
@@ -485,13 +464,13 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
           {/* Navigation Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '24px', overflowX: 'auto', gap: '8px' }}>
             {[
-              { key: 'overview', label: t('Overview', 'جائزہ'), icon: Eye },
-              { key: 'results', label: t('Results & Progress', 'نتائج و تعلیمی پیشرفت'), icon: TrendingUp },
-              { key: 'attendance', label: t('Attendance', 'حاضری کا ریکارڈ'), icon: Calendar },
-              { key: 'risk', label: t('Risk & Support', 'رہنمائی و سپورٹ'), icon: AlertTriangle, badge: activeChild.active_alerts_count },
-              { key: 'teachers', label: t('Teachers', 'اساتذہ سے رابطہ'), icon: PhoneCall },
-              { key: 'homework', label: t('Homework', 'ہوم ورک'), icon: BookOpen },
-              { key: 'fees', label: t('Fees', 'فیس تفصیلات'), icon: FileText },
+              { key: 'overview', label: t('Overview'), icon: Eye },
+              { key: 'results', label: t('Results & Progress'), icon: TrendingUp },
+              { key: 'attendance', label: t('Attendance'), icon: Calendar },
+              { key: 'risk', label: t('Risk & Support'), icon: AlertTriangle, badge: activeChild.active_alerts_count },
+              { key: 'teachers', label: t('Teachers'), icon: PhoneCall },
+              { key: 'homework', label: t('Homework'), icon: BookOpen },
+              { key: 'fees', label: t('Fees'), icon: FileText },
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.key;
@@ -529,7 +508,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
           {childLoading && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
               <RefreshCw className="animate-spin" size={24} style={{ margin: '0 auto 8px auto' }} />
-              <p>{t('Updating details...', 'تفصیلات حاصل کی جا رہی ہیں...')}</p>
+              <p>{t('Updating details...')}</p>
             </div>
           )}
 
@@ -538,9 +517,9 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
               {/* Recent Attendance Strip */}
               <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0' }}>{t('Recent Attendance (Last 10 Days)', 'حالیہ 10 دنوں کی حاضری')}</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0' }}>{t('Recent Attendance (Last 10 Days)')}</h3>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {overviewData.recent_attendance?.length === 0 && <span style={{ color: '#94a3b8' }}>{t('No attendance recorded yet.', 'کوئی ریکارڈ نہیں ملا')}</span>}
+                  {overviewData.recent_attendance?.length === 0 && <span style={{ color: '#94a3b8' }}>{t('No attendance recorded yet.')}</span>}
                   {overviewData.recent_attendance?.map((rec: any, idx: number) => {
                     const isP = rec.status === 'present';
                     const isA = rec.status === 'absent';
@@ -573,9 +552,9 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
 
               {/* Recent Assessments */}
               <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0' }}>{t('Recent Assessment Results', 'حالیہ امتحانی نتائج')}</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0' }}>{t('Recent Assessment Results')}</h3>
                 {overviewData.recent_assessments?.length === 0 ? (
-                  <p style={{ color: '#94a3b8', fontSize: '14px' }}>{t('No recent assessments published.', 'کوئی حالیہ نتیجہ نہیں ملا')}</p>
+                  <p style={{ color: '#94a3b8', fontSize: '14px' }}>{t('No recent assessments published.')}</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {overviewData.recent_assessments?.map((a: any, i: number) => (
@@ -598,7 +577,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
 
               {/* Upcoming Items (Homework & Exams) */}
               <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0' }}>{t('Upcoming in Next 7 Days', 'اگلے 7 دنوں کے اہم امور')}</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0' }}>{t('Upcoming in Next 7 Days')}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {overviewData.upcoming_homework?.map((hw: any) => (
                     <div key={hw.id} style={{ fontSize: '13px', padding: '8px 12px', background: '#eff6ff', borderRadius: '6px', color: '#1e40af' }}>
@@ -611,7 +590,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                     </div>
                   ))}
                   {(!overviewData.upcoming_homework?.length && !overviewData.upcoming_assessments?.length) && (
-                    <p style={{ color: '#94a3b8', fontSize: '13px' }}>{t('No upcoming deadlines scheduled.', 'کوئی آنے والی ڈیڈ لائن مقرر نہیں ہے')}</p>
+                    <p style={{ color: '#94a3b8', fontSize: '13px' }}>{t('No upcoming deadlines scheduled.')}</p>
                   )}
                 </div>
               </div>
@@ -620,10 +599,10 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '6px', color: '#b45309' }}>
                   <Award size={18} />
-                  <span>{t('Positive Commendations', 'اساتذہ کے مثبت تبصرے')}</span>
+                  <span>{t('Positive Commendations')}</span>
                 </h3>
                 {overviewData.positive_shoutouts?.length === 0 ? (
-                  <p style={{ color: '#94a3b8', fontSize: '13px' }}>{t('Regular classroom observations ongoing.', 'معمول کے مشاہدات جاری ہیں')}</p>
+                  <p style={{ color: '#94a3b8', fontSize: '13px' }}>{t('Regular classroom observations ongoing.')}</p>
                 ) : (
                   overviewData.positive_shoutouts?.map((s: any, idx: number) => (
                     <div key={idx} style={{ padding: '10px 14px', background: '#fefce8', border: '1px solid #fef08a', borderRadius: '8px', fontSize: '13px', color: '#854d0e', marginBottom: '8px' }}>
@@ -642,7 +621,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
                 {/* Child Overall */}
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('CHILD OVERALL AVERAGE', 'طالب علم کی مجموعی کارکردگی')}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('CHILD OVERALL AVERAGE')}</div>
                   <div style={{ fontSize: '26px', fontWeight: 700, color: '#334155', marginTop: '4px' }}>
                     {resultsData.overall_percentage !== null ? `${resultsData.overall_percentage}%` : '—'}
                   </div>
@@ -651,7 +630,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
 
                 {/* Class Average */}
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('CLASS AVERAGE', 'کلاس اوسط')}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('CLASS AVERAGE')}</div>
                   <div style={{ fontSize: '26px', fontWeight: 700, color: '#94a3b8', marginTop: '4px' }}>
                     {resultsData.class_average !== null ? `${resultsData.class_average}%` : '—'}
                   </div>
@@ -672,7 +651,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
 
                 {/* Boys Average */}
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
-                  <div style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>{t('BOYS AVERAGE', 'لڑکوں کی اوسط')}</div>
+                  <div style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>{t('BOYS AVERAGE')}</div>
                   {resultsData.boys_privacy_notice ? (
                     <div style={{ fontSize: '13px', color: '#64748b', marginTop: '8px' }}>{resultsData.boys_privacy_notice}</div>
                   ) : (
@@ -680,12 +659,12 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                       {resultsData.boys_class_average !== null ? `${resultsData.boys_class_average}%` : '—'}
                     </div>
                   )}
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Anonymous aggregate', 'گمنام مجموعی ڈیٹا')}</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Anonymous aggregate')}</span>
                 </div>
 
                 {/* Girls Average */}
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #fbcfe8' }}>
-                  <div style={{ fontSize: '12px', color: '#db2777', fontWeight: 600 }}>{t('GIRLS AVERAGE', 'لڑکیوں کی اوسط')}</div>
+                  <div style={{ fontSize: '12px', color: '#db2777', fontWeight: 600 }}>{t('GIRLS AVERAGE')}</div>
                   {resultsData.girls_privacy_notice ? (
                     <div style={{ fontSize: '13px', color: '#64748b', marginTop: '8px' }}>{resultsData.girls_privacy_notice}</div>
                   ) : (
@@ -693,7 +672,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                       {resultsData.girls_class_average !== null ? `${resultsData.girls_class_average}%` : '—'}
                     </div>
                   )}
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Anonymous aggregate', 'گمنام مجموعی ڈیٹا')}</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Anonymous aggregate')}</span>
                 </div>
               </div>
 
@@ -703,21 +682,21 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <div>
                       <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
-                        {t('Class Performance Distribution (Anonymous)', 'کلاس کی عمومی کارکردگی کا جائزہ')}
+                        {t('Class Performance Distribution (Anonymous)')}
                       </h3>
                       <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                        {t('Shows where your child stands relative to the class distribution. Individual classmates remain anonymous.', 'آپ کے بچے کی پوزیشن گرے رنگ میں نمایاں کی گئی ہے۔')}
+                        {t('Shows where your child stands relative to the class distribution. Individual classmates remain anonymous.')}
                       </p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px', fontSize: '12px', alignItems: 'center' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span style={{ width: '12px', height: '12px', background: '#6b7280', borderRadius: '3px' }} />
-                        <span>{t('Child Band', 'بچے کی بریکٹ')}</span>
+                        <span>{t('Child Band')}</span>
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span style={{ width: '12px', height: '12px', background: '#cbd5e1', borderRadius: '3px' }} />
-                        <span>{t('Classmates', 'دیگر طلباء')}</span>
+                        <span>{t('Classmates')}</span>
                       </span>
                     </div>
                   </div>
@@ -748,25 +727,25 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               {/* Subject Breakdown Table */}
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Subject Performance Breakdown', 'مضامین کی تفصیلی کارکردگی')}</h3>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Subject Performance Breakdown')}</h3>
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
                     <thead>
                       <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '12px', borderBottom: '1px solid #e2e8f0' }}>
-                        <th style={{ padding: '12px 20px' }}>{t('Subject', 'مضمون')}</th>
-                        <th style={{ padding: '12px' }}>{t('Current Score', 'حاصل کردہ اسکور')}</th>
-                        <th style={{ padding: '12px' }}>{t('Class Average', 'کلاس اوسط')}</th>
-                        <th style={{ padding: '12px' }}>{t('Difference', 'فرق')}</th>
-                        <th style={{ padding: '12px 20px' }}>{t('Status', 'حیثیت')}</th>
+                        <th style={{ padding: '12px 20px' }}>{t('Subject')}</th>
+                        <th style={{ padding: '12px' }}>{t('Current Score')}</th>
+                        <th style={{ padding: '12px' }}>{t('Class Average')}</th>
+                        <th style={{ padding: '12px' }}>{t('Difference')}</th>
+                        <th style={{ padding: '12px 20px' }}>{t('Status')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {resultsData.subjects?.length === 0 ? (
                         <tr>
                           <td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>
-                            {t('No subject evaluations recorded yet.', 'کوئی مضمون کا ڈیٹا موجود نہیں')}
+                            {t('No subject evaluations recorded yet.')}
                           </td>
                         </tr>
                       ) : (
@@ -819,7 +798,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               {/* Summary Stats */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('ATTENDANCE RATE', 'حاضری فیصد')}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('ATTENDANCE RATE')}</div>
                   <div style={{
                     fontSize: '28px',
                     fontWeight: 700,
@@ -829,32 +808,32 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                     {attendanceData.attendance_rate}%
                   </div>
                   <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    {t('School minimum target:', 'اسکول کا کم از کم ہدف:')} {attendanceData.school_target}%
+                    {t('School minimum target:')} {attendanceData.school_target}%
                   </div>
                 </div>
 
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('PRESENT DAYS', 'موجود دن')}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('PRESENT DAYS')}</div>
                   <div style={{ fontSize: '28px', fontWeight: 700, color: '#16a34a', marginTop: '4px' }}>
                     {attendanceData.present}
                   </div>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t(`Out of ${attendanceData.total_sessions} days`, `کل ${attendanceData.total_sessions} دنوں میں سے`)}</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t(`Out of ${attendanceData.total_sessions} days`)}</span>
                 </div>
 
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('UNEXCUSED ABSENCES', 'غیر حاضریاں')}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('UNEXCUSED ABSENCES')}</div>
                   <div style={{ fontSize: '28px', fontWeight: 700, color: '#dc2626', marginTop: '4px' }}>
                     {attendanceData.absent}
                   </div>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Requires review', 'توجہ طلب')}</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Requires review')}</span>
                 </div>
 
                 <div style={{ background: '#fff', padding: '18px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('LATE ARRIVALS', 'تاخیر سے آمد')}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{t('LATE ARRIVALS')}</div>
                   <div style={{ fontSize: '28px', fontWeight: 700, color: '#d97706', marginTop: '4px' }}>
                     {attendanceData.late}
                   </div>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Arrived after bell', 'بیل کے بعد')}</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Arrived after bell')}</span>
                 </div>
               </div>
 
@@ -863,9 +842,9 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                 <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '14px 18px', color: '#991b1b', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <AlertTriangle size={20} />
                   <div>
-                    <b>{t('Attendance Alert Notice:', 'حاضری میں کمی کا انتباہ:')}</b>
+                    <b>{t('Attendance Alert Notice:')}</b>
                     <span style={{ marginLeft: '6px' }}>
-                      {t(`Attendance is currently ${attendanceData.attendance_rate}%, which is below the school requirement of ${attendanceData.school_target}%. Regular attendance is essential for success.`, `طالب علم کی حاضری ${attendanceData.attendance_rate} فیصد ہے جو کہ مطلوبہ معیار سے کم ہے۔`)}
+                      {t(`Attendance is currently ${attendanceData.attendance_rate}%, which is below the school requirement of ${attendanceData.school_target}%. Regular attendance is essential for success.`)}
                     </span>
                   </div>
                 </div>
@@ -874,21 +853,21 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               {/* Attendance Table */}
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Daily Attendance Register', 'روزانہ حاضری کا رجسٹر')}</h3>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Daily Attendance Register')}</h3>
                 </div>
 
                 <div style={{ overflowX: 'auto', maxHeight: '350px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                     <thead style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>
                       <tr style={{ color: '#64748b', fontSize: '12px', borderBottom: '1px solid #e2e8f0' }}>
-                        <th style={{ padding: '10px 20px' }}>{t('Date', 'تاریخ')}</th>
-                        <th style={{ padding: '10px' }}>{t('Status', 'حیثیت')}</th>
-                        <th style={{ padding: '10px 20px' }}>{t('Notes / Remarks', 'ریمارکس')}</th>
+                        <th style={{ padding: '10px 20px' }}>{t('Date')}</th>
+                        <th style={{ padding: '10px' }}>{t('Status')}</th>
+                        <th style={{ padding: '10px 20px' }}>{t('Notes / Remarks')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {attendanceData.records?.length === 0 ? (
-                        <tr><td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>{t('No attendance records available.', 'کوئی ریکارڈ نہیں ملا')}</td></tr>
+                        <tr><td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>{t('No attendance records available.')}</td></tr>
                       ) : (
                         attendanceData.records?.map((r: any, idx: number) => {
                           const statusColor = r.status === 'present' ? '#16a34a' : (r.status === 'absent' ? '#dc2626' : (r.status === 'late' ? '#d97706' : '#2563eb'));
@@ -916,9 +895,9 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
           {!childLoading && activeTab === 'risk' && riskData && (
             <div>
               <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{t('Support & Guidance Alerts', 'طالب علم کی رہنمائی اور معاونت')}</h3>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{t('Support & Guidance Alerts')}</h3>
                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-                  {t('The school identifies areas where students might benefit from extra practice or guidance. These are opportunities for partnership, not disciplinary actions.', 'اسکول طالب علم کی بہتری کے لیے تجاویز پیش کرتا ہے۔')}
+                  {t('The school identifies areas where students might benefit from extra practice or guidance. These are opportunities for partnership, not disciplinary actions.')}
                 </p>
               </div>
 
@@ -927,10 +906,10 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                 <div style={{ padding: '36px', textAlign: 'center', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', marginBottom: '24px' }}>
                   <CheckCircle2 size={36} color="#16a34a" style={{ margin: '0 auto 10px auto' }} />
                   <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#166534' }}>
-                    {t('Everything is on Track', 'تمام معاملات تسلی بخش ہیں')}
+                    {t('Everything is on Track')}
                   </h4>
                   <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#15803d' }}>
-                    {t('There are no active attendance or academic risk alerts for this student.', 'اس طالب علم کے لیے کوئی فعال انتباہ موجود نہیں ہے۔')}
+                    {t('There are no active attendance or academic risk alerts for this student.')}
                   </p>
                 </div>
               ) : (
@@ -982,12 +961,12 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                             }}
                           >
                             <Check size={14} />
-                            <span>{t('I have reviewed this alert', 'میں نے پڑھ لیا ہے')}</span>
+                            <span>{t('I have reviewed this alert')}</span>
                           </button>
                         ) : (
                           <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <CheckCircle2 size={15} />
-                            <span>{t('Acknowledged', 'تسلیم شدہ')}</span>
+                            <span>{t('Acknowledged')}</span>
                           </span>
                         )}
                       </div>
@@ -998,7 +977,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
 
                       {alert.suggested_action && (
                         <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', color: '#475569' }}>
-                          <b>{t('Recommended action:', 'تجویز کردہ اقدام:')}</b> {alert.suggested_action}
+                          <b>{t('Recommended action:')}</b> {alert.suggested_action}
                         </div>
                       )}
                     </div>
@@ -1010,7 +989,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               {riskData.past_alerts?.length > 0 && (
                 <div>
                   <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#475569', marginBottom: '12px' }}>
-                    {t('Past Resolved Alerts', 'ماضی کے حل شدہ انتباہات')}
+                    {t('Past Resolved Alerts')}
                   </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {riskData.past_alerts?.map((a: any) => (
@@ -1033,9 +1012,9 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{t('Teaching Faculty', 'کلاس اور مضامین کے اساتذہ')}</h3>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{t('Teaching Faculty')}</h3>
                   <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-                    {t('Request a call-back or message teachers for academic questions.', 'اساتذہ سے بات چیت کے لیے کال بیک کی درخواست کریں۔')}
+                    {t('Request a call-back or message teachers for academic questions.')}
                   </p>
                 </div>
 
@@ -1056,7 +1035,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                   }}
                 >
                   <PhoneCall size={16} />
-                  <span>{t('Request Call-Back', 'کال بیک کی درخواست کریں')}</span>
+                  <span>{t('Request Call-Back')}</span>
                 </button>
               </div>
 
@@ -1112,7 +1091,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                         cursor: 'pointer'
                       }}
                     >
-                      {t('Request Contact', 'رابطہ کی درخواست')}
+                      {t('Request Contact')}
                     </button>
                   </div>
                 ))}
@@ -1124,22 +1103,22 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
           {!childLoading && activeTab === 'homework' && (
             <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Assigned Homework', 'تفویض کردہ ہوم ورک')}</h3>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Assigned Homework')}</h3>
               </div>
 
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '12px', borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ padding: '12px 20px' }}>{t('Title & Subject', 'عنوان اور مضمون')}</th>
-                      <th style={{ padding: '12px' }}>{t('Due Date', 'آخری تاریخ')}</th>
-                      <th style={{ padding: '12px' }}>{t('Status', 'حیثیت')}</th>
-                      <th style={{ padding: '12px 20px' }}>{t('Marks / Feedback', 'نمبر اور تبصرہ')}</th>
+                      <th style={{ padding: '12px 20px' }}>{t('Title & Subject')}</th>
+                      <th style={{ padding: '12px' }}>{t('Due Date')}</th>
+                      <th style={{ padding: '12px' }}>{t('Status')}</th>
+                      <th style={{ padding: '12px 20px' }}>{t('Marks / Feedback')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {homeworkData.length === 0 ? (
-                      <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>{t('No homework assignments found.', 'کوئی ہوم ورک نہیں ملا')}</td></tr>
+                      <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>{t('No homework assignments found.')}</td></tr>
                     ) : (
                       homeworkData.map(hw => (
                         <tr key={hw.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -1184,18 +1163,18 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
               ) : (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                   <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Term Fee Vouchers', 'فیس واؤچرز')}</h3>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{t('Term Fee Vouchers')}</h3>
                   </div>
 
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                       <thead>
                         <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '12px', borderBottom: '1px solid #e2e8f0' }}>
-                          <th style={{ padding: '12px 20px' }}>{t('Voucher #', 'واؤچر نمبر')}</th>
-                          <th style={{ padding: '12px' }}>{t('Term', 'مدت')}</th>
-                          <th style={{ padding: '12px' }}>{t('Total Amount', 'کل رقم')}</th>
-                          <th style={{ padding: '12px' }}>{t('Due Date', 'آخری تاریخ')}</th>
-                          <th style={{ padding: '12px 20px' }}>{t('Payment Status', 'حیثیت ادائیگی')}</th>
+                          <th style={{ padding: '12px 20px' }}>{t('Voucher #')}</th>
+                          <th style={{ padding: '12px' }}>{t('Term')}</th>
+                          <th style={{ padding: '12px' }}>{t('Total Amount')}</th>
+                          <th style={{ padding: '12px' }}>{t('Due Date')}</th>
+                          <th style={{ padding: '12px 20px' }}>{t('Payment Status')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1236,7 +1215,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '480px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{t('Request Teacher Call-Back', 'استاد سے رابطہ کی درخواست')}</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{t('Request Teacher Call-Back')}</h3>
               <button onClick={() => setShowCallbackModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={20} />
               </button>
@@ -1245,7 +1224,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
             <form onSubmit={handleSubmitCallback} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                  {t('Select Teacher', 'استاد منتخب کریں')}
+                  {t('Select Teacher')}
                 </label>
                 <select
                   value={callbackTeacherId}
@@ -1253,7 +1232,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                   required
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                 >
-                  <option value="">{t('-- Choose a teacher --', '-- استاد منتخب کریں --')}</option>
+                  <option value="">{t('-- Choose a teacher --')}</option>
                   {teachersData.map(t => (
                     <option key={t.id} value={t.id}>{t.name} ({t.role} - {t.subject})</option>
                   ))}
@@ -1262,45 +1241,45 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                  {t('Topic', 'موضوع')}
+                  {t('Topic')}
                 </label>
                 <select
                   value={callbackTopic}
                   onChange={e => setCallbackTopic(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                 >
-                  <option value="academic">{t('Academic Progress', 'تعلیمی پیشرفت')}</option>
-                  <option value="attendance">{t('Attendance / Leave', 'حاضری یا رخصت')}</option>
-                  <option value="wellbeing">{t('Wellbeing & Behaviour', 'رویہ و فلاح')}</option>
-                  <option value="general">{t('General Inquiry', 'عمومی معلومات')}</option>
+                  <option value="academic">{t('Academic Progress')}</option>
+                  <option value="attendance">{t('Attendance / Leave')}</option>
+                  <option value="wellbeing">{t('Wellbeing & Behaviour')}</option>
+                  <option value="general">{t('General Inquiry')}</option>
                 </select>
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                  {t('Preferred Contact Time', 'رابطے کا ترجیحی وقت')}
+                  {t('Preferred Contact Time')}
                 </label>
                 <select
                   value={callbackTime}
                   onChange={e => setCallbackTime(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                 >
-                  <option value="morning">{t('Morning (8:00 AM - 11:00 AM)', 'صبح')}</option>
-                  <option value="afternoon">{t('Afternoon (1:00 PM - 3:00 PM)', 'دوپہر')}</option>
-                  <option value="anytime">{t('Anytime during school hours', 'اسکول کے اوقات میں کسی بھی وقت')}</option>
+                  <option value="morning">{t('Morning (8:00 AM - 11:00 AM)')}</option>
+                  <option value="afternoon">{t('Afternoon (1:00 PM - 3:00 PM)')}</option>
+                  <option value="anytime">{t('Anytime during school hours')}</option>
                 </select>
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                  {t('Brief Message Note', 'مختصر پیغام')}
+                  {t('Brief Message Note')}
                 </label>
                 <textarea
                   value={callbackMessage}
                   onChange={e => setCallbackMessage(e.target.value)}
                   rows={3}
                   required
-                  placeholder={t('Please mention the specific question or concern...', 'اپنی بات کی وضاحت کریں...')}
+                  placeholder={t('Please mention the specific question or concern...')}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
                 />
               </div>
@@ -1311,14 +1290,14 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                   onClick={() => setShowCallbackModal(false)}
                   style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', cursor: 'pointer' }}
                 >
-                  {t('Cancel', 'منسوخ')}
+                  {t('Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={submittingCallback}
                   style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
                 >
-                  {submittingCallback ? t('Sending...', 'بھیجا جا رہا ہے...') : t('Submit Request', 'درخواست جمع کروائیں')}
+                  {submittingCallback ? t('Sending...') : t('Submit Request')}
                 </button>
               </div>
             </form>
@@ -1339,7 +1318,7 @@ export default function ParentPortal({ user, notify, initialPage }: Props) {
                   style={{ padding: '6px 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Printer size={15} />
-                  <span>{t('Print / Save PDF', 'پرنٹ یا محفوظ کریں')}</span>
+                  <span>{t('Print / Save PDF')}</span>
                 </button>
               </div>
               <button onClick={() => setShowReportCardModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>

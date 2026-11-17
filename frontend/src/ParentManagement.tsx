@@ -1015,7 +1015,7 @@ export default function ParentManagement({ user, notify, campuses }: Props) {
                 <div><b>Email:</b> {activeParent.email}</div>
                 <div><b>Mobile:</b> {activeParent.mobile}</div>
                 <div><b>National ID:</b> {activeParent.identity_masked}</div>
-                <div><b>Language:</b> {activeParent.preferred_language === 'ur' ? 'Urdu' : 'English'}</div>
+                <div><b>Language:</b> {activeParent.preferred_language || 'English'}</div>
               </div>
             </div>
 

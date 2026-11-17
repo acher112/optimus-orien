@@ -54,18 +54,7 @@ test.describe('Optimus Orien Landing Page', () => {
     await expect(page).toHaveURL(/tab=register.*plan=standard/);
   });
 
-  test('language toggle and RTL', async ({ page }) => {
-    const toggleBtn = page.locator('.lang-toggle-btn');
-    await expect(toggleBtn).toContainText('اردو');
-
-    // Toggle to Urdu
-    await toggleBtn.click();
-    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.locator('.landing-root')).toHaveAttribute('dir', 'rtl');
-    await expect(toggleBtn).toContainText('English');
-
-    // Toggle back to English
-    await toggleBtn.click();
+  test('default language and LTR layout', async ({ page }) => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('.landing-root')).toHaveAttribute('dir', 'ltr');
   });

@@ -18,101 +18,67 @@ export interface PlanItem {
 
 interface PricingCarouselSectionProps {
   plans: PlanItem[];
-  locale: 'en' | 'ur';
+  locale?: string;
   onSelectPlan: (planSlug: string) => void;
 }
 
 export default function PricingCarouselSection({
   plans,
-  locale,
   onSelectPlan,
 }: PricingCarouselSectionProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [currency, setCurrency] = useState<'USD' | 'PKR'>('USD');
-  const isUr = locale === 'ur';
 
   const defaultPlans: PlanItem[] = [
     {
       id: 1,
-      name: isUr ? 'اسٹینڈرڈ پلان' : 'Standard Tier',
+      name: 'Standard Tier',
       slug: 'standard',
-      tagline: isUr ? 'بنیادی کارکردگی کا انتظام' : 'Essential Performance Management',
-      description: isUr
-        ? 'بنیادی تجزیاتی ٹولز، تمام کرداروں کے پورٹل اور حاضری و کارکردگی کا مکمل انتظام۔'
-        : 'Includes full access to the intelligence suite, core role portals, campus benchmarking, and early intervention tools.',
+      tagline: 'Essential Performance Management',
+      description: 'Includes full access to the intelligence suite, core role portals, campus benchmarking, and early intervention tools.',
       price_usd_per_student: '3.60',
       price_pkr_per_student: '499.00',
       interval: 'monthly',
       trial_days: 30,
-      features: isUr
-        ? [
-            'طلباء کے پروفائل',
-            'نمبر اور جائزے',
-            'حاضری کا نظام',
-            'ٹیچر پورٹل',
-            'سٹوڈنٹ پورٹل',
-            'پرنسپل ڈیش بورڈ',
-            'کلاس اور مضمون کی کارکردگی',
-            'بنیادی رپورٹس',
-            'ترقی کے رجحانات',
-          ]
-        : [
-            'Student Profiles',
-            'Marks & Assessments',
-            'Attendance Tracking',
-            'Teacher Portal',
-            'Student Portal',
-            'Principal Dashboard',
-            'Class & Subject Performance',
-            'Basic Reports',
-            'Performance Trends',
-          ],
+      features: [
+        'Student Profiles',
+        'Marks & Assessments',
+        'Attendance Tracking',
+        'Teacher Portal',
+        'Student Portal',
+        'Principal Dashboard',
+        'Class & Subject Performance',
+        'Basic Reports',
+        'Performance Trends',
+      ],
       is_featured: false,
       sort_order: 1,
     },
     {
       id: 2,
-      name: isUr ? 'پریمیم پلان' : 'Premium Tier',
+      name: 'Premium Tier',
       slug: 'premium',
-      tagline: isUr ? 'جامع اور جدید تجزیاتی نظام' : 'Advanced Performance Intelligence',
-      description: isUr
-        ? 'اسٹینڈرڈ کی تمام خصوصیات کے ساتھ قبل از وقت رہنمائی، تعلیمی معیار انڈیکس (AQI) اور 5 سالہ ترقیاتی تجزیہ۔'
-        : 'Everything in Standard, plus Early Intervention System, Academic Quality Index (AQI), 5-year longitudinal analysis, and multi-campus governance.',
+      tagline: 'Advanced Performance Intelligence',
+      description: 'Everything in Standard, plus Early Intervention System, Academic Quality Index (AQI), 5-year longitudinal analysis, and multi-campus governance.',
       price_usd_per_student: '7.20',
       price_pkr_per_student: '999.00',
       interval: 'monthly',
       trial_days: 30,
-      features: isUr
-        ? [
-            'اسٹینڈرڈ کی تمام خصوصیات',
-            'قبل از وقت رہنمائی کا نظام',
-            'توجہ طلب طلباء کے اشاریے',
-            'خودکار الرٹس اور اطلاعات',
-            'تعلیمی معیار انڈیکس (AQI)',
-            'اعلیٰ سطحی تجزیات',
-            '5 سالہ تقابلی جائزہ',
-            'کلاس انٹیلی جنس',
-            'اساتذہ کی کارکردگی کے مشاہدات',
-            'برانچوں کا موازنہ',
-            'مرکزی تنظیمی ڈیش بورڈ',
-            'اقدامات کی نگرانی',
-            'تفصیلی برآمدی رپورٹس',
-          ]
-        : [
-            'Everything in Standard',
-            'Early Intervention System',
-            'Student Attention Indicators',
-            'Automated Alerts & Notifications',
-            'Academic Quality Index (AQI)',
-            'Advanced Analytics',
-            '5-Year Performance Analysis',
-            'Advanced Class Intelligence',
-            'Teacher Performance Insights',
-            'School & Branch Comparison',
-            'Organization-Wide Dashboard',
-            'Intervention Tracking',
-            'Advanced Reports',
-          ],
+      features: [
+        'Everything in Standard',
+        'Early Intervention System',
+        'Student Attention Indicators',
+        'Automated Alerts & Notifications',
+        'Academic Quality Index (AQI)',
+        'Advanced Analytics',
+        '5-Year Performance Analysis',
+        'Advanced Class Intelligence',
+        'Teacher Performance Insights',
+        'School & Branch Comparison',
+        'Organization-Wide Dashboard',
+        'Intervention Tracking',
+        'Advanced Reports',
+      ],
       is_featured: true,
       sort_order: 2,
     },
@@ -170,13 +136,9 @@ export default function PricingCarouselSection({
       <div className="pricing-title-block">
         <SingleVortexAnimation color="#FFD400" scale={0.9} />
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <h2 className="pricing-headline">
-            {isUr ? 'طلباء کی تعداد کے لحاظ سے قیمتیں' : 'Student-Based Pricing'}
-          </h2>
+          <h2 className="pricing-headline">Student-Based Pricing</h2>
           <p className="pricing-subhead">
-            {isUr
-              ? '3 روزہ اعزازی رسائی حاصل کریں۔ بغیر کسی ادائیگی اور پیشگی فیس کے تمام پریمیم خصوصیات کا تجربہ کریں۔'
-              : 'Experience full platform access with a 3-day complimentary trial. Explore all Premium features with 3 days of complimentary access. No upfront payment required to get started.'}
+            Experience full platform access with a 3-day complimentary trial. Explore all Premium features with 3 days of complimentary access. No upfront payment required to get started.
           </p>
 
           {/* Quick Currency Selector */}
@@ -232,9 +194,7 @@ export default function PricingCarouselSection({
                 <span className="pricing-badge">{plan.name}</span>
                 <div className="pricing-price-row">
                   <span className="pricing-amount">{price}</span>
-                  <span className="pricing-period">
-                    {isUr ? '/ فی طالب علم / ماہانہ' : '/ student / month'}
-                  </span>
+                  <span className="pricing-period">/ student / month</span>
                 </div>
                 <p style={{ fontWeight: 600, color: '#111', marginBottom: '0.5rem' }}>
                   {plan.tagline}
@@ -258,9 +218,7 @@ export default function PricingCarouselSection({
                   onSelectPlan(plan.slug);
                 }}
               >
-                {isUr
-                  ? `رجسٹریشن شروع کریں (${plan.name})`
-                  : `Get Started with ${plan.name}`}
+                {`Get Started with ${plan.name}`}
               </button>
             </div>
           );

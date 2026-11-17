@@ -34,15 +34,15 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
     return initialPath;
   });
 
-  const [locale, setLocale] = useState<'en' | 'ur'>(() => {
+  const [locale] = useState<'en'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('optimus_landing_locale');
-      if (saved === 'ur' || saved === 'en') return saved;
+      if (saved === 'en') return saved;
     }
     return 'en';
   });
 
-  const isUr = locale === 'ur';
+  // locale locked to English
 
   // Contact form state
   const [contactName, setContactName] = useState('');
@@ -84,30 +84,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/platform/academic-performance':
         return {
           category: 'Platform',
-          title: isUr ? 'تعلیمی کارکردگی کی ذہین نگرانی' : 'Academic Performance Intelligence',
-          subtitle: isUr
-            ? 'امتحانات، ٹیسٹوں اور کلاس اسیسمنٹس کا کثیر جہتی تجزیاتی نظام۔'
-            : 'Unify examination marks, continuous classroom assessments, grade normalization, and multi-curriculum metrics into a single real-time intelligence hub.',
-          badge: isUr ? 'پلیٹ فارم ماڈیول' : 'Platform Capability',
+          title: 'Academic Performance Intelligence',
+          subtitle: 'Unify examination marks, continuous classroom assessments, grade normalization, and multi-curriculum metrics into a single real-time intelligence hub.',
+          badge: 'Platform Capability',
           icon: <GraduationCap size={28} />,
           highlights: [
             {
-              title: isUr ? 'کثیر نصابی معاونت' : 'Multi-Curriculum Alignment',
-              desc: isUr
-                ? 'کیمبرج، آکسفورڈ، فیڈرل بورڈ اور میٹرک کے لیے خودکار گریڈنگ فارمولے۔'
-                : 'Native support for Cambridge O/A Levels, Oxford, Matriculation, FBISE, and custom institutional grading scales with percentile normalization.',
+              title: 'Multi-Curriculum Alignment',
+              desc: 'Native support for Cambridge O/A Levels, Oxford, Matriculation, FBISE, and custom institutional grading scales with percentile normalization.',
             },
             {
-              title: isUr ? 'فوری مارکس انٹری' : 'Rapid Digital Marksheets',
-              desc: isUr
-                ? 'اساتذہ کے لیے آسان اور محفوظ مارکس شیٹس، جو منٹوں میں نتائج مرتب کرتی ہیں۔'
-                : 'Frictionless mark entry interfaces for teachers with automated discrepancy checks, grade curve validation, and historical baseline matching.',
+              title: 'Rapid Digital Marksheets',
+              desc: 'Frictionless mark entry interfaces for teachers with automated discrepancy checks, grade curve validation, and historical baseline matching.',
             },
             {
-              title: isUr ? 'کلاس اور مضمون کا موازنہ' : 'Cross-Section Comparative Analytics',
-              desc: isUr
-                ? 'کیمپس کے تمام سیکشنز اور مضامین کے درمیان کارکردگی کے خلاء کی فوری نشاندہی۔'
-                : 'Instantly benchmark parallel sections, subject faculties, and teacher cohorts to isolate systemic curriculum delivery gaps before term finals.',
+              title: 'Cross-Section Comparative Analytics',
+              desc: 'Instantly benchmark parallel sections, subject faculties, and teacher cohorts to isolate systemic curriculum delivery gaps before term finals.',
             },
           ],
           deepDive: [
@@ -125,30 +117,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/platform/attendance':
         return {
           category: 'Platform',
-          title: isUr ? 'ذہین حاضری کا نظام' : 'Attendance Intelligence & Retention Engine',
-          subtitle: isUr
-            ? 'بائیومیٹرک انضمام، غیر حاضری کی قبل از وقت پیشین گوئی اور فوری الرٹس۔'
-            : 'Track daily presence, detect chronic absenteeism patterns before they affect grades, and notify parents automatically via real-time channels.',
-          badge: isUr ? 'پلیٹ فارم ماڈیول' : 'Platform Capability',
+          title: 'Attendance Intelligence & Retention Engine',
+          subtitle: 'Track daily presence, detect chronic absenteeism patterns before they affect grades, and notify parents automatically via real-time channels.',
+          badge: 'Platform Capability',
           icon: <CalendarCheck size={28} />,
           highlights: [
             {
-              title: isUr ? 'خودکار والدین کے الرٹس' : 'Instant Parent Notification',
-              desc: isUr
-                ? 'طلباء کی غیر حاضری یا تاخیر پر والدین کو فوری واٹس ایپ اور ایس ایم ایس پیغام۔'
-                : 'Automated SMS and push notifications delivered the moment roll-call is finalized, closing parent-school communication gaps immediately.',
+              title: 'Instant Parent Notification',
+              desc: 'Automated SMS and push notifications delivered the moment roll-call is finalized, closing parent-school communication gaps immediately.',
             },
             {
-              title: isUr ? 'غیر حاضری کے رجحانات' : 'Chronic Absenteeism Forecaster',
-              desc: isUr
-                ? 'وہ طلباء جن کی حاضری تعلیمی خطرے کی حد کو چھو رہی ہو ان کی نشاندہی۔'
-                : 'Our algorithm correlates attendance dips directly with upcoming examination drop-offs, flagging students whose attendance trends jeopardize their promotion.',
+              title: 'Chronic Absenteeism Forecaster',
+              desc: 'Our algorithm correlates attendance dips directly with upcoming examination drop-offs, flagging students whose attendance trends jeopardize their promotion.',
             },
             {
-              title: isUr ? 'اسٹاف اور اساتذہ کی حاضری' : 'Biometric & Staff Integration',
-              desc: isUr
-                ? 'بائیومیٹرک مشینوں اور موبائل حاضری کا مربوط انتظام۔'
-                : 'Seamless integration with campus biometric RFID terminals and teacher mobile roll-call with leave approval workflows.',
+              title: 'Biometric & Staff Integration',
+              desc: 'Seamless integration with campus biometric RFID terminals and teacher mobile roll-call with leave approval workflows.',
             },
           ],
           deepDive: [
@@ -166,30 +150,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/platform/skills-assessment':
         return {
           category: 'Platform',
-          title: isUr ? 'مہارتوں کا جامع جائزہ' : 'Holistic Skills & Competency Matrix',
-          subtitle: isUr
-            ? 'نمبروں سے آگے: تنقیدی سوچ، اخلاقیات اور 21ویں صدی کی صلاحیتوں کی پیمائش۔'
-            : 'Evaluate 21st-century competencies, leadership, teamwork, and co-curricular milestones alongside pure academic scores.',
-          badge: isUr ? 'پلیٹ فارم ماڈیول' : 'Platform Capability',
+          title: 'Holistic Skills & Competency Matrix',
+          subtitle: 'Evaluate 21st-century competencies, leadership, teamwork, and co-curricular milestones alongside pure academic scores.',
+          badge: 'Platform Capability',
           icon: <ClipboardCheck size={28} />,
           highlights: [
             {
-              title: isUr ? 'روبرک پر مبنی جائزے' : 'Custom Rubric Frameworks',
-              desc: isUr
-                ? 'اسکول کے اپنے معیار کے مطابق تیار کردہ اخلاقی اور عملی روبرکس۔'
-                : 'Define institutional rubrics for verbal communication, analytical reasoning, collaborative problem-solving, and emotional intelligence.',
+              title: 'Custom Rubric Frameworks',
+              desc: 'Define institutional rubrics for verbal communication, analytical reasoning, collaborative problem-solving, and emotional intelligence.',
             },
             {
-              title: isUr ? 'ہمہ جہت ترقی' : 'Co-Curricular Milestones',
-              desc: isUr
-                ? 'کھیلوں، تقریری مقابلوں اور سائنسی سرگرمیوں کا ڈیجیٹل ریکارڈ۔'
-                : 'Record athletic badges, debate honors, community service hours, and STEM project accomplishments on an enduring digital learner portfolio.',
+              title: 'Co-Curricular Milestones',
+              desc: 'Record athletic badges, debate honors, community service hours, and STEM project accomplishments on an enduring digital learner portfolio.',
             },
             {
-              title: isUr ? 'اساتذہ کے مشاہداتی نوٹس' : 'Behavioral Observation Logs',
-              desc: isUr
-                ? 'اساتذہ کے روزانہ مشاہدات جو طلباء کی رہنمائی میں مدد دیتے ہیں۔'
-                : 'Structured qualitative observation logs that help school counselors and teachers track behavioral patterns without stigmatizing labels.',
+              title: 'Behavioral Observation Logs',
+              desc: 'Structured qualitative observation logs that help school counselors and teachers track behavioral patterns without stigmatizing labels.',
             },
           ],
           deepDive: [
@@ -203,30 +179,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/platform/class-intelligence':
         return {
           category: 'Platform',
-          title: isUr ? 'کلاس روم انٹیلی جنس' : 'Classroom & Teacher Section Diagnostics',
-          subtitle: isUr
-            ? 'کلاس روم کی گہرائی، نصابی رفتار اور تعلیمی ہم آہنگی کی تفصیلی بصیرت۔'
-            : 'Empower department heads and curriculum coordinators with section-by-section velocity, teacher workload metrics, and syllabus coverage audits.',
-          badge: isUr ? 'پلیٹ فارم ماڈیول' : 'Platform Capability',
+          title: 'Classroom & Teacher Section Diagnostics',
+          subtitle: 'Empower department heads and curriculum coordinators with section-by-section velocity, teacher workload metrics, and syllabus coverage audits.',
+          badge: 'Platform Capability',
           icon: <BarChart3 size={28} />,
           highlights: [
             {
-              title: isUr ? 'سلیبس کی رفتار' : 'Syllabus Pacing Audits',
-              desc: isUr
-                ? 'امتحانات سے قبل نصاب کی تکمیل کی خودکار نگرانی۔'
-                : 'Real-time visibility into chapters covered vs academic calendar targets to eliminate end-of-term rushed lessons.',
+              title: 'Syllabus Pacing Audits',
+              desc: 'Real-time visibility into chapters covered vs academic calendar targets to eliminate end-of-term rushed lessons.',
             },
             {
-              title: isUr ? 'اساتذہ کی تاثیر' : 'Teacher Efficacy Index',
-              desc: isUr
-                ? 'اساتذہ کی تدریسی نتائج کی شفاف اور مثبت عکاسی۔'
-                : 'Identify top pedagogical practices across sections and offer peer support where class averages lag institutional standards.',
+              title: 'Teacher Efficacy Index',
+              desc: 'Identify top pedagogical practices across sections and offer peer support where class averages lag institutional standards.',
             },
             {
-              title: isUr ? 'کلاس کی سطح کا موازنہ' : 'Section Parity Analytics',
-              desc: isUr
-                ? 'سیکشن A، B، C کے درمیان نمبروں اور حاضری کا منصفانہ موازنہ۔'
-                : 'Ensure balanced academic rigor across all sections of a grade level, eliminating parent complaints of section bias.',
+              title: 'Section Parity Analytics',
+              desc: 'Ensure balanced academic rigor across all sections of a grade level, eliminating parent complaints of section bias.',
             },
           ],
           deepDive: [
@@ -240,30 +208,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/platform/early-intervention':
         return {
           category: 'Platform',
-          title: isUr ? 'قبل از وقت رہنمائی کا نظام (EIS)' : 'Early Intervention System (EIS)',
-          subtitle: isUr
-            ? 'طلباء کے تعلیمی مسائل کا امتحانات سے 45 دن پہلے خودکار سراغ لگائیں۔'
-            : 'Predictive risk scoring that alerts educators to learning regression weeks before term finals, converting failures into recovery stories.',
-          badge: isUr ? 'پلیٹ فارم ماڈیول' : 'Core Innovation',
+          title: 'Early Intervention System (EIS)',
+          subtitle: 'Predictive risk scoring that alerts educators to learning regression weeks before term finals, converting failures into recovery stories.',
+          badge: 'Core Innovation',
           icon: <AlertTriangle size={28} />,
           highlights: [
             {
-              title: isUr ? '45 روزہ انتباہ' : '45-Day Advance Indicator',
-              desc: isUr
-                ? 'امتحانی ناکامی سے ہفتوں پہلے انتباہی سگنلز موصول کریں۔'
-                : 'Multivariate indicators combining homework completion, attendance micro-slips, and quiz trends trigger proactive counselor alerts.',
+              title: '45-Day Advance Indicator',
+              desc: 'Multivariate indicators combining homework completion, attendance micro-slips, and quiz trends trigger proactive counselor alerts.',
             },
             {
-              title: isUr ? 'رہنمائی کے ایکشن پلانز' : 'Intervention Action Workflows',
-              desc: isUr
-                ? 'مخصوص مضامین میں اضافی رہنمائی اور سرپرستوں کے ساتھ اشتراک۔'
-                : 'Assign targeted remedial exercises, assign peer tutors, or book a 15-minute parent-teacher alignment check-in directly within the platform.',
+              title: 'Intervention Action Workflows',
+              desc: 'Assign targeted remedial exercises, assign peer tutors, or book a 15-minute parent-teacher alignment check-in directly within the platform.',
             },
             {
-              title: isUr ? 'ترقی کی مسلسل نگرانی' : 'Recovery Verification Tracking',
-              desc: isUr
-                ? 'دیکھیں کہ کیا کی گئی کوششوں سے طالب علم کے نتائج میں بہتری آئی۔'
-                : 'Continuous re-evaluation verifies whether the intervention successfully restored the student to their baseline trajectory.',
+              title: 'Recovery Verification Tracking',
+              desc: 'Continuous re-evaluation verifies whether the intervention successfully restored the student to their baseline trajectory.',
             },
           ],
           deepDive: [
@@ -277,30 +237,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/platform/performance-trends':
         return {
           category: 'Platform',
-          title: isUr ? 'طویل مدتی تعلیمی رجحانات' : 'Longitudinal Cohort & Performance Trends',
-          subtitle: isUr
-            ? '5 سالہ تعلیمی ارتقاء اور طلباء کے مجموعی گروہوں کا گہرا تجزیہ۔'
-            : 'Multi-year student cohort tracking that visualizes learning velocity, subject retention, and institutional improvement across academic years.',
-          badge: isUr ? 'پلیٹ فارم ماڈیول' : 'Platform Capability',
+          title: 'Longitudinal Cohort & Performance Trends',
+          subtitle: 'Multi-year student cohort tracking that visualizes learning velocity, subject retention, and institutional improvement across academic years.',
+          badge: 'Platform Capability',
           icon: <TrendingUp size={28} />,
           highlights: [
             {
-              title: isUr ? '5 سالہ تاریخی ٹریکنگ' : '5-Year Multi-Term Historical View',
-              desc: isUr
-                ? 'پرائمری سے سیکنڈری تک طالب علم کی مکمل تعلیمی تاریخ۔'
-                : 'Follow student journeys seamlessly from Grade 1 through graduation without lost historical records or fragmented files.',
+              title: '5-Year Multi-Term Historical View',
+              desc: 'Follow student journeys seamlessly from Grade 1 through graduation without lost historical records or fragmented files.',
             },
             {
-              title: isUr ? 'کوہورٹ موازنہ' : 'Class Cohort Benchmarks',
-              desc: isUr
-                ? 'پچھلے سال کے بیچ اور موجودہ سال کے بیچ کا تفصیلی موازنہ۔'
-                : 'Determine whether teaching initiatives implemented this year yielded measurable percentile gains compared to historical graduating classes.',
+              title: 'Class Cohort Benchmarks',
+              desc: 'Determine whether teaching initiatives implemented this year yielded measurable percentile gains compared to historical graduating classes.',
             },
             {
-              title: isUr ? 'کیرئیر اور مضامین کی رہنمائی' : 'Subject Aptitude Forecasting',
-              desc: isUr
-                ? 'سائنس، آرٹس یا کامرس کے انتخاب کے لیے معروضی رہنمائی۔'
-                : 'Empower high school academic counselors with 3-year aptitude trajectories to guide college subject stream selections.',
+              title: 'Subject Aptitude Forecasting',
+              desc: 'Empower high school academic counselors with 3-year aptitude trajectories to guide college subject stream selections.',
             },
           ],
           deepDive: [
@@ -314,30 +266,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/platform/aqi':
         return {
           category: 'Platform',
-          title: isUr ? 'تعلیمی معیار انڈیکس (AQI)' : 'Academic Quality Index (AQI)',
-          subtitle: isUr
-            ? 'اسکول کے مجموعی تعلیمی معیار، تدریس اور نظم و ضبط کا جامع پیمانہ۔'
-            : 'Our proprietary institutional scorecard that benchmarks campus quality, student progress velocity, and faculty consistency into one clear metric.',
-          badge: isUr ? 'پلیٹ فارم ماڈیول' : 'Executive Benchmark',
+          title: 'Academic Quality Index (AQI)',
+          subtitle: 'Our proprietary institutional scorecard that benchmarks campus quality, student progress velocity, and faculty consistency into one clear metric.',
+          badge: 'Executive Benchmark',
           icon: <Award size={28} />,
           highlights: [
             {
-              title: isUr ? 'کیمپس اسکور کارڈ' : 'Campus Executive Scorecard',
-              desc: isUr
-                ? 'ٹرسٹی اور ایگزیکٹو بورڈ کے لیے سنگل اسکور میٹرک۔'
-                : 'A scientifically weighted 0-100 composite index reflecting student mastery velocity, attendance integrity, and faculty pedagogical delivery.',
+              title: 'Campus Executive Scorecard',
+              desc: 'A scientifically weighted 0-100 composite index reflecting student mastery velocity, attendance integrity, and faculty pedagogical delivery.',
             },
             {
-              title: isUr ? 'ملٹی کیمپس موازنہ' : 'Inter-Campus Benchmarking',
-              desc: isUr
-                ? 'مختلف شہروں یا برانچوں کے درمیان معیار کا مسابقتی جائزہ۔'
-                : 'For multi-branch school networks: instantly understand which campuses require leadership intervention and which are setting gold standards.',
+              title: 'Inter-Campus Benchmarking',
+              desc: 'For multi-branch school networks: instantly understand which campuses require leadership intervention and which are setting gold standards.',
             },
             {
-              title: isUr ? 'معائنہ اور ایکریڈیٹیشن کی تیاری' : 'Accreditation Readiness',
-              desc: isUr
-                ? 'تعلیمی بورڈز اور معائنہ ٹیموں کے لیے تصدیق شدہ اعداد و شمار۔'
-                : 'Pre-formatted regulatory ledgers and quality audit reports ready for ISO, Cambridge, or Ministry inspections in seconds.',
+              title: 'Accreditation Readiness',
+              desc: 'Pre-formatted regulatory ledgers and quality audit reports ready for ISO, Cambridge, or Ministry inspections in seconds.',
             },
           ],
           deepDive: [
@@ -352,30 +296,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/portals/admin':
         return {
           category: 'Portals',
-          title: isUr ? 'سپر ایڈمن اور ایگزیکٹو پورٹل' : 'Super Admin & Multi-Campus Governance',
-          subtitle: isUr
-            ? 'مالیات، فیس، عملے، کیمپسز اور سیکیورٹی کا مرکزی کنٹرول روم۔'
-            : 'Full systemic command for institutional owners, trustees, and executive directors managing single or multi-campus educational enterprises.',
-          badge: isUr ? 'رول پورٹل' : 'Executive Portal',
+          title: 'Super Admin & Multi-Campus Governance',
+          subtitle: 'Full systemic command for institutional owners, trustees, and executive directors managing single or multi-campus educational enterprises.',
+          badge: 'Executive Portal',
           icon: <Building2 size={28} />,
           highlights: [
             {
-              title: isUr ? 'کثیر کیمپس تنظیمی انتظام' : 'Multi-Campus Federation',
-              desc: isUr
-                ? 'تمام برانچز کو ایک ہی اکاؤنٹ سے مانیٹر اور کنٹرول کریں۔'
-                : 'Switch between campuses instantly, configure global academic calendars, and enforce uniform grading policies across your entire network.',
+              title: 'Multi-Campus Federation',
+              desc: 'Switch between campuses instantly, configure global academic calendars, and enforce uniform grading policies across your entire network.',
             },
             {
-              title: isUr ? 'مالیاتی انتظام اور فیس' : 'Institutional Finance & Fees',
-              desc: isUr
-                ? 'فیس کی وصولی، واجبات، بینک انضمام اور تنخواہوں کی ادائیگی۔'
-                : 'Automated 1-click fee challan generation, online gateway reconciliation, defaulter management, and employee payroll distribution.',
+              title: 'Institutional Finance & Fees',
+              desc: 'Automated 1-click fee challan generation, online gateway reconciliation, defaulter management, and employee payroll distribution.',
             },
             {
-              title: isUr ? 'سخت سیکیورٹی اور اختیارات' : 'Granular Role-Based Access (RBAC)',
-              desc: isUr
-                ? 'پرنسپل، اکاؤنٹنٹ اور کلرک کے لیے الگ الگ اختیارات۔'
-                : 'Enterprise permissions control exactly what each administrator, accountant, or coordinator can view or export.',
+              title: 'Granular Role-Based Access (RBAC)',
+              desc: 'Enterprise permissions control exactly what each administrator, accountant, or coordinator can view or export.',
             },
           ],
           deepDive: [
@@ -389,30 +325,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/portals/principal':
         return {
           category: 'Portals',
-          title: isUr ? 'پرنسپل لیڈرشپ پورٹل' : 'Principal Leadership & Diagnostic Portal',
-          subtitle: isUr
-            ? 'کیمپس کی روزانہ کارکردگی، اساتذہ کا جائزہ اور تعلیمی معیار کی نگرانی۔'
-            : 'Designed specifically for school principals and academic directors to oversee daily campus rhythm, class pacing, and student welfare.',
-          badge: isUr ? 'رول پورٹل' : 'Leadership Portal',
+          title: 'Principal Leadership & Diagnostic Portal',
+          subtitle: 'Designed specifically for school principals and academic directors to oversee daily campus rhythm, class pacing, and student welfare.',
+          badge: 'Leadership Portal',
           icon: <School size={28} />,
           highlights: [
             {
-              title: isUr ? 'کیمپس ایگزیکٹو ڈیش بورڈ' : 'Morning Campus Health Briefing',
-              desc: isUr
-                ? 'صبح اسکول کھلتے ہی حاضری، تاخیر اور اہم الرٹس کی رپورٹ۔'
-                : 'Immediate morning view of total student attendance, teacher absences requiring substitute coverage, and urgent risk alerts.',
+              title: 'Morning Campus Health Briefing',
+              desc: 'Immediate morning view of total student attendance, teacher absences requiring substitute coverage, and urgent risk alerts.',
             },
             {
-              title: isUr ? 'تدریسی معائنہ اور فیڈ بیک' : 'Observation & Teacher Coaching',
-              desc: isUr
-                ? 'کلاس روم وزٹ کے نوٹس اور اساتذہ کی رہنمائی۔'
-                : 'Record structured classroom observation notes and share formative pedagogical feedback with teachers securely.',
+              title: 'Observation & Teacher Coaching',
+              desc: 'Record structured classroom observation notes and share formative pedagogical feedback with teachers securely.',
             },
             {
-              title: isUr ? 'والدین اور کمیونٹی کے معاملات' : 'Parent Escalation History',
-              desc: isUr
-                ? 'طالب علم کے تمام ریکارڈز، ملاقاتوں اور نوٹس کی مکمل تاریخ۔'
-                : 'Enter parent conferences equipped with the student’s complete 360-degree academic, behavioral, and attendance record.',
+              title: 'Parent Escalation History',
+              desc: 'Enter parent conferences equipped with the student’s complete 360-degree academic, behavioral, and attendance record.',
             },
           ],
           deepDive: [
@@ -426,30 +354,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/portals/teacher':
         return {
           category: 'Portals',
-          title: isUr ? 'ٹیچر کلاس روم پورٹل' : 'Teacher Classroom Intelligence Hub',
-          subtitle: isUr
-            ? 'مارکس انٹری، روزانہ حاضری، ہوم ورک اور طلباء کی حوصلہ افزائی۔'
-            : 'Frictionless, intuitive tools that save teachers 5+ hours every week on grading, attendance taking, and parent communication.',
-          badge: isUr ? 'رول پورٹل' : 'Teacher Portal',
+          title: 'Teacher Classroom Intelligence Hub',
+          subtitle: 'Frictionless, intuitive tools that save teachers 5+ hours every week on grading, attendance taking, and parent communication.',
+          badge: 'Teacher Portal',
           icon: <UserCheck size={28} />,
           highlights: [
             {
-              title: isUr ? 'تیز رفتار ڈیجیٹل رجسٹر' : '30-Second Roll Call',
-              desc: isUr
-                ? 'پورے سیکشن کی حاضری موبائل یا لیپ ٹاپ پر آدھے منٹ میں مکمل۔'
-                : 'Tap to mark absences with one-click full-class presets, automatic late slip logging, and zero paperwork.',
+              title: '30-Second Roll Call',
+              desc: 'Tap to mark absences with one-click full-class presets, automatic late slip logging, and zero paperwork.',
             },
             {
-              title: isUr ? 'ہموار امتحانی گریڈنگ' : 'Fast Gradebook & Weighting',
-              desc: isUr
-                ? 'مارکس داخل کرتے ہی کلاس اوسط اور فیڈ بیک خودکار تیار۔'
-                : 'Quick keyboard mark entry with real-time class average recalculation, grade curves, and automated comments generator.',
+              title: 'Fast Gradebook & Weighting',
+              desc: 'Quick keyboard mark entry with real-time class average recalculation, grade curves, and automated comments generator.',
             },
             {
-              title: isUr ? 'طلباء کی انفرادی پیش رفت' : 'Student Insights at a Glance',
-              desc: isUr
-                ? 'ہر بچے کی خوبیوں اور کمزوریوں کا فوری خاکہ۔'
-                : 'Instant indicators show which students struggled on past quizzes, ensuring tailored support during class discussions.',
+              title: 'Student Insights at a Glance',
+              desc: 'Instant indicators show which students struggled on past quizzes, ensuring tailored support during class discussions.',
             },
           ],
           deepDive: [
@@ -463,30 +383,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/portals/student':
         return {
           category: 'Portals',
-          title: isUr ? 'اسٹوڈنٹ گروتھ پورٹل' : 'Student Learning & Achievement Portal',
-          subtitle: isUr
-            ? 'طالب علم کا ذاتی ہوم ورک، امتحانی نتائج اور تعلیمی ترقی کا پورٹل۔'
-            : 'A supportive, motivating personal hub where students track their learning progress, view assignment deadlines, and review teacher feedback.',
-          badge: isUr ? 'رول پورٹل' : 'Student Portal',
+          title: 'Student Learning & Achievement Portal',
+          subtitle: 'A supportive, motivating personal hub where students track their learning progress, view assignment deadlines, and review teacher feedback.',
+          badge: 'Student Portal',
           icon: <BookOpen size={28} />,
           highlights: [
             {
-              title: isUr ? 'ڈیجیٹل رپورٹ کارڈز' : 'Transparent Assessment Results',
-              desc: isUr
-                ? 'امتحانی نتائج، گریڈز اور اساتذہ کے نوٹس کا فوری نظارہ۔'
-                : 'Access certified report cards, subject breakdowns, and constructive teacher feedback from any device anytime.',
+              title: 'Transparent Assessment Results',
+              desc: 'Access certified report cards, subject breakdowns, and constructive teacher feedback from any device anytime.',
             },
             {
-              title: isUr ? 'ہوم ورک اور ڈیٹ شیٹس' : 'Assignments & Exam Schedules',
-              desc: isUr
-                ? 'آئندہ ٹیسٹوں اور ہوم ورک کے اوقات کار کا واضح شیڈول۔'
-                : 'Stay organized with clean assignment calendars, downloadable study guides, and exam timetable notifications.',
+              title: 'Assignments & Exam Schedules',
+              desc: 'Stay organized with clean assignment calendars, downloadable study guides, and exam timetable notifications.',
             },
             {
-              title: isUr ? 'ذاتی ترقی کا احساس' : 'Self-Reflection & Milestones',
-              desc: isUr
-                ? 'نمبروں سے زیادہ سیکھنے اور آگے بڑھنے کا مثبت جذبہ۔'
-                : 'Visual growth charts encourage students to measure progress against their own previous best, building lasting intrinsic motivation.',
+              title: 'Self-Reflection & Milestones',
+              desc: 'Visual growth charts encourage students to measure progress against their own previous best, building lasting intrinsic motivation.',
             },
           ],
           deepDive: [
@@ -501,30 +413,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/about':
         return {
           category: 'Company',
-          title: isUr ? 'آپٹیمس اورین کے بارے میں' : 'About Optimus Orien',
-          subtitle: isUr
-            ? 'ہم اسکولوں کو اعداد و شمار کی طاقت سے بچوں کے مستقبل کو سنوارنے میں مدد دیتے ہیں۔'
-            : 'School performance intelligence and early intervention built around care, not labels. Pioneering the future of educational administration and student flourishing.',
-          badge: isUr ? 'ہمارا مشن' : 'Our Mission',
+          title: 'About Optimus Orien',
+          subtitle: 'School performance intelligence and early intervention built around care, not labels. Pioneering the future of educational administration and student flourishing.',
+          badge: 'Our Mission',
           icon: <Sparkles size={28} />,
           highlights: [
             {
-              title: isUr ? 'نگہداشت پر مبنی فلسفہ' : 'Care, Not Labels',
-              desc: isUr
-                ? 'ہم بچوں کو ناکام ہونے کے بعد لیبل لگانے کے بجائے بروقت مدد فراہم کرتے ہیں۔'
-                : 'We reject the practice of writing off struggling learners. Our algorithms exist to connect students with the right intervention at the right moment.',
+              title: 'Care, Not Labels',
+              desc: 'We reject the practice of writing off struggling learners. Our algorithms exist to connect students with the right intervention at the right moment.',
             },
             {
-              title: isUr ? 'تعلیمی کارکردگی کی ذہانت' : 'Unified Performance Picture',
-              desc: isUr
-                ? 'اسکول کے تمام شعبوں کو ایک شفاف پلیٹ فارم پر اکٹھا کرنا۔'
-                : 'We dismantle the silos between admissions, daily attendance, examinations, and fee collections into a single coherent intelligence suite.',
+              title: 'Unified Performance Picture',
+              desc: 'We dismantle the silos between admissions, daily attendance, examinations, and fee collections into a single coherent intelligence suite.',
             },
             {
-              title: isUr ? 'ادارہ جاتی ڈیٹا کی خود مختاری' : 'Institutional Sovereignty',
-              desc: isUr
-                ? 'آپ کے اسکول کا ڈیٹا 100% آپ کی ملکیت ہے۔'
-                : 'Schools retain complete ownership of their records. We do not sell student data, run advertisements, or commercialize institutional profiles.',
+              title: 'Institutional Sovereignty',
+              desc: 'Schools retain complete ownership of their records. We do not sell student data, run advertisements, or commercialize institutional profiles.',
             },
           ],
           deepDive: [
@@ -534,7 +438,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
             },
             {
               heading: 'Global Reach, Local Depth',
-              body: 'Supporting multiple international and national curricula with dual-language capabilities (English & Urdu), Optimus Orien serves modern forward-thinking educational networks worldwide.',
+              body: 'Supporting multiple international and national curricula with institutional-grade intelligence capabilities, Optimus Orien serves modern forward-thinking educational networks worldwide.',
             },
           ],
         };
@@ -542,30 +446,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/privacy':
         return {
           category: 'Legal',
-          title: isUr ? 'پرائیویسی پالیسی اور ڈیٹا پروٹیکشن' : 'Privacy Policy & Student Data Governance',
-          subtitle: isUr
-            ? 'تعلیمی ڈیٹا کی مکمل حفاظت، رازداری اور ادارہ جاتی خود مختاری کی ضمانت۔'
-            : 'Optimus Orien operates under the strictest institutional data privacy standards, guaranteeing FERPA/COPPA alignment and uncompromising student privacy.',
-          badge: isUr ? 'قانونی اور ضوابط' : 'Legal & Compliance',
+          title: 'Privacy Policy & Student Data Governance',
+          subtitle: 'Optimus Orien operates under the strictest institutional data privacy standards, guaranteeing FERPA/COPPA alignment and uncompromising student privacy.',
+          badge: 'Legal & Compliance',
           icon: <Lock size={28} />,
           highlights: [
             {
-              title: isUr ? '100% اسکول کی ملکیت' : 'Complete Data Ownership',
-              desc: isUr
-                ? 'تمام طلباء اور اسکول کے ریکارڈز پر صرف اسکول کا قانونی حق ہے۔'
-                : 'The educational institution remains the sole legal controller and owner of all student profiles, marks, financial ledgers, and institutional records.',
+              title: 'Complete Data Ownership',
+              desc: 'The educational institution remains the sole legal controller and owner of all student profiles, marks, financial ledgers, and institutional records.',
             },
             {
-              title: isUr ? 'بینکنگ گریڈ سیکیورٹی' : 'AES-256 Encryption & TLS 1.3',
-              desc: isUr
-                ? 'تمام ڈیٹا محفوظ سرورز پر خفیہ کاری کے ساتھ محفوظ کیا جاتا ہے۔'
-                : 'All database records are encrypted at rest with military-grade AES-256 and protected in transit with TLS 1.3 cryptographic protocols.',
+              title: 'AES-256 Encryption & TLS 1.3',
+              desc: 'All database records are encrypted at rest with military-grade AES-256 and protected in transit with TLS 1.3 cryptographic protocols.',
             },
             {
-              title: isUr ? 'کوئی اشتہارات نہیں' : 'Zero Commercial Tracking or Ads',
-              desc: isUr
-                ? 'ہم کبھی بھی طالب علم کا ڈیٹا مارکیٹنگ یا اشتہارات کے لیے استعمال نہیں کرتے۔'
-                : 'We do not monetize, profile, sell, or license student information to third-party ad networks or commercial data aggregators. Ever.',
+              title: 'Zero Commercial Tracking or Ads',
+              desc: 'We do not monetize, profile, sell, or license student information to third-party ad networks or commercial data aggregators. Ever.',
             },
           ],
           deepDive: [
@@ -587,30 +483,22 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       case '/terms':
         return {
           category: 'Legal',
-          title: isUr ? 'استعمال کی شرائط اور لائسنس' : 'Terms of Service & Institutional License Agreement',
-          subtitle: isUr
-            ? 'آپٹیمس اورین سروس کے استعمال کے حقوق، ذمہ داریاں اور سروس لیول ایگریمنٹ۔'
-            : 'Clear, transparent terms governing the provision of the Optimus Orien school intelligence cloud service, licensing tiers, and institutional commitments.',
-          badge: isUr ? 'قانونی اور ضوابط' : 'Terms of Service',
+          title: 'Terms of Service & Institutional License Agreement',
+          subtitle: 'Clear, transparent terms governing the provision of the Optimus Orien school intelligence cloud service, licensing tiers, and institutional commitments.',
+          badge: 'Terms of Service',
           icon: <FileText size={28} />,
           highlights: [
             {
-              title: isUr ? 'سروس کی دستیابی (SLA)' : '99.9% Cloud Uptime Guarantee',
-              desc: isUr
-                ? 'سال بھر بغیر کسی رکاوٹ کے تیز رفتار کلاؤڈ سروس کی فراہمی۔'
-                : 'Enterprise cloud infrastructure guaranteed with automatic failover, geographic redundancy, and continuous uptime monitoring.',
+              title: '99.9% Cloud Uptime Guarantee',
+              desc: 'Enterprise cloud infrastructure guaranteed with automatic failover, geographic redundancy, and continuous uptime monitoring.',
             },
             {
-              title: isUr ? 'منصفانہ اور شفاف قیمتیں' : 'Student-Tier Transparent Pricing',
-              desc: isUr
-                ? 'کوئی پوشیدہ فیس نہیں، صرف فعال طلباء کی بنیاد پر ماہانہ یا سالانہ چارجز۔'
-                : 'Licenses are structured per enrolled student with complimentary 3-day full-feature trial periods and no required long-term lock-in.',
+              title: 'Student-Tier Transparent Pricing',
+              desc: 'Licenses are structured per enrolled student with complimentary 3-day full-feature trial periods and no required long-term lock-in.',
             },
             {
-              title: isUr ? 'تکنیکی مدد اور تربیت' : 'Dedicated Institutional Support',
-              desc: isUr
-                ? 'ہر اسکول کے عملے اور اساتذہ کے لیے آن بورڈنگ اور مسلسل رہنمائی۔'
-                : 'Every onboarding school receives administrator training, curriculum template configuration, and priority technical response channels.',
+              title: 'Dedicated Institutional Support',
+              desc: 'Every onboarding school receives administrator training, curriculum template configuration, and priority technical response channels.',
             },
           ],
           deepDive: [
@@ -633,30 +521,24 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
       default:
         return {
           category: 'Company',
-          title: isUr ? 'ہم سے رابطہ کریں' : 'Connect with Our Campus Advisory Team',
-          subtitle: isUr
-            ? 'اپنے اسکول میں جدید تعلیمی انٹیلی جنس لانے کے لیے ہمارے ماہرین سے مشورہ کریں۔'
-            : 'Whether you want a personalized product walkthrough, multi-campus deployment advisory, or technical onboarding assistance, our team is ready to help.',
-          badge: isUr ? 'رابطہ' : 'Direct Advisory',
+          title: 'Connect with Our Campus Advisory Team',
+          subtitle: 'Whether you want a personalized product walkthrough, multi-campus deployment advisory, or technical onboarding assistance, our team is ready to help.',
+          badge: 'Direct Advisory',
           icon: <Phone size={28} />,
           highlights: [
             {
-              title: isUr ? 'براہ راست ای میل' : 'Direct Email Support',
+              title: 'Direct Email Support',
               desc: 'optimusorien@gmail.com — Guaranteed response within 4 business hours.',
               icon: <Mail size={22} />,
             },
             {
-              title: isUr ? 'کیمپس آن بورڈنگ مشاورت' : 'Onboarding & Migration',
-              desc: isUr
-                ? 'پرانے ریکارڈز اور ایکسل فائلوں کو نئے سسٹم میں مفت منتقل کیا جاتا ہے۔'
-                : 'Free data migration assistance from legacy spreadsheets or old school software into Optimus Orien.',
+              title: 'Onboarding & Migration',
+              desc: 'Free data migration assistance from legacy spreadsheets or old school software into Optimus Orien.',
               icon: <Building2 size={22} />,
             },
             {
-              title: isUr ? 'اعزازی 3 روزہ رسائی' : '3-Day Complimentary Trial',
-              desc: isUr
-                ? 'بغیر کسی ادائیگی کے پریمیم خصوصیات کا فوری تجربہ کریں۔'
-                : 'Experience every module across your leadership team without any credit card or upfront financial commitment.',
+              title: '3-Day Complimentary Trial',
+              desc: 'Experience every module across your leadership team without any credit card or upfront financial commitment.',
               icon: <Award size={22} />,
             },
           ],
@@ -689,7 +571,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
   ];
 
   return (
-    <div className="landing-root" dir={isUr ? 'rtl' : 'ltr'}>
+    <div className="landing-root" dir={'ltr'}>
       {/* Top Universal Clean Header */}
       <header className="info-page-header">
         <div className="info-header-container">
@@ -771,7 +653,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
               className="btn-hero-primary"
               onClick={(e) => navigateTo('/login?tab=register', e)}
             >
-              <span>{isUr ? '3 روزہ اعزازی رسائی شروع کریں' : 'Start 3-Day Free Trial'}</span>
+              <span>{'Start 3-Day Free Trial'}</span>
               <ArrowRight size={18} />
             </a>
             <button
@@ -780,7 +662,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
               onClick={(e) => navigateTo('/contact', e)}
             >
               <Phone size={16} />
-              <span>{isUr ? 'ایجوکیشن ٹیم سے رابطہ کریں' : 'Speak with an Advisor'}</span>
+              <span>{'Speak with an Advisor'}</span>
             </button>
           </div>
         </section>
@@ -815,11 +697,9 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
           <section className="info-contact-form-section">
             <div className="contact-form-card">
               <div className="contact-form-header">
-                <h2>{isUr ? 'اسکول کی رجسٹریشن اور مشاورت فارم' : 'Schedule a Walkthrough or Request Access'}</h2>
+                <h2>{'Schedule a Walkthrough or Request Access'}</h2>
                 <p>
-                  {isUr
-                    ? 'فارم پُر کریں، ہماری ٹیم 4 گھنٹوں کے اندر آپ سے رابطہ کرے گی۔'
-                    : 'Fill out this brief form and our institutional deployment specialist will get back to you within 4 business hours.'}
+                  {'Fill out this brief form and our institutional deployment specialist will get back to you within 4 business hours.'}
                 </p>
               </div>
 
@@ -827,11 +707,9 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
                 <div className="contact-success-banner">
                   <CheckCircle2 size={40} color="#08CB00" />
                   <div>
-                    <h3>{isUr ? 'درخواست موصول ہو گئی ہے!' : 'Inquiry Received Successfully!'}</h3>
+                    <h3>{'Inquiry Received Successfully!'}</h3>
                     <p>
-                      {isUr
-                        ? 'ہمارا مشیر جلد آپ کے اسکول سے رابطہ کرے گا۔ شکریہ!'
-                        : 'Thank you for reaching out. An Optimus Orien campus advisor will contact you shortly with credentials.'}
+                      {'Thank you for reaching out. An Optimus Orien campus advisor will contact you shortly with credentials.'}
                     </p>
                   </div>
                 </div>
@@ -839,7 +717,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
                 <form onSubmit={handleContactSubmit} className="contact-actual-form">
                   <div className="form-row-2col">
                     <div className="form-group">
-                      <label>{isUr ? 'آپ کا مکمل نام' : 'Your Full Name'}</label>
+                      <label>{'Your Full Name'}</label>
                       <input
                         type="text"
                         required
@@ -849,7 +727,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
                       />
                     </div>
                     <div className="form-group">
-                      <label>{isUr ? 'سرکاری / اسکول کا ای میل' : 'Official / Work Email'}</label>
+                      <label>{'Official / Work Email'}</label>
                       <input
                         type="email"
                         required
@@ -862,7 +740,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
 
                   <div className="form-row-2col">
                     <div className="form-group">
-                      <label>{isUr ? 'اسکول یا تعلیمی نیٹ ورک کا نام' : 'Institution / Network Name'}</label>
+                      <label>{'Institution / Network Name'}</label>
                       <input
                         type="text"
                         required
@@ -872,7 +750,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
                       />
                     </div>
                     <div className="form-group">
-                      <label>{isUr ? 'آپ کا کردار' : 'Your Role'}</label>
+                      <label>{'Your Role'}</label>
                       <select
                         value={contactRole}
                         onChange={(e) => setContactRole(e.target.value)}
@@ -888,7 +766,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
 
                   <div className="form-row-2col">
                     <div className="form-group">
-                      <label>{isUr ? 'فون نمبر / واٹس ایپ' : 'Phone / WhatsApp Number'}</label>
+                      <label>{'Phone / WhatsApp Number'}</label>
                       <input
                         type="tel"
                         required
@@ -898,7 +776,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
                       />
                     </div>
                     <div className="form-group">
-                      <label>{isUr ? 'طلباء کی متوقع تعداد' : 'Approximate Student Body'}</label>
+                      <label>{'Approximate Student Body'}</label>
                       <select
                         value={contactStudents}
                         onChange={(e) => setContactStudents(e.target.value)}
@@ -912,7 +790,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
                   </div>
 
                   <div className="form-group">
-                    <label>{isUr ? 'آپ کی ضروریات یا سوالات' : 'How can we help your institution?'}</label>
+                    <label>{'How can we help your institution?'}</label>
                     <textarea
                       rows={3}
                       placeholder="Tell us about your current challenges (e.g. marks entry, early intervention, parent communication)..."
@@ -923,7 +801,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
 
                   <button type="submit" className="btn-contact-submit">
                     <Send size={18} />
-                    <span>{isUr ? 'درخواست جمع کرائیں' : 'Submit Institutional Inquiry'}</span>
+                    <span>{'Submit Institutional Inquiry'}</span>
                   </button>
                 </form>
               )}
@@ -934,8 +812,8 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
         {/* Directory of Related Platform & Portal Pages */}
         <section className="info-directory-section">
           <div className="directory-header">
-            <h3>{isUr ? 'دیگر پلیٹ فارم اور پورٹل ماڈیولز دریافت کریں' : 'Explore Platform Capabilities & Roles'}</h3>
-            <p>{isUr ? 'کسی بھی عنوان پر کلک کر کے اس کی تفصیلات دیکھیں:' : 'Click any link to read detailed specifications:'}</p>
+            <h3>{'Explore Platform Capabilities & Roles'}</h3>
+            <p>{'Click any link to read detailed specifications:'}</p>
           </div>
           <div className="directory-links-grid">
             {relatedLinks.map((r, idx) => {
@@ -958,14 +836,10 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
         {/* Bottom Banner */}
         <section className="info-bottom-banner">
           <h2>
-            {isUr
-              ? 'اپنے اسکول کو کارکردگی انٹیلی جنس کے ساتھ بااختیار بنائیں۔'
-              : 'Empower Your School With True Performance Intelligence.'}
+            {'Empower Your School With True Performance Intelligence.'}
           </h2>
           <p>
-            {isUr
-              ? '3 روزہ اعزازی رسائی کے ساتھ تمام پریمیم خصوصیات کا تجربہ کریں۔'
-              : 'Join forward-thinking institutions using Optimus Orien to turn academic data into student growth.'}
+            {'Join forward-thinking institutions using Optimus Orien to turn academic data into student growth.'}
           </p>
           <div className="banner-actions">
             <a
@@ -973,14 +847,14 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
               className="btn-banner-primary"
               onClick={(e) => navigateTo('/login?tab=register', e)}
             >
-              {isUr ? 'اپنا اسکول رجسٹر کریں' : 'Register Your School Today'}
+              {'Register Your School Today'}
             </a>
             <button
               type="button"
               className="btn-banner-secondary"
               onClick={(e) => navigateTo('/', e)}
             >
-              {isUr ? 'مرکزی صفحہ پر جائیں' : 'Return to Landing Page'}
+              {'Return to Landing Page'}
             </button>
           </div>
         </section>

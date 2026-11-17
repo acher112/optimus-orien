@@ -3,8 +3,8 @@ import { navigate } from '../navigation';
 
 interface LandingNavbarProps {
   authenticated: boolean;
-  locale: 'en' | 'ur';
-  onToggleLocale: () => void;
+  locale?: string;
+  onToggleLocale?: () => void;
   onOpenContact: () => void;
 }
 
@@ -36,15 +36,14 @@ export default function LandingNavbar({
   const closeMenu = () => setMenuOpen(false);
 
   const t = {
-    home: locale === 'ur' ? 'ہوم' : 'Home',
-    platform: locale === 'ur' ? 'پلیٹ فارم' : 'Platform',
-    pricing: locale === 'ur' ? 'قیمتیں' : 'Pricing',
-    faq: locale === 'ur' ? 'سوالات' : 'FAQ',
-    contact: locale === 'ur' ? 'رابطہ' : 'Contact',
-    signIn: locale === 'ur' ? 'لاگ ان' : 'Sign in',
-    register: locale === 'ur' ? 'اپنا اسکول رجسٹر کریں' : 'Register your school',
-    dashboard: locale === 'ur' ? 'ڈیش بورڈ پر جائیں' : 'Go to dashboard',
-    langToggle: locale === 'ur' ? 'English' : 'اردو',
+    home: 'Home',
+    platform: 'Platform',
+    pricing: 'Pricing',
+    faq: 'FAQ',
+    contact: 'Contact',
+    signIn: 'Sign in',
+    register: 'Register your school',
+    dashboard: 'Go to dashboard',
   };
 
   const handleNavClick = (id: string) => {
