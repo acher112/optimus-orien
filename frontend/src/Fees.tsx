@@ -80,10 +80,29 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
   const activeFeeCurrency = summary?.currency || defaulterCurrency || (campuses?.find(c => String(c.id) === String(school || activeCampusId)) as any)?.currency || (user as any)?.currency || 'USD';
   const feeSym = getCurrencySymbol(activeFeeCurrency);
 
-  // Modals
+  // Modals & Voucher Generation Wizard
   const [voucherModal, setVoucherModal] = useState(false);
+  const [voucherMode, setVoucherMode] = useState<'monthly' | 'custom'>('monthly');
   const [voucherPeriod, setVoucherPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [voucherClass, setVoucherClass] = useState('');
+  const [voucherDueDate, setVoucherDueDate] = useState('');
+  const [voucherFallbackAmount, setVoucherFallbackAmount] = useState('');
+  const [voucherCategory, setVoucherCategory] = useState('Examination Fee');
+  const [voucherCustomCategoryName, setVoucherCustomCategoryName] = useState('');
+  const [voucherAmount, setVoucherAmount] = useState('');
+  const [voucherNote, setVoucherNote] = useState('');
+  const [voucherGenerating, setVoucherGenerating] = useState(false);
+
+  // Vouchers Tab State
+  const [vouchersList, setVouchersList] = useState<any[]>([]);
+  const [vouchersLoading, setVouchersLoading] = useState(false);
+  const [vouchersSummary, setVouchersSummary] = useState<any>(null);
+  const [vouchersCategories, setVouchersCategories] = useState<string[]>([]);
+  const [vouchersPeriodFilter, setVouchersPeriodFilter] = useState('');
+  const [vouchersClassFilter, setVouchersClassFilter] = useState('');
+  const [vouchersHeadFilter, setVouchersHeadFilter] = useState('all');
+  const [vouchersStatusFilter, setVouchersStatusFilter] = useState('all');
+  const [vouchersSearch, setVouchersSearch] = useState('');
 
   const [headModal, setHeadModal] = useState(false);
   const [headName, setHeadName] = useState('');
@@ -187,6 +206,34 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
   useEffect(() => {
     loadStudents();
   }, [loadStudents, bump]);
+
+  const loadVouchers = useCallback(async () => {
+    setVouchersLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (school) params.set('school', school);
+      if (vouchersPeriodFilter) params.set('period', vouchersPeriodFilter);
+      if (vouchersClassFilter) params.set('school_class', vouchersClassFilter);
+      if (vouchersHeadFilter && vouchersHeadFilter !== 'all') params.set('head', vouchersHeadFilter);
+      if (vouchersStatusFilter && vouchersStatusFilter !== 'all') params.set('status', vouchersStatusFilter);
+      if (vouchersSearch.trim()) params.set('search', vouchersSearch.trim());
+
+      const res = await request<R>(`fees/vouchers/?${params.toString()}`);
+      setVouchersList(res.vouchers || []);
+      setVouchersSummary(res.summary || null);
+      if (res.categories) setVouchersCategories(res.categories);
+    } catch {
+      setVouchersList([]);
+    } finally {
+      setVouchersLoading(false);
+    }
+  }, [school, vouchersPeriodFilter, vouchersClassFilter, vouchersHeadFilter, vouchersStatusFilter, vouchersSearch]);
+
+  useEffect(() => {
+    if (tab === 'vouchers') {
+      loadVouchers();
+    }
+  }, [tab, loadVouchers, bump]);
 
   const visibleClasses = useMemo(() => {
     if (!school) return classes;
@@ -302,20 +349,51 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
 
   const handleGenerateVouchers = async (e: React.FormEvent) => {
     e.preventDefault();
+    setVoucherGenerating(true);
     try {
+      const payload: any = {
+        school: school || (schools[0]?.id ? String(schools[0].id) : undefined),
+        period: voucherPeriod,
+        school_class: voucherClass || undefined,
+        mode: voucherMode,
+        voucher_type: voucherMode,
+        note: voucherNote.trim() || undefined,
+        due_date: voucherDueDate || undefined,
+      };
+
+      if (voucherMode === 'monthly') {
+        if (voucherFallbackAmount && Number(voucherFallbackAmount) > 0) {
+          payload.amount = voucherFallbackAmount;
+          payload.fallback_amount = voucherFallbackAmount;
+        }
+      } else {
+        const cat = voucherCategory === 'custom' ? voucherCustomCategoryName.trim() : voucherCategory;
+        if (!cat) {
+          notify('Please enter or select a fee category (e.g. Exam Fee, Sports Fee)');
+          setVoucherGenerating(false);
+          return;
+        }
+        if (!voucherAmount || Number(voucherAmount) <= 0) {
+          notify('Please enter a valid amount greater than 0');
+          setVoucherGenerating(false);
+          return;
+        }
+        payload.category_name = cat;
+        payload.amount = voucherAmount;
+      }
+
       const res = await request<R>('fees/vouchers/generate/', {
         method: 'POST',
-        body: JSON.stringify({
-          period: voucherPeriod,
-          school_class: voucherClass || undefined,
-          school: school || (schools[0]?.id ? String(schools[0].id) : undefined)
-        })
+        body: JSON.stringify(payload)
       });
-      notify(`Generated ${res.vouchers_created} voucher items for ${voucherPeriod}`);
+      notify(res.message || `Generated ${res.vouchers_created} voucher items for ${voucherPeriod}`);
       setVoucherModal(false);
       setBump(b => b + 1);
+      loadVouchers();
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setVoucherGenerating(false);
     }
   };
 
@@ -951,22 +1029,292 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
           <div className="panel-head">
             <div>
               <h3>Institutional Billing Vouchers</h3>
-              <p>Batch generate monthly, quarterly, and annual billing vouchers for student cohorts</p>
+              <p>Batch generate and manage monthly fee vouchers and specialized category challans (Exam, Sports, Annual, etc.)</p>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="primary-btn" onClick={() => setVoucherModal(true)}><Receipt size={15} /> Batch Generate Vouchers</button>
+              <button
+                className="outline-btn"
+                onClick={loadVouchers}
+                disabled={vouchersLoading}
+                title="Refresh vouchers list"
+              >
+                <RefreshCw size={14} className={vouchersLoading ? 'spin' : ''} /> Refresh
+              </button>
+              <button className="primary-btn" onClick={() => setVoucherModal(true)}>
+                <Receipt size={15} /> Batch Generate Vouchers
+              </button>
             </div>
           </div>
-          <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
-            <Receipt size={40} strokeWidth={1.5} style={{ margin: '0 auto 12px', opacity: 0.6 }} />
-            <h4 style={{ margin: '0 0 6px', fontSize: 16 }}>Automated Monthly Invoicing</h4>
-            <p style={{ maxWidth: 500, margin: '0 auto 16px', fontSize: 13 }}>
-              Generate fee vouchers for all enrolled students across an entire campus or target specific class cohorts. Generated vouchers feed directly into student ledgers.
-            </p>
-            <button className="primary-btn" onClick={() => setVoucherModal(true)}>
-              <Receipt size={16} /> Launch Voucher Generation Wizard
-            </button>
+
+          {/* Vouchers KPI Cards Strip */}
+          <div className="fx-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', margin: '0 20px 18px' }}>
+            <div className="fx-kpi">
+              <span>Total Vouchers</span>
+              <strong style={{ color: '#7c3aed' }}>
+                {vouchersSummary?.total_count ?? vouchersList.length}
+              </strong>
+              <small>Generated billing items</small>
+            </div>
+            <div className="fx-kpi">
+              <span>Total Net Billed</span>
+              <strong style={{ color: '#2563eb' }}>
+                {formatMoney(vouchersSummary?.total_billed || 0, activeFeeCurrency)}
+              </strong>
+              <small>Billed fee volume</small>
+            </div>
+            <div className="fx-kpi">
+              <span>Collected (Paid)</span>
+              <strong style={{ color: '#16a34a' }}>
+                {formatMoney(vouchersSummary?.total_paid || 0, activeFeeCurrency)}
+              </strong>
+              <small>Realized fee revenue</small>
+            </div>
+            <div className="fx-kpi">
+              <span>Unpaid / Pending</span>
+              <strong style={{ color: '#dc2626' }}>
+                {formatMoney(vouchersSummary?.total_unpaid || 0, activeFeeCurrency)}
+              </strong>
+              <small>Outstanding balance</small>
+            </div>
           </div>
+
+          {/* Filter Bar */}
+          <div style={{ padding: '0 20px 14px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 200px' }}>
+              <Search size={15} color="#94a3b8" />
+              <input
+                type="text"
+                placeholder="Search student or roll #..."
+                value={vouchersSearch}
+                onChange={e => setVouchersSearch(e.target.value)}
+                style={{ padding: '7px 12px', fontSize: 13, border: '1px solid #e2e8f0', borderRadius: 8, width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Period:</span>
+              <input
+                type="text"
+                placeholder="All Periods (or 2026-11)"
+                value={vouchersPeriodFilter}
+                onChange={e => setVouchersPeriodFilter(e.target.value)}
+                style={{ padding: '6px 10px', fontSize: 12.5, border: '1px solid #e2e8f0', borderRadius: 8, width: 140 }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Class:</span>
+              <select
+                value={vouchersClassFilter}
+                onChange={e => setVouchersClassFilter(e.target.value)}
+                style={{ padding: '6px 10px', fontSize: 12.5, border: '1px solid #e2e8f0', borderRadius: 8 }}
+              >
+                <option value="">All Classes</option>
+                {visibleClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Category:</span>
+              <select
+                value={vouchersHeadFilter}
+                onChange={e => setVouchersHeadFilter(e.target.value)}
+                style={{ padding: '6px 10px', fontSize: 12.5, border: '1px solid #e2e8f0', borderRadius: 8 }}
+              >
+                <option value="all">All Fee Heads</option>
+                {vouchersCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Status:</span>
+              <select
+                value={vouchersStatusFilter}
+                onChange={e => setVouchersStatusFilter(e.target.value)}
+                style={{ padding: '6px 10px', fontSize: 12.5, border: '1px solid #e2e8f0', borderRadius: 8 }}
+              >
+                <option value="all">All Statuses</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="waived">Waived</option>
+              </select>
+            </div>
+
+            {(vouchersPeriodFilter || vouchersClassFilter || vouchersHeadFilter !== 'all' || vouchersStatusFilter !== 'all' || vouchersSearch) && (
+              <button
+                className="outline-btn"
+                style={{ fontSize: 12, padding: '5px 10px' }}
+                onClick={() => {
+                  setVouchersPeriodFilter('');
+                  setVouchersClassFilter('');
+                  setVouchersHeadFilter('all');
+                  setVouchersStatusFilter('all');
+                  setVouchersSearch('');
+                }}
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
+
+          {/* Vouchers Table */}
+          {vouchersList.length > 0 ? (
+            <div className="table-responsive" style={{ padding: '0 20px 20px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Class</th>
+                    <th>Challan Category</th>
+                    <th>Period</th>
+                    <th>Amount Due</th>
+                    <th>Net Due</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Note / Memo</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vouchersList.map(v => {
+                    const isOverdue = v.status !== 'paid' && v.status !== 'waived' && new Date(v.due_date) < new Date();
+                    const headLower = (v.head_name || '').toLowerCase();
+                    const isMonthly = headLower.includes('monthly') || headLower.includes('tuition');
+                    const isExam = headLower.includes('exam');
+                    const isSports = headLower.includes('sport');
+                    const isAnnual = headLower.includes('annual');
+
+                    const badgeColor = isMonthly ? '#2563eb' : isExam ? '#7c3aed' : isSports ? '#d97706' : isAnnual ? '#059669' : '#4b5563';
+                    const badgeBg = isMonthly ? '#eff6ff' : isExam ? '#f5f3ff' : isSports ? '#fffbeb' : isAnnual ? '#ecfdf5' : '#f3f4f6';
+
+                    return (
+                      <tr key={v.id}>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <strong style={{ color: '#1e293b' }}>{v.student_name}</strong>
+                            <small style={{ color: '#64748b' }}>Roll/Adm: {v.admission_number || '—'}</small>
+                          </div>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>
+                            {v.class_name || '—'}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: badgeColor,
+                            background: badgeBg,
+                            border: `1px solid ${badgeColor}25`
+                          }}>
+                            {v.head_name}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>
+                            {v.period}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 13, color: '#64748b' }}>
+                            {formatMoney(v.amount_due, activeFeeCurrency)}
+                          </span>
+                          {Number(v.discount) > 0 && (
+                            <small style={{ display: 'block', color: '#16a34a', fontSize: 11 }}>
+                              -{formatMoney(v.discount, activeFeeCurrency)} disc
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          <strong style={{ color: v.status === 'paid' ? '#16a34a' : '#1e293b', fontSize: 13.5 }}>
+                            {formatMoney(v.net_due, activeFeeCurrency)}
+                          </strong>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 12, color: isOverdue ? '#dc2626' : '#475569', fontWeight: isOverdue ? 700 : 500 }}>
+                              {v.due_date}
+                            </span>
+                            {isOverdue && (
+                              <span style={{ fontSize: 10, background: '#fee2e2', color: '#b91c1c', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                                Overdue
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          {v.status === 'paid' ? (
+                            <span className="pill green"><CheckCircle2 size={12} /> Paid</span>
+                          ) : v.status === 'partial' ? (
+                            <span className="pill blue">Partial</span>
+                          ) : v.status === 'waived' ? (
+                            <span className="pill gray">Waived</span>
+                          ) : (
+                            <span className="pill red" style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fecaca' }}>
+                              Unpaid
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 12, color: v.note ? '#334155' : '#94a3b8', fontStyle: v.note ? 'normal' : 'italic' }}>
+                            {v.note || '—'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {v.status !== 'paid' && v.status !== 'waived' ? (
+                            <button
+                              className="sm-btn"
+                              style={{ background: '#7c3aed', color: '#fff', borderColor: '#6d28d9', fontWeight: 600 }}
+                              onClick={() => {
+                                const st = allStudents.find(s => s.id === v.student_id) || {
+                                  id: v.student_id,
+                                  name: v.student_name,
+                                  first_name: v.student_name,
+                                  last_name: '',
+                                  admission_number: v.admission_number
+                                };
+                                selectStudentForPay(st);
+                                setTab('collect');
+                              }}
+                              title="Collect payment for this student"
+                            >
+                              <UserCheck size={12} /> Collect
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>Settled</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={{ padding: '36px 20px', textAlign: 'center', color: '#64748b' }}>
+              <Receipt size={44} strokeWidth={1.5} style={{ margin: '0 auto 12px', opacity: 0.6, color: '#7c3aed' }} />
+              <h4 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 700, color: '#1e293b' }}>
+                Automated &amp; Custom Fee Invoicing
+              </h4>
+              <p style={{ maxWidth: 520, margin: '0 auto 18px', fontSize: 13.5, lineHeight: 1.5 }}>
+                Generate monthly tuition vouchers (with automatic fee lookup from student records) or specialized category challans (Exam, Sports, Annual, Lab) for your students.
+              </p>
+              <button
+                className="primary-btn"
+                style={{ padding: '10px 22px', fontSize: 14, fontWeight: 700 }}
+                onClick={() => setVoucherModal(true)}
+              >
+                <Receipt size={16} /> Launch Voucher Generation Wizard
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -1497,23 +1845,230 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
       {/* MODAL: Generate Vouchers */}
       {voucherModal && (
         <div className="modal-backdrop">
-          <div className="modal-card">
+          <div className="modal-card" style={{ maxWidth: 580, width: '92%' }}>
             <div className="modal-head">
-              <h3>Generate Monthly Billing Vouchers</h3>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
+                  Generate Billing Vouchers &amp; Challans
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#64748b' }}>
+                  Choose whether to auto-generate regular monthly fees or bill a custom category challan (Exam, Sports, etc.).
+                </p>
+              </div>
               <button onClick={() => setVoucherModal(false)}><X size={18} /></button>
             </div>
-            <form onSubmit={handleGenerateVouchers}>
-              <div className="modal-fields">
-                <label>Billing Period (YYYY-MM) *
-                  <input type="month" required value={voucherPeriod} onChange={e => setVoucherPeriod(e.target.value)} />
-                </label>
-                <label>Target Class (optional - leave blank for all)
-                  <select value={voucherClass} onChange={e => setVoucherClass(e.target.value)}>
-                    <option value="">All Classes</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </label>
+
+            <form onSubmit={handleGenerateVouchers} style={{ padding: '0 20px 20px' }}>
+              {/* 2 Options Switcher */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, margin: '16px 0 20px' }}>
+                <div
+                  onClick={() => setVoucherMode('monthly')}
+                  style={{
+                    border: `2px solid ${voucherMode === 'monthly' ? '#7c3aed' : '#e2e8f0'}`,
+                    background: voucherMode === 'monthly' ? '#f5f3ff' : '#ffffff',
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: voucherMode === 'monthly' ? '#6d28d9' : '#334155' }}>
+                      Option 1: Monthly Fee
+                    </span>
+                    <span style={{ fontSize: 11, background: voucherMode === 'monthly' ? '#ede9fe' : '#f1f5f9', color: voucherMode === 'monthly' ? '#6d28d9' : '#64748b', padding: '2px 6px', borderRadius: 6, fontWeight: 700 }}>
+                      Auto-fetch
+                    </span>
+                  </div>
+                  <small style={{ fontSize: 11.5, color: '#64748b', lineHeight: 1.35 }}>
+                    Auto-fetches fee from class structure or student's prior fee record. No manual amount needed.
+                  </small>
+                </div>
+
+                <div
+                  onClick={() => setVoucherMode('custom')}
+                  style={{
+                    border: `2px solid ${voucherMode === 'custom' ? '#7c3aed' : '#e2e8f0'}`,
+                    background: voucherMode === 'custom' ? '#f5f3ff' : '#ffffff',
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: voucherMode === 'custom' ? '#6d28d9' : '#334155' }}>
+                      Option 2: Custom Challan
+                    </span>
+                    <span style={{ fontSize: 11, background: voucherMode === 'custom' ? '#ede9fe' : '#f1f5f9', color: voucherMode === 'custom' ? '#6d28d9' : '#64748b', padding: '2px 6px', borderRadius: 6, fontWeight: 700 }}>
+                      Exam, Sports...
+                    </span>
+                  </div>
+                  <small style={{ fontSize: 11.5, color: '#64748b', lineHeight: 1.35 }}>
+                    Select or type category (Exam, Sports, Lab, etc.), specify amount, due date and memo.
+                  </small>
+                </div>
               </div>
+
+              {/* Form Fields: Option 1 (Monthly Fee Auto-fetch) */}
+              {voucherMode === 'monthly' ? (
+                <div className="modal-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <label style={{ gridColumn: 'span 1' }}>
+                    Billing Period (YYYY-MM) *
+                    <input type="month" required value={voucherPeriod} onChange={e => setVoucherPeriod(e.target.value)} />
+                  </label>
+
+                  <label style={{ gridColumn: 'span 1' }}>
+                    Due Date
+                    <input
+                      type="date"
+                      value={voucherDueDate}
+                      onChange={e => setVoucherDueDate(e.target.value)}
+                      placeholder="Default: 10th of month"
+                    />
+                  </label>
+
+                  <label style={{ gridColumn: '1 / -1' }}>
+                    Target Class (optional - leave blank for all)
+                    <select value={voucherClass} onChange={e => setVoucherClass(e.target.value)}>
+                      <option value="">All Classes (School-wide)</option>
+                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </label>
+
+                  <label style={{ gridColumn: '1 / -1' }}>
+                    Fallback Monthly Fee ({activeFeeCurrency}) (optional)
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 2500 (Applied only if student has no fee rate or history)"
+                      value={voucherFallbackAmount}
+                      onChange={e => setVoucherFallbackAmount(e.target.value)}
+                    />
+                    <small style={{ display: 'block', marginTop: 4, color: '#64748b', fontSize: 11.5 }}>
+                      💡 If a student already has their monthly fee configured in the system, it will be automatically used. This fallback is for students with no existing fee structure.
+                    </small>
+                  </label>
+
+                  <label style={{ gridColumn: '1 / -1' }}>
+                    Note / Remarks (optional)
+                    <input
+                      type="text"
+                      maxLength={150}
+                      placeholder="e.g. Monthly Tuition Fee - November 2026"
+                      value={voucherNote}
+                      onChange={e => setVoucherNote(e.target.value)}
+                    />
+                  </label>
+                </div>
+              ) : (
+                /* Form Fields: Option 2 (Custom Category Challan) */
+                <div className="modal-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <label style={{ gridColumn: 'span 1' }}>
+                    Challan Category *
+                    <select
+                      value={voucherCategory}
+                      onChange={e => setVoucherCategory(e.target.value)}
+                    >
+                      <option value="Examination Fee">Examination Fee (امتحانی فیس)</option>
+                      <option value="Sports Gala / Kit Fee">Sports Gala / Kit Fee (سپورٹس فیس)</option>
+                      <option value="Annual Charges">Annual Charges (سالانہ فیس)</option>
+                      <option value="Computer / Science Lab Fee">Computer / Lab Fee (لیب فیس)</option>
+                      <option value="Study Tour / Picnic Fee">Study Tour / Picnic (پکنک فیس)</option>
+                      <option value="Library / Book Bank Fee">Library / Book Bank (لائبریری فیس)</option>
+                      <option value="Identity Card Fee">Identity Card Fee (شناختی کارڈ)</option>
+                      <option value="custom">+ Type Custom Category...</option>
+                    </select>
+                  </label>
+
+                  {voucherCategory === 'custom' ? (
+                    <label style={{ gridColumn: 'span 1' }}>
+                      Type Custom Category Name *
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Winter Camp Fee, Science Exhibition"
+                        value={voucherCustomCategoryName}
+                        onChange={e => setVoucherCustomCategoryName(e.target.value)}
+                      />
+                    </label>
+                  ) : (
+                    <label style={{ gridColumn: 'span 1' }}>
+                      Billing Period (YYYY-MM or Term) *
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 2026-11 or 2026-Annual"
+                        value={voucherPeriod}
+                        onChange={e => setVoucherPeriod(e.target.value)}
+                      />
+                    </label>
+                  )}
+
+                  {voucherCategory === 'custom' && (
+                    <label style={{ gridColumn: 'span 1' }}>
+                      Billing Period (YYYY-MM or Term) *
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 2026-11 or 2026-Annual"
+                        value={voucherPeriod}
+                        onChange={e => setVoucherPeriod(e.target.value)}
+                      />
+                    </label>
+                  )}
+
+                  <label style={{ gridColumn: voucherCategory === 'custom' ? 'span 1' : 'span 1' }}>
+                    Amount Per Student ({activeFeeCurrency}) *
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      step="any"
+                      placeholder="e.g. 1500"
+                      value={voucherAmount}
+                      onChange={e => setVoucherAmount(e.target.value)}
+                    />
+                  </label>
+
+                  <label style={{ gridColumn: 'span 1' }}>
+                    Due Date *
+                    <input
+                      type="date"
+                      required
+                      value={voucherDueDate}
+                      onChange={e => setVoucherDueDate(e.target.value)}
+                    />
+                  </label>
+
+                  <label style={{ gridColumn: 'span 1' }}>
+                    Target Class (optional - leave blank for all)
+                    <select value={voucherClass} onChange={e => setVoucherClass(e.target.value)}>
+                      <option value="">All Classes (School-wide)</option>
+                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </label>
+
+                  <label style={{ gridColumn: '1 / -1' }}>
+                    Challan Note / Description (optional)
+                    <input
+                      type="text"
+                      maxLength={150}
+                      placeholder="e.g. Final Term Examination Challan - 2026"
+                      value={voucherNote}
+                      onChange={e => setVoucherNote(e.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+
               <div style={{
                 marginTop: 24,
                 paddingTop: 16,
@@ -1533,6 +2088,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 </button>
                 <button
                   type="submit"
+                  disabled={voucherGenerating}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -1544,12 +2100,13 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                     color: '#ffffff',
                     fontSize: 13.5,
                     fontWeight: 700,
-                    cursor: 'pointer',
+                    cursor: voucherGenerating ? 'wait' : 'pointer',
                     boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                    transition: 'all 0.15s ease'
+                    transition: 'all 0.15s ease',
+                    opacity: voucherGenerating ? 0.7 : 1
                   }}
                 >
-                  <Check size={16} /> Generate Vouchers
+                  <Check size={16} /> {voucherGenerating ? 'Generating Vouchers...' : 'Generate Vouchers'}
                 </button>
               </div>
             </form>

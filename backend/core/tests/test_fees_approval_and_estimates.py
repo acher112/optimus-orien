@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import date
-from core.models import Student, StudentFee, FeePayment, FinanceEntry, SchoolClass, AcademicYear, StaffMember, SalaryRecord, FinanceCategory
+from core.models import Student, StudentFee, FeePayment, FinanceEntry, SchoolClass, AcademicYear, StaffMember, SalaryRecord, FinanceCategory, Enrollment, FeeHead
 from core.tests.test_phase1 import AccessFixture
 
 
@@ -22,6 +22,7 @@ class FeesApprovalAndEstimatesTests(AccessFixture):
         # 1. Create a student
         st_res = self.call(self.school_admin, 'students', {
             'school': self.s1.id,
+            'school_class': self.sc.id,
             'first_name': 'Ali',
             'last_name': 'Raza',
             'father_name': 'Raza Ali',
@@ -208,4 +209,122 @@ class FeesApprovalAndEstimatesTests(AccessFixture):
         res_all = self.call(self.org_admin, 'finance/summary', {'school': 'all'}, method='get')
         self.assertEqual(res_all.status_code, 200)
         self.assertEqual(float(res_all.json()['total_income']), 8000.0)
+
+    def test_batch_generate_vouchers_monthly_autofetch(self):
+        # Create 2 students in class
+        st1 = Student.objects.create(
+            school=self.s1, first_name='Hamza', last_name='Khan',
+            admission_number='HAM-101', enrolled_on=date.today()
+        )
+        Enrollment.objects.create(student=st1, school_class=self.sc, start_date=date.today())
+
+        st2 = Student.objects.create(
+            school=self.s1, first_name='Bilal', last_name='Ahmed',
+            admission_number='BIL-102', enrolled_on=date.today()
+        )
+        Enrollment.objects.create(student=st2, school_class=self.sc, start_date=date.today())
+
+        # Student 1 has a prior monthly tuition fee record of 3800
+        income_cat = FinanceCategory.objects.create(school=self.s1, kind='income', name='Tuition fees')
+        head_m = FeeHead.objects.create(school=self.s1, name='Monthly Tuition Fee', category=income_cat)
+        StudentFee.objects.create(
+            student=st1, head=head_m, period='2026-10',
+            amount_due=Decimal('3800.00'), due_date=date(2026, 10, 10)
+        )
+
+        # Generate vouchers for 2026-11 with fallback_amount=3200
+        res = self.call(self.school_admin, 'fees/vouchers/generate', {
+            'school': self.s1.id,
+            'period': '2026-11',
+            'school_class': self.sc.id,
+            'mode': 'monthly',
+            'fallback_amount': 3200,
+            'note': 'November 2026 Tuition'
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['mode'], 'monthly')
+        self.assertEqual(data['vouchers_created'], 2)
+
+        # Verify Student 1 fee was auto-fetched as 3800 from prior record
+        fee1 = StudentFee.objects.get(student=st1, period='2026-11')
+        self.assertEqual(fee1.amount_due, Decimal('3800.00'))
+        self.assertEqual(fee1.note, 'November 2026 Tuition')
+
+        # Verify Student 2 fee used fallback amount 3200
+        fee2 = StudentFee.objects.get(student=st2, period='2026-11')
+        self.assertEqual(fee2.amount_due, Decimal('3200.00'))
+        self.assertEqual(fee2.note, 'November 2026 Tuition')
+
+    def test_batch_generate_vouchers_custom_category_exam_and_sports(self):
+        st = Student.objects.create(
+            school=self.s1, first_name='Zain', last_name='Abid',
+            admission_number='ZAI-201', enrolled_on=date.today()
+        )
+        Enrollment.objects.create(student=st, school_class=self.sc, start_date=date.today())
+
+        # Generate custom Examination Fee challan
+        res_exam = self.call(self.school_admin, 'fees/vouchers/generate', {
+            'school': self.s1.id,
+            'period': '2026-11',
+            'school_class': self.sc.id,
+            'mode': 'custom',
+            'category_name': 'Examination Fee',
+            'amount': 1500,
+            'due_date': '2026-11-25',
+            'note': 'Mid-term Exam Challan - 2026'
+        })
+        self.assertEqual(res_exam.status_code, 200)
+        self.assertEqual(res_exam.json()['vouchers_created'], 1)
+
+        v_exam = StudentFee.objects.get(student=st, head__name='Examination Fee', period='2026-11')
+        self.assertEqual(v_exam.amount_due, Decimal('1500.00'))
+        self.assertEqual(str(v_exam.due_date), '2026-11-25')
+        self.assertEqual(v_exam.note, 'Mid-term Exam Challan - 2026')
+
+        # Generate custom Sports Gala Fee challan
+        res_sports = self.call(self.school_admin, 'fees/vouchers/generate', {
+            'school': self.s1.id,
+            'period': '2026-11',
+            'school_class': self.sc.id,
+            'mode': 'custom',
+            'category_name': 'Sports Gala Kit',
+            'amount': 800,
+            'note': 'Sports Week Uniform'
+        })
+        self.assertEqual(res_sports.status_code, 200)
+        v_sports = StudentFee.objects.get(student=st, head__name='Sports Gala Kit', period='2026-11')
+        self.assertEqual(v_sports.amount_due, Decimal('800.00'))
+        self.assertEqual(v_sports.note, 'Sports Week Uniform')
+
+    def test_vouchers_list_api_with_filters(self):
+        st = Student.objects.create(
+            school=self.s1, first_name='Tariq', last_name='Mehmood',
+            admission_number='TAR-301', enrolled_on=date.today()
+        )
+        Enrollment.objects.create(student=st, school_class=self.sc, start_date=date.today())
+        head = FeeHead.objects.create(
+            school=self.s1, name='Annual Charges',
+            category=FinanceCategory.objects.create(school=self.s1, kind='income', name='Annual')
+        )
+        StudentFee.objects.create(
+            student=st, head=head, period='2026-11',
+            amount_due=Decimal('5000.00'), due_date=date(2026, 11, 20),
+            note='Annual Facility Charges'
+        )
+
+        # GET /api/v1/fees/vouchers/
+        res = self.call(self.school_admin, 'fees/vouchers', {'school': str(self.s1.id), 'period': '2026-11'}, method='get')
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn('vouchers', data)
+        self.assertIn('summary', data)
+        self.assertTrue(len(data['vouchers']) >= 1)
+        found = [v for v in data['vouchers'] if v['student_id'] == st.id]
+        self.assertTrue(len(found) == 1)
+        self.assertEqual(found[0]['head_name'], 'Annual Charges')
+        self.assertEqual(found[0]['amount_due'], '5000.00')
+        self.assertEqual(found[0]['note'], 'Annual Facility Charges')
+        self.assertEqual(found[0]['class_name'], 'Grade 10-A')
 

@@ -706,6 +706,7 @@ class StudentFee(models.Model):
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
     status = models.CharField(max_length=16, choices=STATUSES, default='unpaid')
     due_date = models.DateField()
+    note = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

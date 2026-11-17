@@ -324,7 +324,16 @@ def concession_detail(request, pk):
 # ------------------------------------------------------------------ Billing Generator
 @api_view(['POST'])
 def generate_vouchers(request):
-    """Idempotently generates StudentFee line items for a given period and class/school."""
+    """Idempotently generates StudentFee line items for a given period and class/school.
+    Supports TWO modes:
+    1. 'monthly': Regular student monthly tuition fee auto-fetch.
+       - Auto-fetches fee from FeeStructure or previous StudentFee monthly fee records for each student.
+       - If no fee rate exists, falls back to fallback_amount if provided (and sets FeeStructure).
+       - No need for user to type an amount if students already have their fee established.
+    2. 'custom': Specialized category challan (e.g. Exam Fee, Sports Fee, Annual Charges, Lab Fee).
+       - User types/selects category name, amount, due date, and note.
+       - Auto-resolves FeeHead, generates voucher line items with amount, due date, and note.
+    """
     user = request.user
     _require_manager(user)
     school = _school(user, request.data.get('school'))
@@ -337,45 +346,195 @@ def generate_vouchers(request):
     if class_id:
         classes = classes.filter(pk=class_id)
 
+    raw_mode = (request.data.get('mode') or request.data.get('voucher_type') or '').strip().lower()
+    custom_category = (request.data.get('category_name') or request.data.get('category') or '').strip()
+    is_custom = raw_mode == 'custom' or bool(custom_category and custom_category.lower() not in (
+        'monthly tuition fee', 'tuition fees', 'monthly fee', 'tuition'
+    ))
+
+    note = (request.data.get('note') or request.data.get('remarks') or '').strip()[:255]
+    due_date_str = request.data.get('due_date')
+    parsed_due_date = None
+    if due_date_str:
+        try:
+            parsed_due_date = date.fromisoformat(str(due_date_str))
+        except (ValueError, TypeError):
+            pass
+
+    raw_amount = request.data.get('amount') if request.data.get('amount') is not None else request.data.get('fallback_amount')
+    fallback_amount = None
+    if raw_amount is not None and str(raw_amount).strip() != '':
+        try:
+            fallback_amount = _money(raw_amount, 'amount', allow_zero=False)
+        except ValidationError:
+            if is_custom:
+                raise ValidationError({'amount': 'A valid positive amount is required for custom category vouchers.'})
+
     enrollments = Enrollment.objects.filter(school_class__in=classes, end_date__isnull=True).select_related('student', 'school_class')
     created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    total_billed = Decimal('0.00')
+
     with transaction.atomic():
-        for en in enrollments:
-            st = en.student
-            sc = en.school_class
-            structures = FeeStructure.objects.filter(
-                school=school, academic_year=sc.academic_year, head__active=True
-            ).filter(Q(school_class=sc) | Q(school_class__isnull=True))
+        if is_custom:
+            # Mode 2: Custom Category Challan (Exam, Sports, Annual, Lab, etc.)
+            if not custom_category:
+                raise ValidationError({'category_name': 'Category name is required for custom fee challans (e.g. Exam Fee, Sports Fee).'})
+            if fallback_amount is None or fallback_amount <= Decimal('0.00'):
+                raise ValidationError({'amount': 'Amount must be greater than zero for custom fee challans.'})
 
-            for fs in structures:
-                concession = Concession.objects.filter(
-                    student=st
-                ).filter(Q(head=fs.head) | Q(head__isnull=True)).first()
+            cat_lower = custom_category.lower()
+            if any(k in cat_lower for k in ('exam', 'paper', 'test', 'assessment')):
+                finance_cat = "Examination fees"
+            elif any(k in cat_lower for k in ('annual', 'admission', 'reg')):
+                finance_cat = "Annual fees"
+            else:
+                finance_cat = "Other income"
 
+            head = _resolve_fee_head(school, custom_category, finance_cat)
+            head_name = head.name
+            due_date = parsed_due_date or (date.today() + timedelta(days=10))
+
+            for en in enrollments:
+                st = en.student
+                concession = Concession.objects.filter(student=st).filter(Q(head=head) | Q(head__isnull=True)).first()
                 discount = Decimal('0.00')
                 if concession:
                     if concession.discount_type == 'percent':
-                        discount = (fs.amount * (concession.discount_value / Decimal('100.00'))).quantize(Decimal('0.01'))
+                        discount = (fallback_amount * (concession.discount_value / Decimal('100.00'))).quantize(Decimal('0.01'))
                     else:
-                        discount = min(fs.amount, concession.discount_value)
+                        discount = min(fallback_amount, concession.discount_value)
 
-                try:
-                    parts = period.split('-')
-                    if len(parts) == 2 and len(parts[0]) == 4:
-                        due_date = date(int(parts[0]), int(parts[1]), min(fs.due_day, 28))
-                    else:
-                        due_date = date.today()
-                except Exception:
-                    due_date = date.today()
-
-                _, created = StudentFee.objects.get_or_create(
-                    student=st, head=fs.head, period=period,
-                    defaults={'amount_due': fs.amount, 'discount': discount, 'status': 'unpaid', 'due_date': due_date}
+                sf, created = StudentFee.objects.get_or_create(
+                    student=st, head=head, period=period,
+                    defaults={'amount_due': fallback_amount, 'discount': discount, 'status': 'unpaid', 'due_date': due_date, 'note': note}
                 )
                 if created:
                     created_count += 1
+                else:
+                    if sf.status == 'unpaid':
+                        sf.amount_due = fallback_amount
+                        sf.discount = discount
+                        sf.due_date = due_date
+                        if note:
+                            sf.note = note
+                        sf.save(update_fields=['amount_due', 'discount', 'due_date', 'note'])
+                        updated_count += 1
+                total_billed += sf.net_due
 
-    return Response({'success': True, 'period': period, 'vouchers_created': created_count})
+        else:
+            # Mode 1: Monthly Tuition Fee (Auto-fetch)
+            head_m = _resolve_fee_head(school, "Monthly Tuition Fee", "Tuition fees")
+            head_name = head_m.name
+
+            if parsed_due_date:
+                base_due_date = parsed_due_date
+            else:
+                try:
+                    parts = period.split('-')
+                    if len(parts) == 2 and len(parts[0]) == 4:
+                        base_due_date = date(int(parts[0]), int(parts[1]), 10)
+                    else:
+                        base_due_date = date.today() + timedelta(days=10)
+                except Exception:
+                    base_due_date = date.today() + timedelta(days=10)
+
+            for en in enrollments:
+                st = en.student
+                sc = en.school_class
+
+                structures = FeeStructure.objects.filter(
+                    school=school, academic_year=sc.academic_year, head__active=True
+                ).filter(Q(school_class=sc) | Q(school_class__isnull=True))
+
+                target_structures = list(structures) if structures.exists() else []
+
+                if target_structures:
+                    for fs in target_structures:
+                        concession = Concession.objects.filter(
+                            student=st
+                        ).filter(Q(head=fs.head) | Q(head__isnull=True)).first()
+
+                        discount = Decimal('0.00')
+                        if concession:
+                            if concession.discount_type == 'percent':
+                                discount = (fs.amount * (concession.discount_value / Decimal('100.00'))).quantize(Decimal('0.01'))
+                            else:
+                                discount = min(fs.amount, concession.discount_value)
+
+                        due_date = parsed_due_date or date(base_due_date.year, base_due_date.month, min(fs.due_day or 10, 28))
+
+                        sf, created = StudentFee.objects.get_or_create(
+                            student=st, head=fs.head, period=period,
+                            defaults={'amount_due': fs.amount, 'discount': discount, 'status': 'unpaid', 'due_date': due_date, 'note': note}
+                        )
+                        if created:
+                            created_count += 1
+                        else:
+                            if sf.status == 'unpaid' and note:
+                                sf.note = note
+                                sf.save(update_fields=['note'])
+                                updated_count += 1
+                        total_billed += sf.net_due
+
+                else:
+                    # Auto-fetch from student's most recent StudentFee monthly fee record
+                    prior_fee = StudentFee.objects.filter(
+                        student=st
+                    ).filter(
+                        Q(head=head_m) | Q(head__name__icontains='tuition') | Q(head__name__icontains='monthly')
+                    ).order_by('-created_at', '-id').first()
+
+                    auto_amount = None
+                    if prior_fee and prior_fee.amount_due > Decimal('0.00'):
+                        auto_amount = prior_fee.amount_due
+                    elif fallback_amount and fallback_amount > Decimal('0.00'):
+                        auto_amount = fallback_amount
+
+                    if auto_amount is not None:
+                        concession = Concession.objects.filter(
+                            student=st
+                        ).filter(Q(head=head_m) | Q(head__isnull=True)).first()
+                        discount = Decimal('0.00')
+                        if concession:
+                            if concession.discount_type == 'percent':
+                                discount = (auto_amount * (concession.discount_value / Decimal('100.00'))).quantize(Decimal('0.01'))
+                            else:
+                                discount = min(auto_amount, concession.discount_value)
+
+                        due_date = parsed_due_date or base_due_date
+                        sf, created = StudentFee.objects.get_or_create(
+                            student=st, head=head_m, period=period,
+                            defaults={'amount_due': auto_amount, 'discount': discount, 'status': 'unpaid', 'due_date': due_date, 'note': note}
+                        )
+                        if created:
+                            created_count += 1
+                        else:
+                            if sf.status == 'unpaid':
+                                sf.amount_due = auto_amount
+                                sf.discount = discount
+                                sf.due_date = due_date
+                                if note:
+                                    sf.note = note
+                                sf.save(update_fields=['amount_due', 'discount', 'due_date', 'note'])
+                                updated_count += 1
+                        total_billed += sf.net_due
+                    else:
+                        skipped_count += 1
+
+    return Response({
+        'success': True,
+        'period': period,
+        'mode': 'custom' if is_custom else 'monthly',
+        'category': head_name,
+        'vouchers_created': created_count,
+        'vouchers_updated': updated_count,
+        'skipped_count': skipped_count,
+        'total_students': len(enrollments),
+        'total_amount': str(total_billed),
+        'message': f"Generated {created_count} voucher(s) ({updated_count} updated) for {head_name} ({period})."
+    })
 
 
 @api_view(['POST'])
@@ -625,6 +784,125 @@ def student_voucher_create(request):
     }, status=201 if created else 200)
 
 
+@api_view(['GET', 'POST'])
+def vouchers_list(request):
+    """GET: Filterable list of all generated StudentFee voucher items.
+    POST: Single student voucher creation (delegates to student_voucher_create).
+    """
+    if request.method == 'POST':
+        return student_voucher_create(request)
+
+    user = request.user
+    _require_manager(user)
+    school_ids = resolve_campus(request)
+
+    qs = StudentFee.objects.filter(student__school_id__in=school_ids).select_related(
+        'student', 'student__school', 'head'
+    )
+
+    school_param = request.query_params.get('school') or request.query_params.get('campus')
+    if school_param:
+        try:
+            qs = qs.filter(student__school_id=int(school_param))
+        except (ValueError, TypeError):
+            pass
+
+    period = request.query_params.get('period')
+    if period and period != 'all':
+        qs = qs.filter(period=period)
+
+    status = request.query_params.get('status')
+    if status and status != 'all':
+        qs = qs.filter(status=status)
+
+    head_param = request.query_params.get('head')
+    if head_param and head_param != 'all':
+        if head_param.isdigit():
+            qs = qs.filter(head_id=int(head_param))
+        else:
+            qs = qs.filter(head__name__icontains=head_param)
+
+    class_id = request.query_params.get('school_class') or request.query_params.get('class_id')
+    if class_id and class_id != 'all':
+        try:
+            qs = qs.filter(student__enrollments__school_class_id=int(class_id), student__enrollments__end_date__isnull=True)
+        except (ValueError, TypeError):
+            pass
+
+    search = (request.query_params.get('search') or '').strip()
+    if search:
+        qs = qs.filter(
+            Q(student__first_name__icontains=search) |
+            Q(student__last_name__icontains=search) |
+            Q(student__admission_number__icontains=search)
+        )
+
+    total_count = qs.count()
+    total_billed = qs.aggregate(s=Sum('amount_due'))['s'] or Decimal('0.00')
+    total_discount = qs.aggregate(s=Sum('discount'))['s'] or Decimal('0.00')
+    net_billed = max(Decimal('0.00'), total_billed - total_discount)
+
+    paid_qs = qs.filter(status='paid')
+    total_paid = paid_qs.aggregate(s=Sum('amount_due'))['s'] or Decimal('0.00')
+    unpaid_qs = qs.filter(status__in=['unpaid', 'partial'])
+    total_unpaid = unpaid_qs.aggregate(s=Sum('amount_due'))['s'] or Decimal('0.00')
+
+    categories = list(qs.values_list('head__name', flat=True).distinct()[:50])
+
+    limit = min(int(request.query_params.get('limit', 150)), 500)
+    offset = int(request.query_params.get('offset', 0))
+    paged_qs = qs.order_by('-due_date', '-id')[offset:offset + limit]
+
+    student_ids = [sf.student_id for sf in paged_qs]
+    enrollment_map = {}
+    if student_ids:
+        active_ens = Enrollment.objects.filter(
+            student_id__in=student_ids, end_date__isnull=True
+        ).select_related('school_class')
+        for en in active_ens:
+            enrollment_map[en.student_id] = {
+                'class_name': en.school_class.name if en.school_class else '—',
+                'class_id': en.school_class_id if en.school_class else None
+            }
+
+    vouchers = []
+    for sf in paged_qs:
+        en_info = enrollment_map.get(sf.student_id, {})
+        vouchers.append({
+            'id': sf.id,
+            'student_id': sf.student_id,
+            'student_name': sf.student.full_name,
+            'admission_number': sf.student.admission_number,
+            'father_name': sf.student.father_name,
+            'guardian_phone': sf.student.guardian_phone,
+            'class_name': en_info.get('class_name', '—'),
+            'class_id': en_info.get('class_id'),
+            'head_id': sf.head_id,
+            'head_name': sf.head.name,
+            'period': sf.period,
+            'amount_due': str(sf.amount_due),
+            'discount': str(sf.discount),
+            'net_due': str(sf.net_due),
+            'status': sf.status,
+            'due_date': str(sf.due_date),
+            'note': sf.note or '',
+            'created_at': sf.created_at.isoformat(),
+        })
+
+    return Response({
+        'vouchers': vouchers,
+        'count': total_count,
+        'categories': categories,
+        'summary': {
+            'total_count': total_count,
+            'total_billed': str(net_billed),
+            'total_paid': str(total_paid),
+            'total_unpaid': str(total_unpaid),
+            'total_discount': str(total_discount),
+        }
+    })
+
+
 @api_view(['GET', 'PATCH', 'DELETE'])
 def voucher_detail(request, pk):
     user = request.user
@@ -646,6 +924,7 @@ def voucher_detail(request, pk):
             'net_due': str(voucher.net_due),
             'status': voucher.status,
             'due_date': str(voucher.due_date),
+            'note': voucher.note or '',
         })
     if request.method == 'DELETE':
         if voucher.status == 'paid':
@@ -667,6 +946,9 @@ def voucher_detail(request, pk):
     if 'status' in data and data['status'] in ('unpaid', 'waived', 'void'):
         voucher.status = data['status']
         update_fields.append('status')
+    if 'note' in data:
+        voucher.note = str(data['note'])[:255]
+        update_fields.append('note')
     if update_fields:
         voucher.save(update_fields=update_fields)
         record_event(actor=user, action='update', obj=voucher)

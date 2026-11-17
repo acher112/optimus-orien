@@ -74,7 +74,7 @@ urlpatterns = [
     path('fees/concessions/<int:pk>/', fees.concession_detail),
     path('fees/vouchers/generate/', fees.generate_vouchers),
     path('fees/student-voucher/', fees.student_voucher_create),
-    path('fees/vouchers/', fees.student_voucher_create),
+    path('fees/vouchers/', fees.vouchers_list),
     path('fees/vouchers/<int:pk>/', fees.voucher_detail),
     path('fees/ledger/<int:student_id>/', fees.student_ledger),
     path('fees/payments/', fees.payments),
