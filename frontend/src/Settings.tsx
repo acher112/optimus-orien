@@ -7,6 +7,7 @@ import {
   Lock,
   Moon,
   Palette,
+  Pipette,
   Save,
   School,
   ShieldCheck,
@@ -28,10 +29,30 @@ interface SettingsProps {
   notify: (msg: string) => void;
 }
 
+function getContrastColor(hex: string): string {
+  const clean = hex.replace('#', '').trim();
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.62 ? '#1e2433' : '#ffffff';
+  }
+  if (clean.length === 6) {
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.62 ? '#1e2433' : '#ffffff';
+  }
+  return '#ffffff';
+}
+
 export default function Settings({ user, onUserUpdated, notify }: SettingsProps) {
   const stored = getStoredTheme();
   const [mode, setMode] = useState<ThemeMode>(stored.mode);
   const [accent, setAccent] = useState<string>(stored.colorHex);
+  const [customHexInput, setCustomHexInput] = useState<string>(stored.colorHex);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -39,6 +60,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
       if (ce.detail?.mode) setMode(ce.detail.mode);
       if (ce.detail?.hex) {
         setAccent(ce.detail.hex);
+        setCustomHexInput(ce.detail.hex);
         setAvatarColor(ce.detail.hex);
       }
     };
@@ -105,10 +127,21 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
   const handleColorChange = (hexOrId: string) => {
     const hex = resolveHex(hexOrId);
     setAccent(hex);
+    setCustomHexInput(hex);
     setAvatarColor(hex);
     applyTheme(mode, hex);
     const preset = THEME_PRESETS.find(p => p.hex.toLowerCase() === hex.toLowerCase());
-    notify(`Theme color updated to ${preset?.name || hex}`);
+    notify(`Theme color updated to ${preset?.name || hex.toUpperCase()}`);
+  };
+
+  const handleAvatarColorChange = (hexOrId: string) => {
+    const hex = resolveHex(hexOrId);
+    setAvatarColor(hex);
+    setAccent(hex);
+    setCustomHexInput(hex);
+    applyTheme(mode, hex);
+    const preset = THEME_PRESETS.find(p => p.hex.toLowerCase() === hex.toLowerCase());
+    notify(`Profile avatar color set to ${preset?.name || hex.toUpperCase()}`);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -292,13 +325,21 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
           </div>
 
           <div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#6c7489', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Workspace Accent Color
-            </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#6c7489', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                Workspace Accent Color
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: accent }}>
+                {(() => {
+                  const p = THEME_PRESETS.find(tc => tc.hex.toLowerCase() === accent.toLowerCase());
+                  return p ? `${p.name} (${p.hex})` : `Custom (${accent.toUpperCase()})`;
+                })()}
+              </span>
+            </div>
             <div className="theme-color-grid">
               {THEME_PRESETS.map(tc => {
                 const isSelected = accent.toLowerCase() === tc.hex.toLowerCase();
-                const isYellow = tc.hex === '#eab308';
+                const isBright = getContrastColor(tc.hex) === '#1e2433';
                 return (
                   <button
                     key={tc.id}
@@ -307,7 +348,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
                     onClick={() => handleColorChange(tc.hex)}
                   >
                     <div className="theme-swatch" style={{ background: tc.hex }}>
-                      {isSelected && <Check size={16} color={isYellow ? '#1e2433' : '#fff'} strokeWidth={3} />}
+                      {isSelected && <Check size={16} color={isBright ? '#1e2433' : '#fff'} strokeWidth={3} />}
                     </div>
                     <div className="theme-color-info">
                       <strong>{tc.name}</strong>
@@ -316,6 +357,169 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
                   </button>
                 );
               })}
+
+              {/* Custom Color Card in Grid */}
+              {(() => {
+                const isCustomSelected = !THEME_PRESETS.some(
+                  p => p.hex.toLowerCase() === accent.toLowerCase()
+                );
+                const contrastColor = getContrastColor(accent);
+                return (
+                  <label
+                    className={`theme-color-card custom-card ${isCustomSelected ? 'active' : ''}`}
+                    title="Click to open color picker for custom theme color"
+                  >
+                    <input
+                      type="color"
+                      value={accent.startsWith('#') && accent.length === 7 ? accent : '#715ee8'}
+                      onChange={e => handleColorChange(e.target.value)}
+                    />
+                    <div
+                      className="theme-swatch"
+                      style={{
+                        background: isCustomSelected
+                          ? accent
+                          : 'conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ffa500 51deg, #ffff00 102deg, #008000 153deg, #0000ff 204deg, #4b0082 255deg, #ee82ee 306deg, #ff0000 360deg)',
+                        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.12)',
+                      }}
+                    >
+                      {isCustomSelected ? (
+                        <Check size={16} color={contrastColor} strokeWidth={3} />
+                      ) : (
+                        <Pipette size={14} color="#fff" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.7))' }} />
+                      )}
+                    </div>
+                    <div className="theme-color-info">
+                      <strong>{isCustomSelected ? 'Custom Color' : 'Custom Picker'}</strong>
+                      <span style={{ color: isCustomSelected ? accent : '#6c7489' }}>
+                        {isCustomSelected ? accent.toUpperCase() : 'Choose any color'}
+                      </span>
+                    </div>
+                  </label>
+                );
+              })()}
+            </div>
+
+            {/* Custom Accent Toolbar with Direct Hex Code & Color Spectrum */}
+            <div className="custom-color-toolbar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <label
+                  style={{
+                    position: 'relative',
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    background: accent,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                    border: '2px solid #fff',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                  }}
+                  title="Click to open color spectrum"
+                >
+                  <input
+                    type="color"
+                    value={accent.startsWith('#') && accent.length === 7 ? accent : '#715ee8'}
+                    onChange={e => handleColorChange(e.target.value)}
+                    style={{
+                      position: 'absolute',
+                      inset: -10,
+                      width: '200%',
+                      height: '200%',
+                      opacity: 0,
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <Pipette size={14} color={getContrastColor(accent)} />
+                </label>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'inherit' }}>
+                    Custom Color Fine-Tuning
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Pick any shade or enter an exact 6-character hex code
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span
+                    style={{
+                      position: 'absolute',
+                      left: 10,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#94a3b8',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    #
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="715EE8"
+                    maxLength={6}
+                    value={customHexInput.replace('#', '')}
+                    onChange={e => {
+                      const val = e.target.value.replace(/[^0-9a-fA-F]/g, '');
+                      setCustomHexInput(val);
+                      if (val.length === 6) {
+                        handleColorChange(`#${val}`);
+                      }
+                    }}
+                    style={{
+                      paddingLeft: 24,
+                      paddingRight: 10,
+                      paddingTop: 6,
+                      paddingBottom: 6,
+                      width: 105,
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      color: '#1e293b',
+                      textTransform: 'uppercase',
+                    }}
+                  />
+                </div>
+                <label
+                  className="action-btn-sm"
+                  style={{
+                    cursor: 'pointer',
+                    position: 'relative',
+                    margin: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '7px 12px',
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    fontSize: 12,
+                  }}
+                >
+                  <Pipette size={13} />
+                  <span>Color Spectrum</span>
+                  <input
+                    type="color"
+                    value={accent.startsWith('#') && accent.length === 7 ? accent : '#715ee8'}
+                    onChange={e => handleColorChange(e.target.value)}
+                    style={{
+                      position: 'absolute',
+                      opacity: 0,
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                    }}
+                  />
+                </label>
+              </div>
             </div>
           </div>
         </section>
@@ -392,13 +596,18 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
             </label>
 
             <div>
-              <span className="settings-field-label" style={{ display: 'block', marginBottom: 6 }}>
-                Avatar Color
-              </span>
-              <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span className="settings-field-label">
+                  Avatar Color
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: avatarColor }}>
+                  {avatarColor.toUpperCase()}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center' }}>
                 {THEME_PRESETS.map(preset => {
                   const isSelected = avatarColor.toLowerCase() === preset.hex.toLowerCase();
-                  const isYellow = preset.hex === '#eab308';
+                  const isBright = getContrastColor(preset.hex) === '#1e2433';
                   return (
                     <button
                       key={preset.id}
@@ -406,12 +615,76 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
                       title={preset.name}
                       className={`avatar-swatch ${isSelected ? 'selected' : ''}`}
                       style={{ background: preset.hex }}
-                      onClick={() => handleColorChange(preset.hex)}
+                      onClick={() => handleAvatarColorChange(preset.hex)}
                     >
-                      {isSelected && <Check size={14} color={isYellow ? '#1e2433' : '#fff'} strokeWidth={3} />}
+                      {isSelected && <Check size={14} color={isBright ? '#1e2433' : '#fff'} strokeWidth={3} />}
                     </button>
                   );
                 })}
+
+                {/* Custom Avatar Swatch with Color Picker */}
+                {(() => {
+                  const isCustomAvatar = !THEME_PRESETS.some(
+                    p => p.hex.toLowerCase() === avatarColor.toLowerCase()
+                  );
+                  const contrastColor = getContrastColor(avatarColor);
+                  return (
+                    <label
+                      className={`avatar-swatch custom-swatch ${isCustomAvatar ? 'selected' : ''}`}
+                      title={isCustomAvatar ? `Custom Color: ${avatarColor}` : 'Pick custom avatar color'}
+                      style={{
+                        cursor: 'pointer',
+                        background: isCustomAvatar
+                          ? avatarColor
+                          : 'conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ffa500 51deg, #ffff00 102deg, #008000 153deg, #0000ff 204deg, #4b0082 255deg, #ee82ee 306deg, #ff0000 360deg)',
+                        boxShadow: isCustomAvatar ? undefined : 'inset 0 0 0 1px rgba(0,0,0,0.12)',
+                        display: 'grid',
+                        placeItems: 'center',
+                      }}
+                    >
+                      <input
+                        type="color"
+                        value={avatarColor.startsWith('#') && avatarColor.length === 7 ? avatarColor : '#715ee8'}
+                        onChange={e => handleAvatarColorChange(e.target.value)}
+                      />
+                      {isCustomAvatar ? (
+                        <Check size={14} color={contrastColor} strokeWidth={3} />
+                      ) : (
+                        <Pipette size={13} color="#fff" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }} />
+                      )}
+                    </label>
+                  );
+                })()}
+
+                {/* Hex text input for direct entry */}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>HEX</span>
+                  <input
+                    type="text"
+                    maxLength={7}
+                    placeholder="#715EE8"
+                    value={avatarColor.toUpperCase()}
+                    onChange={e => {
+                      let val = e.target.value.trim();
+                      if (!val.startsWith('#') && val.length > 0) val = '#' + val;
+                      setAvatarColor(val);
+                      if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                        handleAvatarColorChange(val);
+                      }
+                    }}
+                    style={{
+                      width: 84,
+                      padding: '4px 6px',
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      borderRadius: 6,
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      color: '#1e293b',
+                    }}
+                  />
+                </div>
               </div>
             </div>
 

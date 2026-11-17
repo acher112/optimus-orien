@@ -1061,7 +1061,57 @@ input:focus-visible,
 }
 .avatar-swatch.selected {
   border-color: #fff;
-  box-shadow: 0 0 0 2px #715ee8;
+  box-shadow: 0 0 0 2px var(--brand-primary, #715ee8);
+}
+
+/* Custom Color Card & Toolbar */
+.theme-color-card.custom-card {
+  position: relative;
+  overflow: hidden;
+  border-style: dashed;
+  border-width: 1.5px;
+}
+.theme-color-card.custom-card.active {
+  border-style: solid;
+}
+.theme-color-card.custom-card input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.custom-color-toolbar {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--brand-primary-light, #f8fafc);
+  border-radius: 12px;
+  border: 1px solid var(--brand-primary-border, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  transition: all .2s;
+}
+.dark .custom-color-toolbar {
+  background: #1e2030;
+  border-color: #2e3146;
+}
+
+.avatar-swatch.custom-swatch {
+  position: relative;
+  overflow: hidden;
+}
+.avatar-swatch.custom-swatch input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 .settings-field-label {
   font-size: 11px;

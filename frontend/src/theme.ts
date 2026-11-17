@@ -9,11 +9,15 @@ export interface ThemePreset {
 export const THEME_PRESETS: ThemePreset[] = [
   { id: 'yellow', name: 'Vibrant Yellow', hex: '#eab308' },
   { id: 'purple', name: 'Imperial Purple', hex: '#715ee8' },
-  { id: 'emerald', name: 'Emerald Green', hex: '#10b981' },
+  { id: 'indigo', name: 'Royal Indigo', hex: '#6366f1' },
   { id: 'blue', name: 'Ocean Blue', hex: '#2563eb' },
-  { id: 'rose', name: 'Crimson Rose', hex: '#e11d48' },
-  { id: 'violet', name: 'Amethyst Violet', hex: '#8b5cf6' },
   { id: 'cyan', name: 'Aqua Cyan', hex: '#06b6d4' },
+  { id: 'teal', name: 'Teal Oasis', hex: '#0d9488' },
+  { id: 'emerald', name: 'Emerald Green', hex: '#10b981' },
+  { id: 'orange', name: 'Sunset Amber', hex: '#ea580c' },
+  { id: 'rose', name: 'Crimson Rose', hex: '#e11d48' },
+  { id: 'pink', name: 'Berry Pink', hex: '#db2777' },
+  { id: 'violet', name: 'Amethyst Violet', hex: '#8b5cf6' },
   { id: 'slate', name: 'Midnight Slate', hex: '#475569' },
 ];
 
