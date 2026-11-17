@@ -14,7 +14,7 @@ from rest_framework.response import Response
 
 from core.models import User, School, TeacherPerformanceAlert, TeacherPerformanceCriteria, TeacherPerformanceNote
 from core.services.feature_permissions import requires_feature
-from core.services.record_permissions import resolve_record_school, check_record_capability
+from core.services.record_permissions import resolve_record_school, resolve_record_schools, check_record_capability
 from core.services.teacher_performance_service import (
     get_teacher_performance_overview, get_teacher_performance_detail,
     preview_criteria_impact, update_criteria_version, update_alert_status,
@@ -27,11 +27,11 @@ from core.services.record_exports import generate_record_excel_response
 @requires_feature('teacher_insights')
 def teacher_performance_overview_view(request):
     """GET /api/v1/teacher-performance/overview/"""
-    school = resolve_record_school(request.user, request.query_params.get('campus') or request.query_params.get('school'))
+    is_all, school, schools = resolve_record_schools(request.user, request.query_params.get('campus') or request.query_params.get('school'))
     if not check_record_capability(request.user, school, 'teacher_performance.view_summary'):
         raise PermissionDenied('Access to Teacher Performance Overview requires leadership authorization.')
 
-    data = get_teacher_performance_overview(school, request.query_params)
+    data = get_teacher_performance_overview(school, request.query_params, is_all=is_all, schools=schools)
     return Response(data)
 
 
@@ -218,23 +218,27 @@ def teacher_performance_notes_view(request):
 @requires_feature('teacher_insights')
 def teacher_performance_export_view(request):
     """GET /api/v1/teacher-performance/export/ (Excel .xlsx download)"""
-    school = resolve_record_school(request.user, request.query_params.get('campus') or request.query_params.get('school'))
+    is_all, school, schools = resolve_record_schools(request.user, request.query_params.get('campus') or request.query_params.get('school'))
     if not check_record_capability(request.user, school, 'teacher_performance.export'):
         raise PermissionDenied('Export permission required.')
 
-    overview = get_teacher_performance_overview(school, request.query_params)
+    overview = get_teacher_performance_overview(school, request.query_params, is_all=is_all, schools=schools)
     rows = overview.get('teachers', [])
 
     cols = [
         {'key': 'name', 'label': 'Teacher Name', 'type': 'text'},
+    ]
+    if is_all:
+        cols.append({'key': 'campus_name', 'label': 'Campus', 'type': 'text'})
+    cols.extend([
         {'key': 'email', 'label': 'Email Address', 'type': 'text'},
         {'key': 'assigned_classes_count', 'label': 'Assigned Classes', 'type': 'number'},
         {'key': 'total_students_evaluated', 'label': 'Students Evaluated', 'type': 'number'},
         {'key': 'composite_average', 'label': 'Composite Average %', 'type': 'number'},
         {'key': 'status_display', 'label': 'Performance Status', 'type': 'text'},
-    ]
+    ])
 
     return generate_record_excel_response(
         request, school, 'teacher_performance', 'Teacher Performance Summary',
-        request.query_params.dict(), cols, rows
+        request.query_params.dict(), cols, rows, is_all=is_all
     )

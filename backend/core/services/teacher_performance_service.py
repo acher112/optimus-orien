@@ -138,26 +138,42 @@ def evaluate_teacher_class_subject(school, teacher_user, school_class, subject, 
     }
 
 
-def get_teacher_performance_overview(school, query_params):
+def get_teacher_performance_overview(school, query_params, is_all=False, schools=None):
     """Computes campus performance overview cards, distribution, and teacher roll (B1-B5)."""
-    criteria = get_active_criteria(school)
+    if is_all and schools is not None:
+        target_schools = schools
+        primary_school = schools.first()
+        school_name = 'All Campuses (Consolidated)'
+        school_id = 'all'
+    else:
+        target_schools = School.objects.filter(pk=school.pk) if hasattr(school, 'pk') else schools
+        primary_school = school
+        school_name = school.name if school else ''
+        school_id = school.id if school else ''
+
+    criteria_by_school = {s.id: get_active_criteria(s) for s in target_schools}
+    default_criteria = criteria_by_school.get(primary_school.id) if primary_school else get_active_criteria(school)
     term_filter = query_params.get('term')
 
-    # Find active teachers with teaching assignments in this campus
+    # Find active teachers with teaching assignments in target campuses
     assignments = TeachingAssignment.objects.filter(
-        school=school,
+        school__in=target_schools,
         end_date__isnull=True
-    ).select_related('teacher', 'school_class', 'subject')
+    ).select_related('school', 'teacher', 'school_class', 'subject')
 
     teacher_metrics = {}
     for a in assignments:
         t_user = a.teacher
-        eval_data = evaluate_teacher_class_subject(school, t_user, a.school_class, a.subject, criteria, term_filter)
+        crit = criteria_by_school.get(a.school_id, default_criteria)
+        eval_data = evaluate_teacher_class_subject(a.school, t_user, a.school_class, a.subject, crit, term_filter)
         if t_user.id not in teacher_metrics:
             teacher_metrics[t_user.id] = {
                 'teacher_id': t_user.id,
                 'name': t_user.get_full_name() or t_user.username,
                 'email': t_user.email,
+                'campus_name': a.school.name,
+                'campus_code': a.school.code,
+                'campus_id': a.school_id,
                 'evaluations': [],
             }
         teacher_metrics[t_user.id]['evaluations'].append(eval_data)
@@ -208,7 +224,7 @@ def get_teacher_performance_overview(school, query_params):
 
         # Check for active alerts
         has_active_alert = TeacherPerformanceAlert.objects.filter(
-            school=school,
+            school__in=target_schools,
             teacher_id=t_id,
             status__in=['open', 'acknowledged', 'under_review']
         ).exists()
@@ -217,6 +233,9 @@ def get_teacher_performance_overview(school, query_params):
             'teacher_id': t_id,
             'name': data['name'],
             'email': data['email'],
+            'campus_name': data.get('campus_name', ''),
+            'campus_code': data.get('campus_code', ''),
+            'campus_id': data.get('campus_id'),
             'assigned_classes_count': len(evals),
             'total_students_evaluated': total_students,
             'composite_average': avg_score,
@@ -243,9 +262,11 @@ def get_teacher_performance_overview(school, query_params):
 
     return {
         'meta': {
-            'school_id': school.id,
-            'school_name': school.name,
-            'criteria_version': criteria.version,
+            'school_id': school_id,
+            'school_name': school_name,
+            'is_all_campuses': is_all,
+            'campus_count': target_schools.count() if is_all else 1,
+            'criteria_version': default_criteria.version if default_criteria else 1,
             'term': term_filter or 'All Published Terms',
         },
         'cards': {

@@ -32,76 +32,104 @@ RECORD_CAPABILITIES = {
 }
 
 
-def resolve_record_school(user, requested_school_id=None):
-    """Resolves and validates the target campus for Record / Teacher Performance actions.
+def resolve_record_schools(user, requested_school_id=None):
+    """Resolves the campus scope for Record and Teacher Performance queries.
 
-    - Principals are rigidly bound to user.school_id; any tampering triggers PermissionDenied.
-    - Org Admins / Owners are bound to campuses within user.organisation_id.
-    - Superusers / Platform Admins can access any campus.
-    - Students, Parents, and unauthorized Teachers are denied.
+    Returns:
+        (is_all_campuses: bool, primary_school: School, schools_qs: QuerySet[School])
+
+    - Principals: strictly restricted to their single assigned campus. Any attempt to pass 'all' or a foreign campus ID raises PermissionDenied.
+    - Organisation Admins / Owners / Platform Admins: can pass 'all' or 'all_campuses' to query across all campuses in their organization.
     """
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied('Active authenticated account required.')
 
     # Platform admin / Superuser
     if user.is_superuser or user.role == 'platform_admin':
+        if requested_school_id and str(requested_school_id).lower() in ('all', 'all_campuses', '0'):
+            all_s = School.objects.all()
+            first_s = all_s.first()
+            if not first_s:
+                raise NotFound('No campus available.')
+            return True, first_s, all_s
         if requested_school_id:
             try:
-                return School.objects.get(pk=int(requested_school_id))
+                school = School.objects.get(pk=int(requested_school_id))
+                return False, school, School.objects.filter(pk=school.pk)
             except (ValueError, School.DoesNotExist):
                 raise NotFound('Campus not found.')
         school = School.objects.first()
         if not school:
             raise NotFound('No campus available.')
-        return school
+        return False, school, School.objects.filter(pk=school.pk)
 
     # Principal / School Admin: RIGID campus binding
     if user.role in ('principal', 'school_admin'):
         if not user.school_id:
             raise PermissionDenied('No campus assigned to this administrator.')
         if requested_school_id:
-            try:
-                req_id = int(requested_school_id)
-            except (ValueError, TypeError):
-                raise PermissionDenied('Invalid campus identifier.')
-            if req_id != user.school_id:
+            if str(requested_school_id).lower() in ('all', 'all_campuses', '0'):
+                raise PermissionDenied('Principals may only access their own assigned campus.')
+            req_str = str(requested_school_id).strip()
+            is_match = False
+            if req_str.isdigit() and int(req_str) == user.school_id:
+                is_match = True
+            elif user.school and user.school.code.lower() == req_str.lower():
+                is_match = True
+            if not is_match:
                 # Anti-tampering check
                 raise PermissionDenied('Principals may only access their own assigned campus.')
-        return user.school
+        return False, user.school, School.objects.filter(pk=user.school_id)
 
     # Organisation Admin / Owner
     if user.role == 'organisation_admin':
         if not user.organisation_id:
             raise PermissionDenied('No organisation associated with account.')
         org_schools = schools_scope(user)
-        if requested_school_id:
-            try:
-                req_id = int(requested_school_id)
-                school = org_schools.filter(pk=req_id).first()
-                if not school:
-                    raise PermissionDenied('Campus outside authorised organisation.')
-                return school
-            except (ValueError, TypeError):
-                raise PermissionDenied('Invalid campus identifier.')
-        school = org_schools.first()
-        if not school:
+        if not org_schools.exists():
             raise NotFound('No accessible campus found for this organisation.')
-        return school
 
-    # Teacher (Allowed only if checking own performance)
+        if requested_school_id and str(requested_school_id).lower() in ('all', 'all_campuses', '0'):
+            return True, org_schools.first(), org_schools
+
+        if requested_school_id:
+            req_str = str(requested_school_id).strip()
+            school = None
+            if req_str.isdigit():
+                school = org_schools.filter(pk=int(req_str)).first()
+            if not school:
+                school = org_schools.filter(code__iexact=req_str).first()
+            if not school:
+                raise PermissionDenied('Campus outside authorised organisation.')
+            return False, school, org_schools.filter(pk=school.pk)
+
+        school = org_schools.first()
+        return False, school, org_schools.filter(pk=school.pk)
+
+    # Teacher
     if user.role == 'teacher':
+        if requested_school_id and str(requested_school_id).lower() in ('all', 'all_campuses'):
+            raise PermissionDenied('Teachers may only access their assigned campus.')
         if user.school:
-            return user.school
+            return False, user.school, School.objects.filter(pk=user.school_id)
         raise PermissionDenied('No campus assigned to this teacher.')
 
     # Accountant (Custom staff role)
     if getattr(user, 'position', '').lower() == 'accountant' or user.role == 'staff':
+        if requested_school_id and str(requested_school_id).lower() in ('all', 'all_campuses'):
+            raise PermissionDenied('Accountants may only access their assigned campus.')
         if requested_school_id and user.school_id and int(requested_school_id) != user.school_id:
             raise PermissionDenied('Accountants may only access their assigned campus.')
         if user.school:
-            return user.school
+            return False, user.school, School.objects.filter(pk=user.school_id)
 
     raise PermissionDenied('Access to Record module is restricted to school leadership.')
+
+
+def resolve_record_school(user, requested_school_id=None):
+    """Resolves and validates single target campus for Record / Teacher Performance actions."""
+    is_all, primary_school, schools_qs = resolve_record_schools(user, requested_school_id)
+    return primary_school
 
 
 def check_record_capability(user, school, capability_key):

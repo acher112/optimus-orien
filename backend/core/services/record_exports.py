@@ -48,6 +48,91 @@ def sanitize_export_filename(name):
     return clean.strip('._') or 'record_export'
 
 
+def _write_data_sheet(ws_data, columns, rows, thin_border=None):
+    """Fills an openpyxl worksheet with formatted data, headers, and column auto-widths."""
+    if thin_border is None:
+        thin_border = Border(
+            left=Side(style='thin', color='E2E8F0'),
+            right=Side(style='thin', color='E2E8F0'),
+            top=Side(style='thin', color='E2E8F0'),
+            bottom=Side(style='thin', color='E2E8F0')
+        )
+    ws_data.views.sheetView[0].showGridLines = True
+    ws_data.freeze_panes = 'A2'
+
+    header_font = Font(name='Segoe UI', size=10, bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='1E293B', end_color='1E293B', fill_type='solid')
+    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    data_font = Font(name='Segoe UI', size=9, color='0F172A')
+    currency_fmt = '#,##0.00'
+    date_fmt = 'yyyy-mm-dd'
+
+    # Write headers
+    ws_data.row_dimensions[1].height = 28
+    for col_idx, col in enumerate(columns, start=1):
+        cell = ws_data.cell(row=1, column=col_idx, value=col['label'])
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    # Write rows
+    for row_idx, r in enumerate(rows, start=2):
+        ws_data.row_dimensions[row_idx].height = 19
+        for col_idx, col in enumerate(columns, start=1):
+            key = col['key']
+            val = r.get(key) if isinstance(r, dict) else getattr(r, key, None)
+            c_type = col.get('type', 'text')
+
+            cell = ws_data.cell(row=row_idx, column=col_idx)
+            cell.font = data_font
+            cell.border = thin_border
+
+            if c_type == 'currency' and val is not None:
+                try:
+                    cell.value = float(val)
+                    cell.number_format = currency_fmt
+                    cell.alignment = Alignment(horizontal='right')
+                except (ValueError, TypeError):
+                    cell.value = sanitize_formula_injection(val)
+            elif c_type == 'number' and val is not None:
+                try:
+                    cell.value = float(val) if '.' in str(val) else int(val)
+                    cell.alignment = Alignment(horizontal='right')
+                except (ValueError, TypeError):
+                    cell.value = sanitize_formula_injection(val)
+            elif c_type == 'date' and val:
+                if isinstance(val, (date, datetime)):
+                    cell.value = val
+                else:
+                    try:
+                        cell.value = date.fromisoformat(str(val))
+                    except ValueError:
+                        cell.value = str(val)
+                cell.number_format = date_fmt
+                cell.alignment = Alignment(horizontal='center')
+            else:
+                cell.value = sanitize_formula_injection(val)
+                cell.alignment = Alignment(horizontal='left')
+
+    # Activate Auto-Filter across all data
+    if columns:
+        last_col_letter = get_column_letter(len(columns))
+        last_row_num = max(2, len(rows) + 1)
+        ws_data.auto_filter.ref = f"A1:{last_col_letter}{last_row_num}"
+
+        # Auto-fit column widths (with safety bounds 12..45)
+        for col_idx, col in enumerate(columns, start=1):
+            col_letter = get_column_letter(col_idx)
+            max_len = len(str(col.get('label', '')))
+            for r_idx in range(2, min(len(rows) + 2, 100)):
+                cv = ws_data.cell(row=r_idx, column=col_idx).value
+                if cv is not None:
+                    max_len = max(max_len, len(str(cv)))
+            ws_data.column_dimensions[col_letter].width = max(min(max_len + 4, 45), 12)
+
+
 def generate_record_excel_response(
     request,
     school,
@@ -58,6 +143,7 @@ def generate_record_excel_response(
     rows,
     totals_summary=None,
     period_label=None,
+    is_all=False,
 ):
     """Generates and streams a dual-sheet .xlsx response.
 
@@ -65,6 +151,7 @@ def generate_record_excel_response(
     - columns: [{'key': 'admission_number', 'label': 'Admission #', 'type': 'text'|'number'|'currency'|'date'}]
     - rows: list of dicts
     - totals_summary: dict of high-level totals for the Summary sheet
+    - is_all: boolean flag indicating consolidated multi-campus query
     """
     if len(rows) > MAX_RECORD_EXPORT_ROWS:
         return Response({
@@ -115,12 +202,14 @@ def generate_record_excel_response(
     cell_title.alignment = Alignment(horizontal='center', vertical='center')
     ws_summary.row_dimensions[1].height = 36
 
+    campus_label = 'All Campuses (Consolidated)' if is_all else f"{school.name} ({school.code})"
+
     # Summary Metadata
     summary_metadata = [
         ('Institution / Organisation', getattr(school.organisation, 'name', '')),
-        ('Campus', f"{school.name} ({school.code})"),
+        ('Campus', campus_label),
         ('Record Section', page_title),
-        ('Reporting Period', period_label or 'All Recorded History'),
+        ('Reporting Period', period_label or 'All Recorded History (Lifetime Archive)'),
         ('Generated By', f"{user.get_full_name() or user.username} [{user.role}]"),
         ('Generated At (Asia/Karachi)', now_str),
         ('Total Exported Rows', len(rows)),
@@ -209,79 +298,7 @@ def generate_record_excel_response(
     # SHEET 2: DATA
     # -------------------------------------------------------------
     ws_data = wb.create_sheet(title='Data')
-    ws_data.views.sheetView[0].showGridLines = True
-    ws_data.freeze_panes = 'A2'
-
-    header_font = Font(name='Segoe UI', size=10, bold=True, color='FFFFFF')
-    header_fill = PatternFill(start_color='1E293B', end_color='1E293B', fill_type='solid')
-    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
-    data_font = Font(name='Segoe UI', size=9, color='0F172A')
-    currency_fmt = '#,##0.00'
-    date_fmt = 'yyyy-mm-dd'
-
-    # Write headers
-    ws_data.row_dimensions[1].height = 28
-    for col_idx, col in enumerate(columns, start=1):
-        cell = ws_data.cell(row=1, column=col_idx, value=col['label'])
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_align
-        cell.border = thin_border
-
-    # Write rows
-    for row_idx, r in enumerate(rows, start=2):
-        ws_data.row_dimensions[row_idx].height = 19
-        for col_idx, col in enumerate(columns, start=1):
-            key = col['key']
-            val = r.get(key) if isinstance(r, dict) else getattr(r, key, None)
-            c_type = col.get('type', 'text')
-
-            cell = ws_data.cell(row=row_idx, column=col_idx)
-            cell.font = data_font
-            cell.border = thin_border
-
-            if c_type == 'currency' and val is not None:
-                try:
-                    cell.value = float(val)
-                    cell.number_format = currency_fmt
-                    cell.alignment = Alignment(horizontal='right')
-                except (ValueError, TypeError):
-                    cell.value = sanitize_formula_injection(val)
-            elif c_type == 'number' and val is not None:
-                try:
-                    cell.value = float(val) if '.' in str(val) else int(val)
-                    cell.alignment = Alignment(horizontal='right')
-                except (ValueError, TypeError):
-                    cell.value = sanitize_formula_injection(val)
-            elif c_type == 'date' and val:
-                if isinstance(val, (date, datetime)):
-                    cell.value = val
-                else:
-                    try:
-                        cell.value = date.fromisoformat(str(val))
-                    except ValueError:
-                        cell.value = str(val)
-                cell.number_format = date_fmt
-                cell.alignment = Alignment(horizontal='center')
-            else:
-                cell.value = sanitize_formula_injection(val)
-                cell.alignment = Alignment(horizontal='left')
-
-    # Activate Auto-Filter across all data
-    last_col_letter = get_column_letter(len(columns))
-    last_row_num = max(2, len(rows) + 1)
-    ws_data.auto_filter.ref = f"A1:{last_col_letter}{last_row_num}"
-
-    # Auto-fit column widths (with safety bounds 12..45)
-    for col_idx, col in enumerate(columns, start=1):
-        col_letter = get_column_letter(col_idx)
-        max_len = len(str(col.get('label', '')))
-        for r_idx in range(2, min(len(rows) + 2, 100)):
-            cv = ws_data.cell(row=r_idx, column=col_idx).value
-            if cv is not None:
-                max_len = max(max_len, len(str(cv)))
-        ws_data.column_dimensions[col_letter].width = max(min(max_len + 4, 45), 12)
+    _write_data_sheet(ws_data, columns, rows, thin_border)
 
     # Stream to memory
     stream = io.BytesIO()
@@ -294,11 +311,338 @@ def generate_record_excel_response(
         action='export_record',
         obj=school,
         changed_fields=['export'],
-        after={'page': page_code, 'row_count': len(rows), 'campus': school.code}
+        after={'page': page_code, 'row_count': len(rows), 'campus': 'all_campuses' if is_all else school.code}
     )
 
+    campus_slug = 'all_campuses' if is_all else school.code
     period_clean = sanitize_export_filename(period_label or 'all_periods')
-    filename = f"record_{page_code}_{school.code}_{period_clean}_{date_slug}.xlsx"
+    filename = f"record_{page_code}_{campus_slug}_{period_clean}_{date_slug}.xlsx"
+
+    response = HttpResponse(
+        stream.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+def generate_comprehensive_record_excel_response(request, school, schools, query_params, is_all=False):
+    """Generates an all-in-one multi-sheet Master Dossier (.xlsx) covering all record sections.
+
+    Supports complete lifetime history (3+ years) across:
+    - Sheet 1: Executive Summary & KPIs
+    - Sheet 2: Monthly Trends Rollup
+    - Sheet 3: Staff Records (if authorized)
+    - Sheet 4: Student Records (if authorized)
+    - Sheet 5: Fees & Collections (if authorized)
+    - Sheet 6: Income & Expenses (if authorized)
+    - Sheet 7: Salaries Register (if authorized, with masking for restricted roles)
+    """
+    from core.services.record_permissions import check_record_capability, can_view_salary_lines
+    from core.services.record_service import (
+        get_record_overview, get_staff_records, get_student_records,
+        get_fees_records, get_finance_records, get_salary_records
+    )
+
+    user = request.user
+    tz_karachi = ZoneInfo('Asia/Karachi')
+    now_karachi = datetime.now(tz_karachi)
+    now_str = now_karachi.strftime('%Y-%m-%d %H:%M:%S PKT')
+    date_slug = now_karachi.strftime('%Y%m%d')
+
+    # Gather data across permitted sections
+    overview = get_record_overview(school, query_params, user, is_all=is_all, schools=schools)
+    monthly_rows = overview.get('monthly_summary', [])
+
+    staff_rows = []
+    if check_record_capability(user, school, 'records.view_staff'):
+        staff_rows = get_staff_records(school, query_params, user, is_all=is_all, schools=schools)
+
+    student_rows = []
+    if check_record_capability(user, school, 'records.view_students'):
+        student_rows = get_student_records(school, query_params, is_all=is_all, schools=schools)
+
+    fee_rows = []
+    if check_record_capability(user, school, 'records.view_fees'):
+        fee_rows = get_fees_records(school, query_params, is_all=is_all, schools=schools)
+
+    finance_rows = []
+    if check_record_capability(user, school, 'records.view_finance'):
+        finance_rows = get_finance_records(school, query_params, is_all=is_all, schools=schools)
+
+    salary_rows = []
+    show_salary_lines = False
+    if check_record_capability(user, school, 'records.view_salaries'):
+        salary_rows = get_salary_records(school, query_params, user, is_all=is_all, schools=schools)
+        show_salary_lines = can_view_salary_lines(user, school)
+
+    total_rows = len(monthly_rows) + len(staff_rows) + len(student_rows) + len(fee_rows) + len(finance_rows) + len(salary_rows)
+    if total_rows > MAX_RECORD_EXPORT_ROWS:
+        return Response({
+            'detail': f'Total records across sections ({total_rows:,}) exceed the maximum export limit of {MAX_RECORD_EXPORT_ROWS:,} rows. Please narrow your date range.',
+            'code': 'export_limit_exceeded',
+            'limit': MAX_RECORD_EXPORT_ROWS,
+        }, status=413)
+
+    wb = openpyxl.Workbook()
+
+    # Styling Palette
+    purple_fill = PatternFill(start_color='6F42C1', end_color='6F42C1', fill_type='solid')
+    light_purple_fill = PatternFill(start_color='F3E8FF', end_color='F3E8FF', fill_type='solid')
+    card_header_fill = PatternFill(start_color='1E293B', end_color='1E293B', fill_type='solid')
+    subtle_gray_fill = PatternFill(start_color='F8FAFC', end_color='F8FAFC', fill_type='solid')
+
+    font_title = Font(name='Segoe UI', size=14, bold=True, color='FFFFFF')
+    font_section = Font(name='Segoe UI', size=11, bold=True, color='FFFFFF')
+    font_bold = Font(name='Segoe UI', size=10, bold=True, color='0F172A')
+    font_normal = Font(name='Segoe UI', size=10, color='334155')
+
+    thin_border = Border(
+        left=Side(style='thin', color='E2E8F0'),
+        right=Side(style='thin', color='E2E8F0'),
+        top=Side(style='thin', color='E2E8F0'),
+        bottom=Side(style='thin', color='E2E8F0')
+    )
+
+    # -------------------------------------------------------------
+    # SHEET 1: EXECUTIVE SUMMARY
+    # -------------------------------------------------------------
+    ws_summary = wb.active
+    ws_summary.title = 'Executive Summary'
+    ws_summary.views.sheetView[0].showGridLines = True
+
+    ws_summary.merge_cells('A1:D1')
+    cell_title = ws_summary['A1']
+    cell_title.value = "OPTIMUS ORIEN — MASTER RECORD DOSSIER (LIFETIME ARCHIVE)"
+    cell_title.font = font_title
+    cell_title.fill = purple_fill
+    cell_title.alignment = Alignment(horizontal='center', vertical='center')
+    ws_summary.row_dimensions[1].height = 36
+
+    campus_label = 'All Campuses (Consolidated)' if is_all else f"{school.name} ({school.code})"
+    period_label = query_params.get('period_label') or (
+        f"Month: {query_params.get('month')}" if query_params.get('month') else
+        (f"Range: {query_params.get('start_date')} to {query_params.get('end_date')}" if query_params.get('start_date') else "All Recorded Lifetime History (3+ Years)")
+    )
+
+    metadata = [
+        ('Institution / Organisation', getattr(school.organisation, 'name', '')),
+        ('Campus Scope', campus_label),
+        ('Dossier Type', 'Complete Multi-Section Master Dossier (.xlsx)'),
+        ('Reporting Period', period_label),
+        ('Generated By', f"{user.get_full_name() or user.username} [{user.role}]"),
+        ('Generated At (Asia/Karachi)', now_str),
+        ('Total Records Across Sheets', total_rows),
+    ]
+
+    ws_summary.cell(row=3, column=1, value='MASTER REPORT METADATA').font = font_section
+    ws_summary.cell(row=3, column=1).fill = card_header_fill
+    ws_summary.merge_cells('A3:D3')
+    ws_summary.row_dimensions[3].height = 22
+
+    for r_idx, (label, val) in enumerate(metadata, start=4):
+        ws_summary.row_dimensions[r_idx].height = 19
+        c1 = ws_summary.cell(row=r_idx, column=1, value=label)
+        c1.font = font_bold
+        c1.fill = subtle_gray_fill
+        c1.border = thin_border
+
+        ws_summary.merge_cells(start_row=r_idx, start_column=2, end_row=r_idx, end_column=4)
+        c2 = ws_summary.cell(row=r_idx, column=2, value=sanitize_formula_injection(val))
+        c2.font = font_normal
+        c2.border = thin_border
+
+    curr_row = 4 + len(metadata) + 1
+
+    # High-level KPIs section
+    kpis = overview.get('kpis', {})
+    kpi_items = [
+        ('Staff Active / Joined / Departed', f"{kpis.get('staff_active', 0):,} Active | {kpis.get('staff_joined', 0):,} Joined | {kpis.get('staff_left', 0):,} Left"),
+        ('Student Admissions & Departures', f"{kpis.get('students_admitted', 0):,} Admitted | {kpis.get('students_left', 0):,} Departed"),
+        ('Fees Total Billed (PKR)', float(kpis.get('fees_billed', 0))),
+        ('Fees Collected (PKR)', float(kpis.get('fees_collected', 0))),
+        ('Fees Outstanding / Defaulters (PKR)', float(kpis.get('fees_outstanding', 0))),
+        ('Total Operational Income (PKR)', float(kpis.get('total_income', 0))),
+        ('Total Operational Expenses (PKR)', float(kpis.get('total_expenses', 0))),
+        ('Net Institutional Balance (PKR)', float(kpis.get('net_balance', 0))),
+        ('Total Salaries Disbursed (PKR)', float(kpis.get('total_salaries', 0))),
+    ]
+
+    ws_summary.cell(row=curr_row, column=1, value='EXECUTIVE KEY PERFORMANCE INDICATORS').font = font_section
+    ws_summary.cell(row=curr_row, column=1).fill = card_header_fill
+    ws_summary.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=4)
+    ws_summary.row_dimensions[curr_row].height = 22
+    curr_row += 1
+
+    for k_label, k_val in kpi_items:
+        ws_summary.row_dimensions[curr_row].height = 20
+        c1 = ws_summary.cell(row=curr_row, column=1, value=k_label)
+        c1.font = font_bold
+        c1.fill = light_purple_fill
+        c1.border = thin_border
+
+        ws_summary.merge_cells(start_row=curr_row, start_column=2, end_row=curr_row, end_column=4)
+        c2 = ws_summary.cell(row=curr_row, column=2)
+        c2.font = font_bold
+        c2.border = thin_border
+        if isinstance(k_val, (int, float)):
+            c2.value = k_val
+            c2.number_format = '#,##0.00'
+            c2.alignment = Alignment(horizontal='right')
+        else:
+            c2.value = sanitize_formula_injection(k_val)
+            c2.alignment = Alignment(horizontal='left')
+        curr_row += 1
+
+    ws_summary.column_dimensions['A'].width = 34
+    ws_summary.column_dimensions['B'].width = 25
+    ws_summary.column_dimensions['C'].width = 25
+    ws_summary.column_dimensions['D'].width = 25
+
+    # -------------------------------------------------------------
+    # SHEET 2: MONTHLY TRENDS
+    # -------------------------------------------------------------
+    ws_monthly = wb.create_sheet(title='Monthly Trends')
+    monthly_cols = [
+        {'key': 'month', 'label': 'Billing Month', 'type': 'text'},
+        {'key': 'admitted', 'label': 'Admissions', 'type': 'number'},
+        {'key': 'left', 'label': 'Departures', 'type': 'number'},
+        {'key': 'collected', 'label': 'Fees Collected (PKR)', 'type': 'currency'},
+        {'key': 'income', 'label': 'Total Income (PKR)', 'type': 'currency'},
+        {'key': 'expense', 'label': 'Total Expense (PKR)', 'type': 'currency'},
+        {'key': 'net', 'label': 'Net Balance (PKR)', 'type': 'currency'},
+        {'key': 'salaries', 'label': 'Salaries Disbursed (PKR)', 'type': 'currency'},
+    ]
+    _write_data_sheet(ws_monthly, monthly_cols, monthly_rows, thin_border)
+
+    # -------------------------------------------------------------
+    # SHEET 3: STAFF RECORDS
+    # -------------------------------------------------------------
+    if check_record_capability(user, school, 'records.view_staff'):
+        ws_staff = wb.create_sheet(title='Staff Records')
+        staff_cols = [
+            {'key': 'staff_name', 'label': 'Staff Member', 'type': 'text'},
+        ]
+        if is_all:
+            staff_cols.append({'key': 'campus_name', 'label': 'Campus', 'type': 'text'})
+        staff_cols.extend([
+            {'key': 'position', 'label': 'Position / Title', 'type': 'text'},
+            {'key': 'role', 'label': 'Assigned Role', 'type': 'text'},
+            {'key': 'event_type_display', 'label': 'Event Type', 'type': 'text'},
+            {'key': 'effective_date', 'label': 'Effective Date', 'type': 'date'},
+            {'key': 'reason_category', 'label': 'Reason Category', 'type': 'text'},
+            {'key': 'from_campus', 'label': 'From Campus', 'type': 'text'},
+            {'key': 'to_campus', 'label': 'To Campus', 'type': 'text'},
+            {'key': 'notes', 'label': 'Notes / Remarks', 'type': 'text'},
+            {'key': 'recorded_by', 'label': 'Recorded By', 'type': 'text'},
+        ])
+        _write_data_sheet(ws_staff, staff_cols, staff_rows, thin_border)
+
+    # -------------------------------------------------------------
+    # SHEET 4: STUDENT RECORDS
+    # -------------------------------------------------------------
+    if check_record_capability(user, school, 'records.view_students'):
+        ws_students = wb.create_sheet(title='Student Records')
+        student_cols = [
+            {'key': 'admission_number', 'label': 'Admission #', 'type': 'text'},
+            {'key': 'student_name', 'label': 'Student Name', 'type': 'text'},
+        ]
+        if is_all:
+            student_cols.append({'key': 'campus_name', 'label': 'Campus', 'type': 'text'})
+        student_cols.extend([
+            {'key': 'class_name', 'label': 'Class', 'type': 'text'},
+            {'key': 'section_name', 'label': 'Section', 'type': 'text'},
+            {'key': 'session_name', 'label': 'Academic Year', 'type': 'text'},
+            {'key': 'event_type_display', 'label': 'Event Status', 'type': 'text'},
+            {'key': 'leave_subtype', 'label': 'Departure Type', 'type': 'text'},
+            {'key': 'effective_date', 'label': 'Effective Date', 'type': 'date'},
+            {'key': 'reason', 'label': 'Reason / Justification', 'type': 'text'},
+            {'key': 'notes', 'label': 'Notes', 'type': 'text'},
+            {'key': 'recorded_by', 'label': 'Recorded By', 'type': 'text'},
+        ])
+        _write_data_sheet(ws_students, student_cols, student_rows, thin_border)
+
+    # -------------------------------------------------------------
+    # SHEET 5: FEES & COLLECTIONS
+    # -------------------------------------------------------------
+    if check_record_capability(user, school, 'records.view_fees'):
+        ws_fees = wb.create_sheet(title='Fees & Collections')
+        fee_cols = [
+            {'key': 'receipt_number', 'label': 'Receipt #', 'type': 'text'},
+            {'key': 'admission_number', 'label': 'Admission #', 'type': 'text'},
+            {'key': 'student_name', 'label': 'Student Name', 'type': 'text'},
+        ]
+        if is_all:
+            fee_cols.append({'key': 'campus_name', 'label': 'Campus', 'type': 'text'})
+        fee_cols.extend([
+            {'key': 'amount', 'label': 'Amount Paid (PKR)', 'type': 'currency'},
+            {'key': 'method', 'label': 'Payment Mode', 'type': 'text'},
+            {'key': 'paid_on', 'label': 'Date Collected', 'type': 'date'},
+            {'key': 'reference', 'label': 'Reference / Cheque #', 'type': 'text'},
+            {'key': 'received_by', 'label': 'Received By', 'type': 'text'},
+        ])
+        _write_data_sheet(ws_fees, fee_cols, fee_rows, thin_border)
+
+    # -------------------------------------------------------------
+    # SHEET 6: INCOME & EXPENSES
+    # -------------------------------------------------------------
+    if check_record_capability(user, school, 'records.view_finance'):
+        ws_finance = wb.create_sheet(title='Income & Expenses')
+        finance_cols = [
+            {'key': 'kind', 'label': 'Kind (Income / Expense)', 'type': 'text'},
+            {'key': 'category_name', 'label': 'Accounting Category', 'type': 'text'},
+        ]
+        if is_all:
+            finance_cols.append({'key': 'campus_name', 'label': 'Campus', 'type': 'text'})
+        finance_cols.extend([
+            {'key': 'amount', 'label': 'Amount (PKR)', 'type': 'currency'},
+            {'key': 'date', 'label': 'Transaction Date', 'type': 'date'},
+            {'key': 'description', 'label': 'Description / Notes', 'type': 'text'},
+            {'key': 'created_by', 'label': 'Recorded By', 'type': 'text'},
+        ])
+        _write_data_sheet(ws_finance, finance_cols, finance_rows, thin_border)
+
+    # -------------------------------------------------------------
+    # SHEET 7: SALARIES REGISTER
+    # -------------------------------------------------------------
+    if check_record_capability(user, school, 'records.view_salaries'):
+        ws_salaries = wb.create_sheet(title='Salaries Register')
+        salary_cols = [
+            {'key': 'staff_name', 'label': 'Staff Member', 'type': 'text'},
+        ]
+        if is_all:
+            salary_cols.append({'key': 'campus_name', 'label': 'Campus', 'type': 'text'})
+        salary_cols.extend([
+            {'key': 'position', 'label': 'Position', 'type': 'text'},
+            {'key': 'month', 'label': 'Disbursement Month', 'type': 'text'},
+            {'key': 'gross', 'label': 'Gross Salary (PKR)' if show_salary_lines else 'Gross (Masked)', 'type': 'currency' if show_salary_lines else 'text'},
+            {'key': 'net', 'label': 'Net Disbursed (PKR)' if show_salary_lines else 'Net (Masked)', 'type': 'currency' if show_salary_lines else 'text'},
+            {'key': 'paid_on', 'label': 'Payment Date', 'type': 'date'},
+            {'key': 'method', 'label': 'Disbursement Mode', 'type': 'text'},
+        ])
+        _write_data_sheet(ws_salaries, salary_cols, salary_rows, thin_border)
+
+    # Stream to memory
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    # Audit log comprehensive export
+    record_event(
+        actor=user,
+        action='export_record_comprehensive',
+        obj=school,
+        changed_fields=['export_master_dossier'],
+        after={
+            'total_rows': total_rows,
+            'is_all': is_all,
+            'campus': 'all_campuses' if is_all else school.code
+        }
+    )
+
+    campus_slug = 'all_campuses' if is_all else school.code
+    period_clean = sanitize_export_filename(query_params.get('month') or query_params.get('start_date') or 'all_lifetime_history')
+    filename = f"record_master_dossier_{campus_slug}_{period_clean}_{date_slug}.xlsx"
 
     response = HttpResponse(
         stream.getvalue(),

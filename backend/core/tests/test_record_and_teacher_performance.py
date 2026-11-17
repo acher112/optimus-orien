@@ -420,3 +420,131 @@ class RecordAndTeacherPerformanceTests(TestCase):
                 content = f.read().lower()
                 for bad_word in forbidden_terms:
                     self.assertNotIn(bad_word, content, f"Forbidden punitive word '{bad_word}' found in {file_path}")
+
+    # -------------------------------------------------------------
+    # 13. Admin Multi-Campus Consolidated Queries (campus=all)
+    # -------------------------------------------------------------
+    def test_admin_all_campuses_consolidated_queries(self):
+        """Verifies owner and org admin can view consolidated records across all campuses."""
+        self.client.force_authenticate(user=self.owner)
+
+        # Seed sample lifecycle events across campuses
+        StaffLifecycleEvent.objects.create(
+            staff=self.staff_member, school=self.campus1, event_type='joined',
+            effective_date=date(2024, 1, 15)
+        )
+        StudentLifecycleEvent.objects.create(
+            student=self.student, school=self.campus1, academic_year=self.year,
+            school_class=self.school_class, event_type='admitted',
+            effective_date=date(2025, 8, 1)
+        )
+
+        # Overview with campus=all
+        res_overview = self.client.get('/api/v1/records/overview/?campus=all')
+        self.assertEqual(res_overview.status_code, 200)
+        self.assertIn('cards', res_overview.data)
+        self.assertIn('monthly_summary', res_overview.data)
+
+        # Staff records with campus=all
+        res_staff = self.client.get('/api/v1/records/staff/?campus=all')
+        self.assertEqual(res_staff.status_code, 200)
+        self.assertGreaterEqual(res_staff.data['total_count'], 1)
+        # Check that campus information is returned
+        first_staff = res_staff.data['rows'][0]
+        self.assertIn('campus_name', first_staff)
+        self.assertIn('campus_code', first_staff)
+
+        # Student records with campus=all
+        res_students = self.client.get('/api/v1/records/students/?campus=all')
+        self.assertEqual(res_students.status_code, 200)
+        self.assertGreaterEqual(res_students.data['total_count'], 1)
+        first_student = res_students.data['rows'][0]
+        self.assertIn('campus_name', first_student)
+
+        # Teacher Performance Overview with campus=all
+        res_tp = self.client.get('/api/v1/teacher-performance/overview/?campus=all')
+        self.assertEqual(res_tp.status_code, 200)
+        self.assertIn('teachers', res_tp.data)
+
+    # -------------------------------------------------------------
+    # 14. Principal Multi-Campus Tampering Denied (campus=all)
+    # -------------------------------------------------------------
+    def test_principal_all_campuses_tampering_denied(self):
+        """Verifies Principal attempting to access consolidated campus=all is rejected with 403."""
+        self.client.force_authenticate(user=self.principal1)
+
+        # Attempting campus=all on Overview
+        res_overview = self.client.get('/api/v1/records/overview/?campus=all')
+        self.assertEqual(res_overview.status_code, 403)
+
+        # Attempting campus=all on Students
+        res_students = self.client.get('/api/v1/records/students/?campus=all')
+        self.assertEqual(res_students.status_code, 403)
+
+        # Attempting campus=all on Teacher Performance
+        res_tp = self.client.get('/api/v1/teacher-performance/overview/?campus=all')
+        self.assertEqual(res_tp.status_code, 403)
+
+    # -------------------------------------------------------------
+    # 15. Class-Level Record Scoping & Filtering
+    # -------------------------------------------------------------
+    def test_class_level_record_scoping(self):
+        """Verifies filtering by specific class scopes student and fee records accurately."""
+        self.client.force_authenticate(user=self.owner)
+
+        StudentLifecycleEvent.objects.create(
+            student=self.student, school=self.campus1, academic_year=self.year,
+            school_class=self.school_class, event_type='admitted',
+            effective_date=date(2025, 8, 1)
+        )
+
+        # Filter by school_class
+        res_c1 = self.client.get(f'/api/v1/records/students/?campus=CC1&class={self.school_class.id}')
+        self.assertEqual(res_c1.status_code, 200)
+        for r in res_c1.data['rows']:
+            self.assertEqual(r['class_name'], self.school_class.name)
+
+        # Filter by fees with school_class
+        res_fees = self.client.get(f'/api/v1/records/fees/?campus=CC1&class={self.school_class.id}')
+        self.assertEqual(res_fees.status_code, 200)
+
+    # -------------------------------------------------------------
+    # 16. Comprehensive All-in-One Master Dossier Excel (.xlsx) Export
+    # -------------------------------------------------------------
+    def test_comprehensive_master_dossier_excel_export(self):
+        """Verifies multi-sheet master dossier (.xlsx) export covering all sections at once."""
+        self.client.force_authenticate(user=self.owner)
+
+        StaffLifecycleEvent.objects.create(
+            staff=self.staff_member, school=self.campus1, event_type='joined',
+            effective_date=date(2024, 1, 15)
+        )
+        StudentLifecycleEvent.objects.create(
+            student=self.student, school=self.campus1, academic_year=self.year,
+            school_class=self.school_class, event_type='admitted',
+            effective_date=date(2025, 8, 1)
+        )
+
+        res = self.client.get('/api/v1/records/export/?campus=all&page_type=comprehensive')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            res['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+        wb = openpyxl.load_workbook(io.BytesIO(res.content))
+        # Verify master dossier sheets exist
+        sheet_names = wb.sheetnames
+        self.assertIn('Executive Summary', sheet_names)
+        self.assertIn('Staff Records', sheet_names)
+        self.assertIn('Student Records', sheet_names)
+
+        # Verify summary sheet metadata mentions consolidated all campuses
+        ws_summary = wb['Executive Summary']
+        found_campus = False
+        for row in ws_summary.iter_rows(values_only=True):
+            for cell_val in row:
+                if cell_val and 'All Campuses' in str(cell_val):
+                    found_campus = True
+                    break
+        self.assertTrue(found_campus, "Master dossier summary sheet should reflect 'All Campuses (Consolidated)'.")

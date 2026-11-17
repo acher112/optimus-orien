@@ -280,6 +280,7 @@ export default function TeacherPerformance({
                 value={selectedCampus}
                 onChange={e => setSelectedCampus(e.target.value)}
               >
+                <option value="all">🌐 All Campuses (Consolidated)</option>
                 {campuses.map(c => (
                   <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
                 ))}
@@ -394,6 +395,7 @@ export default function TeacherPerformance({
               <thead>
                 <tr>
                   <th>Teacher Name</th>
+                  {selectedCampus === 'all' && <th>Campus</th>}
                   <th>Assigned Classes</th>
                   <th className="num-col">Evaluated Students</th>
                   <th className="num-col">Composite Average</th>
@@ -404,7 +406,7 @@ export default function TeacherPerformance({
               </thead>
               <tbody>
                 {overviewData.teachers.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No teachers match current criteria.</td></tr>
+                  <tr><td colSpan={selectedCampus === 'all' ? 8 : 7} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No teachers match current criteria.</td></tr>
                 ) : (
                   overviewData.teachers.map((t: any) => (
                     <tr key={t.teacher_id}>
@@ -412,6 +414,13 @@ export default function TeacherPerformance({
                         <strong>{t.name}</strong>
                         <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{t.email}</div>
                       </td>
+                      {selectedCampus === 'all' && (
+                        <td>
+                          <span className="record-badge" style={{ background: '#f3e8ff', color: '#6f42c1', fontWeight: 600 }}>
+                            {t.campus_name || t.campus_code || 'Main'}
+                          </span>
+                        </td>
+                      )}
                       <td>{t.assigned_classes_count} Classes</td>
                       <td className="num-col">{t.total_students_evaluated}</td>
                       <td className="num-col" style={{ fontWeight: 700, fontSize: '0.95rem' }}>

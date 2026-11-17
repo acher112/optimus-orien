@@ -64,15 +64,35 @@ def parse_date_filters(query_params):
     }
 
 
-def get_record_overview(school, query_params, user):
+def get_record_overview(school, query_params, user, is_all=False, schools=None):
     """Computes high-level summary cards, monthly rolling summary, and yearly table for Record Overview (A8)."""
     filters = parse_date_filters(query_params)
     start_date = filters['start_date']
     end_date = filters['end_date']
     year_id = filters['academic_year_id']
+    class_id = query_params.get('class') or query_params.get('school_class')
+
+    if is_all and schools is not None:
+        target_schools = schools
+        primary_school = schools.first()
+        school_filter = {'school__in': target_schools}
+        student_school_filter = {'student__school__in': target_schools}
+        school_name = 'All Campuses (Consolidated)'
+        school_code = 'ALL'
+        school_id = 'all'
+        campus_count = target_schools.count()
+    else:
+        target_schools = School.objects.filter(pk=school.pk) if hasattr(school, 'pk') else schools
+        primary_school = school
+        school_filter = {'school': primary_school}
+        student_school_filter = {'student__school': primary_school}
+        school_name = primary_school.name if primary_school else ''
+        school_code = primary_school.code if primary_school else ''
+        school_id = primary_school.id if primary_school else ''
+        campus_count = 1
 
     # 1. Staff Events Summary
-    staff_qs = StaffLifecycleEvent.objects.filter(school=school, is_void=False)
+    staff_qs = StaffLifecycleEvent.objects.filter(**school_filter, is_void=False)
     if start_date:
         staff_qs = staff_qs.filter(effective_date__gte=start_date)
     if end_date:
@@ -84,11 +104,13 @@ def get_record_overview(school, query_params, user):
         'terminated': staff_qs.filter(event_type='terminated').count(),
         'transferred': staff_qs.filter(event_type='transferred').count(),
         'retired': staff_qs.filter(event_type='retired').count(),
-        'active_current': StaffMember.objects.filter(school=school, status='active').count(),
+        'active_current': StaffMember.objects.filter(**school_filter, status='active').count(),
     }
 
     # 2. Student Events Summary
-    std_qs = StudentLifecycleEvent.objects.filter(school=school, is_void=False)
+    std_qs = StudentLifecycleEvent.objects.filter(**school_filter, is_void=False)
+    if class_id and str(class_id).isdigit():
+        std_qs = std_qs.filter(school_class_id=int(class_id))
     if start_date:
         std_qs = std_qs.filter(effective_date__gte=start_date)
     if end_date:
@@ -96,17 +118,24 @@ def get_record_overview(school, query_params, user):
     if year_id:
         std_qs = std_qs.filter(academic_year_id=year_id)
 
+    if class_id and str(class_id).isdigit():
+        active_student_count = Enrollment.objects.filter(school_class_id=int(class_id), end_date__isnull=True).count()
+    else:
+        active_student_count = Student.objects.filter(**school_filter, active=True).count()
+
     student_counts = {
         'admitted': std_qs.filter(event_type='admitted').count(),
         'promoted': std_qs.filter(event_type='promoted').count(),
         'not_promoted': std_qs.filter(event_type='not_promoted').count(),
         'passed_out': std_qs.filter(event_type='passed_out').count(),
         'left': std_qs.filter(event_type='left').count(),
-        'active_current': Student.objects.filter(school=school, active=True).count(),
+        'active_current': active_student_count,
     }
 
     # 3. Fees Summary (StudentFee + FeePayment)
-    fee_lines_qs = StudentFee.objects.filter(student__school=school)
+    fee_lines_qs = StudentFee.objects.filter(**student_school_filter)
+    if class_id and str(class_id).isdigit():
+        fee_lines_qs = fee_lines_qs.filter(student__enrollments__school_class_id=int(class_id), student__enrollments__end_date__isnull=True)
     if start_date:
         fee_lines_qs = fee_lines_qs.filter(due_date__gte=start_date)
     if end_date:
@@ -119,7 +148,9 @@ def get_record_overview(school, query_params, user):
     total_billed = fee_agg['billed'] or D_ZERO
     total_waived = fee_agg['discounts'] or D_ZERO
 
-    payments_qs = FeePayment.objects.filter(school=school, status='approved', voided=False)
+    payments_qs = FeePayment.objects.filter(**school_filter, status='approved', voided=False)
+    if class_id and str(class_id).isdigit():
+        payments_qs = payments_qs.filter(student__enrollments__school_class_id=int(class_id), student__enrollments__end_date__isnull=True)
     if start_date:
         payments_qs = payments_qs.filter(paid_on__gte=start_date)
     if end_date:
@@ -139,7 +170,7 @@ def get_record_overview(school, query_params, user):
     }
 
     # 4. Finance (Income vs Expense)
-    finance_qs = FinanceEntry.objects.filter(school=school, voided=False)
+    finance_qs = FinanceEntry.objects.filter(**school_filter, voided=False)
     if start_date:
         finance_qs = finance_qs.filter(date__gte=start_date)
     if end_date:
@@ -156,7 +187,7 @@ def get_record_overview(school, query_params, user):
     }
 
     # 5. Salaries
-    salaries_qs = SalaryRecord.objects.filter(school=school, status='paid')
+    salaries_qs = SalaryRecord.objects.filter(**school_filter, status='paid')
     if filters['month']:
         salaries_qs = salaries_qs.filter(month=filters['month'])
     salaries_agg = salaries_qs.aggregate(total=Sum('net'), count=Count('id'))
@@ -184,10 +215,10 @@ def get_record_overview(school, query_params, user):
     for m in sorted(distinct_months):
         m_income = finance_qs.filter(date__startswith=m, category__kind='income').aggregate(t=Sum('amount'))['t'] or D_ZERO
         m_expense = finance_qs.filter(date__startswith=m, category__kind='expense').aggregate(t=Sum('amount'))['t'] or D_ZERO
-        m_salaries = SalaryRecord.objects.filter(school=school, month=m, status='paid').aggregate(t=Sum('net'))['t'] or D_ZERO
-        m_collected = FeePayment.objects.filter(school=school, status='approved', voided=False, paid_on__startswith=m).aggregate(t=Sum('amount'))['t'] or D_ZERO
-        m_admitted = StudentLifecycleEvent.objects.filter(school=school, event_type='admitted', is_void=False, effective_date__startswith=m).count()
-        m_left = StudentLifecycleEvent.objects.filter(school=school, event_type='left', is_void=False, effective_date__startswith=m).count()
+        m_salaries = SalaryRecord.objects.filter(**school_filter, month=m, status='paid').aggregate(t=Sum('net'))['t'] or D_ZERO
+        m_collected = FeePayment.objects.filter(**school_filter, status='approved', voided=False, paid_on__startswith=m).aggregate(t=Sum('amount'))['t'] or D_ZERO
+        m_admitted = StudentLifecycleEvent.objects.filter(**school_filter, event_type='admitted', is_void=False, effective_date__startswith=m).count()
+        m_left = StudentLifecycleEvent.objects.filter(**school_filter, event_type='left', is_void=False, effective_date__startswith=m).count()
 
         monthly_rows.append({
             'month': m,
@@ -205,9 +236,9 @@ def get_record_overview(school, query_params, user):
     curr_year = timezone.localdate().year
     for y in [curr_year - 1, curr_year]:
         y_str = str(y)
-        y_admitted = StudentLifecycleEvent.objects.filter(school=school, event_type='admitted', is_void=False, effective_date__year=y).count()
-        y_left = StudentLifecycleEvent.objects.filter(school=school, event_type='left', is_void=False, effective_date__year=y).count()
-        y_collected = FeePayment.objects.filter(school=school, status='approved', voided=False, paid_on__year=y).aggregate(t=Sum('amount'))['t'] or D_ZERO
+        y_admitted = StudentLifecycleEvent.objects.filter(**school_filter, event_type='admitted', is_void=False, effective_date__year=y).count()
+        y_left = StudentLifecycleEvent.objects.filter(**school_filter, event_type='left', is_void=False, effective_date__year=y).count()
+        y_collected = FeePayment.objects.filter(**school_filter, status='approved', voided=False, paid_on__year=y).aggregate(t=Sum('amount'))['t'] or D_ZERO
         y_income = finance_qs.filter(date__year=y, category__kind='income').aggregate(t=Sum('amount'))['t'] or D_ZERO
         y_expense = finance_qs.filter(date__year=y, category__kind='expense').aggregate(t=Sum('amount'))['t'] or D_ZERO
         yearly_rows.append({
@@ -233,9 +264,11 @@ def get_record_overview(school, query_params, user):
 
     return {
         'meta': {
-            'school_id': school.id,
-            'school_name': school.name,
-            'school_code': school.code,
+            'school_id': school_id,
+            'school_name': school_name,
+            'school_code': school_code,
+            'is_all_campuses': is_all,
+            'campus_count': campus_count,
             'period_label': filters['month'] or (f"{start_date} to {end_date}" if start_date and end_date else 'All time'),
             'tz': 'Asia/Karachi',
         },
@@ -252,10 +285,14 @@ def get_record_overview(school, query_params, user):
     }
 
 
-def get_staff_records(school, query_params, user):
+def get_staff_records(school, query_params, user, is_all=False, schools=None):
     """Retrieves paginated and filtered staff lifecycle records (A3-A6)."""
-    qs = StaffLifecycleEvent.objects.filter(school=school, is_void=False).select_related(
-        'staff', 'from_campus', 'to_campus', 'reason_category', 'recorded_by'
+    if is_all and schools is not None:
+        qs = StaffLifecycleEvent.objects.filter(school__in=schools, is_void=False)
+    else:
+        qs = StaffLifecycleEvent.objects.filter(school=school, is_void=False)
+    qs = qs.select_related(
+        'school', 'staff', 'from_campus', 'to_campus', 'reason_category', 'recorded_by'
     )
 
     ev_type = query_params.get('event_type')
@@ -290,6 +327,9 @@ def get_staff_records(school, query_params, user):
 
         rows.append({
             'id': ev.id,
+            'campus_id': ev.school_id,
+            'campus_name': ev.school.name,
+            'campus_code': ev.school.code,
             'staff_id': ev.staff_id,
             'staff_name': ev.staff.full_name,
             'position': ev.staff.position,
@@ -308,10 +348,14 @@ def get_staff_records(school, query_params, user):
     return rows
 
 
-def get_student_records(school, query_params):
+def get_student_records(school, query_params, is_all=False, schools=None):
     """Retrieves paginated and filtered student lifecycle records (A3-A6)."""
-    qs = StudentLifecycleEvent.objects.filter(school=school, is_void=False).select_related(
-        'student', 'school_class', 'section', 'academic_year', 'reason_category', 'recorded_by'
+    if is_all and schools is not None:
+        qs = StudentLifecycleEvent.objects.filter(school__in=schools, is_void=False)
+    else:
+        qs = StudentLifecycleEvent.objects.filter(school=school, is_void=False)
+    qs = qs.select_related(
+        'school', 'student', 'school_class', 'section', 'academic_year', 'reason_category', 'recorded_by'
     )
 
     ev_type = query_params.get('event_type')
@@ -347,12 +391,15 @@ def get_student_records(school, query_params):
     for ev in qs:
         rows.append({
             'id': ev.id,
+            'campus_id': ev.school_id,
+            'campus_name': ev.school.name,
+            'campus_code': ev.school.code,
             'student_id': ev.student_id,
             'admission_number': ev.student.admission_number,
             'student_name': ev.student.full_name,
-            'class_name': ev.school_class.name,
+            'class_name': ev.school_class.name if ev.school_class else '',
             'section_name': ev.section.name if ev.section else '',
-            'session_name': ev.academic_year.name,
+            'session_name': ev.academic_year.name if ev.academic_year else '',
             'event_type': ev.event_type,
             'event_type_display': ev.get_event_type_display(),
             'leave_subtype': ev.leave_subtype,
@@ -365,27 +412,36 @@ def get_student_records(school, query_params):
     return rows
 
 
-def get_fees_records(school, query_params):
+def get_fees_records(school, query_params, is_all=False, schools=None):
     """Retrieves fee rolls, collections, and defaulters history (A3, A6)."""
     filters = parse_date_filters(query_params)
     defaulters_only = query_params.get('defaulters_only') in ('true', '1', 'True')
     payment_mode = query_params.get('payment_mode')
+    class_id = query_params.get('class') or query_params.get('school_class')
 
     if defaulters_only:
         # Outstanding dues
-        fee_qs = StudentFee.objects.filter(
-            student__school=school,
-            status__in=['unpaid', 'partial']
-        ).select_related('student', 'head').order_by('-due_date')
+        if is_all and schools is not None:
+            fee_qs = StudentFee.objects.filter(
+                student__school__in=schools,
+                status__in=['unpaid', 'partial']
+            )
+        else:
+            fee_qs = StudentFee.objects.filter(
+                student__school=school,
+                status__in=['unpaid', 'partial']
+            )
+        fee_qs = fee_qs.select_related('student', 'student__school', 'head').order_by('-due_date')
 
-        class_id = query_params.get('class')
         if class_id and str(class_id).isdigit():
             fee_qs = fee_qs.filter(student__enrollments__school_class_id=int(class_id), student__enrollments__end_date__isnull=True)
 
         rows = []
         for f in fee_qs[:500]:
+            c_name = f.student.school.name if f.student and f.student.school else ''
             rows.append({
                 'id': f.id,
+                'campus_name': c_name,
                 'admission_number': f.student.admission_number,
                 'student_name': f.student.full_name,
                 'fee_head': f.head.name,
@@ -399,9 +455,14 @@ def get_fees_records(school, query_params):
         return rows
 
     # Standard Payments History
-    pay_qs = FeePayment.objects.filter(school=school, status='approved', voided=False).select_related(
-        'student', 'received_by'
-    ).order_by('-paid_on', '-id')
+    if is_all and schools is not None:
+        pay_qs = FeePayment.objects.filter(school__in=schools, status='approved', voided=False)
+    else:
+        pay_qs = FeePayment.objects.filter(school=school, status='approved', voided=False)
+    pay_qs = pay_qs.select_related('student', 'student__school', 'school', 'received_by').order_by('-paid_on', '-id')
+
+    if class_id and str(class_id).isdigit():
+        pay_qs = pay_qs.filter(student__enrollments__school_class_id=int(class_id), student__enrollments__end_date__isnull=True)
 
     if payment_mode and payment_mode != 'all':
         pay_qs = pay_qs.filter(method=payment_mode)
@@ -412,8 +473,10 @@ def get_fees_records(school, query_params):
 
     rows = []
     for p in pay_qs[:1000]:
+        c_name = p.school.name if getattr(p, 'school', None) else (p.student.school.name if getattr(p, 'student', None) and p.student.school else '')
         rows.append({
             'id': p.id,
+            'campus_name': c_name,
             'receipt_number': p.receipt_number,
             'admission_number': p.student.admission_number,
             'student_name': p.student.full_name,
@@ -426,15 +489,17 @@ def get_fees_records(school, query_params):
     return rows
 
 
-def get_finance_records(school, query_params):
+def get_finance_records(school, query_params, is_all=False, schools=None):
     """Retrieves income & expense ledger transactions with category totals (A3, A6)."""
     filters = parse_date_filters(query_params)
     kind = query_params.get('kind')
     cat_id = query_params.get('category_id')
 
-    qs = FinanceEntry.objects.filter(school=school, voided=False).select_related(
-        'category', 'created_by'
-    ).order_by('-date', '-id')
+    if is_all and schools is not None:
+        qs = FinanceEntry.objects.filter(school__in=schools, voided=False)
+    else:
+        qs = FinanceEntry.objects.filter(school=school, voided=False)
+    qs = qs.select_related('school', 'category', 'created_by').order_by('-date', '-id')
 
     if kind in ('income', 'expense'):
         qs = qs.filter(category__kind=kind)
@@ -449,6 +514,7 @@ def get_finance_records(school, query_params):
     for fe in qs[:1000]:
         rows.append({
             'id': fe.id,
+            'campus_name': fe.school.name,
             'kind': fe.category.get_kind_display(),
             'category_name': fe.category.name,
             'amount': fe.amount,
@@ -459,22 +525,27 @@ def get_finance_records(school, query_params):
     return rows
 
 
-def get_salary_records(school, query_params, user):
+def get_salary_records(school, query_params, user, is_all=False, schools=None):
     """Retrieves monthly salary records with principal line item masking (A3, A5, A6)."""
     month = query_params.get('month')
-    qs = SalaryRecord.objects.filter(school=school, status='paid').select_related(
-        'staff'
-    ).order_by('staff__last_name', 'staff__first_name')
+    if is_all and schools is not None:
+        qs = SalaryRecord.objects.filter(school__in=schools, status='paid')
+        target_s = schools.first()
+    else:
+        qs = SalaryRecord.objects.filter(school=school, status='paid')
+        target_s = school
+    qs = qs.select_related('school', 'staff').order_by('staff__last_name', 'staff__first_name')
 
     if month:
         qs = qs.filter(month=month)
 
-    show_lines = can_view_salary_lines(user, school)
+    show_lines = can_view_salary_lines(user, target_s)
 
     rows = []
     for sr in qs[:500]:
         rows.append({
             'id': sr.id,
+            'campus_name': sr.school.name,
             'staff_name': sr.staff.full_name,
             'position': sr.staff.position,
             'month': sr.month,

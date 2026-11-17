@@ -43,8 +43,13 @@ export default function Record({
   );
 
   // Filters
+  const [periodPreset, setPeriodPreset] = useState<'all_time' | 'month' | 'range'>('all_time');
   const [monthFilter, setMonthFilter] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [searchFilter, setSearchFilter] = useState<string>('');
+  const [classFilter, setClassFilter] = useState<string>('');
+  const [classesList, setClassesList] = useState<{ id: number; name: string }[]>([]);
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
   const [defaultersOnly, setDefaultersOnly] = useState<boolean>(false);
   const [financeKind, setFinanceKind] = useState<string>('all');
@@ -55,8 +60,9 @@ export default function Record({
   const [tableRows, setTableRows] = useState<any[]>([]);
   const [salaryLinesUnlocked, setSalaryLinesUnlocked] = useState<boolean>(false);
 
-  // Modals
+  // Modals & Export Mode
   const [confirmExportModal, setConfirmExportModal] = useState<boolean>(false);
+  const [exportMode, setExportMode] = useState<'section' | 'comprehensive'>('section');
   const [createEventModal, setCreateEventModal] = useState<boolean>(false);
   const [createTargetType, setCreateTargetType] = useState<'staff' | 'student'>('staff');
   const [voidModal, setVoidModal] = useState<{ open: boolean; eventId: number | null; type: 'staff' | 'student' }>({
@@ -81,14 +87,41 @@ export default function Record({
     setActiveTab(getInitialTab());
   }, [page]);
 
+  // Fetch classes for active campus or all campuses
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const url = selectedCampus && selectedCampus !== 'all'
+          ? `/api/v1/classes/?school=${selectedCampus}`
+          : '/api/v1/classes/';
+        const res = await fetch(url, { credentials: 'include' });
+        if (res.ok) {
+          const json = await res.json();
+          const items = Array.isArray(json) ? json : (json.results || []);
+          setClassesList(items);
+        }
+      } catch (e) {
+        console.error('Failed to load classes for record filter', e);
+      }
+    };
+    fetchClasses();
+  }, [selectedCampus]);
+
   // Fetch data
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const qParams = new URLSearchParams();
       if (selectedCampus) qParams.set('campus', selectedCampus);
-      if (monthFilter) qParams.set('month', monthFilter);
       if (searchFilter) qParams.set('search', searchFilter);
+      if (classFilter) qParams.set('class', classFilter);
+
+      if (periodPreset === 'month' && monthFilter) {
+        qParams.set('month', monthFilter);
+      } else if (periodPreset === 'range') {
+        if (startDate) qParams.set('start_date', startDate);
+        if (endDate) qParams.set('end_date', endDate);
+      }
 
       if (activeTab === 'overview') {
         const res = await fetch(`/api/v1/records/overview/?${qParams.toString()}`, { credentials: 'include' });
@@ -137,23 +170,40 @@ export default function Record({
     } finally {
       setLoading(false);
     }
-  }, [activeTab, selectedCampus, monthFilter, searchFilter, eventTypeFilter, defaultersOnly, financeKind, notify]);
+  }, [activeTab, selectedCampus, periodPreset, monthFilter, startDate, endDate, searchFilter, classFilter, eventTypeFilter, defaultersOnly, financeKind, notify]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   // Handle Export Download
-  const handleExport = async () => {
+  const handleExport = async (overrideMode?: 'section' | 'comprehensive') => {
+    const mode = overrideMode || exportMode;
     setConfirmExportModal(false);
     try {
       const qParams = new URLSearchParams();
       if (selectedCampus) qParams.set('campus', selectedCampus);
-      if (monthFilter) qParams.set('month', monthFilter);
       if (searchFilter) qParams.set('search', searchFilter);
-      qParams.set('page_type', activeTab);
+      if (classFilter) qParams.set('class', classFilter);
 
-      notify('Preparing secure Excel export...', 'info');
+      if (periodPreset === 'month' && monthFilter) {
+        qParams.set('month', monthFilter);
+        qParams.set('period_label', `Month_${monthFilter}`);
+      } else if (periodPreset === 'range') {
+        if (startDate) qParams.set('start_date', startDate);
+        if (endDate) qParams.set('end_date', endDate);
+        qParams.set('period_label', `${startDate}_to_${endDate}`);
+      } else {
+        qParams.set('period_label', 'lifetime_complete_archive');
+      }
+
+      if (mode === 'comprehensive') {
+        qParams.set('page_type', 'comprehensive');
+      } else {
+        qParams.set('page_type', activeTab);
+      }
+
+      notify(`Preparing ${mode === 'comprehensive' ? 'All-in-One Comprehensive Master Dossier (.xlsx)' : 'section export'}...`, 'info');
       const res = await fetch(`/api/v1/records/export/?${qParams.toString()}`, { credentials: 'include' });
       if (!res.ok) {
         const errJson = await res.json().catch(() => null);
@@ -162,7 +212,7 @@ export default function Record({
 
       const blob = await res.blob();
       const contentDisposition = res.headers.get('content-disposition');
-      let filename = `record_${activeTab}_export.xlsx`;
+      let filename = mode === 'comprehensive' ? 'record_master_dossier.xlsx' : `record_${activeTab}_export.xlsx`;
       if (contentDisposition) {
         const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
         if (match && match[1]) filename = match[1].replace(/['"]/g, '').trim();
@@ -235,20 +285,31 @@ export default function Record({
                 className="record-select"
                 value={selectedCampus}
                 onChange={e => setSelectedCampus(e.target.value)}
+                style={{ fontWeight: 600 }}
               >
+                <option value="all">🌐 All Campuses (Consolidated)</option>
                 {campuses.map(c => (
                   <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
                 ))}
               </select>
             )}
             <button
+              className="record-btn-secondary"
+              onClick={() => { setExportMode('comprehensive'); setConfirmExportModal(true); }}
+              title="Download full multi-year archive covering Staff, Students, Fees, Finance & Salaries in a single multi-sheet Excel dossier"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px' }}
+            >
+              <Download size={15} color="#6f42c1" />
+              <span style={{ fontWeight: 600, color: '#6f42c1' }}>Master Dossier (.xlsx)</span>
+            </button>
+            <button
               className="record-download-btn"
               disabled={getRowCount() === 0 || loading}
-              onClick={() => setConfirmExportModal(true)}
-              title={getRowCount() === 0 ? 'No rows match current filters' : 'Export all filtered rows to Excel'}
+              onClick={() => { setExportMode('section'); setConfirmExportModal(true); }}
+              title={getRowCount() === 0 ? 'No rows match current filters' : 'Export all filtered rows for current tab to Excel'}
             >
               <Download size={16} />
-              <span>Download Excel (.xlsx)</span>
+              <span>Download Tab (.xlsx)</span>
               <span className="record-count-badge">{getRowCount()} rows</span>
             </button>
           </div>
@@ -309,16 +370,69 @@ export default function Record({
               className="record-input"
               value={searchFilter}
               onChange={e => setSearchFilter(e.target.value)}
-              style={{ width: '220px' }}
+              style={{ width: '200px' }}
             />
 
-            <input
-              type="month"
-              className="record-input"
-              value={monthFilter}
-              onChange={e => setMonthFilter(e.target.value)}
-              title="Filter by month (YYYY-MM)"
-            />
+            {/* Longitudinal Archive Period Preset */}
+            <select
+              className="record-select"
+              value={periodPreset}
+              onChange={e => setPeriodPreset(e.target.value as any)}
+              title="Select reporting timeframe (All Time for complete lifetime archive)"
+              style={{ fontWeight: 600, color: '#334155' }}
+            >
+              <option value="all_time">📅 All Time (Lifetime Archive)</option>
+              <option value="month">🗓️ Specific Month</option>
+              <option value="range">📆 Custom Date Range</option>
+            </select>
+
+            {periodPreset === 'month' && (
+              <input
+                type="month"
+                className="record-input"
+                value={monthFilter}
+                onChange={e => setMonthFilter(e.target.value)}
+                title="Filter by month (YYYY-MM)"
+              />
+            )}
+
+            {periodPreset === 'range' && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <input
+                  type="date"
+                  className="record-input"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  title="Archive Start Date"
+                  style={{ width: '135px' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>to</span>
+                <input
+                  type="date"
+                  className="record-input"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  title="Archive End Date"
+                  style={{ width: '135px' }}
+                />
+              </div>
+            )}
+
+            {/* Class Filter */}
+            {(activeTab === 'students' || activeTab === 'fees' || activeTab === 'overview') && (
+              <select
+                className="record-select"
+                value={classFilter}
+                onChange={e => setClassFilter(e.target.value)}
+                title="Filter by Class"
+                style={{ minWidth: '130px' }}
+              >
+                <option value="">All Classes</option>
+                {classesList.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            )}
 
             {(activeTab === 'staff' || activeTab === 'students') && (
               <select
@@ -479,6 +593,7 @@ export default function Record({
             <thead>
               <tr>
                 <th>Staff Member</th>
+                {selectedCampus === 'all' && <th>Campus</th>}
                 <th>Position</th>
                 <th>Event Type</th>
                 <th>Effective Date</th>
@@ -491,11 +606,18 @@ export default function Record({
             </thead>
             <tbody>
               {tableRows.length === 0 ? (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No staff lifecycle events found.</td></tr>
+                <tr><td colSpan={selectedCampus === 'all' ? 10 : 9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No staff lifecycle events found.</td></tr>
               ) : (
                 tableRows.map((r: any) => (
                   <tr key={r.id}>
                     <td><strong>{r.staff_name}</strong></td>
+                    {selectedCampus === 'all' && (
+                      <td>
+                        <span className="record-badge" style={{ background: '#f3e8ff', color: '#6f42c1', fontWeight: 600 }}>
+                          {r.campus_name || r.campus_code || 'Main'}
+                        </span>
+                      </td>
+                    )}
                     <td>{r.position}</td>
                     <td>
                       <span className={`record-status-pill ${r.event_type === 'joined' ? 'status-on-track' : r.event_type === 'terminated' ? 'status-needs-support' : 'status-watch'}`}>
@@ -532,6 +654,7 @@ export default function Record({
               <tr>
                 <th>Admission #</th>
                 <th>Student Name</th>
+                {selectedCampus === 'all' && <th>Campus</th>}
                 <th>Class & Section</th>
                 <th>Session</th>
                 <th>Event Status</th>
@@ -544,12 +667,19 @@ export default function Record({
             </thead>
             <tbody>
               {tableRows.length === 0 ? (
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No student academic lifecycle records found.</td></tr>
+                <tr><td colSpan={selectedCampus === 'all' ? 11 : 10} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No student academic lifecycle records found.</td></tr>
               ) : (
                 tableRows.map((r: any) => (
                   <tr key={r.id}>
                     <td><code>{r.admission_number}</code></td>
                     <td><strong>{r.student_name}</strong></td>
+                    {selectedCampus === 'all' && (
+                      <td>
+                        <span className="record-badge" style={{ background: '#f3e8ff', color: '#6f42c1', fontWeight: 600 }}>
+                          {r.campus_name || r.campus_code || 'Main'}
+                        </span>
+                      </td>
+                    )}
                     <td>{r.class_name} {r.section_name && `(${r.section_name})`}</td>
                     <td>{r.session_name}</td>
                     <td>
@@ -587,6 +717,7 @@ export default function Record({
                 <tr>
                   <th>Admission #</th>
                   <th>Student Name</th>
+                  {selectedCampus === 'all' && <th>Campus</th>}
                   <th>Fee Head</th>
                   <th>Period</th>
                   <th className="num-col">Due Date</th>
@@ -600,6 +731,7 @@ export default function Record({
                   <th>Receipt #</th>
                   <th>Admission #</th>
                   <th>Student Name</th>
+                  {selectedCampus === 'all' && <th>Campus</th>}
                   <th className="num-col">Amount Paid</th>
                   <th>Payment Mode</th>
                   <th>Date Collected</th>
@@ -610,7 +742,7 @@ export default function Record({
             </thead>
             <tbody>
               {tableRows.length === 0 ? (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No fee payment or defaulter records found.</td></tr>
+                <tr><td colSpan={selectedCampus === 'all' ? 10 : 9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No fee payment or defaulter records found.</td></tr>
               ) : (
                 tableRows.map((r: any) => (
                   <tr key={r.id}>
@@ -618,6 +750,13 @@ export default function Record({
                       <>
                         <td><code>{r.admission_number}</code></td>
                         <td><strong>{r.student_name}</strong></td>
+                        {selectedCampus === 'all' && (
+                          <td>
+                            <span className="record-badge" style={{ background: '#f3e8ff', color: '#6f42c1', fontWeight: 600 }}>
+                              {r.campus_name || r.campus_code || 'Main'}
+                            </span>
+                          </td>
+                        )}
                         <td>{r.fee_head}</td>
                         <td>{r.period}</td>
                         <td className="num-col">{r.due_date}</td>
@@ -635,6 +774,13 @@ export default function Record({
                         <td><code>{r.receipt_number}</code></td>
                         <td>{r.admission_number}</td>
                         <td><strong>{r.student_name}</strong></td>
+                        {selectedCampus === 'all' && (
+                          <td>
+                            <span className="record-badge" style={{ background: '#f3e8ff', color: '#6f42c1', fontWeight: 600 }}>
+                              {r.campus_name || r.campus_code || 'Main'}
+                            </span>
+                          </td>
+                        )}
                         <td className="num-col" style={{ color: '#059669', fontWeight: 700 }}>
                           PKR {Number(r.amount).toLocaleString()}
                         </td>
@@ -659,6 +805,7 @@ export default function Record({
             <thead>
               <tr>
                 <th>Transaction Date</th>
+                {selectedCampus === 'all' && <th>Campus</th>}
                 <th>Type</th>
                 <th>Accounting Category</th>
                 <th className="num-col">Amount (PKR)</th>
@@ -668,11 +815,18 @@ export default function Record({
             </thead>
             <tbody>
               {tableRows.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No finance transactions found.</td></tr>
+                <tr><td colSpan={selectedCampus === 'all' ? 7 : 6} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No finance transactions found.</td></tr>
               ) : (
                 tableRows.map((r: any) => (
                   <tr key={r.id}>
                     <td>{r.date}</td>
+                    {selectedCampus === 'all' && (
+                      <td>
+                        <span className="record-badge" style={{ background: '#f3e8ff', color: '#6f42c1', fontWeight: 600 }}>
+                          {r.campus_name || r.campus_code || 'Main'}
+                        </span>
+                      </td>
+                    )}
                     <td>
                       <span className={`record-status-pill ${r.kind === 'Income' ? 'status-on-track' : 'status-needs-support'}`}>
                         {r.kind}
@@ -708,6 +862,7 @@ export default function Record({
               <thead>
                 <tr>
                   <th>Staff Member</th>
+                  {selectedCampus === 'all' && <th>Campus</th>}
                   <th>Position</th>
                   <th>Month</th>
                   <th className="num-col">Basic Salary</th>
@@ -719,11 +874,18 @@ export default function Record({
               </thead>
               <tbody>
                 {tableRows.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No salary records found for this period.</td></tr>
+                  <tr><td colSpan={selectedCampus === 'all' ? 9 : 8} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>No salary records found for this period.</td></tr>
                 ) : (
                   tableRows.map((r: any) => (
                     <tr key={r.id}>
                       <td><strong>{r.staff_name}</strong></td>
+                      {selectedCampus === 'all' && (
+                        <td>
+                          <span className="record-badge" style={{ background: '#f3e8ff', color: '#6f42c1', fontWeight: 600 }}>
+                            {r.campus_name || r.campus_code || 'Main'}
+                          </span>
+                        </td>
+                      )}
                       <td>{r.position}</td>
                       <td>{r.month}</td>
                       <td className="num-col">{r.basic !== null ? `PKR ${Number(r.basic).toLocaleString()}` : '***'}</td>
@@ -745,30 +907,81 @@ export default function Record({
       {/* EXPORT CONFIRMATION MODAL */}
       {confirmExportModal && (
         <div className="record-modal-overlay">
-          <div className="record-modal">
+          <div className="record-modal" style={{ maxWidth: '520px' }}>
             <div className="record-modal-header">
               <h3>Confirm Secure Data Export</h3>
               <button className="record-btn-secondary" style={{ padding: '4px', border: 'none' }} onClick={() => setConfirmExportModal(false)}>
                 <X size={18} />
               </button>
             </div>
-            <div className="record-modal-body">
-              <p style={{ margin: 0, fontSize: '0.92rem', color: '#334155' }}>
-                You are about to export <strong>{getRowCount()} rows</strong> of operational, financial, and personal history for <strong>{activeTab.toUpperCase()}</strong>.
-              </p>
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', fontSize: '0.84rem', color: '#64748b' }}>
-                • File format: <strong>.xlsx (Dual-Sheet: Summary & Data)</strong><br />
-                • Formula-injection protection enabled.<br />
-                • Personal and financial confidentiality rules applied.<br />
-                • Operation will be logged in the system audit trail.
+            <div className="record-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+                  Choose Export Package:
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 12px', border: exportMode === 'section' ? '2px solid #6f42c1' : '1px solid #e2e8f0', borderRadius: '10px', background: exportMode === 'section' ? '#f5f3ff' : '#ffffff', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="export_package"
+                      checked={exportMode === 'section'}
+                      onChange={() => setExportMode('section')}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
+                        Current Section Only ({activeTab.toUpperCase()})
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        Exports {getRowCount()} filtered rows with Summary and Data worksheets.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 12px', border: exportMode === 'comprehensive' ? '2px solid #6f42c1' : '1px solid #e2e8f0', borderRadius: '10px', background: exportMode === 'comprehensive' ? '#f5f3ff' : '#ffffff', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="export_package"
+                      checked={exportMode === 'comprehensive'}
+                      onChange={() => setExportMode('comprehensive')}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
+                        ⭐ All-in-One Comprehensive Master Dossier (.xlsx)
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        Complete multi-year archive: Summary, Trends, Staff, Students, Fees, Finance & Salaries in one workbook.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Scope Breakdown */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', fontSize: '0.82rem', color: '#334155' }}>
+                <div style={{ marginBottom: '4px' }}>
+                  <strong>Campus Scope:</strong> {selectedCampus === 'all' ? 'All Campuses (Consolidated Multi-Branch)' : (campuses.find(c => String(c.id) === selectedCampus)?.name || `Campus ${selectedCampus}`)}
+                </div>
+                {classFilter && (
+                  <div style={{ marginBottom: '4px' }}>
+                    <strong>Target Class:</strong> {classesList.find(c => String(c.id) === classFilter)?.name || `Class #${classFilter}`}
+                  </div>
+                )}
+                <div style={{ marginBottom: '4px' }}>
+                  <strong>Archive Period:</strong> {periodPreset === 'all_time' ? 'All Recorded History (Lifetime Archive — 3+ Years)' : periodPreset === 'month' ? `Month: ${monthFilter || 'Current'}` : `Date Range: ${startDate || 'Start'} to ${endDate || 'Present'}`}
+                </div>
+                <div style={{ color: '#059669', fontWeight: 600, marginTop: '6px' }}>
+                  ✓ Formula-injection protection enabled &bull; Streamed securely &bull; Audited
+                </div>
               </div>
             </div>
             <div className="record-modal-footer">
               <button className="record-btn-secondary" onClick={() => setConfirmExportModal(false)}>
                 Cancel
               </button>
-              <button className="record-btn-primary" onClick={handleExport}>
-                Proceed with Download
+              <button className="record-btn-primary" onClick={() => handleExport()}>
+                {exportMode === 'comprehensive' ? 'Download Master Dossier (.xlsx)' : 'Download Section (.xlsx)'}
               </button>
             </div>
           </div>
