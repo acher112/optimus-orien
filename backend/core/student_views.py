@@ -604,11 +604,11 @@ def student_profile(request):
     grades = Grade.objects.filter(student=student).select_related('assessment__subject').order_by('-assessment__date')[:8]
     for g in grades:
         max_m = g.assessment.max_marks or 100
-        pct = round((g.marks / max_m * 100), 1) if max_m else None
+        pct = round((float(g.marks) / float(max_m) * 100), 1) if (max_m and g.marks is not None) else None
         recent_grades.append({
             'assessment_title': g.assessment.title,
             'subject_name': g.assessment.subject.name if g.assessment.subject else 'General',
-            'marks': float(g.marks),
+            'marks': float(g.marks) if g.marks is not None else None,
             'max_marks': float(max_m),
             'percentage': pct,
             'date': g.assessment.date.isoformat() if g.assessment.date else None

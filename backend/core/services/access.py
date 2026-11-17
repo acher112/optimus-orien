@@ -240,7 +240,7 @@ def queryset_for(user, model):
   if user.role in ('student', 'parent') and not user.is_superuser:
    return ReviewCase.objects.none()
   q=ReviewCase.objects.filter(school__in=schools)
-  if user.role=='organisation_admin' and not user.is_superuser and not user.organisation.allow_org_admin_student_access:return q.none()
+  if user.role=='organisation_admin' and not user.is_superuser and not getattr(user.organisation, 'allow_org_admin_student_access', False):return q.none()
   if user.role=='teacher' and not user.is_superuser:
    from core.services.teacher_scope import get_teacher_scope
    scope=get_teacher_scope(user)
@@ -253,7 +253,7 @@ def queryset_for(user, model):
   if user.role in ('student', 'parent') and not user.is_superuser:
    return Intervention.objects.none()
   q=Intervention.objects.filter(case__school__in=schools)
-  if user.role=='organisation_admin' and not user.is_superuser and not user.organisation.allow_org_admin_student_access:return q.none()
+  if user.role=='organisation_admin' and not user.is_superuser and not getattr(user.organisation, 'allow_org_admin_student_access', False):return q.none()
   if user.role=='teacher' and not user.is_superuser:
    from core.services.teacher_scope import get_teacher_scope
    scope=get_teacher_scope(user)

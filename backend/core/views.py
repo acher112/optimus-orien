@@ -1782,7 +1782,13 @@ def student_stats(students,classes=None):
  grades=Grade.objects.filter(student_id__in=ids,assessment__published=True)
  if classes is not None:grades=grades.filter(assessment__school_class__in=classes)
  grades=grades.select_related('assessment')
- percents=[float(g.marks/g.assessment.max_marks*100) for g in grades if g.assessment.max_marks]
+ percents=[]
+ for g in grades:
+  if g.marks is not None and getattr(g, 'assessment', None) and getattr(g.assessment, 'max_marks', None) and g.assessment.max_marks > 0:
+   try:
+    percents.append(float(g.marks / g.assessment.max_marks * 100))
+   except (TypeError, ZeroDivisionError, ValueError):
+    pass
  attendance=Attendance.objects.filter(student_id__in=ids)
  if classes is not None:attendance=attendance.filter(school_class__in=classes)
  recorded=attendance.count();present=attendance.filter(status__in=['present','late']).count()
@@ -1810,31 +1816,61 @@ def dashboard(request):
   else:
    target_school_id = 0
 
+ if target_school_id is None:
+  target_school_id = 0
+
  from core.services.cache_service import get_or_set_dashboard_cache
 
  def _compute_dashboard():
-  stats=student_stats(students,classes)
-  cases=queryset_for(u,ReviewCase) if u.role not in ('parent','student') else ReviewCase.objects.none()
-  school_items=[]
-  for school in schools[:20]:
-   scoped_students=students.filter(school=school)
-   school_items.append({'id':school.id,'name':school.name,'principal_name':resolve_school_principal_name(school),'students':scoped_students.count(),**student_stats(scoped_students,classes.filter(school=school))})
-  recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name','student__school__name'))
-  recent=[{**x,'student_name':f"{x.pop('student__first_name')} {x.pop('student__last_name')}",'school_name':x.pop('student__school__name','')} for x in recent]
-  recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
-  return {
-   'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':StaffMember.objects.filter(school__in=schools,status='active').count()},
-   'stats':stats,
-   'schools':school_items,
-   'recent_cases':recent,
-   'recent_students':recent_students,
-   'attention':cases.filter(priority='high').exclude(status='resolved').count(),
-  }
+  try:
+   stats=student_stats(students,classes)
+   cases=queryset_for(u,ReviewCase) if u.role not in ('parent','student') else ReviewCase.objects.none()
+   school_items=[]
+   for school in schools[:20]:
+    scoped_students=students.filter(school=school)
+    school_items.append({'id':school.id,'name':school.name,'principal_name':resolve_school_principal_name(school),'students':scoped_students.count(),**student_stats(scoped_students,classes.filter(school=school))})
+   recent=list(cases.order_by('-updated_at')[:6].values('id','title','status','priority','student_id','student__first_name','student__last_name','student__school__name'))
+   recent=[{**x,'student_name':f"{x.pop('student__first_name') or ''} {x.pop('student__last_name') or ''}".strip(),'school_name':x.pop('student__school__name','') or ''} for x in recent]
+   recent_students=list(students.order_by('-id')[:7].values('id','first_name','last_name','admission_number','school__name'))
+   return {
+    'counts':{'students':students.count(),'schools':schools.count(),'classes':classes.count(),'open_cases':cases.exclude(status='resolved').count(),'teachers':User.objects.filter(school__in=schools,role='teacher').count(),'employees':StaffMember.objects.filter(school__in=schools,status='active').count()},
+    'stats':stats,
+    'schools':school_items,
+    'recent_cases':recent,
+    'recent_students':recent_students,
+    'attention':cases.filter(priority='high').exclude(status='resolved').count(),
+   }
+  except Exception as e:
+   import logging
+   logging.getLogger('core').exception(f"Error computing dashboard for user {u.id}: {e}")
+   return {
+    'counts':{
+     'students':students.count() if hasattr(students, 'count') else 0,
+     'schools':schools.count() if hasattr(schools, 'count') else 0,
+     'classes':classes.count() if hasattr(classes, 'count') else 0,
+     'open_cases':0,
+     'teachers':0,
+     'employees':0
+    },
+    'stats':{'academic_average':None,'grade_records':0,'attendance_rate':None,'attendance_records':0},
+    'schools':[],
+    'recent_cases':[],
+    'recent_students':[],
+    'attention':0,
+   }
 
  org_id = u.organisation_id or 0
- base_data, _ = get_or_set_dashboard_cache(org_id, target_school_id, u.role, _compute_dashboard)
- resp = dict(base_data)
- resp['recent_notifications'] = list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))
+ try:
+  base_data, _ = get_or_set_dashboard_cache(org_id, target_school_id, u.role, _compute_dashboard)
+  resp = dict(base_data)
+ except Exception:
+  resp = _compute_dashboard()
+
+ try:
+  resp['recent_notifications'] = list(Notification.objects.filter(user=u,read=False).order_by('-created_at')[:5].values('id','title','body'))
+ except Exception:
+  resp['recent_notifications'] = []
+
  resp = Response(resp)
  resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
  resp['Pragma'] = 'no-cache'
@@ -1849,7 +1885,7 @@ def export_students(request):
  if request.user.role == 'teacher':
   if not getattr(request.user.organisation, 'teachers_can_export', True):
    raise PermissionDenied('Exporting is disabled for teachers')
- if request.user.role=='organisation_admin' and not request.user.organisation.allow_org_admin_student_access:
+ if request.user.role=='organisation_admin' and not getattr(request.user.organisation, 'allow_org_admin_student_access', False):
   raise PermissionDenied('Individual student export requires explicit organisation policy')
  fmt=request.query_params.get('format') or 'csv'
  from core.services.exports import export_response

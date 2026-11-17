@@ -666,7 +666,7 @@ def exam_results_sheet(request):
 
         for p in papers:
             g = grades_by_student_subj.get((st.id, p.subject_id))
-            if g and g.result_status in ('recorded', 'present'):
+            if g and g.result_status in ('recorded', 'present') and g.marks is not None:
                 subj_scores[p.subject_id] = {
                     'marks': str(g.marks),
                     'status': g.result_status,
@@ -676,10 +676,12 @@ def exam_results_sheet(request):
                 total_max += p.max_marks
             elif g:
                 subj_scores[p.subject_id] = {
-                    'marks': '0.00',
+                    'marks': str(g.marks) if g.marks is not None else '0.00',
                     'status': g.result_status,
-                    'percentage': 0.0
+                    'percentage': g.percentage or 0.0
                 }
+                if g.marks is not None:
+                    total_obtained += g.marks
                 total_max += p.max_marks
             else:
                 subj_scores[p.subject_id] = {'marks': '-', 'status': 'not_entered', 'percentage': None}
@@ -774,7 +776,8 @@ def student_report_card(request):
                 'grade_point': band['grade_point'],
                 'feedback': g.feedback
             })
-            total_obtained += g.marks
+            if g.marks is not None:
+                total_obtained += g.marks
             total_max += p.max_marks
         else:
             results.append({

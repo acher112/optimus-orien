@@ -232,10 +232,11 @@ def teacher_dashboard(request):
                 total_weight = Decimal('0.00')
                 weighted_sum = Decimal('0.00')
                 for g in st_grades:
-                    w = g.assessment.weight
-                    p = (g.marks / g.assessment.max_marks) * Decimal('100.0')
-                    weighted_sum += (p * w)
-                    total_weight += w
+                    if g.marks is not None and getattr(g, 'assessment', None) and getattr(g.assessment, 'max_marks', None) and g.assessment.max_marks > 0:
+                        w = g.assessment.weight
+                        p = (g.marks / g.assessment.max_marks) * Decimal('100.0')
+                        weighted_sum += (p * w)
+                        total_weight += w
                 if total_weight > Decimal('0.00'):
                     student_pcts.append(float(weighted_sum / total_weight))
 
@@ -435,8 +436,9 @@ def teacher_my_class(request):
                 tot_w = Decimal('0.00')
                 w_sum = Decimal('0.00')
                 for g in st_grades:
-                    tot_w += g.assessment.weight
-                    w_sum += (g.marks / g.assessment.max_marks * Decimal('100.0')) * g.assessment.weight
+                    if g.marks is not None and getattr(g, 'assessment', None) and getattr(g.assessment, 'max_marks', None) and g.assessment.max_marks > 0:
+                        tot_w += g.assessment.weight
+                        w_sum += (g.marks / g.assessment.max_marks * Decimal('100.0')) * g.assessment.weight
                 if tot_w > 0:
                     st_pcts.append(float(w_sum / tot_w))
 
@@ -482,8 +484,9 @@ def teacher_my_class(request):
                 tot_w = Decimal('0.00')
                 w_sum = Decimal('0.00')
                 for g in st_grades:
-                    tot_w += g.assessment.weight
-                    w_sum += (g.marks / g.assessment.max_marks * Decimal('100.0')) * g.assessment.weight
+                    if g.marks is not None and getattr(g, 'assessment', None) and getattr(g.assessment, 'max_marks', None) and g.assessment.max_marks > 0:
+                        tot_w += g.assessment.weight
+                        w_sum += (g.marks / g.assessment.max_marks * Decimal('100.0')) * g.assessment.weight
                 if tot_w > 0:
                     st_sub_marks[subj.code] = round(float(w_sum / tot_w), 1)
 
@@ -660,8 +663,9 @@ def teacher_my_subjects(request):
                 tot_w = Decimal('0.00')
                 w_sum = Decimal('0.00')
                 for g in st_grades:
-                    tot_w += g.assessment.weight
-                    w_sum += (g.marks / g.assessment.max_marks * Decimal('100.0')) * g.assessment.weight
+                    if g.marks is not None and getattr(g, 'assessment', None) and getattr(g.assessment, 'max_marks', None) and g.assessment.max_marks > 0:
+                        tot_w += g.assessment.weight
+                        w_sum += (g.marks / g.assessment.max_marks * Decimal('100.0')) * g.assessment.weight
                 if tot_w > 0:
                     st_pcts.append(float(w_sum / tot_w))
 

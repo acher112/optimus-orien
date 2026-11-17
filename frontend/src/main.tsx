@@ -1338,7 +1338,20 @@ function App() {
       if (page === 'Overview') {
         if (user.role !== 'teacher') {
           const campusQs = safeCampusId ? `?school=${safeCampusId}` : '';
-          setDash(await request<Dashboard>(`dashboard/${campusQs}`));
+          try {
+            setDash(await request<Dashboard>(`dashboard/${campusQs}`));
+          } catch (dashErr: any) {
+            console.error('Failed to load dashboard:', dashErr);
+            setDash(prev => prev || {
+              counts: { students: 0, schools: campuses.length, classes: 0, open_cases: 0, teachers: 0, employees: 0 },
+              stats: { academic_average: null, grade_records: 0, attendance_rate: null, attendance_records: 0 },
+              schools: [],
+              recent_cases: [],
+              recent_students: [],
+              attention: 0,
+              recent_notifications: []
+            });
+          }
         }
       } else if (['Reports', 'Campuses', 'Campus setup', 'Audit log', 'Permissions', 'Staff', 'Finance', 'Plan & Billing', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Study materials', 'My performance', 'Communication', 'Settings', 'Examinations', 'Grading Scale', 'Academic Quality Index', 'Timetable', 'Data import', 'Platform owner', 'Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases', 'My Class', 'My Subjects'].includes(page)) {
         // subcomponents handle own data
