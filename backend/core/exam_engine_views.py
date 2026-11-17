@@ -555,6 +555,8 @@ def engine_marks_grid(request, config_id):
                         raise ValidationError(
                             f"Marks for {student.full_name} in {comp.name} ({marks_obtained}) outside valid range 0 to {max_marks}."
                         )
+                    if res_status in ('not_entered', ''):
+                        res_status = 'recorded'
 
                 mark_obj, _ = ExamStudentMark.objects.update_or_create(
                     student=student,

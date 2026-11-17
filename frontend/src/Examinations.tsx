@@ -91,6 +91,7 @@ export default function Examinations({
   const [gridSubjectId, setGridSubjectId] = useState<number | null>(null);
   const [engineMarksData, setEngineMarksData] = useState<R | null>(null);
   const [savingEngineMarks, setSavingEngineMarks] = useState(false);
+  const [hasUnsavedMarks, setHasUnsavedMarks] = useState(false);
 
   // Active configuration and campus scoping for grid
   const currentEngineConfig = useMemo(() => {
@@ -345,6 +346,7 @@ export default function Examinations({
         return computeLiveStudentRow(st, res.columns || [], reportingScale);
       });
       setEngineMarksData({ ...res, students: enrichedStudents });
+      setHasUnsavedMarks(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load mark entry grid');
     } finally {
@@ -464,8 +466,146 @@ export default function Examinations({
   // ----------------------------------------------------
   // Mark Entry Handlers
   // ----------------------------------------------------
+  const handleScoreChange = useCallback((sIdx: number, colId: number, val: string) => {
+    setEngineMarksData(prev => {
+      if (!prev) return prev;
+      const repScale = parseFloat(prev.configuration?.reporting_scale) || 100;
+      const st = prev.students[sIdx];
+      if (!st) return prev;
+      const termEntry = st.terms?.[colId] || { marks_obtained: '', result_status: 'recorded' };
+
+      // Typing a mark auto-records it unless it's absent or exempt
+      const newStatus = (val !== '' && (termEntry.result_status === 'not_entered' || !termEntry.result_status))
+        ? 'recorded'
+        : termEntry.result_status;
+
+      const updatedTerms = {
+        ...st.terms,
+        [colId]: {
+          ...termEntry,
+          marks_obtained: val,
+          result_status: newStatus
+        }
+      };
+
+      const updatedStudents = [...prev.students];
+      updatedStudents[sIdx] = computeLiveStudentRow(
+        { ...st, terms: updatedTerms },
+        prev.columns || [],
+        repScale
+      );
+
+      return { ...prev, students: updatedStudents };
+    });
+    setHasUnsavedMarks(true);
+  }, [computeLiveStudentRow]);
+
+  const handleStatusChange = useCallback((sIdx: number, colId: number, newStatus: string) => {
+    setEngineMarksData(prev => {
+      if (!prev) return prev;
+      const repScale = parseFloat(prev.configuration?.reporting_scale) || 100;
+      const st = prev.students[sIdx];
+      if (!st) return prev;
+      const termEntry = st.terms?.[colId] || { marks_obtained: '', result_status: 'recorded' };
+
+      const updatedTerms = {
+        ...st.terms,
+        [colId]: {
+          ...termEntry,
+          result_status: newStatus,
+          marks_obtained: (newStatus === 'absent' || newStatus === 'exempt') ? '' : termEntry.marks_obtained
+        }
+      };
+
+      const updatedStudents = [...prev.students];
+      updatedStudents[sIdx] = computeLiveStudentRow(
+        { ...st, terms: updatedTerms },
+        prev.columns || [],
+        repScale
+      );
+
+      return { ...prev, students: updatedStudents };
+    });
+    setHasUnsavedMarks(true);
+  }, [computeLiveStudentRow]);
+
+  const handleScoreKeyDown = useCallback((
+    e: React.KeyboardEvent<HTMLInputElement>,
+    sIdx: number,
+    cIdx: number,
+    colId: number,
+    totalStudents: number
+  ) => {
+    // Enter or ArrowDown -> move to next student in same column
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (sIdx + 1 < totalStudents) {
+        const nextInput = document.getElementById(`grid-input-${sIdx + 1}-${cIdx}`) as HTMLInputElement | null;
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.select();
+        }
+      }
+    }
+    // Shift+Enter or ArrowUp -> move to previous student in same column
+    else if ((e.key === 'Enter' && e.shiftKey) || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (sIdx > 0) {
+        const prevInput = document.getElementById(`grid-input-${sIdx - 1}-${cIdx}`) as HTMLInputElement | null;
+        if (prevInput) {
+          prevInput.focus();
+          prevInput.select();
+        }
+      }
+    }
+    // Quick shortcut: 'a' or 'A' -> mark Absent and advance
+    else if ((e.key === 'a' || e.key === 'A') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      handleStatusChange(sIdx, colId, 'absent');
+      if (sIdx + 1 < totalStudents) {
+        setTimeout(() => {
+          const nextInput = document.getElementById(`grid-input-${sIdx + 1}-${cIdx}`) as HTMLInputElement | null;
+          if (nextInput) {
+            nextInput.focus();
+            nextInput.select();
+          }
+        }, 40);
+      }
+    }
+    // Quick shortcut: 'e' or 'E' -> mark Exempt and advance
+    else if ((e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      handleStatusChange(sIdx, colId, 'exempt');
+      if (sIdx + 1 < totalStudents) {
+        setTimeout(() => {
+          const nextInput = document.getElementById(`grid-input-${sIdx + 1}-${cIdx}`) as HTMLInputElement | null;
+          if (nextInput) {
+            nextInput.focus();
+            nextInput.select();
+          }
+        }, 40);
+      }
+    }
+  }, [handleStatusChange]);
+
   const handleSaveEngineMarks = async () => {
     if (!selectedConfigId || !gridClassId || !gridSubjectId || !engineMarksData) return;
+
+    // Check for marks exceeding maximum
+    for (const st of engineMarksData.students || []) {
+      for (const col of engineMarksData.columns || []) {
+        const termEntry = st.terms?.[col.id];
+        if (termEntry && termEntry.marks_obtained !== '' && termEntry.marks_obtained !== null && termEntry.marks_obtained !== undefined) {
+          const val = parseFloat(termEntry.marks_obtained);
+          const maxVal = parseFloat(col.max_marks);
+          if (!isNaN(val) && !isNaN(maxVal) && val > maxVal) {
+            notify(`Cannot save: ${st.name}'s mark (${val}) in ${col.name} exceeds max marks (${maxVal}).`);
+            return;
+          }
+        }
+      }
+    }
+
     setSavingEngineMarks(true);
     try {
       const payload = {
@@ -481,6 +621,7 @@ export default function Examinations({
         body: JSON.stringify(payload)
       });
       notify(`Saved ${res.updated_marks} marks records across terms. Recalculated ${res.affected_students} students.`);
+      setHasUnsavedMarks(false);
       loadMarksGridData();
       loadAnalytics();
       setBump(b => b + 1);
@@ -1299,7 +1440,14 @@ export default function Examinations({
         <section className="panel hr-panel">
           <div className="panel-head" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Marks Entry Grid</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Marks Entry Grid</h3>
+                {hasUnsavedMarks && (
+                  <span className="pill orange" style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px' }}>
+                    Unsaved Changes
+                  </span>
+                )}
+              </div>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Enter student marks across terms. Contributions and normalized scores calculate live.</p>
             </div>
             <div>
@@ -1307,9 +1455,16 @@ export default function Examinations({
                 className="primary-btn"
                 onClick={handleSaveEngineMarks}
                 disabled={savingEngineMarks || !engineMarksData}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '8px 16px' }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 13,
+                  padding: '8px 18px',
+                  boxShadow: hasUnsavedMarks ? '0 0 0 3px rgba(99, 102, 241, 0.25), 0 4px 12px rgba(99, 102, 241, 0.35)' : undefined
+                }}
               >
-                <Check size={14} /> {savingEngineMarks ? 'Saving…' : 'Save Marks & Recalculate'}
+                <Check size={14} /> {savingEngineMarks ? 'Saving…' : hasUnsavedMarks ? 'Save Marks & Recalculate ●' : 'Save Marks & Recalculate'}
               </button>
             </div>
           </div>
@@ -1353,6 +1508,17 @@ export default function Examinations({
               </select>
             </label>
           </div>
+
+          {engineMarksData && (
+            <div style={{ padding: '0 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div className="exam-grid-tip">
+                <Sparkles size={13} style={{ color: '#6366f1' }} />
+                <span>
+                  <strong>Spreadsheet mode:</strong> Press <strong>Enter</strong> or <strong>↓</strong> for next student, <strong>A</strong> for Absent, <strong>E</strong> for Exempt. Click anywhere to type immediately.
+                </span>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div style={{ padding: '50px 20px', textAlign: 'center', color: '#64748b' }}>
@@ -1409,81 +1575,118 @@ export default function Examinations({
                         </div>
                       </td>
                       <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{st.roll_number}</td>
-                      {(engineMarksData.columns || []).map((col: R) => {
+                      {(engineMarksData.columns || []).map((col: R, colIdx: number) => {
                         const termEntry = st.terms?.[col.id] || { marks_obtained: '', result_status: 'recorded' };
-                        const hasVal = termEntry.marks_obtained !== '' && termEntry.marks_obtained !== null && !isNaN(parseFloat(termEntry.marks_obtained));
+                        const rawMarks = termEntry.marks_obtained;
+                        const hasVal = rawMarks !== '' && rawMarks !== null && rawMarks !== undefined && !isNaN(parseFloat(rawMarks));
+                        const numVal = hasVal ? parseFloat(rawMarks) : null;
                         const maxVal = parseFloat(col.max_marks) || 100;
                         const wtVal = parseFloat(col.weight_percentage) || 0;
-                        const termPct = hasVal ? ((parseFloat(termEntry.marks_obtained) / maxVal) * 100).toFixed(1) : null;
-                        const termContr = hasVal ? ((parseFloat(termEntry.marks_obtained) / maxVal) * wtVal).toFixed(1) : null;
+                        const termPct = hasVal && numVal !== null ? ((numVal / maxVal) * 100).toFixed(1) : null;
+                        const termContr = hasVal && numVal !== null ? ((numVal / maxVal) * wtVal).toFixed(1) : null;
+                        const isOverMax = hasVal && numVal !== null && numVal > maxVal;
+
+                        const isAbsent = termEntry.result_status === 'absent';
+                        const isExempt = termEntry.result_status === 'exempt' || termEntry.is_exempt;
+                        const isIncomplete = termEntry.result_status === 'incomplete';
+                        const isSpecialStatus = isAbsent || isExempt || isIncomplete;
 
                         return (
-                          <td key={col.id} style={{ textAlign: 'center' }}>
+                          <td
+                            key={col.id}
+                            className="exam-grid-td"
+                            style={{ textAlign: 'center' }}
+                            onClick={() => {
+                              if (!isSpecialStatus) {
+                                const input = document.getElementById(`grid-input-${sIdx}-${colIdx}`) as HTMLInputElement | null;
+                                if (input) {
+                                  input.focus();
+                                  input.select();
+                                }
+                              }
+                            }}
+                          >
                             <div className="exam-score-cell">
-                              <div className="exam-input-row">
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0"
-                                  max={col.max_marks}
-                                  placeholder="—"
-                                  className={`exam-cell-input ${termEntry.result_status !== 'recorded' ? 'non-recorded' : ''}`}
-                                  value={termEntry.result_status === 'recorded' ? (termEntry.marks_obtained ?? '') : ''}
-                                  disabled={termEntry.result_status !== 'recorded'}
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
-                                    const updatedStudents = [...engineMarksData.students];
-                                    const updatedTerms = {
-                                      ...st.terms,
-                                      [col.id]: {
-                                        ...termEntry,
-                                        marks_obtained: val
-                                      }
-                                    };
-                                    updatedStudents[sIdx] = computeLiveStudentRow(
-                                      { ...st, terms: updatedTerms },
-                                      engineMarksData.columns || [],
-                                      repScale
-                                    );
-                                    setEngineMarksData({ ...engineMarksData, students: updatedStudents });
-                                  }}
-                                />
-                                <select
-                                  className={`exam-cell-status-select ${termEntry.result_status !== 'recorded' ? 'active-status' : ''}`}
-                                  value={termEntry.result_status}
-                                  title="Mark status: Recorded, Absent, Exempt, or Incomplete"
-                                  onChange={e => {
-                                    const stVal = e.target.value;
-                                    const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
-                                    const updatedStudents = [...engineMarksData.students];
-                                    const updatedTerms = {
-                                      ...st.terms,
-                                      [col.id]: {
-                                        ...termEntry,
-                                        result_status: stVal
-                                      }
-                                    };
-                                    updatedStudents[sIdx] = computeLiveStudentRow(
-                                      { ...st, terms: updatedTerms },
-                                      engineMarksData.columns || [],
-                                      repScale
-                                    );
-                                    setEngineMarksData({ ...engineMarksData, students: updatedStudents });
-                                  }}
-                                >
-                                  <option value="recorded">Score</option>
-                                  <option value="absent">ABS</option>
-                                  <option value="exempt">EXM</option>
-                                  <option value="incomplete">INC</option>
-                                </select>
-                              </div>
-                              {hasVal && termEntry.result_status === 'recorded' && (
-                                <div className="exam-score-meta">
-                                  <span className="exam-score-pct">{termPct}%</span>
-                                  <span className="exam-score-wt">{termContr}pts</span>
+                              {isSpecialStatus ? (
+                                <div className={`exam-special-badge-card ${isAbsent ? 'is-abs' : isExempt ? 'is-exm' : 'is-inc'}`}>
+                                  <div className="exam-badge-main">
+                                    <span className="exam-badge-dot" />
+                                    <span className="exam-badge-title">
+                                      {isAbsent ? 'ABSENT' : isExempt ? 'EXEMPT' : 'INCOMPLETE'}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="exam-badge-clear"
+                                    title="Click to clear status and enter score"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      handleStatusChange(sIdx, col.id, 'recorded');
+                                      setTimeout(() => {
+                                        const input = document.getElementById(`grid-input-${sIdx}-${colIdx}`) as HTMLInputElement | null;
+                                        if (input) {
+                                          input.focus();
+                                          input.select();
+                                        }
+                                      }, 50);
+                                    }}
+                                  >
+                                    <X size={11} />
+                                    <span>Clear</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className={`exam-score-card ${isOverMax ? 'has-error' : ''}`}>
+                                  <div className="exam-score-inner-row">
+                                    <input
+                                      id={`grid-input-${sIdx}-${colIdx}`}
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      max={col.max_marks}
+                                      placeholder="—"
+                                      className="exam-num-input"
+                                      value={rawMarks ?? ''}
+                                      autoComplete="off"
+                                      onFocus={e => e.target.select()}
+                                      onKeyDown={e => handleScoreKeyDown(e, sIdx, colIdx, col.id, engineMarksData.students.length)}
+                                      onChange={e => handleScoreChange(sIdx, col.id, e.target.value)}
+                                    />
+                                    <span className="exam-max-denom">/{col.max_marks}</span>
+                                    <select
+                                      className="exam-status-dropdown"
+                                      value={termEntry.result_status === 'not_entered' ? 'recorded' : (termEntry.result_status || 'recorded')}
+                                      title="Mark status: Normal Score, Absent (ABS), Exempt (EXM), Incomplete (INC)"
+                                      onChange={e => handleStatusChange(sIdx, col.id, e.target.value)}
+                                      onClick={e => e.stopPropagation()}
+                                    >
+                                      <option value="recorded">Score</option>
+                                      <option value="absent">ABS</option>
+                                      <option value="exempt">EXM</option>
+                                      <option value="incomplete">INC</option>
+                                    </select>
+                                  </div>
                                 </div>
                               )}
+
+                              {/* Micro Calculation / Meta */}
+                              <div className="exam-cell-meta-bar">
+                                {isOverMax ? (
+                                  <span className="exam-meta-error">Max is {col.max_marks}!</span>
+                                ) : isAbsent ? (
+                                  <span className="exam-meta-abs">Assessed 0.0 pts</span>
+                                ) : isExempt ? (
+                                  <span className="exam-meta-exm">Exempt from wt</span>
+                                ) : isIncomplete ? (
+                                  <span className="exam-meta-inc">Incomplete</span>
+                                ) : hasVal ? (
+                                  <span className="exam-meta-active">
+                                    <strong>{termPct}%</strong> <span style={{ opacity: 0.4 }}>·</span> {termContr}pts
+                                  </span>
+                                ) : (
+                                  <span className="exam-meta-idle">{col.weight_percentage}% weight</span>
+                                )}
+                              </div>
                             </div>
                           </td>
                         );
