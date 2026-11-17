@@ -268,8 +268,9 @@ def exam_papers(request):
         qs = ExamPaper.objects.filter(session__school_id__in=school_ids).select_related(
             'session', 'school_class', 'subject', 'invigilator', 'assessment'
         )
-        if request.query_params.get('session'):
-            qs = qs.filter(session_id=request.query_params['session'])
+        sess_param = request.query_params.get('session')
+        if sess_param and sess_param.lower() not in ('all', '', 'null', 'undefined'):
+            qs = qs.filter(session_id=sess_param)
         if request.query_params.get('class'):
             qs = qs.filter(school_class_id=request.query_params['class'])
         if request.query_params.get('date'):
@@ -313,18 +314,42 @@ def exam_papers(request):
         return Response({'results': results})
 
     # POST: create new paper with clash check
-    session_id = request.data.get('session')
-    session = ExamSession.objects.filter(pk=session_id, school__in=schools_scope(user)).first()
-    if not session:
-        raise ValidationError({'session': 'Select a valid exam session.'})
-
     class_id = request.data.get('school_class')
-    school_class = SchoolClass.objects.filter(pk=class_id, school=session.school).first()
+    school_class = SchoolClass.objects.filter(pk=class_id, school_id__in=school_ids).first()
     if not school_class:
         raise ValidationError({'school_class': 'Select a valid class for this campus.'})
 
+    session_id = request.data.get('session')
+    session = None
+    if session_id:
+        session = ExamSession.objects.filter(pk=session_id, school_id__in=school_ids).first()
+    if not session:
+        session = ExamSession.objects.filter(school=school_class.school).order_by('-start_date').first()
+    if not session:
+        ay = (
+            school_class.academic_year
+            or AcademicYear.objects.filter(school=school_class.school, active=True).first()
+            or AcademicYear.objects.filter(school=school_class.school).first()
+        )
+        if not ay:
+            ay = AcademicYear.objects.create(
+                school=school_class.school,
+                name='2026-2027',
+                start_date=date.today(),
+                end_date=date.today() + timedelta(days=365),
+                active=True
+            )
+        session = ExamSession.objects.create(
+            school=school_class.school,
+            academic_year=ay,
+            name=f"Examination Session ({ay.name})",
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=60),
+            status='published'
+        )
+
     subject_id = request.data.get('subject')
-    subject = Subject.objects.filter(pk=subject_id, school=session.school).first()
+    subject = Subject.objects.filter(pk=subject_id, school_id__in=school_ids).first()
     if not subject:
         raise ValidationError({'subject': 'Select a valid subject.'})
 
@@ -351,7 +376,11 @@ def exam_papers(request):
 
     invigilator = None
     if request.data.get('invigilator'):
-        invigilator = StaffMember.objects.filter(pk=request.data['invigilator'], school=session.school).first()
+        invigilator = StaffMember.objects.filter(pk=request.data['invigilator'], school_id__in=school_ids).first()
+
+    # Duplicate paper check within same session, class, and subject
+    if ExamPaper.objects.filter(session=session, school_class=school_class, subject=subject).exists():
+        raise ValidationError({'subject': f"Paper for '{subject.name}' in {school_class.name} is already scheduled in session '{session.name}'."})
 
     # --- CLASH DETECTION ---
     # Time overlap check: start_time to start_time + duration

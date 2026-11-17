@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle, Award, BarChart3, Building2, Calculator, Calendar, Check, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Layers, Plus, Printer, RefreshCw,
@@ -91,6 +91,41 @@ export default function Examinations({
   const [gridSubjectId, setGridSubjectId] = useState<number | null>(null);
   const [engineMarksData, setEngineMarksData] = useState<R | null>(null);
   const [savingEngineMarks, setSavingEngineMarks] = useState(false);
+
+  // Active configuration and campus scoping for grid
+  const currentEngineConfig = useMemo(() => {
+    return engineConfigs.find(c => c.id === selectedConfigId);
+  }, [engineConfigs, selectedConfigId]);
+
+  const configCampusId = currentEngineConfig?.school_id ?? activeCampusId;
+
+  const filteredGridClasses = useMemo(() => {
+    if (!configCampusId) return classes;
+    const scoped = classes.filter(c => !c.school_id || c.school_id === configCampusId);
+    return scoped.length > 0 ? scoped : classes;
+  }, [classes, configCampusId]);
+
+  const filteredGridSubjects = useMemo(() => {
+    if (!configCampusId) return subjects;
+    const scoped = subjects.filter(s => !s.school_id || s.school_id === configCampusId);
+    return scoped.length > 0 ? scoped : subjects;
+  }, [subjects, configCampusId]);
+
+  useEffect(() => {
+    if (filteredGridClasses.length > 0) {
+      if (!gridClassId || !filteredGridClasses.some(c => c.id === gridClassId)) {
+        setGridClassId(filteredGridClasses[0].id);
+      }
+    }
+  }, [filteredGridClasses, gridClassId]);
+
+  useEffect(() => {
+    if (filteredGridSubjects.length > 0) {
+      if (!gridSubjectId || !filteredGridSubjects.some(s => s.id === gridSubjectId)) {
+        setGridSubjectId(filteredGridSubjects[0].id);
+      }
+    }
+  }, [filteredGridSubjects, gridSubjectId]);
 
   // Analytics State
   const [analyticsData, setAnalyticsData] = useState<R | null>(null);
@@ -201,14 +236,14 @@ export default function Examinations({
   }, [activeCampusId, isSingleCampusRole]);
 
   useEffect(() => {
-    if (activeSessionId) {
-      request<R>(`exams/papers/?session=${activeSessionId}`).then(pRes => {
-        setPapers(pRes.results || []);
-      }).catch(() => {});
-    } else {
+    const qs = activeCampusId ? `?school=${activeCampusId}` : (!isSingleCampusRole ? '?school=all' : '');
+    const sessQs = activeSessionId ? `?session=${activeSessionId}` : qs;
+    request<R>(`exams/papers/${sessQs}`).then(pRes => {
+      setPapers(pRes.results || []);
+    }).catch(() => {
       setPapers([]);
-    }
-  }, [activeSessionId]);
+    });
+  }, [activeSessionId, activeCampusId, isSingleCampusRole, bump]);
 
   // Load Analytics Data
   const loadAnalytics = useCallback(async () => {
@@ -447,6 +482,7 @@ export default function Examinations({
       });
       notify(`Saved ${res.updated_marks} marks records across terms. Recalculated ${res.affected_students} students.`);
       loadMarksGridData();
+      loadAnalytics();
       setBump(b => b + 1);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Failed to save marks');
@@ -495,30 +531,44 @@ export default function Examinations({
   const handleCreatePaper = async (e: React.FormEvent) => {
     e.preventDefault();
     setClashError('');
-    if (!activeSessionId) return;
+    if (!paperClass || !paperSubject) {
+      notify('Please select a class and subject.');
+      return;
+    }
     try {
-      await request<R>('exams/papers/', {
+      const payload: Record<string, any> = {
+        school_class: Number(paperClass),
+        subject: Number(paperSubject),
+        date: paperDate,
+        start_time: paperTime,
+        duration_min: Number(paperDuration) || 120,
+        max_marks: paperMaxMarks,
+        room: paperRoom,
+        invigilator: paperInvigilator ? Number(paperInvigilator) : undefined
+      };
+      if (activeSessionId) {
+        payload.session = activeSessionId;
+      }
+      const res = await request<R>('exams/papers/', {
         method: 'POST',
-        body: JSON.stringify({
-          session: activeSessionId,
-          school_class: paperClass,
-          subject: paperSubject,
-          date: paperDate,
-          start_time: paperTime,
-          duration_min: paperDuration,
-          max_marks: paperMaxMarks,
-          room: paperRoom,
-          invigilator: paperInvigilator || undefined
-        })
+        body: JSON.stringify(payload)
       });
       notify('Exam paper scheduled in date sheet.');
       setPaperModal(false);
+      if (res?.session_id) {
+        setActiveSessionId(res.session_id);
+      }
+      loadSessionsAndPapers();
       setBump(b => b + 1);
     } catch (err: any) {
-      if (err.clash) {
+      if (err?.clash) {
         setClashError(err.clash);
+      } else if (err?.subject) {
+        setClashError(typeof err.subject === 'string' ? err.subject : (Array.isArray(err.subject) ? err.subject[0] : 'Subject error'));
       } else {
-        notify(err instanceof Error ? err.message : 'Scheduling failed');
+        const msg = err instanceof Error ? err.message : (err?.detail || 'Scheduling failed');
+        setClashError(msg);
+        notify(msg);
       }
     }
   };
@@ -839,14 +889,16 @@ export default function Examinations({
                 </div>
               </div>
 
-              {/* No Marks Banner */}
-              {analyticsData.summary && ((analyticsData.summary.eligible_students_count ?? analyticsData.summary.eligible_count ?? 0) === 0) && ((analyticsData.summary.pending_students_count ?? analyticsData.summary.pending_count ?? 0) === 0) && (
+              {/* Guidance Banner when No Students Evaluated */}
+              {analyticsData.summary && ((analyticsData.summary.eligible_students_count ?? analyticsData.summary.eligible_count ?? 0) === 0) && (
                 <div style={{ padding: '14px 18px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 22 }}>💡</span>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#1e40af' }}>
-                        No marks recorded for this examination structure yet
+                        {((analyticsData.summary?.pending_students_count ?? analyticsData.summary?.pending_count) ?? 0) > 0
+                          ? `${(analyticsData.summary?.pending_students_count ?? analyticsData.summary?.pending_count)} student(s) enrolled with pending marks evaluation`
+                          : 'No marks recorded for this examination structure yet'}
                       </div>
                       <div style={{ fontSize: 12, color: '#3b82f6' }}>
                         Marks entered in the <strong>Marks Entry Grid</strong> will automatically calculate normalized percentages, student &amp; class averages, gender analytics, and score distributions.
@@ -1287,7 +1339,7 @@ export default function Examinations({
                 value={gridClassId || ''}
                 onChange={e => setGridClassId(Number(e.target.value))}
               >
-                {classes.map(c => <option key={c.id} value={c.id}>{c.full_display_name || (c.school_name ? `${c.name} (${c.school_name})` : c.name)}</option>)}
+                {filteredGridClasses.map(c => <option key={c.id} value={c.id}>{c.full_display_name || (c.school_name ? `${c.name} (${c.school_name})` : c.name)}</option>)}
               </select>
             </label>
             <label style={{ fontSize: 13, fontWeight: 600 }}>Subject:
@@ -1297,7 +1349,7 @@ export default function Examinations({
                 value={gridSubjectId || ''}
                 onChange={e => setGridSubjectId(Number(e.target.value))}
               >
-                {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code || ''}){s.school_name ? ` - ${s.school_name}` : ''}</option>)}
+                {filteredGridSubjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code || ''}){s.school_name ? ` - ${s.school_name}` : ''}</option>)}
               </select>
             </label>
           </div>
@@ -1622,41 +1674,106 @@ export default function Examinations({
               <h3>Exam Date Sheet & Papers</h3>
               <p>Clash detection for rooms, classes, and invigilators during examination sessions</p>
             </div>
-            {isManager && (
-              <button className="primary-btn" onClick={() => setPaperModal(true)}>
-                <Plus size={15} /> Schedule Paper
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                Session:
+                <select
+                  className="fx-select"
+                  value={activeSessionId || ''}
+                  onChange={e => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    setActiveSessionId(val);
+                  }}
+                >
+                  <option value="">All Sessions (Combined Date Sheet)</option>
+                  {sessions.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.status}){s.school_name ? ` – ${s.school_name}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {isManager && (
+                <>
+                  <button className="outline-btn" onClick={() => setSessionModal(true)} style={{ fontSize: 13 }}>
+                    <Plus size={14} /> New Session
+                  </button>
+                  <button
+                    className="primary-btn"
+                    onClick={() => {
+                      if (filteredGridClasses.length > 0 && !paperClass) {
+                        setPaperClass(String(filteredGridClasses[0].id));
+                        const clObj = filteredGridClasses[0];
+                        const avail = clObj.school_id ? subjects.filter(s => !s.school_id || s.school_id === clObj.school_id) : subjects;
+                        if (avail.length > 0) setPaperSubject(String(avail[0].id));
+                      }
+                      setPaperModal(true);
+                    }}
+                  >
+                    <Plus size={15} /> Schedule Paper
+                  </button>
+                </>
+              )}
+            </div>
           </div>
           <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>DATE</th>
-                  <th>TIME</th>
-                  <th>CLASS</th>
-                  <th>SUBJECT</th>
-                  <th>DURATION</th>
-                  <th>MAX MARKS</th>
-                  <th>ROOM</th>
-                  <th>INVIGILATOR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {papers.map(p => (
-                  <tr key={p.id}>
-                    <td><strong>{p.date}</strong></td>
-                    <td>{p.start_time}</td>
-                    <td>{p.class_name}</td>
-                    <td>{p.subject_name}</td>
-                    <td>{p.duration_min} min</td>
-                    <td>{p.max_marks}</td>
-                    <td>{p.room || '–'}</td>
-                    <td>{p.invigilator_name || 'Unassigned'}</td>
+            {papers.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                <Calendar size={32} style={{ margin: '0 auto 12px', display: 'block', color: '#94a3b8' }} />
+                <div style={{ fontWeight: 600, fontSize: 15, color: '#334155', marginBottom: 4 }}>
+                  No exam papers scheduled yet
+                </div>
+                <p style={{ margin: '0 0 16px', fontSize: 13 }}>
+                  Schedule subject exam papers with date, time, duration, room allocation, and clash detection.
+                </p>
+                {isManager && (
+                  <button
+                    className="primary-btn"
+                    onClick={() => {
+                      if (filteredGridClasses.length > 0 && !paperClass) {
+                        setPaperClass(String(filteredGridClasses[0].id));
+                        const clObj = filteredGridClasses[0];
+                        const avail = clObj.school_id ? subjects.filter(s => !s.school_id || s.school_id === clObj.school_id) : subjects;
+                        if (avail.length > 0) setPaperSubject(String(avail[0].id));
+                      }
+                      setPaperModal(true);
+                    }}
+                    style={{ margin: '0 auto' }}
+                  >
+                    <Plus size={15} /> Schedule Paper
+                  </button>
+                )}
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>DATE</th>
+                    <th>TIME</th>
+                    <th>CLASS</th>
+                    <th>SUBJECT</th>
+                    <th>DURATION</th>
+                    <th>MAX MARKS</th>
+                    <th>ROOM</th>
+                    <th>INVIGILATOR</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {papers.map(p => (
+                    <tr key={p.id}>
+                      <td><strong>{p.date}</strong></td>
+                      <td>{p.start_time}</td>
+                      <td>{p.class_name}</td>
+                      <td>{p.subject_name}</td>
+                      <td>{p.duration_min} min</td>
+                      <td>{p.max_marks}</td>
+                      <td>{p.room || '–'}</td>
+                      <td>{p.invigilator_name || 'Unassigned'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       )}
@@ -2071,16 +2188,48 @@ export default function Examinations({
             )}
             <form onSubmit={handleCreatePaper}>
               <div className="modal-fields">
+                <label>Exam Session
+                  <select
+                    value={activeSessionId || ''}
+                    onChange={e => setActiveSessionId(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    {sessions.length > 0 ? (
+                      sessions.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.status}){s.school_name ? ` – ${s.school_name}` : ''}</option>
+                      ))
+                    ) : (
+                      <option value="">Auto-create session for campus</option>
+                    )}
+                  </select>
+                </label>
                 <label>Class *
-                  <select required value={paperClass} onChange={e => setPaperClass(e.target.value)}>
+                  <select required value={paperClass} onChange={e => {
+                    const cid = e.target.value;
+                    setPaperClass(cid);
+                    const clObj = classes.find(c => String(c.id) === String(cid));
+                    if (clObj?.school_id) {
+                      const avail = subjects.filter(s => !s.school_id || s.school_id === clObj.school_id);
+                      if (avail.length > 0 && (!paperSubject || !avail.some(s => String(s.id) === String(paperSubject)))) {
+                        setPaperSubject(String(avail[0].id));
+                      }
+                    }
+                  }}>
                     <option value="">Select class…</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.full_display_name || (c.school_name ? `${c.name} (${c.school_name})` : c.name)}</option>)}
                   </select>
                 </label>
                 <label>Subject *
                   <select required value={paperSubject} onChange={e => setPaperSubject(e.target.value)}>
                     <option value="">Select subject…</option>
-                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                    {(() => {
+                      const clObj = classes.find(c => String(c.id) === String(paperClass));
+                      const subjList = clObj?.school_id
+                        ? subjects.filter(s => !s.school_id || s.school_id === clObj.school_id)
+                        : subjects;
+                      return subjList.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.code || ''}){s.school_name ? ` - ${s.school_name}` : ''}</option>
+                      ));
+                    })()}
                   </select>
                 </label>
                 <label>Date *

@@ -426,7 +426,11 @@ def engine_marks_grid(request, config_id):
         raise ValidationError({'detail': 'class and subject parameters are required.'})
 
     school_class = SchoolClass.objects.filter(pk=class_id, school=config.school).first()
+    if not school_class:
+        school_class = SchoolClass.objects.filter(pk=class_id, school_id__in=school_ids).first()
     subject = Subject.objects.filter(pk=subject_id, school=config.school).first()
+    if not subject:
+        subject = Subject.objects.filter(pk=subject_id, school_id__in=school_ids).first()
     if not school_class or not subject:
         raise NotFound('Class or subject not found.')
 
