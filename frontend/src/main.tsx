@@ -28,6 +28,8 @@ const PublicInfoPage = React.lazy(() => import('./landing/PublicInfoPage'));
 const SchoolSetup = React.lazy(() => import('./SchoolSetup'));
 const Reports = React.lazy(() => import('./Reports'));
 import Staff from './Staff';
+const RecordPage = React.lazy(() => import('./Record'));
+const TeacherPerformancePage = React.lazy(() => import('./TeacherPerformance'));
 const Finance = React.lazy(() => import('./Finance'));
 const Fees = React.lazy(() => import('./Fees'));
 const Salaries = React.lazy(() => import('./Salaries'));
@@ -116,6 +118,16 @@ const WORKSPACE_NAV = [
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Announcements', icon: Megaphone, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  // Record Group (Spec Part A §A2)
+  { name: 'Record', icon: FileSpreadsheet, roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Record Overview', icon: LayoutDashboard, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Staff Record', icon: Users, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Student Record', icon: GraduationCap, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Fees Record', icon: Receipt, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Income & Expenses Record', icon: Wallet, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Salaries Record', icon: Banknote, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  // Teacher Performance (Spec Part B §B1)
+  { name: 'Teacher Performance', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
 ];
 
 function BriefcaseIcon(props: any) {
@@ -193,6 +205,8 @@ const NAV_GROUPS = [
     ]
   },
   { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
+  { sublabel: 'RECORD & ARCHIVE', items: ['Record', 'Record Overview', 'Staff Record', 'Student Record', 'Fees Record', 'Income & Expenses Record', 'Salaries Record'] },
+  { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
@@ -266,6 +280,18 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   'Review Cases': 'premium',
   'Interventions': 'premium',
   'Audit log': 'premium',
+
+  // Record Module (Part A §A10)
+  'Record': 'standard',
+  'Record Overview': 'standard',
+  'Staff Record': 'standard',
+  'Student Record': 'standard',
+  'Fees Record': 'standard',
+  'Income & Expenses Record': 'premium',
+  'Salaries Record': 'premium',
+
+  // Teacher Performance (Part B §B1)
+  'Teacher Performance': 'premium',
 };
 
 const NAV_ITEM_FEATURE_KEYS: Record<string, string> = {
@@ -303,6 +329,18 @@ const NAV_ITEM_FEATURE_KEYS: Record<string, string> = {
   'Review Cases': 'students_at_risk',
   'Interventions': 'interventions',
   'Audit log': 'audit_log',
+
+  // Record Module Feature Keys
+  'Record': 'records_overview',
+  'Record Overview': 'records_overview',
+  'Staff Record': 'records_staff',
+  'Student Record': 'records_students',
+  'Fees Record': 'records_fees',
+  'Income & Expenses Record': 'accounts_ledger',
+  'Salaries Record': 'hr_payroll',
+
+  // Teacher Performance Feature Key
+  'Teacher Performance': 'teacher_insights',
 };
 
 // Global toggle to hide plan selection & payment methods from the UI while keeping underlying packages intact
@@ -2364,6 +2402,7 @@ function App() {
               {isItemUnlocked('Academic Quality Index') && renderNavButton('Academic Quality Index', 'Academic Quality (AQI)', TrendingUp)}
               {isItemUnlocked('Study materials') && renderNavButton('Study materials', 'Study Materials', BookOpen)}
               {isItemUnlocked('Timetable') && renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              {isItemUnlocked('Teacher Performance') && renderNavButton('Teacher Performance', 'My Performance', Award)}
               {teacherScope?.can_view_my_class && isItemUnlocked('Review cases') && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
 
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
@@ -3987,6 +4026,37 @@ function App() {
               />
             ) : (
               <StudentsAtRisk user={user} notify={notify} initialTab={page} onNavigate={switchPage} activeCampusId={activeCampusId} campuses={campuses} />
+            )
+          )}
+          {['Record', 'Record Overview', 'Staff Record', 'Student Record', 'Fees Record', 'Income & Expenses Record', 'Salaries Record'].includes(page) && (
+            <ErrorBoundary fallbackTitle="School Record">
+              <RecordPage
+                page={page}
+                user={user}
+                notify={notify}
+                activeCampusId={activeCampusId}
+                campuses={campuses}
+                onNavigate={switchPage}
+              />
+            </ErrorBoundary>
+          )}
+          {page === 'Teacher Performance' && (
+            !isFeatureUnlocked('teacher_insights') ? (
+              <FeatureLockedScreen
+                featureName="Teacher Performance & Instructional Insights"
+                description="Evidence-based instructional analytics, class benchmark tracking, value-added intake growth, and supportive intervention plans."
+                requiredPlan="Premium"
+                onUpgrade={() => switchPage('Plan & Billing')}
+              />
+            ) : (
+              <ErrorBoundary fallbackTitle="Teacher Performance">
+                <TeacherPerformancePage
+                  user={user}
+                  notify={notify}
+                  activeCampusId={activeCampusId}
+                  campuses={campuses}
+                />
+              </ErrorBoundary>
             )
           )}
           </React.Suspense>

@@ -37,6 +37,7 @@ class School(models.Model):
  parents_can_view_fees = models.BooleanField(default=True)
  aqi_min_group_size = models.PositiveIntegerField(default=5)
  blocked_words=models.TextField(blank=True,default='')
+ teachers_can_view_own_performance = models.BooleanField(default=True, help_text="Allow teachers to view their own performance summary and self-reflection")
  class Meta:constraints=[models.UniqueConstraint(fields=['organisation','code'],name='unique_school_code_per_org')]
  def __str__(self):return self.name
 
@@ -1366,6 +1367,22 @@ class OrganisationRolePolicy(models.Model):
         'fees.view_campus': False,
         'salaries.view_campus': False,
         'staff.promote_terminate': False,
+        # Record module permissions
+        'records.view_staff': True,
+        'records.view_students': True,
+        'records.view_fees': True,
+        'records.view_finance': True,
+        'records.view_salaries': True,
+        'records.view_salary_lines': False,  # Off by default, owner can toggle
+        'records.view_terminated_notes': False,  # Strictly False for principals
+        'records.manage': True,
+        'records.export': True,
+        # Teacher Performance permissions
+        'teacher_performance.view_summary': True,
+        'teacher_performance.view_detail': True,
+        'teacher_performance.manage_criteria': True,
+        'teacher_performance.manage_alerts': True,
+        'teacher_performance.export': True,
     }
 
     @classmethod
@@ -2669,4 +2686,253 @@ class PlanRefundRequest(models.Model):
 
     def __str__(self):
         return f"Refund Request #{self.id} for Order #{self.order.order_number} ({self.school.name}) [{self.status}]"
+
+
+# ==================================================================
+# MODULE A: RECORD LIFECYCLE EVENT MODELS
+# ==================================================================
+
+class LifecycleReasonCategory(models.Model):
+    """Configurable reason categories for staff and student lifecycle transitions."""
+    TARGET_TYPES = [('staff', 'Staff'), ('student', 'Student')]
+    school = models.ForeignKey(School, null=True, blank=True, on_delete=models.CASCADE, related_name='lifecycle_reasons')
+    target_type = models.CharField(max_length=16, choices=TARGET_TYPES)
+    code = models.CharField(max_length=50)
+    name_en = models.CharField(max_length=120)
+    name_ur = models.CharField(max_length=120, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['display_order', 'name_en']
+        constraints = [
+            models.UniqueConstraint(fields=['school', 'target_type', 'code'], name='unique_lifecycle_reason_per_school')
+        ]
+
+    def __str__(self):
+        return f"{self.name_en} ({self.target_type})"
+
+
+class StaffLifecycleEvent(models.Model):
+    """Append-only lifecycle event ledger for staff members (Spec Part A §A3-A4)."""
+    EVENT_TYPES = [
+        ('joined', 'Joined'),
+        ('resigned', 'Resigned'),
+        ('terminated', 'Terminated'),
+        ('contract_ended', 'Contract Ended'),
+        ('retired', 'Retired'),
+        ('transferred', 'Transferred'),
+        ('rejoined', 'Rejoined'),
+    ]
+
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name='lifecycle_events')
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='staff_lifecycle_events')
+    from_campus = models.ForeignKey(School, null=True, blank=True, on_delete=models.PROTECT, related_name='staff_transfers_from')
+    to_campus = models.ForeignKey(School, null=True, blank=True, on_delete=models.PROTECT, related_name='staff_transfers_to')
+    event_type = models.CharField(max_length=24, choices=EVENT_TYPES, db_index=True)
+    effective_date = models.DateField(db_index=True)
+    reason_category = models.ForeignKey(LifecycleReasonCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    reason_text = models.CharField(max_length=255, blank=True, default='')
+    restricted_notes = models.TextField(blank=True, default='', help_text="Confidential notes visible ONLY to Owner and Org Admin")
+    notes = models.TextField(blank=True, default='')
+    recorded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    amends = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='amendments')
+    is_void = models.BooleanField(default=False, db_index=True)
+    void_reason = models.CharField(max_length=255, blank=True, default='')
+    voided_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    voided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-effective_date', '-id']
+        indexes = [
+            models.Index(fields=['school', 'effective_date'], name='staff_ev_sch_dt_idx'),
+            models.Index(fields=['staff', 'effective_date'], name='staff_ev_stf_dt_idx'),
+            models.Index(fields=['event_type', 'effective_date'], name='staff_ev_type_dt_idx'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.is_void and not self.void_reason.strip():
+            raise ValidationError({'void_reason': 'A mandatory reason is required to void a record.'})
+        if self.event_type == 'transferred':
+            if not self.to_campus_id:
+                raise ValidationError({'to_campus': 'Destination campus is required for staff transfers.'})
+            if self.from_campus_id and self.from_campus_id == self.to_campus_id:
+                raise ValidationError({'to_campus': 'Destination campus must differ from source campus.'})
+        # Validate transitions if new record and not void
+        if not self.pk and not self.is_void and not self.amends_id:
+            last_ev = StaffLifecycleEvent.objects.filter(staff=self.staff, is_void=False).order_by('-effective_date', '-id').first()
+            if last_ev:
+                sep_events = ('resigned', 'terminated', 'contract_ended', 'retired')
+                if last_ev.event_type in sep_events and self.event_type != 'rejoined':
+                    raise ValidationError({'event_type': f"Staff member is currently {last_ev.event_type}. They must be rejoined before other transitions."})
+                if last_ev.event_type not in sep_events and self.event_type in ('joined', 'rejoined'):
+                    raise ValidationError({'event_type': "Staff member is already active. Cannot record joined/rejoined without a prior separation."})
+
+    def __str__(self):
+        return f"{self.staff.full_name} - {self.get_event_type_display()} ({self.effective_date})"
+
+
+class StudentLifecycleEvent(models.Model):
+    """Append-only lifecycle event ledger for students (Spec Part A §A3-A4)."""
+    EVENT_TYPES = [
+        ('admitted', 'Admitted / Enrolled'),
+        ('promoted', 'Promoted'),
+        ('passed_out', 'Passed out (Graduated)'),
+        ('not_promoted', 'Not promoted (repeating)'),
+        ('left', 'Left'),
+    ]
+    LEAVE_SUBTYPES = [
+        ('withdrawn', 'Withdrawn'),
+        ('transferred_out', 'Transferred Out'),
+        ('struck_off', 'Struck Off'),
+        ('migrated', 'Migrated'),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='lifecycle_events')
+    enrollment = models.ForeignKey(Enrollment, null=True, blank=True, on_delete=models.PROTECT, related_name='lifecycle_events')
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='student_lifecycle_events')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name='+')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.PROTECT, related_name='+')
+    section = models.ForeignKey(Section, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    event_type = models.CharField(max_length=24, choices=EVENT_TYPES, db_index=True)
+    leave_subtype = models.CharField(max_length=24, blank=True, default='', choices=LEAVE_SUBTYPES)
+    from_campus = models.ForeignKey(School, null=True, blank=True, on_delete=models.PROTECT, related_name='student_transfers_from')
+    to_campus = models.ForeignKey(School, null=True, blank=True, on_delete=models.PROTECT, related_name='student_transfers_to')
+    effective_date = models.DateField(db_index=True)
+    reason_category = models.ForeignKey(LifecycleReasonCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    reason_text = models.CharField(max_length=255, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    recorded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    amends = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='amendments')
+    is_void = models.BooleanField(default=False, db_index=True)
+    void_reason = models.CharField(max_length=255, blank=True, default='')
+    voided_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    voided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-effective_date', '-id']
+        indexes = [
+            models.Index(fields=['school', 'effective_date'], name='std_ev_sch_dt_idx'),
+            models.Index(fields=['student', 'effective_date'], name='std_ev_std_dt_idx'),
+            models.Index(fields=['event_type', 'effective_date'], name='std_ev_type_dt_idx'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.is_void and not self.void_reason.strip():
+            raise ValidationError({'void_reason': 'A mandatory reason is required to void a record.'})
+        if self.event_type == 'left' and not self.leave_subtype:
+            self.leave_subtype = 'withdrawn'
+        if not self.pk and not self.is_void and not self.amends_id:
+            last_ev = StudentLifecycleEvent.objects.filter(student=self.student, is_void=False).order_by('-effective_date', '-id').first()
+            if last_ev:
+                if last_ev.event_type == 'passed_out':
+                    raise ValidationError({'event_type': "Student has passed out (graduated). No further lifecycle transitions allowed."})
+                if last_ev.event_type == 'left' and self.event_type in ('promoted', 'not_promoted', 'passed_out'):
+                    raise ValidationError({'event_type': "A student who has left cannot be promoted or graduated without readmission."})
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.get_event_type_display()} ({self.effective_date})"
+
+
+# ==================================================================
+# MODULE B: TEACHER PERFORMANCE MODELS
+# ==================================================================
+
+class TeacherPerformanceCriteria(models.Model):
+    """Versioned risk criteria rules for evaluating teacher performance support needs (Spec Part B §B3-B4)."""
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='teacher_performance_criteria')
+    name = models.CharField(max_length=160, default='Standard Supportive Criteria')
+    version = models.PositiveIntegerField(default=1)
+    active = models.BooleanField(default=True)
+    min_students = models.PositiveSmallIntegerField(default=10, help_text="Minimum students in class/subject to evaluate")
+    min_assessments = models.PositiveSmallIntegerField(default=2, help_text="Minimum published assessments required")
+    diff_campus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('10.00'), help_text="Points below campus subject average")
+    drop_term_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('8.00'), help_text="Points drop compared to prior term")
+    pass_rate_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('60.00'), help_text="Pass rate benchmark %")
+    rules = models.JSONField(default=dict, blank=True)
+    explanation_of_change = models.TextField(blank=True, default='')
+    previous_version = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='successor_versions')
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-version']
+        constraints = [
+            models.UniqueConstraint(fields=['school', 'version'], name='unique_teacher_criteria_version')
+        ]
+
+    def __str__(self):
+        return f"{self.school.name} - {self.name} v{self.version}{' [ACTIVE]' if self.active else ''}"
+
+
+class TeacherPerformanceAlert(models.Model):
+    """Supportive intervention alert for teacher support and mentoring (Spec Part B §B3-B5)."""
+    STATUS_CHOICES = [
+        ('suggested', 'Suggested (Pending Review)'),
+        ('open', 'Open'),
+        ('acknowledged', 'Acknowledged'),
+        ('under_review', 'Under Review'),
+        ('resolved', 'Resolved'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='teacher_performance_alerts')
+    teacher = models.ForeignKey(User, on_delete=models.PROTECT, related_name='performance_alerts')
+    teaching_assignment = models.ForeignKey(TeachingAssignment, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.PROTECT, related_name='+')
+    subject = models.ForeignKey(Subject, on_delete=models.PROTECT, related_name='+')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name='+')
+    term_name = models.CharField(max_length=80)
+    criteria_version = models.PositiveIntegerField(default=1)
+    trigger_reason = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='suggested', db_index=True)
+    confirmed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    action_plan = models.TextField(blank=True, default='', help_text="Supportive action plan or mentoring notes")
+    resolved_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['school', 'status'], name='tp_alert_sch_stat_idx'),
+            models.Index(fields=['teacher', 'status'], name='tp_alert_tch_stat_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.teacher.get_full_name() or self.teacher.username} - {self.subject.name} ({self.term_name}) [{self.status}]"
+
+
+class TeacherPerformanceNote(models.Model):
+    """Observations and self-reflection notes for teacher performance evaluation."""
+    NOTE_KINDS = [
+        ('private_leadership', 'Private Leadership Note (Owner & Principal only)'),
+        ('self_reflection', 'Teacher Self-Reflection (Teacher & Principal)'),
+    ]
+
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='teacher_performance_notes')
+    teacher = models.ForeignKey(User, on_delete=models.PROTECT, related_name='received_performance_notes')
+    author = models.ForeignKey(User, on_delete=models.PROTECT, related_name='authored_performance_notes')
+    kind = models.CharField(max_length=24, choices=NOTE_KINDS, default='private_leadership')
+    academic_year = models.ForeignKey(AcademicYear, null=True, blank=True, on_delete=models.SET_NULL)
+    term_name = models.CharField(max_length=80, blank=True, default='')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Note on {self.teacher.username} by {self.author.username} ({self.kind})"
+
 

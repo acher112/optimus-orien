@@ -6,7 +6,7 @@ from . import (
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
-    parent_views, landing_views, subscription_views
+    parent_views, landing_views, subscription_views, record_views, teacher_performance_views
 )
 
 r = DefaultRouter()
@@ -316,6 +316,28 @@ urlpatterns = [
     path('parent/notifications/', parent_views.parent_notifications_list),
     path('parent/notifications/<int:pk>/read/', parent_views.parent_notification_mark_read),
     path('parent/notification-preferences/', parent_views.parent_notification_preferences),
+
+    # Record Module (Spec Part A)
+    path('records/overview/', record_views.records_overview_view),
+    path('records/staff/', record_views.records_staff_view),
+    path('records/students/', record_views.records_students_view),
+    path('records/fees/', record_views.records_fees_view),
+    path('records/finance/', record_views.records_finance_view),
+    path('records/salaries/', record_views.records_salaries_view),
+    path('records/export/', record_views.records_export_view),
+    path('records/events/<str:target_type>/', record_views.records_create_event_view),
+    path('records/events/<str:target_type>/<int:event_id>/void/', record_views.records_void_event_view),
+
+    # Teacher Performance Module (Spec Part B)
+    path('teacher-performance/overview/', teacher_performance_views.teacher_performance_overview_view),
+    path('teacher-performance/teachers/<int:teacher_id>/', teacher_performance_views.teacher_performance_detail_view),
+    path('teacher-performance/me/', teacher_performance_views.teacher_performance_self_view),
+    path('teacher-performance/criteria/', teacher_performance_views.teacher_performance_criteria_view),
+    path('teacher-performance/criteria/preview/', teacher_performance_views.teacher_performance_preview_view),
+    path('teacher-performance/alerts/', teacher_performance_views.teacher_performance_alerts_view),
+    path('teacher-performance/alerts/<int:alert_id>/action/', teacher_performance_views.teacher_performance_alert_action_view),
+    path('teacher-performance/notes/', teacher_performance_views.teacher_performance_notes_view),
+    path('teacher-performance/export/', teacher_performance_views.teacher_performance_export_view),
 
     path('', include(r.urls))
 
