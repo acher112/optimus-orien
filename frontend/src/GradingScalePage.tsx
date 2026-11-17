@@ -346,26 +346,26 @@ export default function GradingScalePage({
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>
       {/* Page Header */}
-      <div className="page-header" style={{ marginBottom: 20 }}>
+      <div className="page-header" style={{ marginBottom: 16 }}>
         <div>
           <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6366f1', fontWeight: 700 }}>
-            <SlidersHorizontal size={14} /> ACADEMIC POLICIES & EVALUATION CRITERIA
+            <SlidersHorizontal size={13} /> ACADEMIC POLICIES
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', margin: '4px 0 6px' }}>
-            Grading Scales & Assessment Weightage Criteria
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '4px 0' }}>
+            Grading Scales & Criteria
           </h1>
-          <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>
-            Configure institutional assessment weightage distribution (Exams, Homework, Classwork, Attendance) and letter grade GPA bands per campus.
+          <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>
+            Configure assessment weightages (Exams, Homework, Classwork, Attendance) and letter grade GPA bands.
           </p>
         </div>
 
         {/* Campus Scope Selector */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {campuses.length > 1 && onSelectCampus && (
-            <label className="fx-filter-item" style={{ fontSize: 13, fontWeight: 600 }}>Campus
+            <label className="fx-filter-item" style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>Campus
               <select
                 className="fx-select"
-                style={{ marginLeft: 6, fontSize: 13 }}
+                style={{ marginLeft: 6, fontSize: 12 }}
                 value={effectiveCampusId || ''}
                 onChange={e => onSelectCampus(e.target.value ? Number(e.target.value) : null)}
               >
@@ -381,47 +381,44 @@ export default function GradingScalePage({
             onClick={() => loadScales()}
             disabled={loading}
             title="Refresh criteria"
+            style={{ height: 36, padding: '0 12px', fontSize: 12 }}
           >
-            <RefreshCw size={14} className={loading ? 'spin' : ''} /> Refresh
+            <RefreshCw size={13} className={loading ? 'spin' : ''} /> Refresh
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="error-bar" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c' }}>
-          <AlertCircle size={16} /> {error}
+        <div className="error-bar" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+          <AlertCircle size={15} /> {error}
         </div>
       )}
 
       {/* Navigation Sub-Tabs */}
-      <nav className="tab-nav" style={{ display: 'flex', gap: 8, borderBottom: '2px solid #e2e8f0', marginBottom: 24 }}>
+      <nav className="fx-tabs" aria-label="Grading scale sections">
         <button
           className={activeTab === 'criteria' ? 'on' : ''}
           onClick={() => setActiveTab('criteria')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 600, borderBottom: activeTab === 'criteria' ? '2px solid #6366f1' : 'none', color: activeTab === 'criteria' ? '#6366f1' : '#64748b', background: 'transparent' }}
         >
-          <SlidersHorizontal size={16} /> Assessment Weightage Criteria
+          <SlidersHorizontal size={14} /> Weightage Criteria
         </button>
         <button
           className={activeTab === 'scales' ? 'on' : ''}
           onClick={() => setActiveTab('scales')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 600, borderBottom: activeTab === 'scales' ? '2px solid #6366f1' : 'none', color: activeTab === 'scales' ? '#6366f1' : '#64748b', background: 'transparent' }}
         >
-          <Award size={16} /> Letter Grades & GPA Bands ({bands.length})
+          <Award size={14} /> Letter Grades & GPA ({bands.length})
         </button>
         <button
           className={activeTab === 'matrix' ? 'on' : ''}
           onClick={() => setActiveTab('matrix')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 600, borderBottom: activeTab === 'matrix' ? '2px solid #6366f1' : 'none', color: activeTab === 'matrix' ? '#6366f1' : '#64748b', background: 'transparent' }}
         >
-          <Building2 size={16} /> Campus Criteria Overview ({scales.length})
+          <Building2 size={14} /> Campus Overview ({scales.length})
         </button>
         <button
           className={activeTab === 'test' ? 'on' : ''}
           onClick={() => { setActiveTab('test'); runCompositeTest(); }}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 600, borderBottom: activeTab === 'test' ? '2px solid #6366f1' : 'none', color: activeTab === 'test' ? '#6366f1' : '#64748b', background: 'transparent' }}
         >
-          <Sparkles size={16} /> Live Connection & Composite Verification
+          <Sparkles size={14} /> Live Verification
         </button>
       </nav>
 
@@ -429,47 +426,56 @@ export default function GradingScalePage({
       {/* TAB 1: ASSESSMENT WEIGHTAGE CRITERIA                           */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'criteria' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* Preset Templates Card */}
-          <section className="panel" style={{ padding: '18px 22px', borderTop: '4px solid #6366f1' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+          <section className="panel" style={{ padding: '16px 20px', borderTop: '4px solid #6366f1' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
                   Institutional Criteria Presets
                 </h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-                  Choose an approved educational weightage model or customize values below.
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+                  Select an approved educational weightage model or customize sliders below.
                 </p>
               </div>
-              <span className="pill purple" style={{ fontSize: 12 }}>
-                Active Campus: {String(campuses.find((c: any) => c.id === effectiveCampusId)?.name || 'All Campuses')}
+              <span className="pill purple" style={{ fontSize: 11, padding: '3px 8px' }}>
+                Campus: {String(campuses.find((c: any) => c.id === effectiveCampusId)?.name || 'All Campuses')}
               </span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-              {PRESET_TEMPLATES.map((p, i) => (
-                <div
-                  key={i}
-                  onClick={() => applyPreset(p)}
-                  style={{
-                    padding: '12px 16px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    background: (examWeight === p.exam_weight && hwWeight === p.homework_weight && cwWeight === p.classwork_weight && attWeight === p.attendance_weight) ? '#f5f3ff' : '#ffffff',
-                    borderColor: (examWeight === p.exam_weight && hwWeight === p.homework_weight && cwWeight === p.classwork_weight && attWeight === p.attendance_weight) ? '#8b5cf6' : '#e2e8f0',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <strong style={{ fontSize: 13, color: '#1e293b' }}>{p.name}</strong>
-                    {(examWeight === p.exam_weight && hwWeight === p.homework_weight && cwWeight === p.classwork_weight && attWeight === p.attendance_weight) && (
-                      <span className="pill green" style={{ fontSize: 10, padding: '2px 6px' }}>Active</span>
-                    )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 10 }}>
+              {PRESET_TEMPLATES.map((p, i) => {
+                const isActive = (examWeight === p.exam_weight && hwWeight === p.homework_weight && cwWeight === p.classwork_weight && attWeight === p.attendance_weight);
+                return (
+                  <div
+                    key={i}
+                    onClick={() => applyPreset(p)}
+                    className={`preset-card-pro ${isActive ? 'active' : ''}`}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: 13, color: '#1e293b' }}>{p.name}</strong>
+                      {isActive && (
+                        <span className="pill green" style={{ fontSize: 10, padding: '2px 6px' }}>Active</span>
+                      )}
+                    </div>
+                    <div className="preset-weight-bar">
+                      <div style={{ width: `${p.exam_weight}%`, background: '#6366f1' }} title={`Exams: ${p.exam_weight}%`} />
+                      <div style={{ width: `${p.homework_weight}%`, background: '#3b82f6' }} title={`Homework: ${p.homework_weight}%`} />
+                      <div style={{ width: `${p.classwork_weight}%`, background: '#10b981' }} title={`Classwork: ${p.classwork_weight}%`} />
+                      <div style={{ width: `${p.attendance_weight}%`, background: '#f59e0b' }} title={`Attendance: ${p.attendance_weight}%`} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, color: '#64748b', alignItems: 'center' }}>
+                      <span><strong>{p.exam_weight}%</strong> Exams</span>
+                      <span>·</span>
+                      <span><strong>{p.homework_weight}%</strong> HW</span>
+                      <span>·</span>
+                      <span><strong>{p.classwork_weight}%</strong> CW</span>
+                      <span>·</span>
+                      <span><strong>{p.attendance_weight}%</strong> Att</span>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>{p.description}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 

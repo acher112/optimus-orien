@@ -1297,59 +1297,59 @@ export default function Examinations({
       {/* ------------------------------------------------------------- */}
       {tab === 'engine_marks' && (
         <section className="panel hr-panel">
-          <div className="panel-head">
+          <div className="panel-head" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <h3>Configurable Marks Entry Grid</h3>
-              <p>Enter marks across configured terms. Term percentages and contributions are normalized automatically.</p>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Marks Entry Grid</h3>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Enter student marks across terms. Contributions and normalized scores calculate live.</p>
             </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div>
               <button
                 className="primary-btn"
                 onClick={handleSaveEngineMarks}
                 disabled={savingEngineMarks || !engineMarksData}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '8px 16px' }}
               >
-                {savingEngineMarks ? 'Saving & Recalculating…' : 'Save Marks & Recalculate'}
+                <Check size={14} /> {savingEngineMarks ? 'Saving…' : 'Save Marks & Recalculate'}
               </button>
             </div>
           </div>
 
           {/* Grid Selectors */}
-          <div style={{ display: 'flex', gap: 16, padding: '12px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', alignItems: 'center' }}>
-            <label style={{ fontSize: 13, fontWeight: 600 }}>Structure:
+          <div className="exam-grid-controls">
+            {engineConfigs.length > 1 && (
+              <label className="exam-control-label">Structure
+                <select
+                  className="fx-select exam-control-select"
+                  value={selectedConfigId || ''}
+                  onChange={e => {
+                    setSelectedConfigId(Number(e.target.value));
+                    setBump(b => b + 1);
+                  }}
+                >
+                  {engineConfigs.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.status})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="exam-control-label">Class
               <select
-                className="fx-select"
-                style={{ marginLeft: 6 }}
-                value={selectedConfigId || ''}
-                onChange={e => {
-                  setSelectedConfigId(Number(e.target.value));
-                  setBump(b => b + 1);
-                }}
-              >
-                {engineConfigs.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.status}){activeCampusId === null && c.school_name ? ` – ${c.school_name}` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label style={{ fontSize: 13, fontWeight: 600 }}>Class:
-              <select
-                className="fx-select"
-                style={{ marginLeft: 6 }}
+                className="fx-select exam-control-select"
                 value={gridClassId || ''}
                 onChange={e => setGridClassId(Number(e.target.value))}
               >
-                {filteredGridClasses.map(c => <option key={c.id} value={c.id}>{c.full_display_name || (c.school_name ? `${c.name} (${c.school_name})` : c.name)}</option>)}
+                {filteredGridClasses.map(c => <option key={c.id} value={c.id}>{c.full_display_name || c.name}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: 13, fontWeight: 600 }}>Subject:
+            <label className="exam-control-label">Subject
               <select
-                className="fx-select"
-                style={{ marginLeft: 6 }}
+                className="fx-select exam-control-select"
                 value={gridSubjectId || ''}
                 onChange={e => setGridSubjectId(Number(e.target.value))}
               >
-                {filteredGridSubjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code || ''}){s.school_name ? ` - ${s.school_name}` : ''}</option>)}
+                {filteredGridSubjects.map(s => <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>)}
               </select>
             </label>
           </div>
@@ -1378,28 +1378,37 @@ export default function Examinations({
                 <thead>
                   <tr>
                     <th>STUDENT</th>
-                    <th>ROLL #</th>
+                    <th style={{ textAlign: 'center', width: 70 }}>ROLL #</th>
                     {(engineMarksData.columns || []).map((col: R) => (
-                      <th key={col.id} style={{ minWidth: 140 }}>
-                        <div>{col.name}</div>
-                        <div style={{ fontSize: 11, fontWeight: 400, color: '#64748b' }}>
-                          Max: {col.max_marks} | Weight: {col.weight_percentage}%
+                      <th key={col.id} style={{ minWidth: 120, textAlign: 'center' }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{col.name}</div>
+                        <div className="exam-col-subtitle">
+                          Max {col.max_marks} <span style={{ opacity: 0.5 }}>·</span> {col.weight_percentage}% wt
                         </div>
                       </th>
                     ))}
-                    <th>NORMALIZED %</th>
-                    <th>SCALED MARKS</th>
-                    <th>STATUS</th>
+                    <th style={{ textAlign: 'center', minWidth: 120 }}>NORMALIZED %</th>
+                    <th style={{ textAlign: 'center', minWidth: 110 }}>SCALED MARKS</th>
+                    <th style={{ textAlign: 'center', minWidth: 110 }}>STATUS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(engineMarksData.students || []).map((st: R, sIdx: number) => (
                     <tr key={st.student_id}>
                       <td>
-                        <strong>{st.name}</strong>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>{st.admission_number} ({st.gender})</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div className="exam-student-avatar">
+                            {(st.name || 'ST').split(' ').map((n: string) => n[0]).slice(0, 2).join('')}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', lineHeight: 1.2 }}>{st.name}</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                              {st.admission_number || `Roll #${st.roll_number}`}
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td>{st.roll_number}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{st.roll_number}</td>
                       {(engineMarksData.columns || []).map((col: R) => {
                         const termEntry = st.terms?.[col.id] || { marks_obtained: '', result_status: 'recorded' };
                         const hasVal = termEntry.marks_obtained !== '' && termEntry.marks_obtained !== null && !isNaN(parseFloat(termEntry.marks_obtained));
@@ -1409,108 +1418,110 @@ export default function Examinations({
                         const termContr = hasVal ? ((parseFloat(termEntry.marks_obtained) / maxVal) * wtVal).toFixed(1) : null;
 
                         return (
-                          <td key={col.id}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max={col.max_marks}
-                                placeholder="Marks"
-                                style={{ width: 85, padding: '4px 6px', fontSize: 13 }}
-                                value={termEntry.marks_obtained}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
-                                  const updatedStudents = [...engineMarksData.students];
-                                  const updatedTerms = {
-                                    ...st.terms,
-                                    [col.id]: {
-                                      ...termEntry,
-                                      marks_obtained: val
-                                    }
-                                  };
-                                  updatedStudents[sIdx] = computeLiveStudentRow(
-                                    { ...st, terms: updatedTerms },
-                                    engineMarksData.columns || [],
-                                    repScale
-                                  );
-                                  setEngineMarksData({ ...engineMarksData, students: updatedStudents });
-                                }}
-                              />
-                              <select
-                                style={{ fontSize: 10, padding: 2 }}
-                                value={termEntry.result_status}
-                                onChange={e => {
-                                  const stVal = e.target.value;
-                                  const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
-                                  const updatedStudents = [...engineMarksData.students];
-                                  const updatedTerms = {
-                                    ...st.terms,
-                                    [col.id]: {
-                                      ...termEntry,
-                                      result_status: stVal
-                                    }
-                                  };
-                                  updatedStudents[sIdx] = computeLiveStudentRow(
-                                    { ...st, terms: updatedTerms },
-                                    engineMarksData.columns || [],
-                                    repScale
-                                  );
-                                  setEngineMarksData({ ...engineMarksData, students: updatedStudents });
-                                }}
-                              >
-                                <option value="recorded">Recorded</option>
-                                <option value="absent">Absent</option>
-                                <option value="exempt">Exempt</option>
-                                <option value="incomplete">Incomplete</option>
-                              </select>
-                              {hasVal && (
-                                <div style={{ fontSize: 10, color: '#475569', background: '#f1f5f9', padding: '2px 4px', borderRadius: 4, textAlign: 'center' }}>
-                                  <strong style={{ color: '#0f172a' }}>{termPct}%</strong>
-                                  <span style={{ color: '#64748b', marginLeft: 3 }}>· W: {termContr}%</span>
+                          <td key={col.id} style={{ textAlign: 'center' }}>
+                            <div className="exam-score-cell">
+                              <div className="exam-input-row">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  max={col.max_marks}
+                                  placeholder="—"
+                                  className={`exam-cell-input ${termEntry.result_status !== 'recorded' ? 'non-recorded' : ''}`}
+                                  value={termEntry.result_status === 'recorded' ? (termEntry.marks_obtained ?? '') : ''}
+                                  disabled={termEntry.result_status !== 'recorded'}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
+                                    const updatedStudents = [...engineMarksData.students];
+                                    const updatedTerms = {
+                                      ...st.terms,
+                                      [col.id]: {
+                                        ...termEntry,
+                                        marks_obtained: val
+                                      }
+                                    };
+                                    updatedStudents[sIdx] = computeLiveStudentRow(
+                                      { ...st, terms: updatedTerms },
+                                      engineMarksData.columns || [],
+                                      repScale
+                                    );
+                                    setEngineMarksData({ ...engineMarksData, students: updatedStudents });
+                                  }}
+                                />
+                                <select
+                                  className={`exam-cell-status-select ${termEntry.result_status !== 'recorded' ? 'active-status' : ''}`}
+                                  value={termEntry.result_status}
+                                  title="Mark status: Recorded, Absent, Exempt, or Incomplete"
+                                  onChange={e => {
+                                    const stVal = e.target.value;
+                                    const repScale = parseFloat(engineMarksData.configuration?.reporting_scale) || 100;
+                                    const updatedStudents = [...engineMarksData.students];
+                                    const updatedTerms = {
+                                      ...st.terms,
+                                      [col.id]: {
+                                        ...termEntry,
+                                        result_status: stVal
+                                      }
+                                    };
+                                    updatedStudents[sIdx] = computeLiveStudentRow(
+                                      { ...st, terms: updatedTerms },
+                                      engineMarksData.columns || [],
+                                      repScale
+                                    );
+                                    setEngineMarksData({ ...engineMarksData, students: updatedStudents });
+                                  }}
+                                >
+                                  <option value="recorded">Score</option>
+                                  <option value="absent">ABS</option>
+                                  <option value="exempt">EXM</option>
+                                  <option value="incomplete">INC</option>
+                                </select>
+                              </div>
+                              {hasVal && termEntry.result_status === 'recorded' && (
+                                <div className="exam-score-meta">
+                                  <span className="exam-score-pct">{termPct}%</span>
+                                  <span className="exam-score-wt">{termContr}pts</span>
                                 </div>
                               )}
                             </div>
                           </td>
                         );
                       })}
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         {st.final_percentage !== null && st.final_percentage !== undefined ? (
-                          <div>
-                            <strong style={{ color: OVERALL_COLOR, fontSize: 14 }}>{st.final_percentage}%</strong>
-                            <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>100% complete</div>
+                          <div className="exam-score-final-pill complete">
+                            <strong>{st.final_percentage}%</strong>
+                            <small>100% complete</small>
                           </div>
                         ) : st.current_percentage !== null && st.current_percentage !== undefined ? (
-                          <div>
-                            <span style={{ color: '#0d9488', fontSize: 13, fontWeight: 700 }} title={`Current progress across ${st.assessed_weight}% weight assessed`}>
-                              {st.current_percentage}% <small style={{ fontWeight: 500 }}>(cur)</small>
-                            </span>
-                            <div style={{ fontSize: 10, color: '#64748b' }}>Assessed: {st.assessed_weight}%</div>
+                          <div className="exam-score-final-pill in-progress">
+                            <strong>{st.current_percentage}%</strong>
+                            <small>{st.assessed_weight}% assessed</small>
                           </div>
                         ) : (
-                          <span style={{ color: '#94a3b8' }}>–</span>
+                          <span style={{ color: '#cbd5e1' }}>—</span>
                         )}
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         {st.scaled_marks !== null && st.scaled_marks !== undefined ? (
-                          <div>
-                            <strong style={{ fontSize: 13, color: '#1e293b' }}>{st.scaled_marks}</strong>
-                            <span style={{ fontSize: 11, color: '#64748b' }}> / {engineMarksData.configuration?.reporting_scale || '100.00'}</span>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                            {st.scaled_marks}
+                            <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}> / {engineMarksData.configuration?.reporting_scale || '100'}</span>
                           </div>
                         ) : (
-                          <span style={{ color: '#94a3b8' }}>–</span>
+                          <span style={{ color: '#cbd5e1' }}>—</span>
                         )}
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         {st.completed ? (
-                          <span className="pill green" style={{ fontWeight: 700 }}>Complete</span>
+                          <span className="pill green" style={{ fontWeight: 700, fontSize: 11, padding: '3px 8px' }}>Complete</span>
                         ) : parseFloat(st.assessed_weight || '0') > 0 ? (
-                          <span className="pill blue" style={{ fontWeight: 600 }} title={`Assessed: ${st.assessed_weight}%`}>
-                            In Progress ({st.assessed_weight}%)
+                          <span className="pill blue" style={{ fontWeight: 600, fontSize: 11, padding: '3px 8px' }} title={`Assessed: ${st.assessed_weight}%`}>
+                            {st.assessed_weight}% Evaluated
                           </span>
                         ) : (
-                          <span className="pill amber" title="No marks entered yet">Pending</span>
+                          <span className="pill gray" style={{ fontSize: 11, padding: '3px 8px' }}>Pending</span>
                         )}
                       </td>
                     </tr>
