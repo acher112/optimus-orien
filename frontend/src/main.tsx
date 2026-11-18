@@ -120,12 +120,6 @@ const WORKSPACE_NAV = [
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
   // Record Group (Spec Part A §A2)
   { name: 'Record', icon: FileSpreadsheet, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Record Overview', icon: LayoutDashboard, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Staff Record', icon: Users, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Student Record', icon: GraduationCap, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Fees Record', icon: Receipt, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Income & Expenses Record', icon: Wallet, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
-  { name: 'Salaries Record', icon: Banknote, childOf: 'Record', roles: ['organisation_admin', 'school_admin', 'principal'] },
   // Teacher Performance (Spec Part B §B1)
   { name: 'Teacher Performance', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
 ];
@@ -205,7 +199,7 @@ const NAV_GROUPS = [
     ]
   },
   { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
-  { sublabel: 'RECORD & ARCHIVE', items: ['Record', 'Record Overview', 'Staff Record', 'Student Record', 'Fees Record', 'Income & Expenses Record', 'Salaries Record'] },
+  { sublabel: 'RECORD & ARCHIVE', items: ['Record'] },
   { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },

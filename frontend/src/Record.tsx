@@ -19,7 +19,7 @@ interface RecordProps {
 type RecordTab = 'overview' | 'staff' | 'students' | 'fees' | 'finance' | 'salaries';
 
 export default function Record({
-  page = 'Record Overview',
+  page = 'Record',
   user,
   notify,
   activeCampusId,
