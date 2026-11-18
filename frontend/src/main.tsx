@@ -120,8 +120,10 @@ const WORKSPACE_NAV = [
   { name: 'Data import', icon: UploadCloud, roles: ['organisation_admin', 'school_admin', 'principal'] },
   // Record Group (Spec Part A §A2)
   { name: 'Record', icon: FileSpreadsheet, roles: ['organisation_admin', 'school_admin', 'principal'] },
-  // Teacher Performance (Spec Part B §B1)
+  // Teacher Performance (Divided into Set Criteria and Evaluation)
   { name: 'Teacher Performance', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  { name: 'Set Criteria', icon: SlidersHorizontal, childOf: 'Teacher Performance', roles: ['organisation_admin', 'school_admin', 'principal'] },
+  { name: 'Evaluation', icon: Award, childOf: 'Teacher Performance', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
 ];
 
 function BriefcaseIcon(props: any) {
@@ -203,7 +205,8 @@ const FORBIDDEN_TEACHER_PAGES = [
   'Staff', 'Staff Salaries', 'Salaries',
   'Campuses', 'Campus setup', 'Academic years',
   'Audit log', 'Permissions', 'Data import', 'Platform owner',
-  'Reports', 'Risk criteria', 'Students at Risk', 'At-risk list'
+  'Reports', 'Risk criteria', 'Students at Risk', 'At-risk list',
+  'Set Criteria', 'Teacher Criteria'
 ];
 
 const NAV_GROUPS = [
@@ -221,7 +224,7 @@ const NAV_GROUPS = [
   },
   { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
   { sublabel: 'RECORD & ARCHIVE', items: ['Record'] },
-  { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance'] },
+  { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance', 'Set Criteria', 'Evaluation'] },
   { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
@@ -307,6 +310,10 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
 
   // Teacher Performance (Part B §B1)
   'Teacher Performance': 'premium',
+  'Set Criteria': 'premium',
+  'Evaluation': 'premium',
+  'Teacher Evaluation': 'premium',
+  'Teacher Criteria': 'premium',
 };
 
 const NAV_ITEM_FEATURE_KEYS: Record<string, string> = {
@@ -356,6 +363,10 @@ const NAV_ITEM_FEATURE_KEYS: Record<string, string> = {
 
   // Teacher Performance Feature Key
   'Teacher Performance': 'teacher_insights',
+  'Set Criteria': 'teacher_insights',
+  'Evaluation': 'teacher_insights',
+  'Teacher Evaluation': 'teacher_insights',
+  'Teacher Criteria': 'teacher_insights',
 };
 
 // Global toggle to hide plan selection & payment methods from the UI while keeping underlying packages intact
@@ -2432,7 +2443,7 @@ function App() {
               {isItemUnlocked('Academic Quality Index') && renderNavButton('Academic Quality Index', 'Academic Quality (AQI)', TrendingUp)}
               {isItemUnlocked('Study materials') && renderNavButton('Study materials', 'Study Materials', BookOpen)}
               {isItemUnlocked('Timetable') && renderNavButton('Timetable', 'Timetable', CalendarDays)}
-              {isItemUnlocked('Teacher Performance') && renderNavButton('Teacher Performance', 'My Performance', Award)}
+              {isItemUnlocked('Teacher Performance') && renderNavButton('Evaluation', 'My Performance', Award)}
               {teacherScope?.can_view_my_class && isItemUnlocked('Review cases') && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
 
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
@@ -2493,7 +2504,7 @@ function App() {
                       const children = visibleNavItems.filter((c: any) => c.childOf === name);
                       const isDropdown = children.length > 0;
                       const isChildActive = isDropdown && children.some((c: any) => c.name === page);
-                      const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page));
+                      const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page)) || (name === 'Teacher Performance' && ['Evaluation', 'Set Criteria', 'Teacher Evaluation', 'Teacher Criteria'].includes(page));
                       const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
 
                       if (isDropdown) {
@@ -4070,7 +4081,7 @@ function App() {
               />
             </ErrorBoundary>
           )}
-          {page === 'Teacher Performance' && (
+          {['Teacher Performance', 'Evaluation', 'Teacher Evaluation', 'Set Criteria', 'Teacher Criteria'].includes(page) && (
             !isFeatureUnlocked('teacher_insights') ? (
               <FeatureLockedScreen
                 featureName="Teacher Performance & Instructional Insights"
@@ -4085,6 +4096,12 @@ function App() {
                   notify={notify}
                   activeCampusId={activeCampusId}
                   campuses={campuses}
+                  page={page}
+                  initialTab={['Set Criteria', 'Teacher Criteria'].includes(page) ? 'criteria' : 'evaluation'}
+                  onNavigateTab={(tab: string) => {
+                    if (tab === 'criteria') switchPage('Set Criteria');
+                    else switchPage('Evaluation');
+                  }}
                 />
               </ErrorBoundary>
             )

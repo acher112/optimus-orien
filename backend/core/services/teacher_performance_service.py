@@ -38,8 +38,38 @@ def get_active_criteria(school):
             diff_campus_threshold=Decimal('10.00'),
             drop_term_threshold=Decimal('8.00'),
             pass_rate_threshold=Decimal('60.00'),
-            explanation_of_change='Initial baseline supportive criteria version.'
+            explanation_of_change='Initial baseline supportive criteria version.',
+            rules={
+                'class_avg_threshold': 50.0,
+                'include_class_teacher': True,
+                'class_teacher_weight': 15,
+                'show_all_classes': True,
+                'aggregation_mode': 'weighted_by_students',
+                'weights': {
+                    'class_average': 40,
+                    'pass_rate': 30,
+                    'campus_diff': 20,
+                    'class_teacher': 10,
+                },
+                'grade_levels': ['all'],
+            }
         )
+    elif not crit.rules:
+        crit.rules = {
+            'class_avg_threshold': 50.0,
+            'include_class_teacher': True,
+            'class_teacher_weight': 15,
+            'show_all_classes': True,
+            'aggregation_mode': 'weighted_by_students',
+            'weights': {
+                'class_average': 40,
+                'pass_rate': 30,
+                'campus_diff': 20,
+                'class_teacher': 10,
+            },
+            'grade_levels': ['all'],
+        }
+        crit.save(update_fields=['rules'])
     return crit
 
 
@@ -70,6 +100,7 @@ def evaluate_teacher_class_subject(school, teacher_user, school_class, subject, 
             'teacher_name': teacher_user.get_full_name() or teacher_user.username,
             'class_id': school_class.id,
             'class_name': school_class.name,
+            'grade_level': getattr(school_class, 'grade_level', '') or '',
             'subject_id': subject.id,
             'subject_name': subject.name,
             'student_count': student_count,
@@ -112,7 +143,10 @@ def evaluate_teacher_class_subject(school, teacher_user, school_class, subject, 
     status = 'on_track'
     status_display = 'On track'
 
-    if campus_diff <= -float(criteria.diff_campus_threshold) or pass_rate < float(criteria.pass_rate_threshold):
+    rules = getattr(criteria, 'rules', {}) or {}
+    class_avg_thresh = Decimal(str(rules.get('class_avg_threshold', 50.0)))
+
+    if campus_diff <= -float(criteria.diff_campus_threshold) or pass_rate < float(criteria.pass_rate_threshold) or class_avg < class_avg_thresh:
         status = 'needs_support'
         status_display = 'Needs support'
     elif campus_diff <= -(float(criteria.diff_campus_threshold) / 2):
@@ -124,6 +158,7 @@ def evaluate_teacher_class_subject(school, teacher_user, school_class, subject, 
         'teacher_name': teacher_user.get_full_name() or teacher_user.username,
         'class_id': school_class.id,
         'class_name': school_class.name,
+        'grade_level': getattr(school_class, 'grade_level', '') or '',
         'subject_id': subject.id,
         'subject_name': subject.name,
         'student_count': student_count,
@@ -190,10 +225,26 @@ def get_teacher_performance_overview(school, query_params, is_all=False, schools
     search = query_params.get('search')
     status_filter = query_params.get('status')
 
+    # Map class teacher assignments
+    ct_assignments = ClassTeacherAssignment.objects.filter(
+        school_class__school__in=target_schools,
+        end_date__isnull=True
+    ).select_related('school_class')
+    ct_map = {cta.teacher_id: cta.school_class.name for cta in ct_assignments}
+
     for t_id, data in teacher_metrics.items():
         evals = data['evaluations']
-        valid_avgs = [e['class_average'] for e in evals if e['class_average'] is not None]
-        avg_score = round(sum(valid_avgs) / len(valid_avgs), 2) if valid_avgs else None
+        crit_rules = getattr(default_criteria, 'rules', {}) or {}
+        agg_mode = crit_rules.get('aggregation_mode', 'weighted_by_students')
+
+        valid_evals = [e for e in evals if e['class_average'] is not None]
+        if agg_mode == 'weighted_by_students' and valid_evals:
+            tot_students_valid = sum(e['student_count'] for e in valid_evals)
+            avg_score = round(sum(e['class_average'] * e['student_count'] for e in valid_evals) / tot_students_valid, 2) if tot_students_valid > 0 else None
+        else:
+            valid_avgs = [e['class_average'] for e in valid_evals]
+            avg_score = round(sum(valid_avgs) / len(valid_avgs), 2) if valid_avgs else None
+
         total_students = sum(e['student_count'] for e in evals)
 
         # Composite teacher status
@@ -229,6 +280,9 @@ def get_teacher_performance_overview(school, query_params, is_all=False, schools
             status__in=['open', 'acknowledged', 'under_review']
         ).exists()
 
+        is_ct = t_id in ct_map
+        ct_class_name = ct_map.get(t_id, '')
+
         row = {
             'teacher_id': t_id,
             'name': data['name'],
@@ -242,6 +296,8 @@ def get_teacher_performance_overview(school, query_params, is_all=False, schools
             'status': overall_status,
             'status_display': display_status,
             'has_active_alert': has_active_alert,
+            'is_class_teacher': is_ct,
+            'class_teacher_for': ct_class_name,
             'evaluations': evals,
         }
 
@@ -382,14 +438,17 @@ def get_teacher_performance_detail(school, teacher_user, user):
     }
 
 
-def preview_criteria_impact(school, criteria_dict):
+def preview_criteria_impact(school, criteria_dict, is_all=False, schools=None):
     """Live preview of proposed risk criteria before saving (B4)."""
     min_students = int(criteria_dict.get('min_students', 10))
     min_assessments = int(criteria_dict.get('min_assessments', 2))
     diff_threshold = Decimal(str(criteria_dict.get('diff_campus_threshold', 10.00)))
     pass_threshold = Decimal(str(criteria_dict.get('pass_rate_threshold', 60.00)))
+    class_avg_thresh = Decimal(str(criteria_dict.get('class_avg_threshold', 50.00)))
+    include_ct = bool(criteria_dict.get('include_class_teacher', True))
+    aggregation_mode = str(criteria_dict.get('aggregation_mode', 'weighted_by_students'))
 
-    # Dummy mock criteria object
+    # Mock criteria object
     class MockCrit:
         pass
     c = MockCrit()
@@ -397,31 +456,72 @@ def preview_criteria_impact(school, criteria_dict):
     c.min_assessments = min_assessments
     c.diff_campus_threshold = diff_threshold
     c.pass_rate_threshold = pass_threshold
+    c.rules = {
+        'class_avg_threshold': float(class_avg_thresh),
+        'include_class_teacher': include_ct,
+        'aggregation_mode': aggregation_mode,
+    }
+
+    if is_all and schools is not None:
+        target_schools = schools
+    else:
+        target_schools = School.objects.filter(pk=school.pk) if hasattr(school, 'pk') else [school]
 
     assignments = TeachingAssignment.objects.filter(
-        school=school,
+        school__in=target_schools,
         end_date__isnull=True
-    ).select_related('teacher', 'school_class', 'subject')
+    ).select_related('school', 'teacher', 'school_class', 'subject')
 
     counts = {'on_track': 0, 'watch': 0, 'needs_support': 0, 'insufficient_data': 0}
     matched_teachers = set()
+    teacher_assignments_map = {}
 
     for a in assignments:
-        res = evaluate_teacher_class_subject(school, a.teacher, a.school_class, a.subject, c)
+        res = evaluate_teacher_class_subject(a.school, a.teacher, a.school_class, a.subject, c)
         st = res['status']
         counts[st] += 1
         if st in ('needs_support', 'watch'):
             matched_teachers.add(a.teacher.id)
 
+        if a.teacher.id not in teacher_assignments_map:
+            teacher_assignments_map[a.teacher.id] = {
+                'teacher_name': a.teacher.get_full_name() or a.teacher.username,
+                'evals': []
+            }
+        teacher_assignments_map[a.teacher.id]['evals'].append(res)
+
+    sample_preview = None
+    if teacher_assignments_map:
+        sorted_teachers = sorted(teacher_assignments_map.values(), key=lambda t: len(t['evals']), reverse=True)
+        top_teacher = sorted_teachers[0]
+        sample_preview = {
+            'teacher_name': top_teacher['teacher_name'],
+            'classes_count': len(top_teacher['evals']),
+            'classes': [{
+                'class_name': e['class_name'],
+                'subject_name': e['subject_name'],
+                'student_count': e['student_count'],
+                'class_average': e['class_average'],
+                'pass_rate': e['pass_rate'],
+                'status': e['status'],
+                'status_display': e['status_display'],
+            } for e in top_teacher['evals']],
+        }
+
     return {
         'total_assignments_evaluated': assignments.count(),
+        'total_teachers_evaluated': len(teacher_assignments_map),
         'counts_by_status': counts,
         'flagged_teachers_count': len(matched_teachers),
+        'sample_preview': sample_preview,
         'preview_parameters': {
             'min_students': min_students,
             'min_assessments': min_assessments,
             'diff_campus_threshold': float(diff_threshold),
             'pass_rate_threshold': float(pass_threshold),
+            'class_avg_threshold': float(class_avg_thresh),
+            'include_class_teacher': include_ct,
+            'aggregation_mode': aggregation_mode,
         }
     }
 
@@ -439,16 +539,36 @@ def update_criteria_version(school, data, user):
         current.active = False
         current.save()
 
+    rules = dict(current.rules if current and current.rules else {})
+    incoming_rules = data.get('rules') or {}
+    rules.update(incoming_rules)
+
+    if 'class_avg_threshold' in data:
+        rules['class_avg_threshold'] = float(data['class_avg_threshold'])
+    if 'include_class_teacher' in data:
+        rules['include_class_teacher'] = bool(data['include_class_teacher'])
+    if 'class_teacher_weight' in data:
+        rules['class_teacher_weight'] = int(data['class_teacher_weight'])
+    if 'show_all_classes' in data:
+        rules['show_all_classes'] = bool(data['show_all_classes'])
+    if 'aggregation_mode' in data:
+        rules['aggregation_mode'] = str(data['aggregation_mode'])
+    if 'weights' in data:
+        rules['weights'] = data['weights']
+    if 'grade_levels' in data:
+        rules['grade_levels'] = data['grade_levels']
+
     new_crit = TeacherPerformanceCriteria.objects.create(
         school=school,
         name=data.get('name', 'Standard Supportive Criteria'),
         version=new_version_num,
         active=True,
-        min_students=data.get('min_students', 10),
-        min_assessments=data.get('min_assessments', 2),
+        min_students=int(data.get('min_students', 10)),
+        min_assessments=int(data.get('min_assessments', 2)),
         diff_campus_threshold=Decimal(str(data.get('diff_campus_threshold', '10.00'))),
         drop_term_threshold=Decimal(str(data.get('drop_term_threshold', '8.00'))),
         pass_rate_threshold=Decimal(str(data.get('pass_rate_threshold', '60.00'))),
+        rules=rules,
         explanation_of_change=explanation,
         previous_version=current,
         created_by=user,
@@ -458,7 +578,7 @@ def update_criteria_version(school, data, user):
         actor=user,
         action='update_teacher_criteria',
         obj=new_crit,
-        changed_fields=['version', 'active'],
+        changed_fields=['version', 'active', 'rules'],
         after={'version': new_crit.version, 'explanation': explanation}
     )
     return new_crit

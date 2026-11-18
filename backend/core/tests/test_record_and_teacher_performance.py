@@ -26,7 +26,7 @@ from rest_framework.test import APIClient
 
 from core.models import (
     Organisation, School, User, AcademicYear, SchoolClass, Subject, Section,
-    Student, Enrollment, StaffMember, TeachingAssignment,
+    Student, Enrollment, StaffMember, TeachingAssignment, ClassTeacherAssignment,
     FeeHead, StudentFee, FeePayment, FinanceCategory, FinanceEntry, SalaryRecord,
     StaffLifecycleEvent, StudentLifecycleEvent, LifecycleReasonCategory,
     TeacherPerformanceCriteria, TeacherPerformanceAlert, TeacherPerformanceNote,
@@ -548,3 +548,109 @@ class RecordAndTeacherPerformanceTests(TestCase):
                     found_campus = True
                     break
         self.assertTrue(found_campus, "Master dossier summary sheet should reflect 'All Campuses (Consolidated)'.")
+
+    # -------------------------------------------------------------
+    # 17. Teacher Performance Criteria All Campuses & Class Options
+    # -------------------------------------------------------------
+    def test_teacher_performance_criteria_all_campuses_and_options(self):
+        """Verifies criteria settings support all campuses and all class evaluation options."""
+        self.client.force_authenticate(user=self.owner)
+
+        # GET criteria with campus=all
+        res_get = self.client.get('/api/v1/teacher-performance/criteria/?campus=all')
+        self.assertEqual(res_get.status_code, 200)
+        self.assertTrue(res_get.data['is_all_campuses'])
+        active_c = res_get.data['active_criteria']
+        self.assertIn('class_avg_threshold', active_c)
+        self.assertIn('include_class_teacher', active_c)
+        self.assertIn('aggregation_mode', active_c)
+        self.assertIn('campuses', res_get.data)
+        self.assertGreaterEqual(len(res_get.data['campuses']), 2)
+
+        # POST criteria with apply_to_all_campuses
+        post_payload = {
+            'campus': 'all',
+            'apply_to_all_campuses': True,
+            'name': 'Updated Multi-Campus Criteria',
+            'min_students': 12,
+            'min_assessments': 3,
+            'diff_campus_threshold': 8.0,
+            'drop_term_threshold': 6.0,
+            'pass_rate_threshold': 65.0,
+            'class_avg_threshold': 55.0,
+            'include_class_teacher': True,
+            'class_teacher_weight': 20,
+            'show_all_classes': True,
+            'aggregation_mode': 'weighted_by_students',
+            'explanation_of_change': 'Annual standard revision for all campuses.',
+        }
+        res_post = self.client.post('/api/v1/teacher-performance/criteria/', post_payload, format='json')
+        self.assertEqual(res_post.status_code, 201)
+        self.assertGreaterEqual(res_post.data['applied_campuses_count'], 2)
+
+        # Verify active criteria on campus1 and campus2
+        crit1 = TeacherPerformanceCriteria.objects.filter(school=self.campus1, active=True).first()
+        crit2 = TeacherPerformanceCriteria.objects.filter(school=self.campus2, active=True).first()
+        self.assertIsNotNone(crit1)
+        self.assertIsNotNone(crit2)
+        self.assertEqual(crit1.min_students, 12)
+        self.assertEqual(crit2.min_students, 12)
+        self.assertEqual(float(crit1.rules.get('class_avg_threshold')), 55.0)
+        self.assertEqual(float(crit2.rules.get('class_avg_threshold')), 55.0)
+
+    # -------------------------------------------------------------
+    # 18. Teacher Performance Multi-Class Breakdown & Class Teacher
+    # -------------------------------------------------------------
+    def test_teacher_performance_multi_class_and_class_teacher(self):
+        """Verifies teacher evaluation roll and dossier show class teacher role and class breakdown."""
+        # Assign teacher1 as class teacher
+        ClassTeacherAssignment.objects.create(
+            teacher=self.teacher1, school_class=self.school_class,
+            start_date=date(2025, 8, 1)
+        )
+
+        self.client.force_authenticate(user=self.principal1)
+
+        # Overview roll includes class teacher role
+        res_ov = self.client.get(f'/api/v1/teacher-performance/overview/?campus={self.campus1.id}')
+        self.assertEqual(res_ov.status_code, 200)
+        teachers = res_ov.data['teachers']
+        t1_row = next((t for t in teachers if t['teacher_id'] == self.teacher1.id), None)
+        self.assertIsNotNone(t1_row)
+        self.assertTrue(t1_row['is_class_teacher'])
+        self.assertEqual(t1_row['class_teacher_for'], self.school_class.name)
+
+        # Detail dossier includes class_teacher_summary
+        res_det = self.client.get(f'/api/v1/teacher-performance/teachers/{self.teacher1.id}/?campus={self.campus1.id}')
+        self.assertEqual(res_det.status_code, 200)
+        self.assertIn('class_teacher_summary', res_det.data)
+        self.assertEqual(res_det.data['class_teacher_summary']['class_name'], self.school_class.name)
+        self.assertIn('classes', res_det.data)
+
+        # Live simulation preview for principal's campus
+        prev_res = self.client.post('/api/v1/teacher-performance/criteria/preview/', {
+            'campus': self.campus1.id,
+            'min_students': 1,
+            'min_assessments': 1,
+            'diff_campus_threshold': 10.0,
+            'pass_rate_threshold': 60.0,
+            'class_avg_threshold': 50.0,
+            'aggregation_mode': 'weighted_by_students',
+        }, format='json')
+        self.assertEqual(prev_res.status_code, 200)
+        self.assertIn('total_assignments_evaluated', prev_res.data)
+        self.assertIn('sample_preview', prev_res.data)
+
+        # Owner can preview across all campuses
+        self.client.force_authenticate(user=self.owner)
+        prev_all = self.client.post('/api/v1/teacher-performance/criteria/preview/', {
+            'campus': 'all',
+            'min_students': 1,
+            'min_assessments': 1,
+            'diff_campus_threshold': 10.0,
+            'pass_rate_threshold': 60.0,
+            'class_avg_threshold': 50.0,
+            'aggregation_mode': 'weighted_by_students',
+        }, format='json')
+        self.assertEqual(prev_all.status_code, 200)
+        self.assertIn('total_assignments_evaluated', prev_all.data)

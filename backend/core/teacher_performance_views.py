@@ -80,13 +80,38 @@ def teacher_performance_self_view(request):
 @requires_feature('teacher_insights')
 def teacher_performance_criteria_view(request):
     """GET, POST /api/v1/teacher-performance/criteria/"""
-    school = resolve_record_school(request.user, request.query_params.get('campus') or request.data.get('campus'))
+    requested_campus = request.query_params.get('campus') or request.data.get('campus')
+    is_all, school, schools = resolve_record_schools(request.user, requested_campus)
     if not check_record_capability(request.user, school, 'teacher_performance.manage_criteria'):
         raise PermissionDenied('Criteria configuration requires leadership authorization.')
 
     if request.method == 'GET':
         crit = get_active_criteria(school)
-        history = TeacherPerformanceCriteria.objects.filter(school=school).order_by('-version')[:10]
+        history = TeacherPerformanceCriteria.objects.filter(school=school).order_by('-version')[:15]
+        rules = crit.rules or {}
+        active_crit_dict = {
+            'version': crit.version,
+            'name': crit.name,
+            'min_students': crit.min_students,
+            'min_assessments': crit.min_assessments,
+            'diff_campus_threshold': float(crit.diff_campus_threshold),
+            'drop_term_threshold': float(crit.drop_term_threshold),
+            'pass_rate_threshold': float(crit.pass_rate_threshold),
+            'class_avg_threshold': float(rules.get('class_avg_threshold', 50.0)),
+            'include_class_teacher': bool(rules.get('include_class_teacher', True)),
+            'class_teacher_weight': int(rules.get('class_teacher_weight', 15)),
+            'show_all_classes': bool(rules.get('show_all_classes', True)),
+            'aggregation_mode': rules.get('aggregation_mode', 'weighted_by_students'),
+            'weights': rules.get('weights', {
+                'class_average': 40,
+                'pass_rate': 30,
+                'campus_diff': 20,
+                'class_teacher': 10,
+            }),
+            'grade_levels': rules.get('grade_levels', ['all']),
+            'rules': rules,
+        }
+
         history_list = [{
             'version': h.version,
             'name': h.name,
@@ -96,29 +121,42 @@ def teacher_performance_criteria_view(request):
             'diff_campus_threshold': float(h.diff_campus_threshold),
             'drop_term_threshold': float(h.drop_term_threshold),
             'pass_rate_threshold': float(h.pass_rate_threshold),
+            'class_avg_threshold': float((h.rules or {}).get('class_avg_threshold', 50.0)),
+            'include_class_teacher': bool((h.rules or {}).get('include_class_teacher', True)),
+            'aggregation_mode': (h.rules or {}).get('aggregation_mode', 'weighted_by_students'),
             'explanation_of_change': h.explanation_of_change,
+            'created_by': h.created_by.get_full_name() if h.created_by else 'System Leadership',
             'created_at': h.created_at.strftime('%Y-%m-%d %H:%M'),
         } for h in history]
 
+        campuses_list = [{'id': s.id, 'name': s.name, 'code': s.code} for s in schools]
+
         return Response({
-            'active_criteria': {
-                'version': crit.version,
-                'name': crit.name,
-                'min_students': crit.min_students,
-                'min_assessments': crit.min_assessments,
-                'diff_campus_threshold': float(crit.diff_campus_threshold),
-                'drop_term_threshold': float(crit.drop_term_threshold),
-                'pass_rate_threshold': float(crit.pass_rate_threshold),
-            },
+            'active_criteria': active_crit_dict,
             'version_history': history_list,
+            'is_all_campuses': is_all,
+            'campus_id': school.id if not is_all else 'all',
+            'campus_name': school.name if not is_all else 'All Campuses (Consolidated)',
+            'campuses': campuses_list,
         })
 
     # POST new criteria version
-    new_crit = update_criteria_version(school, request.data, request.user)
+    apply_all = bool(request.data.get('apply_to_all_campuses') or is_all)
+    can_apply_all = request.user.role in ('organisation_admin', 'platform_admin') or request.user.is_superuser
+    if apply_all and can_apply_all:
+        target_schools = list(schools)
+    else:
+        target_schools = [school]
+
+    new_crit = None
+    for s in target_schools:
+        new_crit = update_criteria_version(s, request.data, request.user)
+
     return Response({
         'status': 'updated',
         'version': new_crit.version,
-        'message': f"Teacher performance criteria updated to version {new_crit.version}.",
+        'applied_campuses_count': len(target_schools),
+        'message': f"Teacher performance criteria updated to version {new_crit.version} across {len(target_schools)} campus(es).",
     }, status=201)
 
 
@@ -126,11 +164,12 @@ def teacher_performance_criteria_view(request):
 @requires_feature('teacher_insights')
 def teacher_performance_preview_view(request):
     """POST /api/v1/teacher-performance/criteria/preview/"""
-    school = resolve_record_school(request.user, request.data.get('campus'))
+    requested_campus = request.data.get('campus')
+    is_all, school, schools = resolve_record_schools(request.user, requested_campus)
     if not check_record_capability(request.user, school, 'teacher_performance.manage_criteria'):
         raise PermissionDenied('Preview requires criteria management authorization.')
 
-    result = preview_criteria_impact(school, request.data)
+    result = preview_criteria_impact(school, request.data, is_all=is_all, schools=schools)
     return Response(result)
 
 
