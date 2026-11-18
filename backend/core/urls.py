@@ -6,7 +6,8 @@ from . import (
     fees, salaries, exams, platform_owner, imports, announcements, study_materials,
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
-    parent_views, landing_views, subscription_views, record_views, teacher_performance_views
+    parent_views, landing_views, subscription_views, record_views, teacher_performance_views,
+    public_directory_views
 )
 
 r = DefaultRouter()
@@ -177,6 +178,39 @@ urlpatterns = [
     path('platform-admin/landing/faqs/', landing_views.admin_landing_faqs_view),
     path('platform-admin/landing/plans/', landing_views.admin_landing_plans_view),
     path('platform-admin/landing/contacts/', landing_views.admin_landing_contacts_view),
+
+    # Public "Find a School" Directory & Campus Leaderboard
+    path('public/schools/', public_directory_views.public_schools_list_view),
+    path('public/schools/compare/', public_directory_views.public_schools_compare_view),
+    path('public/schools/sitemap/', public_directory_views.public_schools_sitemap_view),
+    path('public/schools/methodology/', public_directory_views.public_methodology_view),
+    path('public/schools/<slug:slug>/', public_directory_views.public_school_detail_view),
+    path('public/schools/<slug:slug>/reveal-contact/', public_directory_views.public_reveal_contact_view),
+    path('public/schools/<slug:slug>/enquiry/', public_directory_views.public_submit_enquiry_view),
+
+    # School-Side Public Profile & Enquiries Management
+    path('schools/<int:school_id>/public-profile/', public_directory_views.school_public_profile_view),
+    path('schools/<int:school_id>/public-profile/submit/', public_directory_views.school_public_profile_submit_view),
+    path('schools/<int:school_id>/public-profile/unpublish/', public_directory_views.school_public_profile_unpublish_view),
+    path('schools/<int:school_id>/public-enquiries/', public_directory_views.school_public_enquiries_view),
+    path('schools/<int:school_id>/public-enquiries/<int:enquiry_id>/handle/', public_directory_views.school_public_enquiry_handle_view),
+    path('principal/public-directory-consent/', public_directory_views.principal_public_consent_view),
+
+    # Platform Admin Directory Moderation & Config
+    path('platform-admin/public-directory/listings/', public_directory_views.admin_public_directory_listings_view),
+    path('platform-admin/public-directory/listings/<int:listing_id>/approve/', public_directory_views.admin_public_directory_approve_view),
+    path('platform-admin/public-directory/listings/<int:listing_id>/reject/', public_directory_views.admin_public_directory_reject_view),
+    path('platform-admin/public-directory/listings/<int:listing_id>/unpublish/', public_directory_views.admin_public_directory_unpublish_view),
+    path('platform-admin/public-directory/config/', public_directory_views.admin_public_directory_config_view),
+    path('platform-admin/public-directory/trigger-snapshot/', public_directory_views.admin_public_directory_trigger_snapshot_view),
+
+    # Admin aliases for public directory moderation
+    path('admin/public-directory/listings/', public_directory_views.admin_public_directory_listings_view),
+    path('admin/public-directory/listings/<int:listing_id>/approve/', public_directory_views.admin_public_directory_approve_view),
+    path('admin/public-directory/listings/<int:listing_id>/reject/', public_directory_views.admin_public_directory_reject_view),
+    path('admin/public-directory/listings/<int:listing_id>/unpublish/', public_directory_views.admin_public_directory_unpublish_view),
+    path('admin/public-directory/config/', public_directory_views.admin_public_directory_config_view),
+    path('admin/public-directory/trigger-snapshot/', public_directory_views.admin_public_directory_trigger_snapshot_view),
 
     # Existing core endpoints
     path('public/indicators/', onboarding_views.public_school_indicators),

@@ -2937,3 +2937,302 @@ class TeacherPerformanceNote(models.Model):
         return f"Note on {self.teacher.username} by {self.author.username} ({self.kind})"
 
 
+# =============================================================================
+# PUBLIC "FIND A SCHOOL" DIRECTORY & CAMPUS LEADERBOARD MODELS
+# Platform-level unscoped tables (Public API reads ONLY these tables; never touches tenant tables)
+# and tenant-scoped draft model with Row Level Security (RLS).
+# =============================================================================
+
+class PlatformPublicDirectoryConfig(models.Model):
+    """
+    Platform-level administrative configuration for public directory ranking eligibility
+    and automated enquiry retention period.
+    """
+    min_active_students = models.PositiveIntegerField(default=15, help_text="Minimum active students enrolled to be eligible for ranking")
+    min_published_assessments = models.PositiveIntegerField(default=2, help_text="Minimum published assessments in period")
+    min_subjects_covered = models.PositiveIntegerField(default=3, help_text="Minimum subjects covered in published assessments")
+    data_freshness_months = models.PositiveIntegerField(default=12, help_text="Maximum age of published period in months")
+    enquiry_retention_days = models.PositiveIntegerField(default=90, help_text="Retention period for parent enquiries before auto-purge")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Public Directory Config"
+
+    def __str__(self):
+        return f"Directory Config (Min Students: {self.min_active_students}, Retention: {self.enquiry_retention_days}d)"
+
+
+class PublicCampusListing(models.Model):
+    """
+    Authoritative, platform-level public directory listing for an enrolled campus.
+    Intentionally unscoped to enable safe, fast public queries without RLS overhead.
+    Public API reads ONLY this table and related public models.
+    """
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('pending_approval', 'Pending Approval'),
+        ('live', 'Live'),
+        ('unpublished', 'Unpublished'),
+        ('rejected', 'Rejected'),
+    ]
+    GENDER_CHOICES = [
+        ('co-ed', 'Co-Education'),
+        ('boys', 'Boys Only'),
+        ('girls', 'Girls Only'),
+    ]
+    MEDIUM_CHOICES = [
+        ('english', 'English Medium'),
+        ('urdu', 'Urdu Medium'),
+        ('bilingual', 'Bilingual'),
+    ]
+    CONTACT_MODE_CHOICES = [
+        ('enquiry_only', 'Enquiry Form Only'),
+        ('official_contact', 'Official School Contact'),
+        ('principal_direct', 'Principal Direct Contact (Consented)'),
+    ]
+    RANK_DISPLAY_CHOICES = [
+        ('exact_rank', 'Exact Rank'),
+        ('tier_only', 'Tier Only'),
+        ('unranked_listing', 'Listed Without Rank'),
+    ]
+
+    # Core Identifiers
+    school = models.OneToOneField(School, on_delete=models.CASCADE, related_name='public_listing')
+    slug = models.SlugField(max_length=140, unique=True, db_index=True)
+    display_name = models.CharField(max_length=180)
+    tagline = models.CharField(max_length=250, blank=True, default='')
+    about = models.TextField(max_length=2500, blank=True, default='')
+    logo_url = models.URLField(max_length=500, blank=True, default='')
+
+    # Location (Coordinate picked directly by school; no geocoding service)
+    country = models.CharField(max_length=80, db_index=True, default='Pakistan')
+    province = models.CharField(max_length=80, db_index=True, default='Punjab')
+    city = models.CharField(max_length=80, db_index=True, default='Lahore')
+    address = models.CharField(max_length=255, blank=True, default='')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
+    # Academic & Institutional Metadata
+    boards = models.JSONField(default=list, blank=True)
+    levels = models.JSONField(default=list, blank=True)
+    gender_type = models.CharField(max_length=20, choices=GENDER_CHOICES, default='co-ed')
+    medium = models.CharField(max_length=20, choices=MEDIUM_CHOICES, default='english')
+    established_year = models.PositiveIntegerField(null=True, blank=True)
+    facilities = models.JSONField(default=list, blank=True)
+    website = models.URLField(max_length=255, blank=True, default='')
+    social_links = models.JSONField(default=dict, blank=True)
+    admission_status = models.CharField(max_length=20, choices=[('open', 'Open'), ('closed', 'Closed')], default='open')
+
+    # Principal Privacy & Consent Fields (Name shown only with principal's own explicit consent)
+    principal_name = models.CharField(max_length=120, blank=True, default='')
+    principal_title = models.CharField(max_length=80, blank=True, default='Principal')
+    show_principal_name = models.BooleanField(default=False)
+
+    # Contact Settings & Direct Fields (Protected: NEVER serialized in list payloads or HTML)
+    contact_mode = models.CharField(max_length=25, choices=CONTACT_MODE_CHOICES, default='enquiry_only')
+    official_phone = models.CharField(max_length=40, blank=True, default='')
+    official_email = models.EmailField(blank=True, default='')
+    principal_direct_phone = models.CharField(max_length=40, blank=True, default='')
+    principal_direct_email = models.EmailField(blank=True, default='')
+
+    # Display & SEO Controls
+    rank_display_mode = models.CharField(max_length=25, choices=RANK_DISPLAY_CHOICES, default='exact_rank')
+    noindex = models.BooleanField(default=False)
+
+    # Governance & Approval Workflow
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, default='')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_name']
+        indexes = [
+            models.Index(fields=['status', 'country', 'city']),
+            models.Index(fields=['status', 'admission_status']),
+        ]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.city}, {self.country}) [{self.status}]"
+
+
+class PublicRankSnapshot(models.Model):
+    """
+    Immutable academic performance snapshot generated for a listed campus.
+    Guarantees reproducibility of ranks and zero runtime load on multi-tenant tables.
+    """
+    listing = models.ForeignKey(PublicCampusListing, on_delete=models.CASCADE, related_name='snapshots')
+    academic_year = models.CharField(max_length=40)
+    period_name = models.CharField(max_length=80)
+    aqi_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    band = models.CharField(max_length=60, default='Not ranked yet (not enough published data)')
+    aqi_config_version = models.CharField(max_length=20, default='v1.0')
+
+    # Auditing & Statistical Basis
+    student_count = models.PositiveIntegerField(default=0)
+    assessment_count = models.PositiveIntegerField(default=0)
+    subjects_count = models.PositiveIntegerField(default=0)
+    is_eligible = models.BooleanField(default=False)
+    eligibility_reasons = models.JSONField(default=list, blank=True)
+
+    # Competition Ranks (Ties: 1, 2, 2, 4)
+    rank_overall = models.PositiveIntegerField(null=True, blank=True)
+    rank_country = models.PositiveIntegerField(null=True, blank=True)
+    rank_province = models.PositiveIntegerField(null=True, blank=True)
+    rank_city = models.PositiveIntegerField(null=True, blank=True)
+    rank_board = models.JSONField(default=dict, blank=True)
+    rank_level = models.JSONField(default=dict, blank=True)
+    rank_tier = models.CharField(max_length=30, blank=True, default='')
+
+    # Trend & Delta for "Most Improved" Leaderboard
+    previous_aqi_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    score_delta = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+
+    generated_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-generated_at']
+        indexes = [
+            models.Index(fields=['is_eligible', '-aqi_score']),
+            models.Index(fields=['listing', '-generated_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.listing.display_name} - {self.period_name}: AQI {self.aqi_score} ({self.band})"
+
+
+class PublicEnquiry(models.Model):
+    """
+    Minimal parent enquiry for a public campus.
+    Retained for 90 days, purged by automated management command.
+    The campus reads ONLY its own enquiries; honeypot and rate limits enforced.
+    """
+    STATUS_CHOICES = [
+        ('new', 'New'),
+        ('contacted', 'Contacted'),
+        ('archived', 'Archived'),
+    ]
+
+    listing = models.ForeignKey(PublicCampusListing, on_delete=models.CASCADE, related_name='enquiries')
+    parent_name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=40)
+    email = models.EmailField(blank=True, default='')
+    child_grade = models.CharField(max_length=50)
+    message = models.TextField(max_length=2000)
+
+    # Security & Processing
+    ip_hash = models.CharField(max_length=64, db_index=True)
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    is_handled = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    retention_expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Enquiry from {self.parent_name} for {self.listing.display_name} ({self.status})"
+
+
+class PublicListingConsent(models.Model):
+    """
+    Immutable legal consent audit for public directory publication and principal privacy choices.
+    """
+    CONSENT_CHOICES = [
+        ('school_publish', 'School Directory Publication Opt-In'),
+        ('principal_name', 'Principal Name Disclosure Consent'),
+        ('principal_contact', 'Principal Direct Contact Disclosure Consent'),
+    ]
+
+    listing = models.ForeignKey(PublicCampusListing, on_delete=models.CASCADE, related_name='consents')
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='+')
+    consent_type = models.CharField(max_length=30, choices=CONSENT_CHOICES)
+    consent_text_version = models.CharField(max_length=30, default='v1.0')
+    agreed = models.BooleanField(default=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Consent {self.consent_type} by {self.user.username} on {self.listing.display_name}"
+
+
+class PublicListingEvent(models.Model):
+    """
+    Complete audit trail of all governance state transitions and contact reveal events.
+    """
+    EVENT_CHOICES = [
+        ('opt_in_submitted', 'Opt-In Submitted for Approval'),
+        ('approved', 'Listing Approved by Platform Admin'),
+        ('rejected', 'Listing Rejected by Platform Admin'),
+        ('unpublished_by_school', 'Listing Unpublished by School Owner'),
+        ('unpublished_by_admin', 'Listing Unpublished by Platform Admin'),
+        ('profile_updated', 'Profile Metadata Updated'),
+        ('contact_revealed', 'Campus Contact Revealed via Rate-Limited Gate'),
+    ]
+
+    listing = models.ForeignKey(PublicCampusListing, on_delete=models.CASCADE, related_name='events')
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    event_type = models.CharField(max_length=35, choices=EVENT_CHOICES)
+    reason = models.TextField(blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Event {self.event_type} on {self.listing.display_name} at {self.created_at}"
+
+
+class SchoolPublicProfileDraft(models.Model):
+    """
+    Tenant-scoped working draft for campus public profile configuration.
+    Enforces Row-Level Security (RLS) scoped strictly to school_id.
+    """
+    school = models.OneToOneField(School, on_delete=models.CASCADE, related_name='public_profile_draft')
+    display_name = models.CharField(max_length=180, blank=True, default='')
+    tagline = models.CharField(max_length=250, blank=True, default='')
+    about = models.TextField(max_length=2500, blank=True, default='')
+    logo_url = models.URLField(max_length=500, blank=True, default='')
+
+    country = models.CharField(max_length=80, default='Pakistan')
+    province = models.CharField(max_length=80, default='Punjab')
+    city = models.CharField(max_length=80, default='Lahore')
+    address = models.CharField(max_length=255, blank=True, default='')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
+    boards = models.JSONField(default=list, blank=True)
+    levels = models.JSONField(default=list, blank=True)
+    gender_type = models.CharField(max_length=20, default='co-ed')
+    medium = models.CharField(max_length=20, default='english')
+    established_year = models.PositiveIntegerField(null=True, blank=True)
+    facilities = models.JSONField(default=list, blank=True)
+    website = models.URLField(max_length=255, blank=True, default='')
+    social_links = models.JSONField(default=dict, blank=True)
+    admission_status = models.CharField(max_length=20, default='open')
+
+    contact_mode = models.CharField(max_length=25, default='enquiry_only')
+    official_phone = models.CharField(max_length=40, blank=True, default='')
+    official_email = models.EmailField(blank=True, default='')
+    rank_display_mode = models.CharField(max_length=25, default='exact_rank')
+    is_opted_in = models.BooleanField(default=False)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "School Public Profile Draft"
+
+    def __str__(self):
+        return f"Draft Profile for {self.school.name} (Opted in: {self.is_opted_in})"
+
+
+
