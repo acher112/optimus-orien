@@ -6,6 +6,7 @@ import {
   BarChart3, Layers, FileText
 } from 'lucide-react';
 import { type User } from './api';
+import { getScoreColorStyle, getRiskBadgeStyle, getDifferenceStyle } from './performanceColors';
 import './record.css';
 
 interface TeacherPerformanceProps {
@@ -383,18 +384,11 @@ export default function TeacherPerformance({
         <div className="record-title-row">
           <div className="record-title-group">
             <h1>
-              <Award size={26} color="#6f42c1" />
+              <Award size={24} color="#6f42c1" />
               <span>
-                {activeTab === 'criteria'
-                  ? 'Teacher Performance Criteria & Class Evaluation Settings'
-                  : 'Teacher Performance & Instructional Insights'}
+                {activeTab === 'criteria' ? 'Teacher Criteria' : 'Teacher Performance'}
               </span>
             </h1>
-            <p className="record-subtitle">
-              {activeTab === 'criteria'
-                ? 'Configure multi-campus benchmarks, class inclusion rules, and multi-class weighting models.'
-                : 'Fair, evidence-based academic progress tracking and supportive leadership workflows.'}
-            </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -520,35 +514,30 @@ export default function TeacherPerformance({
                 <div className="record-kpi-card">
                   <span className="record-kpi-title">Evaluated Teachers</span>
                   <span className="record-kpi-value">{overviewData.cards.evaluated_teachers}</span>
-                  <span className="record-kpi-sub">Across published subjects</span>
                 </div>
-                <div className="record-kpi-card">
+                <div className="record-kpi-card kpi-best">
                   <span className="record-kpi-title">On Track</span>
                   <span className="record-kpi-value" style={{ color: '#059669' }}>
                     {overviewData.cards.on_track_count}
                   </span>
-                  <span className="record-kpi-sub">Meeting or exceeding benchmarks</span>
                 </div>
-                <div className="record-kpi-card">
+                <div className="record-kpi-card kpi-watch">
                   <span className="record-kpi-title">Watch</span>
                   <span className="record-kpi-value" style={{ color: '#d97706' }}>
                     {overviewData.cards.watch_count}
                   </span>
-                  <span className="record-kpi-sub">Within developmental tolerance</span>
                 </div>
-                <div className="record-kpi-card">
+                <div className="record-kpi-card kpi-risk">
                   <span className="record-kpi-title">Needs Support</span>
                   <span className="record-kpi-value" style={{ color: '#dc2626' }}>
                     {overviewData.cards.needs_support_count}
                   </span>
-                  <span className="record-kpi-sub">Recommended for supportive mentoring</span>
                 </div>
-                <div className="record-kpi-card">
+                <div className="record-kpi-card kpi-insufficient">
                   <span className="record-kpi-title">Insufficient Data</span>
                   <span className="record-kpi-value" style={{ color: '#64748b' }}>
                     {overviewData.cards.insufficient_data_count}
                   </span>
-                  <span className="record-kpi-sub">Protected under cohort fairness threshold</span>
                 </div>
               </div>
 
@@ -603,8 +592,14 @@ export default function TeacherPerformance({
                             </div>
                           </td>
                           <td className="num-col">{t.total_students_evaluated}</td>
-                          <td className="num-col" style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                            {t.composite_average !== null ? `${t.composite_average}%` : '—'}
+                          <td className="num-col">
+                            {t.composite_average !== null ? (
+                              <span className="score-pill" style={getScoreColorStyle(t.composite_average)}>
+                                {t.composite_average}%
+                              </span>
+                            ) : (
+                              <span style={{ color: '#94a3b8' }}>—</span>
+                            )}
                           </td>
                           <td>
                             <span className={`record-status-pill status-${t.status.replace('_', '-')}`}>
@@ -730,17 +725,33 @@ export default function TeacherPerformance({
                           <td>{c.subject_name}</td>
                           <td className="num-col">{c.student_count}</td>
                           <td className="num-col">{c.assessments_count}</td>
-                          <td className="num-col" style={{ fontWeight: 700 }}>
-                            {c.class_average !== null ? `${c.class_average}%` : '—'}
+                          <td className="num-col">
+                            {c.class_average !== null ? (
+                              <span className="score-pill" style={getScoreColorStyle(c.class_average)}>
+                                {c.class_average}%
+                              </span>
+                            ) : '—'}
                           </td>
                           <td className="num-col">
-                            {c.pass_rate !== null ? `${c.pass_rate}%` : '—'}
+                            {c.pass_rate !== null ? (
+                              <span className="score-pill" style={getScoreColorStyle(c.pass_rate, 60)}>
+                                {c.pass_rate}%
+                              </span>
+                            ) : '—'}
                           </td>
-                          <td className="num-col" style={{ color: c.campus_diff >= 0 ? '#16a34a' : '#dc2626' }}>
-                            {c.campus_diff !== null ? `${c.campus_diff > 0 ? '+' : ''}${c.campus_diff} pts` : '—'}
+                          <td className="num-col">
+                            {c.campus_diff !== null ? (
+                              <span style={getDifferenceStyle(c.campus_diff)}>
+                                {c.campus_diff > 0 ? '+' : ''}{c.campus_diff} pts
+                              </span>
+                            ) : '—'}
                           </td>
-                          <td className="num-col" style={{ color: '#2563eb' }}>
-                            {c.value_added_delta !== null ? `+${c.value_added_delta}%` : '—'}
+                          <td className="num-col">
+                            {c.value_added_delta !== null ? (
+                              <span style={getDifferenceStyle(c.value_added_delta)}>
+                                {c.value_added_delta > 0 ? '+' : ''}{c.value_added_delta}%
+                              </span>
+                            ) : '—'}
                           </td>
                           <td>
                             <span className={`record-status-pill status-${c.status.replace('_', '-')}`}>
@@ -846,19 +857,14 @@ export default function TeacherPerformance({
       {activeTab === 'criteria' && !isTeacherSelf && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Active Criteria Banner */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="record-badge" style={{ background: '#dcfce7', color: '#15803d', fontWeight: 700, fontSize: '0.82rem' }}>
-                  ACTIVE VERSION {activeCriteriaData?.version || 1}
-                </span>
-                <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>
-                  {activeCriteriaData?.name || 'Standard Supportive Criteria'}
-                </strong>
-              </div>
-              <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: '#64748b' }}>
-                Criteria rules are immutable and version-controlled. Editing criteria publishes a new audited version.
-              </p>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="record-badge" style={{ background: '#dcfce7', color: '#15803d', fontWeight: 700, fontSize: '0.82rem' }}>
+                ACTIVE VERSION {activeCriteriaData?.version || 1}
+              </span>
+              <strong style={{ fontSize: '1rem', color: '#0f172a' }}>
+                {activeCriteriaData?.name || 'Standard Supportive Criteria'}
+              </strong>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -875,106 +881,87 @@ export default function TeacherPerformance({
 
           {/* Section 1: Campus Scope & Multi-Campus Options */}
           {isMultiCampusUser && (
-            <div className="record-table-wrap" style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            <div className="record-table-wrap" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                 <Globe size={18} color="#6f42c1" />
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Campus Scope & Propagation</h3>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Campus Scope</h3>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                   <input
                     type="checkbox"
                     checked={criteriaForm.apply_to_all_campuses}
                     onChange={e => setCriteriaForm({ ...criteriaForm, apply_to_all_campuses: e.target.checked })}
                     style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                   />
-                  <div>
-                    <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
-                      Apply this criteria version across all campuses in the organisation
-                    </strong>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      When enabled, publishing updates criteria version across all campuses in your organisation simultaneously.
-                    </div>
-                  </div>
+                  <strong style={{ fontSize: '0.88rem', color: '#1e293b' }}>
+                    Apply across all campuses
+                  </strong>
                 </label>
               </div>
             </div>
           )}
 
           {/* Section 2: Class Scope & Multi-Class Rules */}
-          <div className="record-table-wrap" style={{ padding: '20px' }}>
+          <div className="record-table-wrap" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
               <Layers size={18} color="#6f42c1" />
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-                  Class Scope & Multi-Class Evaluation Rules
-                </h3>
-                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                  Configure which classes are shown, cohort fairness thresholds, and aggregation for teachers with multiple classes.
-                </span>
-              </div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                Class Scope & Evaluation Rules
+              </h3>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
               {/* Multi-Class Aggregation Method */}
-              <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Multi-Class Aggregation Method
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
+                  Multi-Class Aggregation
                 </label>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '8px' }}>
-                  How to combine performance when a teacher handles multiple classes (e.g. 4 classes):
-                </div>
                 <select
                   className="record-select"
                   style={{ width: '100%' }}
                   value={criteriaForm.aggregation_mode}
                   onChange={e => setCriteriaForm({ ...criteriaForm, aggregation_mode: e.target.value })}
                 >
-                  <option value="weighted_by_students">Student-Weighted Average (Proportional to Class Size)</option>
-                  <option value="equal_average">Equal Class Average (Each Class Weighted Equally)</option>
+                  <option value="weighted_by_students">Student-Weighted Average</option>
+                  <option value="equal_average">Equal Class Average</option>
                 </select>
               </div>
 
               {/* Class Teacher Duties */}
-              <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '6px' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: criteriaForm.include_class_teacher ? '8px' : '0' }}>
                   <input
                     type="checkbox"
                     checked={criteriaForm.include_class_teacher}
                     onChange={e => setCriteriaForm({ ...criteriaForm, include_class_teacher: e.target.checked })}
                     style={{ width: '16px', height: '16px' }}
                   />
-                  <strong style={{ fontSize: '0.84rem' }}>
-                    Include Class Teacher Section Performance
+                  <strong style={{ fontSize: '0.82rem' }}>
+                    Include Class Teacher Section
                   </strong>
                 </label>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '8px' }}>
-                  Tracks overall section average across all subjects when teacher is assigned as a Class Teacher.
-                </div>
                 {criteriaForm.include_class_teacher && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.8rem', color: '#475569' }}>Duty Weight (%):</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#475569' }}>Weight:</span>
                     <input
                       type="number"
                       className="record-input"
-                      style={{ width: '70px', padding: '4px 8px' }}
+                      style={{ width: '60px', padding: '4px 6px' }}
                       value={criteriaForm.class_teacher_weight}
                       onChange={e => setCriteriaForm({ ...criteriaForm, class_teacher_weight: Number(e.target.value) })}
                     />
-                    <span style={{ fontSize: '0.78rem', color: '#64748b' }}>in leadership review</span>
+                    <span style={{ fontSize: '0.78rem', color: '#64748b' }}>%</span>
                   </div>
                 )}
               </div>
 
               {/* Min Students Threshold */}
-              <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '4px' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
                   Min Students per Class (N)
                 </label>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '8px' }}>
-                  Fairness threshold: Classes below N students are protected and tagged Insufficient Data.
-                </div>
                 <input
                   type="number"
                   min="1"
@@ -987,13 +974,10 @@ export default function TeacherPerformance({
               </div>
 
               {/* Min Assessments Threshold */}
-              <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '4px' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
                   Min Published Assessments (M)
                 </label>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '8px' }}>
-                  Minimum assessments required in a class before official evaluation is computed.
-                </div>
                 <input
                   type="number"
                   min="1"
@@ -1007,7 +991,7 @@ export default function TeacherPerformance({
             </div>
 
             {/* Class Visibility Toggle */}
-            <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+            <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
@@ -1015,35 +999,27 @@ export default function TeacherPerformance({
                   onChange={e => setCriteriaForm({ ...criteriaForm, show_all_classes: e.target.checked })}
                   style={{ width: '16px', height: '16px' }}
                 />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
-                  Show all assigned classes in teacher evaluation detail (even classes with small cohorts tagged as Insufficient Data)
+                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#334155' }}>
+                  Show all assigned classes in teacher evaluation
                 </span>
               </label>
             </div>
           </div>
 
           {/* Section 3: Performance Measurement Benchmarks */}
-          <div className="record-table-wrap" style={{ padding: '20px' }}>
+          <div className="record-table-wrap" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
               <BarChart3 size={18} color="#6f42c1" />
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-                  Performance Measurement Benchmarks
-                </h3>
-                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                  Define passing rates, relative deviation limits, and score thresholds based on class results.
-                </span>
-              </div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                Performance Benchmarks
+              </h3>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
                   Student Pass Rate Benchmark (%)
                 </label>
-                <div style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: '6px' }}>
-                  Minimum percentage of learners passing the subject in a class.
-                </div>
                 <input
                   type="number"
                   step="1"
@@ -1057,12 +1033,9 @@ export default function TeacherPerformance({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
                   Class Average Benchmark (%)
                 </label>
-                <div style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: '6px' }}>
-                  Minimum expected class-wide average score across assessments.
-                </div>
                 <input
                   type="number"
                   step="1"
@@ -1076,12 +1049,9 @@ export default function TeacherPerformance({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '4px' }}>
-                  Campus Difference Tolerance (pts below)
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
+                  Campus Difference Tolerance (pts)
                 </label>
-                <div style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: '6px' }}>
-                  Maximum points below campus subject average before Needs Support is triggered.
-                </div>
                 <input
                   type="number"
                   step="0.5"
@@ -1095,12 +1065,9 @@ export default function TeacherPerformance({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
                   Term-over-Term Drop Tolerance (pts)
                 </label>
-                <div style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: '6px' }}>
-                  Points drop compared to prior academic term before review alert.
-                </div>
                 <input
                   type="number"
                   step="0.5"
@@ -1115,42 +1082,25 @@ export default function TeacherPerformance({
             </div>
 
             {/* Developmental Classification Guide Card */}
-            <div style={{ marginTop: '18px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 18px' }}>
-              <strong style={{ fontSize: '0.86rem', display: 'block', marginBottom: '8px', color: '#334155' }}>
-                Classification Logic Preview:
-              </strong>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-                <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                  <span className="record-status-pill status-on-track" style={{ display: 'inline-block', marginBottom: '4px' }}>On track</span>
-                  <div>Meeting pass rate (≥{criteriaForm.pass_rate_threshold}%) and class average (≥{criteriaForm.class_avg_threshold}%).</div>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                  <span className="record-status-pill status-watch" style={{ display: 'inline-block', marginBottom: '4px' }}>Watch</span>
-                  <div>Within {criteriaForm.diff_campus_threshold / 2} pts of campus subject average.</div>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                  <span className="record-status-pill status-needs-support" style={{ display: 'inline-block', marginBottom: '4px' }}>Needs support</span>
-                  <div>Below campus average by &gt;{criteriaForm.diff_campus_threshold} pts or pass rate &lt;{criteriaForm.pass_rate_threshold}%.</div>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                  <span className="record-status-pill status-insufficient" style={{ display: 'inline-block', marginBottom: '4px' }}>Insufficient data</span>
-                  <div>Fewer than {criteriaForm.min_students} students or &lt;{criteriaForm.min_assessments} assessments.</div>
-                </div>
+            <div style={{ marginTop: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>
+                Classification Tiers:
+              </span>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="record-status-pill status-on-track">On track (≥{criteriaForm.pass_rate_threshold}%)</span>
+                <span className="record-status-pill status-watch">Watch (±{criteriaForm.diff_campus_threshold / 2} pts)</span>
+                <span className="record-status-pill status-needs-support">Needs support (&gt;{criteriaForm.diff_campus_threshold} pts diff)</span>
+                <span className="record-status-pill status-insufficient">Insufficient data (&lt;{criteriaForm.min_students} students)</span>
               </div>
             </div>
           </div>
 
           {/* Section 4: Live Impact Simulation Tool */}
-          <div className="record-table-wrap" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-                  Interactive Live Impact Simulation
-                </h3>
-                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                  Test these criteria values against currently enrolled classes before publishing.
-                </span>
-              </div>
+          <div className="record-table-wrap" style={{ padding: '18px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: previewResult ? '14px' : '0', flexWrap: 'wrap', gap: '10px' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                Live Impact Simulation
+              </h3>
 
               <button
                 className="record-btn-secondary"
@@ -1238,23 +1188,20 @@ export default function TeacherPerformance({
           </div>
 
           {/* Section 5: Governance & Publish Version */}
-          <div className="record-table-wrap" style={{ padding: '20px' }}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', fontWeight: 700 }}>
-              Governance & Publish Criteria Version
+          <div className="record-table-wrap" style={{ padding: '18px 20px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', fontWeight: 700 }}>
+              Publish Criteria Version
             </h3>
-            <p style={{ margin: '0 0 14px 0', fontSize: '0.82rem', color: '#64748b' }}>
-              Publishing a revision increments the criteria version number and records an immutable audit log entry.
-            </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Explanation of Change (Required for Audit Compliance):
+                  Reason for change:
                 </label>
                 <textarea
                   className="record-input"
-                  style={{ width: '100%', height: '75px', boxSizing: 'border-box' }}
-                  placeholder="Detail the academic rationale for adjusting thresholds, class inclusion, or weighting parameters..."
+                  style={{ width: '100%', height: '70px', boxSizing: 'border-box' }}
+                  placeholder="e.g. Updated term benchmarks or class weights"
                   value={criteriaForm.explanation_of_change}
                   onChange={e => setCriteriaForm({ ...criteriaForm, explanation_of_change: e.target.value })}
                 />

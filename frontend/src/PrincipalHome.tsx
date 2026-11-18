@@ -156,19 +156,9 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
       {/* Welcome & Campus Lock Header */}
       <div className="welcome-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--brand-primary, #715ee8)', fontWeight: 600 }}>
-            <Building2 size={15} />
-            <span>CAMPUS HEADMASTER PORTAL</span>
-            <span style={{ fontSize: '0.75rem', background: 'rgba(113, 94, 232, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
-              Isolated Campus Scope
-            </span>
-          </div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: '0.25rem 0' }}>
             {data?.campus.name || 'Campus Overview'}
           </h1>
-          <p style={{ color: 'var(--text-secondary, #64748b)', margin: 0, fontSize: '0.92rem' }}>
-            {data?.campus.city ? `${data.campus.city} · ` : ''}Monitoring daily campus operations, instructional delivery, and student progress.
-          </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <button className="outline-btn" onClick={() => onNavigate('Settings')} title="Security and password settings">

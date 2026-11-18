@@ -240,11 +240,7 @@ export default function Communication({
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">CLASSROOM / DISCUSSIONS</div>
-          <h1>Subject communication</h1>
-          <p>
-            Communicate and ask questions within your class subjects. Subject teachers can answer and guide their students.
-          </p>
+          <h1>Subject Communication</h1>
           {currentCampus && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#eef2ff', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#4338ca', marginTop: 8 }}>
               <Building2 size={15} />

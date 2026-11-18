@@ -41,9 +41,7 @@ export default function MyPerformance() {
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">INSIGHTS / MY PERFORMANCE</div>
-          <h1>{data?.student?.name ? `${data.student.name}’s performance` : 'My performance'}</h1>
-          <p>Your marks (gray) compared with the boys (blue) and girls (pink) averages in your class.</p>
+          <h1>{data?.student?.name ? `${data.student.name}’s Performance` : 'My Performance'}</h1>
         </div>
         <div className="rp-controls">
           {data && (data.wards?.length ?? 0) > 1 && (

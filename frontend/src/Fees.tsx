@@ -522,9 +522,7 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">STUDENTS & LEARNING / FEES</div>
           <h1>Student Fees</h1>
-          <p>Institutional fee collection, heads, billing vouchers, and automated finance integration.</p>
           {activeCampus && (
             <div style={{
               display: 'inline-flex',

@@ -329,9 +329,7 @@ export default function Reports({
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">INSIGHTS / ANALYTICS</div>
-          <h1>Reports &amp; analytics</h1>
-          <p>Multi-dimensional intelligence across academic progress, income streams, and expense allocations.</p>
+          <h1>Reports &amp; Analytics</h1>
         </div>
         <div className="rp-controls">
           <label className="rp-period">

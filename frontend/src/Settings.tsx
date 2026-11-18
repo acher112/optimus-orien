@@ -222,9 +222,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">{user.role === 'teacher' ? 'FACULTY PROFILE & PREFERENCES' : user.role === 'principal' ? 'EXECUTIVE LEADERSHIP PROFILE' : 'WORKSPACE & PREFERENCES'}</div>
-          <h1>{activeTab === 'profile' ? (user.role === 'teacher' ? 'Teacher 360° Profile' : user.role === 'principal' ? 'Principal 360° Profile' : 'Professional 360° Profile') : 'Settings & Preferences'}</h1>
-          <p>{activeTab === 'profile' ? 'Comprehensive longitudinal performance trajectory, career milestones, and institutional credentials.' : 'Customise your profile details, personal color themes, and workspace experience.'}</p>
+          <h1>{activeTab === 'profile' ? (user.role === 'teacher' ? 'Teacher Profile' : user.role === 'principal' ? 'Principal Profile' : 'Profile') : 'Settings'}</h1>
         </div>
       </div>
 

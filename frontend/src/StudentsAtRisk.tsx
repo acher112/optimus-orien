@@ -10,6 +10,7 @@ import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Toolti
 import { list, request, type User } from './api';
 import ExportMenu from './ExportMenu';
 import { FilterBar } from './FilterBar';
+import { getScoreColorStyle, getRiskBadgeStyle, getAttendanceStyle } from './performanceColors';
 import './hr.css';
 
 type R = Record<string, any>;
@@ -290,11 +291,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, a
       {/* Top Header */}
       <div className="fx-top" style={{ flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
         <div>
-          <div className="fx-breadcrumb">STUDENT SUPPORT / ACADEMIC & ATTENDANCE RISK</div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: '4px 0 2px' }}>Students at Risk</h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-            Early academic and attendance indicators to support student performance.
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -350,28 +347,23 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, a
           <div className="fx-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
             <div className="fx-kpi">
               <span>Total Flagged</span>
-              <strong style={{ color: '#dc2626' }}>{summary.total_at_risk} Students</strong>
-              <small>Objective criteria match</small>
+              <strong style={{ color: '#dc2626' }}>{summary.total_at_risk}</strong>
             </div>
             <div className="fx-kpi">
-              <span>High Risk Level</span>
-              <strong style={{ color: '#ef4444' }}>{summary.high_risk}</strong>
-              <small>3+ rules or severe deficit</small>
+              <span>High Risk</span>
+              <strong style={{ color: '#dc2626' }}>{summary.high_risk}</strong>
             </div>
             <div className="fx-kpi">
               <span>Medium Risk</span>
-              <strong style={{ color: '#f59e0b' }}>{summary.medium_risk}</strong>
-              <small>2 rules or moderate deficit</small>
+              <strong style={{ color: '#d97706' }}>{summary.medium_risk}</strong>
             </div>
             <div className="fx-kpi">
               <span>Low Risk</span>
-              <strong style={{ color: '#84cc16' }}>{summary.low_risk}</strong>
-              <small>1 rule triggered</small>
+              <strong style={{ color: '#16a34a' }}>{summary.low_risk}</strong>
             </div>
             <div className="fx-kpi">
               <span>Not Enough Data</span>
               <strong style={{ color: '#64748b' }}>{summary.insufficient_data_count}</strong>
-              <small>&lt; 3 results recorded</small>
             </div>
           </div>
 
@@ -555,18 +547,25 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, a
                           </span>
                         </td>
                         <td>
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                            background: isHigh ? '#fee2e2' : isMed ? '#fef3c7' : '#fef9c3',
-                            color: isHigh ? '#b91c1c' : isMed ? '#b45309' : '#854d0e'
-                          }}>
-                            <span style={{
-                              width: 6, height: 6, borderRadius: '50%',
-                              background: isHigh ? '#ef4444' : isMed ? '#f59e0b' : '#eab308'
-                            }} />
-                            {s.risk_level.toUpperCase()}
-                          </span>
+                          {(() => {
+                            const badgeStyle = getRiskBadgeStyle(s.risk_level);
+                            const dotColor = s.risk_level === 'high' ? '#ef4444' : s.risk_level === 'medium' ? '#f59e0b' : '#16a34a';
+                            return (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                                background: badgeStyle.background,
+                                color: badgeStyle.color,
+                                border: `1px solid ${badgeStyle.borderColor}`
+                              }}>
+                                <span style={{
+                                  width: 6, height: 6, borderRadius: '50%',
+                                  background: dotColor
+                                }} />
+                                {s.risk_level.toUpperCase()}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td style={{ maxWidth: 220 }}>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -586,9 +585,27 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, a
                           </div>
                         </td>
                         <td>
-                          <div style={{ fontSize: 12 }}>
-                            <div>Avg: <b>{s.evidence?.overall_average ?? '—'}%</b></div>
-                            <div style={{ color: '#64748b', fontSize: 11 }}>Att: {s.evidence?.attendance_rate ?? '—'}%</div>
+                          <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <div>
+                              <span style={{ color: '#64748b', fontSize: 11, marginRight: 4 }}>Avg:</span>
+                              {s.evidence?.overall_average !== null && s.evidence?.overall_average !== undefined ? (
+                                <span className="score-pill" style={{ ...getScoreColorStyle(s.evidence.overall_average), fontSize: 11, padding: '1px 6px' }}>
+                                  {s.evidence.overall_average}%
+                                </span>
+                              ) : (
+                                <b>—</b>
+                              )}
+                            </div>
+                            <div>
+                              <span style={{ color: '#64748b', fontSize: 11, marginRight: 4 }}>Att:</span>
+                              {s.evidence?.attendance_rate !== null && s.evidence?.attendance_rate !== undefined ? (
+                                <span style={{ ...getAttendanceStyle(s.evidence.attendance_rate), fontSize: 11, fontWeight: 700 }}>
+                                  {s.evidence.attendance_rate}%
+                                </span>
+                              ) : (
+                                <span style={{ color: '#64748b', fontSize: 11 }}>—</span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td>
@@ -972,7 +989,7 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, a
                   <tr key={s.student_id}>
                     <td><strong>{s.student_name}</strong></td>
                     <td>{s.full_class_name}</td>
-                    <td><span className={`pill ${s.risk_level === 'high' ? 'red' : s.risk_level === 'medium' ? 'orange' : 'yellow'}`}>{s.risk_level.toUpperCase()}</span></td>
+                    <td><span className={`pill ${s.risk_level === 'high' ? 'red' : s.risk_level === 'medium' ? 'orange' : 'green'}`}>{s.risk_level.toUpperCase()}</span></td>
                     <td><span className="pill blue">{s.case_info.status}</span></td>
                     <td>
                       <div>
@@ -1054,28 +1071,33 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, a
 
             <div style={{ padding: '16px 0' }}>
               {/* Risk Level Badge */}
-              <div style={{
-                background: drawerStudent.risk_level === 'high' ? '#fef2f2' : drawerStudent.risk_level === 'medium' ? '#fffbeb' : '#fefce8',
-                border: `1px solid ${drawerStudent.risk_level === 'high' ? '#fecaca' : drawerStudent.risk_level === 'medium' ? '#fde68a' : '#fef08a'}`,
-                padding: '12px 14px',
-                borderRadius: 8,
-                marginBottom: 16
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{
-                    fontWeight: 700, fontSize: 13,
-                    color: drawerStudent.risk_level === 'high' ? '#b91c1c' : drawerStudent.risk_level === 'medium' ? '#b45309' : '#854d0e'
+              {(() => {
+                const drawerBadge = getRiskBadgeStyle(drawerStudent.risk_level);
+                return (
+                  <div style={{
+                    background: drawerBadge.background,
+                    border: `1px solid ${drawerBadge.borderColor}`,
+                    padding: '12px 14px',
+                    borderRadius: 8,
+                    marginBottom: 16
                   }}>
-                    Assigned Level: {drawerStudent.risk_level.toUpperCase()} RISK
-                  </span>
-                  <span style={{ fontSize: 12, color: '#64748b' }}>
-                    {drawerStudent.triggered_rules_count} criteria indicator(s) triggered
-                  </span>
-                </div>
-                <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>
-                  Student trend over evaluated timeframe is <b>{drawerStudent.trend.toUpperCase()}</b>.
-                </div>
-              </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{
+                        fontWeight: 700, fontSize: 13,
+                        color: drawerBadge.color
+                      }}>
+                        Assigned Level: {drawerStudent.risk_level.toUpperCase()} RISK
+                      </span>
+                      <span style={{ fontSize: 12, color: '#64748b' }}>
+                        {drawerStudent.triggered_rules_count} criteria indicator(s) triggered
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>
+                      Student trend over evaluated timeframe is <b>{drawerStudent.trend.toUpperCase()}</b>.
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Triggered Rules Breakdown */}
               <h4 style={{ margin: '14px 0 8px', fontSize: 14 }}>Triggered Criteria Indicators</h4>
@@ -1107,22 +1129,23 @@ export default function StudentsAtRisk({ user, notify, initialTab, onNavigate, a
                   <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Subject Averages & Failing Subjects</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
                     {Object.entries(drawerStudent.evidence.subject_averages).map(([subj, score]) => {
-                      const isFailing = Number(score) < 50;
+                      const numScore = Number(score);
+                      const scoreStyle = getScoreColorStyle(numScore);
                       return (
                         <div
                           key={subj}
                           style={{
                             padding: '8px 10px',
                             borderRadius: 6,
-                            background: isFailing ? '#fee2e2' : '#f1f5f9',
-                            border: `1px solid ${isFailing ? '#fca5a5' : '#e2e8f0'}`
+                            background: scoreStyle.background,
+                            border: `1px solid ${scoreStyle.borderColor}`
                           }}
                         >
                           <div style={{ fontSize: 11, color: '#64748b', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                             {subj}
                           </div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: isFailing ? '#dc2626' : '#1e293b' }}>
-                            {Number(score)}%
+                          <div style={{ fontSize: 14, fontWeight: 700, color: scoreStyle.color }}>
+                            {numScore}%
                           </div>
                         </div>
                       );

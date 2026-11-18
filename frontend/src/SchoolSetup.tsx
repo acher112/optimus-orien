@@ -233,9 +233,7 @@ export default function SchoolSetup({ user, initialSchool, onBack }: { user: Use
           <button className="setup-back" onClick={onBack}>
             <ArrowLeft size={16} /> Back to campuses
           </button>
-          <div className="eyebrow"><span className="eyebrow-dot" /> ADMINISTRATIVE ONBOARDING</div>
-          <h1>Campus configuration</h1>
-          <p>A guided setup for the learning environment your campus actually uses.</p>
+          <h1>Campus Configuration</h1>
         </div>
         <div className="setup-header-identity">
           <span className="setup-header-icon"><GraduationCap size={23} /></span>

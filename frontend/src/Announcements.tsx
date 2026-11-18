@@ -227,9 +227,7 @@ export default function Announcements({ user, notify }: { user: AuthUser; notify
     <>
       <div className="page-header" style={{ marginBottom: 20 }}>
         <div>
-          <div className="eyebrow"><Megaphone size={13} /> CAMPUS BROADCASTS</div>
           <h1>Announcements</h1>
-          <p>Targeted notices and institutional updates for students, staff, teachers, leadership, and parents.</p>
         </div>
         {canCreate && (
           <button className="primary-btn" onClick={openCreateModal}>

@@ -423,9 +423,7 @@ export default function StudyMaterials({
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <div className="eyebrow">STUDENTS & LEARNING / STUDY MATERIALS</div>
           <h1>Study Materials</h1>
-          <p>Institutional learning repository, class syllabus assets, notes, and versioned study documents.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <ExportMenu

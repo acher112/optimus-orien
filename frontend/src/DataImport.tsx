@@ -127,9 +127,7 @@ export default function DataImport({ user, notify }: { user: User; notify: (m: s
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">ADMINISTRATION / BULK DATA INGESTION</div>
           <h1>Data Import</h1>
-          <p>Import students, staff, or exam marks with dry-run validation preview and duplicate checks.</p>
         </div>
         <div className="fx-filters">
           {schools.length > 1 && (

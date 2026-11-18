@@ -5,6 +5,7 @@ import {
   Layers, FileText, TrendingUp, BookOpen, ClipboardCheck, ClipboardList, HelpCircle
 } from 'lucide-react';
 import { request, type User, type Resource } from './api';
+import { getGradeBadgeStyle, getScoreColorStyle } from './performanceColors';
 
 interface GradeBandItem {
   id?: number;
@@ -348,15 +349,9 @@ export default function GradingScalePage({
       {/* Page Header */}
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div>
-          <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6366f1', fontWeight: 700 }}>
-            <SlidersHorizontal size={13} /> ACADEMIC POLICIES
-          </div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '4px 0' }}>
             Grading Scales & Criteria
           </h1>
-          <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>
-            Configure assessment weightages (Exams, Homework, Classwork, Attendance) and letter grade GPA bands.
-          </p>
         </div>
 
         {/* Campus Scope Selector */}
@@ -434,9 +429,6 @@ export default function GradingScalePage({
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
                   Institutional Criteria Presets
                 </h3>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
-                  Select an approved educational weightage model or customize sliders below.
-                </p>
               </div>
               <span className="pill purple" style={{ fontSize: 11, padding: '3px 8px' }}>
                 Campus: {String(campuses.find((c: any) => c.id === effectiveCampusId)?.name || 'All Campuses')}
@@ -486,9 +478,6 @@ export default function GradingScalePage({
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
                   Component Weightage Breakdown
                 </h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-                  Define how term examinations, homework, classroom tasks, and attendance contribute to each student's overall performance.
-                </p>
               </div>
 
               {/* Total Weight Sum Badge */}
@@ -692,11 +681,8 @@ export default function GradingScalePage({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
-                Institutional Letter Grade & GPA Bands
+                Letter Grade & GPA Bands
               </h3>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-                Map percentage ranges to standard letter grades, GPA grade points, and performance descriptions.
-              </p>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -736,12 +722,17 @@ export default function GradingScalePage({
                 {bands.map((band, idx) => (
                   <tr key={idx}>
                     <td>
-                      <input
-                        type="text"
-                        value={band.letter}
-                        onChange={e => handleBandChange(idx, 'letter', e.target.value)}
-                        style={{ width: '80px', padding: '6px 8px', fontWeight: 800, textAlign: 'center', borderRadius: 6, border: '1px solid #cbd5e1' }}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="grade-badge" style={getGradeBadgeStyle(band.letter)}>
+                          {band.letter || '—'}
+                        </span>
+                        <input
+                          type="text"
+                          value={band.letter}
+                          onChange={e => handleBandChange(idx, 'letter', e.target.value)}
+                          style={{ width: '60px', padding: '6px 8px', fontWeight: 800, textAlign: 'center', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                        />
+                      </div>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -810,11 +801,8 @@ export default function GradingScalePage({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
-                All Campus Criteria Configurations
+                Campus Criteria Matrix
               </h3>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-                Compare active assessment weightages and grading scales across all branches.
-              </p>
             </div>
             <button
               className="primary-btn"
@@ -922,11 +910,8 @@ export default function GradingScalePage({
         <section className="panel" style={{ padding: '22px 24px', borderTop: '4px solid #f59e0b' }}>
           <div style={{ marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
-              Live System Connection: Student Composite Evaluation
+              Student Composite Standing Verification
             </h3>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-              Verify how the campus assessment weightage criteria (Exams {examWeight}%, Homework {hwWeight}%, Classwork {cwWeight}%, Attendance {attWeight}%) translates into a live composite grade for enrolled learners.
-            </p>
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
@@ -970,20 +955,35 @@ export default function GradingScalePage({
                 <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>OVERALL COMPOSITE</div>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: '#6366f1' }}>
-                      {testResult.composite_percentage !== null ? `${testResult.composite_percentage}%` : 'N/A'}
+                    <div style={{ fontSize: 28, fontWeight: 800 }}>
+                      {testResult.composite_percentage !== null ? (
+                        <span className="score-pill" style={{ ...getScoreColorStyle(testResult.composite_percentage), fontSize: 24, padding: '4px 12px' }}>
+                          {testResult.composite_percentage}%
+                        </span>
+                      ) : 'N/A'}
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'center', padding: '10px 18px', background: '#ffffff', borderRadius: 10, border: '2px solid #8b5cf6' }}>
-                    <div style={{ fontSize: 11, color: '#6b21a8', fontWeight: 700 }}>GRADE</div>
-                    <div style={{ fontSize: 32, fontWeight: 900, color: '#7c3aed' }}>{testResult.letter_grade}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>GPA {testResult.grade_point}</div>
-                  </div>
+                  {(() => {
+                    const gradeStyle = getGradeBadgeStyle(testResult.letter_grade);
+                    return (
+                      <div style={{
+                        textAlign: 'center',
+                        padding: '10px 18px',
+                        background: gradeStyle.background,
+                        borderRadius: 10,
+                        border: `2px solid ${gradeStyle.borderColor}`
+                      }}>
+                        <div style={{ fontSize: 11, color: gradeStyle.color, fontWeight: 700 }}>GRADE</div>
+                        <div style={{ fontSize: 32, fontWeight: 900, color: gradeStyle.color }}>{testResult.letter_grade}</div>
+                        <div style={{ fontSize: 11, color: gradeStyle.color, opacity: 0.85, fontWeight: 600 }}>GPA {testResult.grade_point}</div>
+                      </div>
+                    );
+                  })()}
 
                   <div>
-                    {testResult.passed === true && <span className="pill green" style={{ fontSize: 13, padding: '6px 12px' }}>PASSED</span>}
-                    {testResult.passed === false && <span className="pill red" style={{ fontSize: 13, padding: '6px 12px' }}>NEEDS SUPPORT</span>}
+                    {testResult.passed === true && <span className="pill green" style={{ fontSize: 13, padding: '6px 12px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>PASSED</span>}
+                    {testResult.passed === false && <span className="pill red" style={{ fontSize: 13, padding: '6px 12px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}>NEEDS SUPPORT</span>}
                   </div>
                 </div>
               </div>

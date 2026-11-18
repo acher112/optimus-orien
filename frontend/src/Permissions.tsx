@@ -317,14 +317,7 @@ export default function Permissions({ user, notify }: PermissionsProps) {
       {/* Top Header */}
       <div className="permissions-header">
         <div>
-          <div className="eyebrow">
-            <span className="eyebrow-dot" /> ACCESS CONTROL & GOVERNANCE
-          </div>
-          <h1>Role Permissions Manager</h1>
-          <p>
-            Configure granular access capabilities across institutional roles.
-            Permissions take effect instantly across all campus workflows.
-          </p>
+          <h1>Role Permissions</h1>
         </div>
 
         <div className="permissions-header-actions">

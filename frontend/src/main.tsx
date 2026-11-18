@@ -2931,7 +2931,6 @@ function App() {
               <>
                 <div className="welcome-row">
                 <div>
-                  <div className="eyebrow"><span className="eyebrow-dot" /> YOUR COMMAND CENTER</div>
                   <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user.name.split(' ')[0]} <span className="wave">✳</span></h1>
                   <p>Here's what's happening across your learning community today.</p>
                 </div>
@@ -6964,9 +6963,7 @@ function AuditLogView({ notify }: { notify: (m: string) => void }) {
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">SYSTEM & SECURITY / AUDIT TRAIL</div>
-          <h1>Immutable audit log</h1>
-          <p>Complete traceability of administrative modifications, account provisioning, transfers, and configuration activations.</p>
+          <h1>Audit Log</h1>
         </div>
       </div>
       <div className="resource-hero-bar">

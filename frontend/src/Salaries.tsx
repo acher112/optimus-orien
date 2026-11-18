@@ -319,9 +319,7 @@ export default function Salaries({
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">FINANCE / STAFF SALARIES & PAYROLL</div>
           <h1>Staff Salaries</h1>
-          <p>Compensation structures, monthly payroll sheets, bulk approvals, and auto-linked finance expenses.</p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#eef2ff', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#4338ca', marginTop: 8 }}>
             <Building2 size={15} />
             <span>{currentCampus ? `${currentCampus.name}${currentCampus.principal_name ? ` • Principal: ${currentCampus.principal_name}` : ''}` : '🌐 All Campuses'}</span>

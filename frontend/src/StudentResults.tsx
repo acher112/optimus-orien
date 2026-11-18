@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { request } from './api';
+import { getScoreColorStyle, getRiskBadgeStyle, getDifferenceStyle } from './performanceColors';
 
 interface Props {
   user: any;
@@ -111,8 +112,12 @@ export const StudentResults: React.FC<Props> = ({ user, notify }) => {
             <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
               Overall Score
             </div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: '#0f172a' }}>
-              {profile.overall_percentage !== null ? `${profile.overall_percentage}%` : '—'}
+            <div style={{ fontSize: 28, fontWeight: 900 }}>
+              {profile.overall_percentage !== null ? (
+                <span className="score-pill" style={{ ...getScoreColorStyle(profile.overall_percentage), fontSize: 22, padding: '3px 10px' }}>
+                  {profile.overall_percentage}%
+                </span>
+              ) : '—'}
             </div>
           </div>
           {profile.difference_text && (
@@ -269,22 +274,33 @@ export const StudentResults: React.FC<Props> = ({ user, notify }) => {
                   <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
                     {s.subject_name}
                   </div>
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    borderRadius: 12,
-                    background: (s.risk_color || '#64748b') + '20',
-                    color: s.risk_color || '#64748b'
-                  }}>
-                    {s.risk_label || 'Status'}
-                  </span>
+                  {(() => {
+                    const rLevel = (s.risk_level || s.risk_label || '').toLowerCase();
+                    const badge = getRiskBadgeStyle(rLevel.includes('support') || rLevel.includes('high') ? 'high' : rLevel.includes('watch') || rLevel.includes('med') ? 'medium' : 'low');
+                    return (
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: 12,
+                        background: badge.background,
+                        color: badge.color,
+                        border: `1px solid ${badge.borderColor}`
+                      }}>
+                        {s.risk_label || 'Status'}
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 8 }}>
-                  <span style={{ fontSize: 28, fontWeight: 900, color: '#0f172a' }}>
-                    {s.final_percentage !== null ? `${s.final_percentage}%` : '—'}
-                  </span>
+                  {s.final_percentage !== null ? (
+                    <span className="score-pill" style={{ ...getScoreColorStyle(s.final_percentage), fontSize: 20, padding: '3px 10px' }}>
+                      {s.final_percentage}%
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 28, fontWeight: 900, color: '#94a3b8' }}>—</span>
+                  )}
                   {s.class_subject_average !== null && (
                     <span style={{ fontSize: 12, color: '#64748b' }}>
                       Class: {s.class_subject_average}%

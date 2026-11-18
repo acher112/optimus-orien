@@ -9,6 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend
 } from 'recharts';
 import { request, type User } from './api';
+import { getScoreColorStyle, getAttendanceStyle, getRiskBadgeStyle } from './performanceColors';
 import { CredentialsReceiptModal, type CredentialsReceiptData } from './CredentialsReceiptModal';
 import { InformParentModal } from './InformParentModal';
 
@@ -213,9 +214,6 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
           <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', margin: '4px 0 2px' }}>
             My Class: {class_info?.display_name}
           </h1>
-          <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
-            Complete 360° homeroom oversight: all subjects, examinations, marks, attendance, and student progress.
-          </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -293,8 +291,12 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
             <span>Class Academic Avg</span>
             <Award size={18} color="#8b5cf6" />
           </div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: class_academic_average !== null && class_academic_average >= 70 ? '#16a34a' : '#0f172a', margin: '6px 0 2px' }}>
-            {class_academic_average !== null ? `${class_academic_average.toFixed(1)}%` : '—'}
+          <div style={{ fontSize: 28, fontWeight: 800, margin: '6px 0 2px' }}>
+            {class_academic_average !== null ? (
+              <span className="score-pill" style={{ ...getScoreColorStyle(class_academic_average), fontSize: 22, padding: '3px 10px' }}>
+                {class_academic_average.toFixed(1)}%
+              </span>
+            ) : '—'}
           </div>
           <div style={{ fontSize: 12, color: '#64748b' }}>
             Across <b>{subjects.length}</b> subjects in this class
@@ -712,10 +714,7 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
                         </td>
                         <td style={{ padding: '12px 10px' }}>
                           {st.attendance_rate !== null ? (
-                            <span style={{
-                              fontWeight: 600,
-                              color: st.attendance_rate < 75 ? '#dc2626' : st.attendance_rate < 90 ? '#d97706' : '#16a34a'
-                            }}>
+                            <span style={{ ...getAttendanceStyle(st.attendance_rate), fontSize: 12, fontWeight: 700 }}>
                               {st.attendance_rate.toFixed(1)}%
                             </span>
                           ) : '—'}
@@ -725,7 +724,7 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
                           return (
                             <td key={sub.subject_id} style={{ padding: '12px 10px', textAlign: 'center', fontWeight: mark !== undefined ? 600 : 400 }}>
                               {mark !== undefined && mark !== null ? (
-                                <span style={{ color: mark >= 50 ? '#0f172a' : '#dc2626' }}>
+                                <span className="score-pill" style={{ ...getScoreColorStyle(mark), fontSize: 11, padding: '1px 6px' }}>
                                   {mark}%
                                 </span>
                               ) : (
@@ -735,21 +734,20 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
                           );
                         })}
                         <td style={{ padding: '12px 12px', textAlign: 'right' }}>
-                          <span style={{
-                            padding: '3px 8px', borderRadius: 4, fontWeight: 700,
-                            background: avgBadgeBg, color: avgBadgeColor, fontSize: 12
-                          }}>
-                            {avg !== null ? `${avg.toFixed(1)}%` : '—'}
-                          </span>
+                          {avg !== null ? (
+                            <span className="score-pill" style={{ ...getScoreColorStyle(avg), fontSize: 12, padding: '2px 8px' }}>
+                              {avg.toFixed(1)}%
+                            </span>
+                          ) : '—'}
                         </td>
                         <td style={{ padding: '12px 12px', textAlign: 'center' }}>
                           {st.is_at_risk ? (
-                            <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#fee2e2', color: '#b91c1c' }}>
+                            <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}>
                               At Risk
                             </span>
                           ) : (
-                            <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#f1f5f9', color: '#475569' }}>
-                              Normal
+                            <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+                              On Track
                             </span>
                           )}
                         </td>

@@ -107,9 +107,7 @@ export default function Staff({
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">PEOPLE / STAFF</div>
-          <h1>Staff directory</h1>
-          <p>Add staff, promote them, assign roles or end employment. Every change is kept in the history.</p>
+          <h1>Staff Directory</h1>
         </div>
         <div className="hr-actions">
           <button className={`outline-btn ${viewTab === 'attendance' ? 'active' : ''}`} onClick={() => setViewTab(t => t === 'attendance' ? 'directory' : 'attendance')}>

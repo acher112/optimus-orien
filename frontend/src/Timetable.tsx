@@ -271,9 +271,7 @@ export default function Timetable({ user, notify }: { user: User; notify: (msg: 
       {/* Header */}
       <div className="page-header">
         <div>
-          <div className="eyebrow">STUDENTS & LEARNING / TIMETABLE</div>
-          <h1>Class & Teacher Timetable</h1>
-          <p>Weekly period scheduling, room allocations, and faculty timetables across academic cycles.</p>
+          <h1>Timetable</h1>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <ExportMenu

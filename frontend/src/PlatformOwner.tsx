@@ -106,9 +106,7 @@ export default function PlatformOwner({ user, notify }: { user: User; notify: (m
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">PLATFORM GOVERNANCE & SAAS CONSOLE</div>
           <h1>Platform Owner</h1>
-          <p>Tenant organisations, subscription tiers, audited support-access grants, and security invitations.</p>
         </div>
         <div className="fx-filters">
           <button className="outline-btn" onClick={() => setBump(b => b + 1)}><RefreshCw size={15} /> Refresh</button>

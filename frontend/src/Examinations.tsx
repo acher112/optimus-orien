@@ -720,9 +720,7 @@ export default function Examinations({
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">ACADEMICS & EXAMINATION ENGINE</div>
-          <h1>Examination & Academic Performance</h1>
-          <p>Configurable term weightages, independent subject maximum marks, and normalized performance analytics.</p>
+          <h1>Examinations</h1>
         </div>
         <div className="fx-filters">
           {!isSingleCampusRole ? (
@@ -1326,7 +1324,6 @@ export default function Examinations({
           <div className="panel-head">
             <div>
               <h3>Examination Structures & Weightages</h3>
-              <p>Configure terms, weights summing to 100%, independent subject maximum marks, and reporting scales.</p>
             </div>
             {isManager && (
               <button className="primary-btn" onClick={() => setConfigModal(true)}>
@@ -1743,8 +1740,7 @@ export default function Examinations({
         <section className="panel hr-panel">
           <div className="panel-head">
             <div>
-              <h3>Student Academic Transcript & Multi-Term Matrix</h3>
-              <p>Individual student examination breakdown showing term normalized percentages, contributions, and pending progress.</p>
+              <h3>Student Academic Transcripts</h3>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <select
@@ -1886,7 +1882,6 @@ export default function Examinations({
           <div className="panel-head">
             <div>
               <h3>Exam Date Sheet & Papers</h3>
-              <p>Clash detection for rooms, classes, and invigilators during examination sessions</p>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1998,7 +1993,7 @@ export default function Examinations({
       {tab === 'sessions' && (
         <section className="panel hr-panel">
           <div className="panel-head">
-            <div><h3>Assessment Terms & Sessions</h3><p>Manage formal mid-terms, finals, and moderation status</p></div>
+            <div><h3>Assessment Terms & Sessions</h3></div>
             {isManager && (
               <button className="primary-btn" onClick={() => setSessionModal(true)}><Plus size={15} /> New Exam Session</button>
             )}
@@ -2050,7 +2045,7 @@ export default function Examinations({
       {tab === 'scales' && (
         <section className="panel hr-panel">
           <div className="panel-head">
-            <div><h3>Institutional Grading Scales</h3><p>Configure percentage to letter and GPA band mapping</p></div>
+            <div><h3>Institutional Grading Scales</h3></div>
           </div>
           <div className="table-scroll">
             <table className="data-table">

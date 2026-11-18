@@ -283,13 +283,7 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
       {/* Top Header & Sub-Tabs Navigation */}
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div>
-          <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--brand-primary, #715ee8)', fontWeight: 600 }}>
-            <ClipboardCheck size={15} /> ATTENDANCE MANAGEMENT
-          </div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: '0.2rem 0' }}>Attendance Register</h1>
-          <p style={{ color: 'var(--text-secondary, #64748b)', margin: 0, fontSize: '0.92rem' }}>
-            Daily participation tracking for students and campus faculty.
-          </p>
         </div>
 
         {/* Sub-tabs Switcher */}

@@ -205,9 +205,7 @@ export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgra
     <>
       <div className="page-header">
         <div>
-          <div className="eyebrow">FINANCE / LEDGER</div>
           <h1>Finance</h1>
-          <p>Track income and expenses by category. Charts and totals update as you add entries.</p>
         </div>
         <div className="fx-filters">
           {!isPrincipal && schools.length > 1 && <label>Campus<select className="fx-select" value={school} onChange={e => setSchool(e.target.value)}><option value="">All campuses</option>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
