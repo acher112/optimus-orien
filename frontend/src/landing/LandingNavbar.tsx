@@ -89,6 +89,23 @@ export default function LandingNavbar({
               {t.faq}
             </a>
             <a
+              href="/schools"
+              onClick={(e) => {
+                e.preventDefault();
+                closeMenu();
+                navigate('/schools');
+              }}
+              style={{
+                color: '#4f46e5',
+                fontWeight: 700,
+                background: 'rgba(99, 102, 241, 0.08)',
+                padding: '4px 12px',
+                borderRadius: '8px'
+              }}
+            >
+              {locale === 'ur' ? 'اسکول تلاش کریں' : 'Find a School'}
+            </a>
+            <a
               href="#contact"
               onClick={(e) => {
                 e.preventDefault();

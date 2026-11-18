@@ -131,23 +131,6 @@ body {
   }
 }
 
-/* Test Environment Banner */
-.test-env-banner {
-  background: #fef3c7;
-  color: #92400e;
-  border-bottom: 1px solid #fde68a;
-  padding: 0.4rem 1rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-align: center;
-  position: relative;
-  z-index: 1000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 /* ==========================================================================
    NAVBAR
    ========================================================================== */

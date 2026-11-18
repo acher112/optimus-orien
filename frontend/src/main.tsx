@@ -9,7 +9,7 @@ import {
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle,
-  CreditCard, Lock, Crown
+  CreditCard, Lock, Crown, Globe
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -39,6 +39,11 @@ const AcademicQualityIndex = React.lazy(() => import('./AcademicQualityIndex'));
 const PlatformOwner = React.lazy(() => import('./PlatformOwner'));
 import AdminPortal, { AdminLogin, AdminUnauthorized } from './AdminPortal';
 const DataImport = React.lazy(() => import('./DataImport'));
+const PublicSchoolsPage = React.lazy(() => import('./public-directory/PublicSchoolsPage'));
+const PublicSchoolProfilePage = React.lazy(() => import('./public-directory/PublicSchoolProfilePage'));
+const PublicSchoolComparePage = React.lazy(() => import('./public-directory/PublicSchoolComparePage').then(m => ({ default: m.PublicSchoolComparePage })));
+const PublicMethodologyPage = React.lazy(() => import('./public-directory/PublicMethodologyPage').then(m => ({ default: m.PublicMethodologyPage })));
+const SchoolPublicProfileEditor = React.lazy(() => import('./public-directory/SchoolPublicProfileEditor').then(m => ({ default: m.SchoolPublicProfileEditor })));
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
@@ -87,6 +92,7 @@ import './style.css';
 const WORKSPACE_NAV = [
   { name: 'Overview', icon: LayoutDashboard },
   { name: 'Campuses', icon: Building2, adminOnly: true },
+  { name: 'Public Profile', icon: Globe, adminOnly: true, roles: ['organisation_admin', 'school_admin', 'owner', 'platform_admin'] },
   { name: 'Campus setup', icon: Settings2, adminOnly: true },
   { name: 'Academic years', icon: CalendarDays, adminOnly: true },
   { name: 'Classes', icon: Users },
@@ -203,14 +209,14 @@ const FORBIDDEN_TEACHER_PAGES = [
   'Finance', 'Plan & Billing', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee',
   'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Fees',
   'Staff', 'Staff Salaries', 'Salaries',
-  'Campuses', 'Campus setup', 'Academic years',
+  'Campuses', 'Public Profile', 'Campus setup', 'Academic years',
   'Audit log', 'Permissions', 'Data import', 'Platform owner',
   'Reports', 'Risk criteria', 'Students at Risk', 'At-risk list',
   'Set Criteria', 'Teacher Criteria'
 ];
 
 const NAV_GROUPS = [
-  { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses'] },
+  { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses', 'Public Profile'] },
   { sublabel: 'ACADEMIC CONFIGURATION', adminLabel: true, items: ['Campus setup', 'Academic years'] },
   { sublabel: 'ACADEMIC STRUCTURE', items: ['Classes', 'Subjects'] },
   {
@@ -236,6 +242,7 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   // Free tier
   'Overview': 'free',
   'Campuses': 'free',
+  'Public Profile': 'free',
   'Campus setup': 'free',
   'Academic years': 'free',
   'Classes': 'free',
@@ -866,7 +873,8 @@ function App() {
     if (isAdmin) return false;
     const isPublic = path === '/' || path === '' ||
       path.startsWith('/about') || path.startsWith('/privacy') || path.startsWith('/terms') ||
-      path.startsWith('/contact') || path.startsWith('/platform') || path.startsWith('/portals');
+      path.startsWith('/contact') || path.startsWith('/platform') || path.startsWith('/portals') ||
+      path.startsWith('/schools');
     if (isPublic) return false;
     try {
       if (localStorage.getItem('optimus_user')) return false;
@@ -2071,6 +2079,7 @@ function App() {
     currentSearch.includes('tab=forgot');
 
   const isPublicHomeRoute = (currentPathname === '/' || currentPathname === '') && !isAuthRoute;
+  const isPublicSchoolsRoute = currentPathname.startsWith('/schools') && !isAuthRoute;
   const isPublicInfoRoute =
     (currentPathname.startsWith('/about') ||
     currentPathname.startsWith('/privacy') ||
@@ -2141,6 +2150,45 @@ function App() {
     return (
       <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading...</div></div>}>
         <PublicInfoPage initialPath={currentPathname} authenticated={Boolean(user)} />
+      </React.Suspense>
+    );
+  }
+
+  if (isPublicSchoolsRoute) {
+    const subpath = currentPathname.replace(/^\/schools\/?/, '').trim();
+    const handleNav = (p: string) => {
+      window.history.pushState(null, '', p);
+      setCurrentPathname(p);
+      window.scrollTo(0, 0);
+    };
+
+    if (subpath === 'compare') {
+      return (
+        <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading Campus Comparison…</div></div>}>
+          <PublicSchoolComparePage onNavigate={handleNav} />
+        </React.Suspense>
+      );
+    }
+
+    if (subpath === 'methodology') {
+      return (
+        <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading Ranking Methodology…</div></div>}>
+          <PublicMethodologyPage onNavigate={handleNav} />
+        </React.Suspense>
+      );
+    }
+
+    if (subpath && !subpath.includes('/')) {
+      return (
+        <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading Campus Profile…</div></div>}>
+          <PublicSchoolProfilePage slug={subpath} onNavigate={handleNav} authenticated={Boolean(user)} />
+        </React.Suspense>
+      );
+    }
+
+    return (
+      <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading Campus Directory…</div></div>}>
+        <PublicSchoolsPage onNavigate={handleNav} authenticated={Boolean(user)} />
       </React.Suspense>
     );
   }
@@ -3786,6 +3834,14 @@ function App() {
                 localStorage.setItem('optimus_active_campus_id', String(campusId));
                 switchPage(targetPage, { ...(initialFilters || {}), school: String(campusId) });
               }}
+            />
+          )}
+          {page === 'Public Profile' && (
+            <SchoolPublicProfileEditor
+              user={user}
+              activeCampuses={campuses}
+              notify={notify}
+              onNavigate={switchPage}
             />
           )}
           {page === 'Audit log' && (

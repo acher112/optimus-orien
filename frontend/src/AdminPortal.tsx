@@ -8,6 +8,7 @@ import {
   Pencil, Trash2, Plus, UserPlus, History, Info, UserCheck, RotateCcw
 } from 'lucide-react';
 import { request, login, type User } from './api';
+import { AdminPublicDirectoryTab } from './public-directory/AdminPublicDirectoryTab';
 
 export interface AdminPortalProps {
   user: User;
@@ -16,7 +17,7 @@ export interface AdminPortalProps {
   onGoToApp?: () => void;
 }
 
-type TabType = 'directory' | 'finance' | 'orders' | 'refunds' | 'security';
+type TabType = 'directory' | 'finance' | 'orders' | 'refunds' | 'security' | 'public_directory';
 
 export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<TabType>('directory');
@@ -712,6 +713,28 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
             }}
           >
             <Key size={16} /> Governance & Support Grants
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('public_directory')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 18px',
+              fontSize: 14,
+              fontWeight: 600,
+              borderRadius: '8px 8px 0 0',
+              border: 'none',
+              background: activeTab === 'public_directory' ? '#ffffff' : 'transparent',
+              color: activeTab === 'public_directory' ? '#4338ca' : '#64748b',
+              borderBottom: activeTab === 'public_directory' ? '3px solid #4338ca' : '3px solid transparent',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <ShieldCheck size={16} /> Public Leaderboard & Directory
           </button>
         </div>
 
@@ -1982,6 +2005,13 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
               </div>
             </div>
           </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 6: PUBLIC DIRECTORY & LEADERBOARD GOVERNANCE               */}
+        {/* ============================================================== */}
+        {activeTab === 'public_directory' && (
+          <AdminPublicDirectoryTab notify={sendNotification} />
         )}
       </main>
 

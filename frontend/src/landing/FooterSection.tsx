@@ -117,6 +117,16 @@ export default function FooterSection({
                   AQI
                 </a>
               </li>
+              <li>
+                <a href="/schools" onClick={(e) => handleLinkClick('/schools', e)} style={{ color: '#4f46e5', fontWeight: 700 }}>
+                  Find a School (Leaderboard)
+                </a>
+              </li>
+              <li>
+                <a href="/schools/methodology" onClick={(e) => handleLinkClick('/schools/methodology', e)}>
+                  Directory Methodology
+                </a>
+              </li>
             </ul>
           </div>
 

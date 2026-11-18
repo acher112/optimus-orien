@@ -100,6 +100,29 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'classes' | 'subjects' | 'gender'>('classes');
 
+  // Principal Public Directory Privacy Consent State
+  const [showPrincipalName, setShowPrincipalName] = useState(false);
+  const [showDirectContact, setShowDirectContact] = useState(false);
+  const [savingConsent, setSavingConsent] = useState(false);
+
+  const handleSaveConsent = async () => {
+    setSavingConsent(true);
+    try {
+      await request('principal/public-directory-consent/', {
+        method: 'POST',
+        body: JSON.stringify({
+          show_name: showPrincipalName,
+          show_direct_contact: showDirectContact
+        })
+      });
+      notify('Public directory privacy preferences updated successfully.');
+    } catch (e: any) {
+      notify('Could not update consent preferences: ' + (e?.message || 'Error'));
+    } finally {
+      setSavingConsent(false);
+    }
+  };
+
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -251,6 +274,61 @@ export default function PrincipalHome({ user, onNavigate, notify }: PrincipalHom
           attendance_rate: kpi?.today_attendance_rate,
         }] : []}
       />
+
+      {/* Principal Public Directory Privacy & Consent Card */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #e0e7ff',
+        padding: '1.25rem 1.5rem',
+        boxShadow: '0 2px 10px rgba(99, 102, 241, 0.04)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '1rem'
+      }}>
+        <div style={{ maxWidth: '640px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '3px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
+              PRIVACY CONTROLS
+            </span>
+            <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>
+              Public Directory & Campus Profile Consent
+            </strong>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b', lineHeight: 1.5 }}>
+            Your name and personal contact details are <strong>never</strong> displayed on the public school leaderboard unless you explicitly opt in.
+          </p>
+          <div style={{ display: 'flex', gap: '1.25rem', marginTop: '10px', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', cursor: 'pointer', color: '#334155' }}>
+              <input
+                type="checkbox"
+                checked={showPrincipalName}
+                onChange={e => setShowPrincipalName(e.target.checked)}
+              />
+              <span>Publish My Name on Public Campus Profile</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', cursor: 'pointer', color: '#334155' }}>
+              <input
+                type="checkbox"
+                checked={showDirectContact}
+                onChange={e => setShowDirectContact(e.target.checked)}
+              />
+              <span>Allow Direct Inquiries to My Official Phone & Email</span>
+            </label>
+          </div>
+        </div>
+
+        <button
+          className="outline-btn"
+          onClick={handleSaveConsent}
+          disabled={savingConsent}
+          style={{ borderColor: '#6366f1', color: '#4f46e5', fontWeight: 600, padding: '8px 16px' }}
+        >
+          {savingConsent ? 'Saving…' : 'Save Privacy Preferences'}
+        </button>
+      </div>
 
       {/* Needs Attention Panel */}
       <div className="panel" style={{ background: 'var(--card-bg, #fff)', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)', padding: '1.5rem' }}>
