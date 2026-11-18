@@ -116,6 +116,14 @@ export default function TeacherPerformance({
     loadOverview();
   }, [loadOverview]);
 
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    } catch {}
+  }, [selectedTeacherId]);
+
   // Run live criteria preview
   const handleTestPreview = async () => {
     setSimulating(true);

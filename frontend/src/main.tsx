@@ -128,6 +128,27 @@ function BriefcaseIcon(props: any) {
   return <Users {...props} />;
 }
 
+export function scrollToPageTop() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+  } catch {
+    try {
+      window.scrollTo(0, 0);
+    } catch {}
+  }
+  try {
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+    const shell = document.querySelector('.main-shell');
+    if (shell) shell.scrollTop = 0;
+    const content = document.querySelector('.content');
+    if (content) content.scrollTop = 0;
+    const app = document.querySelector('.app');
+    if (app) app.scrollTop = 0;
+  } catch {}
+}
+
 export function formatCleanDateTime(val: any): string {
   if (val === null || val === undefined || val === '') return '—';
   if (typeof val === 'string') {
@@ -1205,7 +1226,7 @@ function App() {
       const ce = e as CustomEvent<{ page?: string }>;
       if (ce.detail?.page) {
         setPage(ce.detail.page);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        scrollToPageTop();
       }
     };
     window.addEventListener('optimus_navigate', handleNav);
@@ -1424,6 +1445,20 @@ function App() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    scrollToPageTop();
+    const frameId = requestAnimationFrame(() => {
+      scrollToPageTop();
+    });
+    const timerId = setTimeout(() => {
+      scrollToPageTop();
+    }, 60);
+    return () => {
+      cancelAnimationFrame(frameId);
+      clearTimeout(timerId);
+    };
+  }, [page]);
+
   const switchPage = (p: string, initialFilters?: Record<string, any>) => {
     let target = p;
     if (target === 'Fees' || target === 'Student Fees') target = 'Student fees';
@@ -1436,6 +1471,7 @@ function App() {
     }
     setResourceFilters(filters);
     setSidebar(false);
+    scrollToPageTop();
   };
 
   const handleResourceFilterChange = useCallback((newFilters: Record<string, any>) => {
