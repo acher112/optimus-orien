@@ -347,10 +347,8 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
               <div style={{ color: '#ef4444', fontWeight: 700, fontSize: 16, marginBottom: 12 }}>{error}</div>
               <button
                 onClick={() => loadProfile(studentId)}
+                className="primary-btn"
                 style={{
-                  background: '#4f46e5',
-                  color: '#fff',
-                  border: 'none',
                   borderRadius: 8,
                   padding: '9px 18px',
                   fontWeight: 700,
@@ -770,10 +768,8 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
           </button>
           <button
             onClick={onClose}
+            className="primary-btn"
             style={{
-              background: '#4f46e5',
-              color: '#ffffff',
-              border: 'none',
               borderRadius: 8,
               padding: '8px 20px',
               fontSize: 13,

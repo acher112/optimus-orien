@@ -1050,13 +1050,11 @@ export default function TeacherMyClass({ user, onNavigate, notify }: TeacherMyCl
                     onClick={() => {
                       window.dispatchEvent(new CustomEvent('optimus_view_student_profile', { detail: { studentId: detailStudent.id } }));
                     }}
+                    className="primary-btn"
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 6,
-                      background: '#4f46e5',
-                      border: 'none',
-                      color: '#ffffff',
                       padding: '5px 12px',
                       borderRadius: 6,
                       fontSize: 12,

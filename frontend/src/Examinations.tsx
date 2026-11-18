@@ -2378,7 +2378,7 @@ export default function Examinations({
                   <input type="date" required value={newSessionEnd} onChange={e => setNewSessionEnd(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setSessionModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Create Session</button>
               </div>
@@ -2468,7 +2468,7 @@ export default function Examinations({
                   </select>
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setPaperModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Schedule Paper</button>
               </div>

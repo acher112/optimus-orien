@@ -994,8 +994,8 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   borderRadius: 10,
                   fontSize: 14,
                   fontWeight: 700,
-                  background: (!selectedStudent || !payAmount) ? undefined : 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-                  boxShadow: (!selectedStudent || !payAmount) ? undefined : '0 4px 14px rgba(79, 70, 229, 0.3)',
+                  background: (!selectedStudent || !payAmount) ? undefined : 'var(--brand-primary-gradient, var(--brand-primary, #715ee8))',
+                  boxShadow: (!selectedStudent || !payAmount) ? undefined : '0 4px 14px var(--brand-primary-glow, rgba(113, 94, 232, 0.3))',
                   marginTop: 6
                 }}
               >
@@ -2069,9 +2069,9 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 </div>
               )}
 
-              <div style={{
-                marginTop: 24,
-                paddingTop: 16,
+              <div className="modal-footer" style={{
+                marginTop: 20,
+                padding: '16px 24px 22px',
                 borderTop: '1px solid #f1f5f9',
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -2089,20 +2089,16 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 <button
                   type="submit"
                   disabled={voucherGenerating}
+                  className="primary-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 7,
                     padding: '10px 24px',
                     borderRadius: 10,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#ffffff',
                     fontSize: 13.5,
                     fontWeight: 700,
                     cursor: voucherGenerating ? 'wait' : 'pointer',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                    transition: 'all 0.15s ease',
                     opacity: voucherGenerating ? 0.7 : 1
                   }}
                 >
@@ -2128,9 +2124,9 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   <input type="text" placeholder="e.g. Tuition Fee, Admission Fee, Transport" required value={headName} onChange={e => setHeadName(e.target.value)} />
                 </label>
               </div>
-              <div style={{
-                marginTop: 24,
-                paddingTop: 16,
+              <div className="modal-footer" style={{
+                marginTop: 20,
+                padding: '16px 24px 22px',
                 borderTop: '1px solid #f1f5f9',
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -2147,20 +2143,15 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 </button>
                 <button
                   type="submit"
+                  className="primary-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 7,
                     padding: '10px 24px',
                     borderRadius: 10,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#ffffff',
                     fontSize: 13.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                    transition: 'all 0.15s ease'
+                    fontWeight: 700
                   }}
                 >
                   <Check size={16} /> Save Head
@@ -2208,9 +2199,9 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   <input type="number" min="1" max="31" value={structDueDay} onChange={e => setStructDueDay(e.target.value)} />
                 </label>
               </div>
-              <div style={{
-                marginTop: 24,
-                paddingTop: 16,
+              <div className="modal-footer" style={{
+                marginTop: 20,
+                padding: '16px 24px 22px',
                 borderTop: '1px solid #f1f5f9',
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -2233,20 +2224,15 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 </button>
                 <button
                   type="submit"
+                  className="primary-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 7,
                     padding: '10px 24px',
                     borderRadius: 10,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#ffffff',
                     fontSize: 13.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                    transition: 'all 0.15s ease'
+                    fontWeight: 700
                   }}
                 >
                   <Check size={16} />
@@ -2290,9 +2276,9 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   <input type="text" placeholder="e.g. Sibling discount (Brother in Gr 7) or Staff child" required value={concReason} onChange={e => setConcReason(e.target.value)} />
                 </label>
               </div>
-              <div style={{
-                marginTop: 24,
-                paddingTop: 16,
+              <div className="modal-footer" style={{
+                marginTop: 20,
+                padding: '16px 24px 22px',
                 borderTop: '1px solid #f1f5f9',
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -2309,20 +2295,15 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 </button>
                 <button
                   type="submit"
+                  className="primary-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 7,
                     padding: '10px 24px',
                     borderRadius: 10,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#ffffff',
                     fontSize: 13.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                    transition: 'all 0.15s ease'
+                    fontWeight: 700
                   }}
                 >
                   <Check size={16} /> Grant Concession
@@ -2432,9 +2413,9 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                 <strong>Notice:</strong> Reminder notices use polite communication without restricting student access to classes, examinations, or reports, and are limited to one per student daily.
               </p>
 
-              <div style={{
-                marginTop: 24,
-                paddingTop: 16,
+              <div className="modal-footer" style={{
+                marginTop: 20,
+                padding: '16px 24px 22px',
                 borderTop: '1px solid #f1f5f9',
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -2453,20 +2434,16 @@ export default function Fees({ user, notify, initialTab, activeCampusId, campuse
                   type="button"
                   disabled={reminderSending}
                   onClick={() => handleSendReminder(reminderModal.student_id, reminderModal.student_name)}
+                  className="primary-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 7,
                     padding: '10px 24px',
                     borderRadius: 10,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#ffffff',
                     fontSize: 13.5,
                     fontWeight: 700,
-                    cursor: reminderSending ? 'not-allowed' : 'pointer',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                    transition: 'all 0.15s ease'
+                    cursor: reminderSending ? 'not-allowed' : 'pointer'
                   }}
                 >
                   <Send size={14} /> {reminderSending ? 'Sending…' : 'Send Reminder'}

@@ -56,10 +56,8 @@ export const StudentResults: React.FC<Props> = ({ user, notify }) => {
         </div>
         <button
           onClick={loadResults}
+          className="primary-btn"
           style={{
-            background: '#4f46e5',
-            color: '#fff',
-            border: 'none',
             borderRadius: 8,
             padding: '10px 18px',
             fontSize: 13,

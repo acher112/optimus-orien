@@ -1033,7 +1033,7 @@ export default function Salaries({
               <p style={{ fontSize: 13, color: 'var(--text-muted, #64748b)', marginTop: 10 }}>
                 This will automatically calculate basic salaries, active allowances, deductions, and adjustments for all active staff, accounting for mid-month hiring or proration.
               </p>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setGenerateModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Generate</button>
               </div>
@@ -1069,7 +1069,7 @@ export default function Salaries({
                   <input type="text" placeholder="e.g. Bank transfer ref or cheque #" value={payRef} onChange={e => setPayRef(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setPayModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Confirm Payout & Post Expense</button>
               </div>
@@ -1092,7 +1092,7 @@ export default function Salaries({
                   <input type="text" required placeholder="Reason for voiding this salary record" value={voidReason} onChange={e => setVoidReason(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setVoidModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn" style={{ background: '#dc2626' }}>Void Record</button>
               </div>
@@ -1201,7 +1201,7 @@ export default function Salaries({
                   <input type="date" required value={structEffDate} onChange={e => setStructEffDate(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setStructModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Save Structure</button>
               </div>
@@ -1243,7 +1243,7 @@ export default function Salaries({
                   <input type="text" required placeholder="Justification reason" value={adjReason} onChange={e => setAdjReason(e.target.value)} />
                 </label>
               </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer" style={{ marginTop: 20, padding: '16px 24px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="outline-btn" onClick={() => setAdjModal(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Save Adjustment</button>
               </div>

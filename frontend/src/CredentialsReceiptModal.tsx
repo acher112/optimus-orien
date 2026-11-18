@@ -257,10 +257,8 @@ export const CredentialsReceiptModal: React.FC<Props> = ({ receipt, onClose }) =
           <button
             type="button"
             onClick={handlePrint}
+            className="primary-btn"
             style={{
-              background: '#6366f1',
-              color: '#ffffff',
-              border: 'none',
               borderRadius: 8,
               padding: '8px 18px',
               fontSize: 13,
@@ -268,8 +266,7 @@ export const CredentialsReceiptModal: React.FC<Props> = ({ receipt, onClose }) =
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 8,
-              boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)'
+              gap: 8
             }}
           >
             <Printer size={16} /> Print Credentials Slip

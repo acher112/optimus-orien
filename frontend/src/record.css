@@ -4,10 +4,10 @@
    ========================================================================== */
 
 :root {
-  --brand-purple: #9b51e0;
-  --brand-purple-dark: #6f42c1;
-  --brand-purple-light: #f3e8ff;
-  --brand-purple-glow: rgba(155, 81, 224, 0.25);
+  --brand-purple: var(--brand-primary, #9b51e0);
+  --brand-purple-dark: var(--brand-primary-hover, #6f42c1);
+  --brand-purple-light: var(--brand-primary-light, #f3e8ff);
+  --brand-purple-glow: var(--brand-primary-glow, rgba(155, 81, 224, 0.25));
   --record-canvas: #f7f9fc;
   --record-surface: #ffffff;
   --record-border: #e2e8f0;
@@ -147,8 +147,8 @@
 }
 
 .record-download-btn {
-  background: linear-gradient(135deg, var(--brand-purple) 0%, var(--brand-purple-dark) 100%);
-  color: #ffffff;
+  background: var(--brand-primary-gradient, linear-gradient(135deg, var(--brand-purple) 0%, var(--brand-purple-dark) 100%));
+  color: var(--brand-primary-contrast, #ffffff);
   border: none;
   border-radius: 9999px;
   padding: 9px 20px;
@@ -158,14 +158,14 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(111, 66, 193, 0.25);
+  box-shadow: 0 4px 12px var(--brand-primary-glow, rgba(111, 66, 193, 0.25));
   transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
   white-space: nowrap;
 }
 
 .record-download-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(111, 66, 193, 0.35);
+  box-shadow: 0 6px 16px var(--brand-primary-glow, rgba(111, 66, 193, 0.35));
 }
 
 .record-download-btn:disabled {
@@ -380,14 +380,19 @@
 }
 
 .record-btn-primary {
-  background: var(--brand-purple-dark);
+  background: var(--brand-primary, #6f42c1);
   border: none;
-  color: #ffffff;
+  color: var(--brand-primary-contrast, #ffffff);
   border-radius: 9999px;
   padding: 8px 18px;
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 2px 8px var(--brand-primary-glow, rgba(111, 66, 193, 0.25));
+}
+
+.record-btn-primary:hover:not(:disabled) {
+  background: var(--brand-primary-hover, #5b4cdb);
 }
 
 /* RTL Support */

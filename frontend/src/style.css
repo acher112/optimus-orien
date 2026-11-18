@@ -168,30 +168,187 @@
   --brand-primary-contrast: #ffffff;
   --brand-primary-text: #715ee8;
   --hero-contrast: #ffffff;
+  /* Universal cross-system color aliases */
+  --primary: var(--brand-primary);
+  --primary-color: var(--brand-primary);
+  --primary-hover: var(--brand-primary-hover);
+  --primary-contrast: var(--brand-primary-contrast);
+  --brand-purple: var(--brand-primary);
+  --brand-purple-dark: var(--brand-primary-hover);
+  --brand-purple-light: var(--brand-primary-light);
+  --brand-purple-glow: var(--brand-primary-glow);
 }
 
-/* Primary Action Buttons */
+/* ==========================================================================
+   MODAL CARD & MODAL FOOTER SAFE-BORDER SPACING SYSTEM
+   (Ensures buttons never touch or bleed over modal card borders)
+   ========================================================================== */
+.modal-card {
+  overflow: hidden !important;
+  border-radius: 20px !important;
+  box-sizing: border-box !important;
+}
+
+.modal-footer,
+.modal-card form > div:last-child:not(.modal-fields),
+.modal-card > div:last-child:not(.modal-fields):not(.modal-head) {
+  padding: 16px 24px 22px !important;
+  margin-top: auto !important;
+  border-top: 1px solid #f0f1f6 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 12px !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  background: inherit;
+}
+
+.dark .modal-footer,
+.dark .modal-card form > div:last-child:not(.modal-fields),
+.dark .modal-card > div:last-child:not(.modal-fields):not(.modal-head) {
+  border-top-color: #35374c !important;
+}
+
+/* ==========================================================================
+   UNIVERSAL THEME-AWARE PRIMARY & ACTION BUTTONS
+   (All website buttons strictly follow the active theme color)
+   ========================================================================== */
 .primary-btn,
 .login-submit,
 .setup-btn.primary,
-.btn-primary {
-  background: var(--brand-primary) !important;
-  border-color: var(--brand-primary) !important;
+.btn-primary,
+.record-btn-primary:not(.danger),
+.record-download-btn,
+.add-custom-btn,
+.setup-map-trigger-btn,
+.map-search-btn,
+.plan-cta-btn,
+.premium-upgrade-btn,
+.comm-reply-btn,
+.empty-state-cta-btn,
+.campus-dropdown-add-btn,
+.modal-footer button[type="submit"]:not(.danger-btn):not(.hr-danger):not(.outline-btn),
+.modal-card form button[type="submit"]:not(.danger-btn):not(.hr-danger):not(.outline-btn),
+button.save-btn:not(.danger-btn),
+button.primary-btn:not(.danger-btn):not(.hr-danger) {
+  background: var(--brand-primary-gradient, var(--brand-primary, #715ee8)) !important;
+  background-color: var(--brand-primary, #715ee8) !important;
+  border: 1px solid var(--brand-primary, #715ee8) !important;
   color: var(--brand-primary-contrast, #ffffff) !important;
-  box-shadow: 0 8px 18px var(--brand-primary-glow) !important;
+  box-shadow: 0 4px 14px var(--brand-primary-glow, rgba(113, 94, 232, 0.35)) !important;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .primary-btn svg,
 .login-submit svg,
-.setup-btn.primary svg {
+.setup-btn.primary svg,
+.btn-primary svg,
+.record-btn-primary:not(.danger) svg,
+.record-download-btn svg,
+.add-custom-btn svg,
+.setup-map-trigger-btn svg,
+.map-search-btn svg,
+.plan-cta-btn svg,
+.empty-state-cta-btn svg,
+.modal-footer button[type="submit"]:not(.danger-btn):not(.hr-danger):not(.outline-btn) svg,
+.modal-card form button[type="submit"]:not(.danger-btn):not(.hr-danger):not(.outline-btn) svg {
   color: var(--brand-primary-contrast, #ffffff) !important;
   stroke: var(--brand-primary-contrast, #ffffff) !important;
 }
-.primary-btn:hover,
-.login-submit:hover,
-.setup-btn.primary:hover {
-  background: var(--brand-primary-hover) !important;
-  border-color: var(--brand-primary-hover) !important;
+
+/* Button Hover States */
+.primary-btn:hover:not(:disabled),
+.login-submit:hover:not(:disabled),
+.setup-btn.primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled),
+.record-btn-primary:not(.danger):hover:not(:disabled),
+.record-download-btn:hover:not(:disabled),
+.add-custom-btn:hover:not(:disabled),
+.setup-map-trigger-btn:hover:not(:disabled),
+.map-search-btn:hover:not(:disabled),
+.plan-cta-btn:hover:not(:disabled),
+.empty-state-cta-btn:hover:not(:disabled),
+.modal-footer button[type="submit"]:not(.danger-btn):not(.hr-danger):not(.outline-btn):hover:not(:disabled),
+.modal-card form button[type="submit"]:not(.danger-btn):not(.hr-danger):not(.outline-btn):hover:not(:disabled) {
+  background: var(--brand-primary-hover, #5d4cd0) !important;
+  background-color: var(--brand-primary-hover, #5d4cd0) !important;
+  border-color: var(--brand-primary-hover, #5d4cd0) !important;
   color: var(--brand-primary-contrast, #ffffff) !important;
+  box-shadow: 0 6px 18px var(--brand-primary-glow, rgba(113, 94, 232, 0.45)) !important;
+  transform: translateY(-1px);
+}
+
+/* Button Disabled States */
+.primary-btn:disabled,
+.login-submit:disabled,
+.setup-btn.primary:disabled,
+.btn-primary:disabled,
+.record-btn-primary:disabled,
+.record-download-btn:disabled,
+.add-custom-btn:disabled,
+.setup-map-trigger-btn:disabled,
+.map-search-btn:disabled,
+.modal-footer button[type="submit"]:disabled,
+.modal-card form button[type="submit"]:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Active Filter Buttons, Tabs & Campus Pills */
+.campus-pill.active {
+  background: var(--brand-primary, #6366f1) !important;
+  border-color: var(--brand-primary, #6366f1) !important;
+  color: var(--brand-primary-contrast, #ffffff) !important;
+  box-shadow: 0 2px 8px var(--brand-primary-glow, rgba(99, 102, 241, 0.28)) !important;
+}
+
+.record-nav-btn.active {
+  background: var(--brand-primary-light, #f0edff) !important;
+  color: var(--brand-primary-text, var(--brand-primary, #715ee8)) !important;
+  border-color: var(--brand-primary-border, rgba(113, 94, 232, 0.3)) !important;
+  box-shadow: 0 2px 6px var(--brand-primary-glow, rgba(113, 94, 232, 0.15)) !important;
+}
+
+.record-nav-btn:hover {
+  background: var(--brand-primary-light, #f7f6fe) !important;
+  color: var(--brand-primary-text, var(--brand-primary, #715ee8)) !important;
+}
+
+.outline-btn:hover {
+  border-color: var(--brand-primary-border, #c5baff) !important;
+  color: var(--brand-primary-text, var(--brand-primary, #7666dd)) !important;
+  background: var(--brand-primary-light, #f7f6fe) !important;
+}
+
+/* Destructive Action Buttons - Strictly Preserved Red */
+.danger-btn,
+.primary-btn.hr-danger,
+.hr-danger,
+.record-btn-primary.danger,
+button.danger-btn,
+button.delete-btn {
+  background: #dc2626 !important;
+  background-color: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25) !important;
+}
+
+.danger-btn:hover,
+.primary-btn.hr-danger:hover,
+.hr-danger:hover,
+.record-btn-primary.danger:hover,
+button.danger-btn:hover,
+button.delete-btn:hover {
+  background: #b91c1c !important;
+  background-color: #b91c1c !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.35) !important;
 }
 
 /* Hero Banner on Overview */

@@ -115,6 +115,16 @@ export function applyTheme(mode: ThemeMode, colorInput?: string) {
   root.style.setProperty('--brand-primary-text', isDark ? lighterHex : lightBgText);
   root.style.setProperty('--hero-contrast', heroContrast);
 
+  // Canonical cross-module CSS variables
+  root.style.setProperty('--primary', hex);
+  root.style.setProperty('--primary-color', hex);
+  root.style.setProperty('--primary-hover', hoverHex);
+  root.style.setProperty('--primary-contrast', contrastText);
+  root.style.setProperty('--brand-purple', hex);
+  root.style.setProperty('--brand-purple-dark', hoverHex);
+  root.style.setProperty('--brand-purple-light', lightBg);
+  root.style.setProperty('--brand-purple-glow', glow);
+
   if (isDark) {
     root.classList.add('dark');
   } else {

@@ -198,10 +198,8 @@ export const FirstPasswordChangeModal: React.FC<Props> = ({ onSuccess, notify })
           <button
             type="submit"
             disabled={saving}
+            className="primary-btn"
             style={{
-              background: '#4f46e5',
-              color: '#ffffff',
-              border: 'none',
               borderRadius: 8,
               padding: '12px 18px',
               fontSize: 14,
