@@ -9,7 +9,7 @@ import {
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle,
-  CreditCard, Lock, Crown, Globe
+  CreditCard, Lock, Crown, Globe, Home
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -839,10 +839,11 @@ function App() {
       setError('');
       if (typeof window !== 'undefined') {
         const path = window.location.pathname;
-        if (path !== '/login' && path !== '/register' && !path.startsWith('/admin')) {
-          window.history.replaceState(null, '', '/login?session_expired=1');
+        // Only redirect to login if user is inside protected internal workspace (/app)
+        if (path === '/app' || path.startsWith('/app/')) {
+          window.history.replaceState(null, '', '/login');
           setCurrentPathname('/login');
-          setCurrentSearch('?session_expired=1');
+          setCurrentSearch('');
         }
       }
     };
@@ -1382,9 +1383,9 @@ function App() {
       if (typeof window !== 'undefined') {
         const p = window.location.pathname;
         if (p === '/app' || p.startsWith('/app/')) {
-          window.history.replaceState(null, '', '/login?session_expired=1');
+          window.history.replaceState(null, '', '/login');
           setCurrentPathname('/login');
-          setCurrentSearch('?session_expired=1');
+          setCurrentSearch('');
         }
       }
     }).finally(() => setLoading(false));
@@ -1451,9 +1452,9 @@ function App() {
         if (typeof window !== 'undefined') {
           const p = window.location.pathname;
           if (p === '/app' || p.startsWith('/app/')) {
-            window.history.replaceState(null, '', '/login?session_expired=1');
+            window.history.replaceState(null, '', '/login');
             setCurrentPathname('/login');
-            setCurrentSearch('?session_expired=1');
+            setCurrentSearch('');
           }
         }
         return;
@@ -2338,13 +2339,21 @@ function App() {
         aria-hidden="true"
       />
       <aside ref={sidebarRef} className={'sidebar ' + (sidebar ? 'open' : '')}>
-        <div className="brand">
+        <div
+          className="brand"
+          onClick={() => {
+            window.history.pushState(null, '', '/');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }}
+          style={{ cursor: 'pointer' }}
+          title="Go to Landing Page (Home)"
+        >
           <span className="brand-symbol">◈</span>
           <span className="brand-copy">
             <strong>optimus<span>orien</span></strong>
             <small>EDUCATION INTELLIGENCE</small>
           </span>
-          <button className="mobile-x" onClick={() => setSidebar(false)}><X size={19} /></button>
+          <button className="mobile-x" onClick={(e) => { e.stopPropagation(); setSidebar(false); }}><X size={19} /></button>
         </div>
 
         {/* Dynamic Campus Selector */}
@@ -2666,6 +2675,18 @@ function App() {
               <b>{user.name}</b>
               <small>{user.role === 'organisation_admin' ? 'Super Owner' : nice(user.role)}</small>
             </div>
+            <button
+              type="button"
+              aria-label="Home"
+              title="Go to Landing Page (Home)"
+              onClick={() => {
+                window.history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              style={{ marginRight: 4 }}
+            >
+              <Home size={17} />
+            </button>
             <button aria-label="Sign out" title="Sign out" onClick={handleSignOut}>
               <LogOut size={18} />
             </button>
@@ -2748,6 +2769,31 @@ function App() {
             )}
           </div>
           <div className="topbar-right">
+            <button
+              type="button"
+              className="icon-button"
+              title="Go to Landing Page (Home)"
+              onClick={() => {
+                window.history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '5px 10px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--text-secondary, #475569)',
+                background: 'var(--bg-subtle, #f8fafc)',
+                border: '1px solid var(--border-color, #e2e8f0)',
+                cursor: 'pointer'
+              }}
+            >
+              <Home size={15} color="var(--brand-primary, #6366f1)" />
+              <span className="hide-on-mobile">Home</span>
+            </button>
             <span className="today">
               <CalendarDays size={16} />
               {new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date())}
@@ -5798,7 +5844,15 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
   return (
     <div className="login-page">
       <div className="login-left">
-        <div className="login-brand">
+        <div
+          className="login-brand"
+          onClick={() => {
+            window.history.pushState(null, '', '/');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }}
+          style={{ cursor: 'pointer' }}
+          title="Go to Landing Page (Home)"
+        >
           <span className="brand-symbol">◈</span>
           <strong>optimus<span>orien</span></strong>
         </div>
@@ -5822,6 +5876,59 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
       </div>
       <div className="login-right">
         <div className="login-form-wrap login-card">
+          {/* Top Navigation Bar: Home & Find a School */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <button
+              type="button"
+              onClick={() => {
+                window.history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: 8,
+                padding: '7px 14px',
+                fontSize: '0.84rem',
+                fontWeight: 600,
+                color: '#334155',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#334155'; }}
+              title="Return to Landing Page (Home)"
+            >
+              <Home size={15} color="#4f46e5" />
+              <span>Home (Landing Page)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.history.pushState(null, '', '/schools');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '0.84rem',
+                fontWeight: 600,
+                color: '#4f46e5',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <span>Find a School →</span>
+            </button>
+          </div>
+
           <div className="login-welcome-icon"><GraduationCap size={26} /></div>
 
           <div className="login-tabs">
@@ -5919,24 +6026,6 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
               <span className="eyebrow">WELCOME BACK</span>
               <h2>Your workspace awaits.</h2>
               <p className="login-subtitle">Sign in to your education workspace</p>
-              {window.location.search.includes('session_expired=1') && (
-                <div style={{
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: 8,
-                  padding: '10px 14px',
-                  fontSize: 13,
-                  color: '#1e40af',
-                  marginBottom: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontWeight: 500
-                }}>
-                  <Clock size={16} style={{ flexShrink: 0 }} />
-                  <span>Your session has expired. Please sign in again to continue.</span>
-                </div>
-              )}
               <form onSubmit={submitLogin}>
                 <label>
                   Username or Email

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, SlidersHorizontal, Map, List, Award, TrendingUp, Sparkles,
   CheckCircle2, ArrowRight, X, Phone, Mail, Building2, MapPin,
-  ChevronRight, ArrowUpRight, ShieldCheck, Scale, ExternalLink, RefreshCw, UserRound
+  ChevronRight, ArrowUpRight, ShieldCheck, Scale, ExternalLink, RefreshCw, UserRound, Home
 } from 'lucide-react';
 import { PublicCampusCardData, RevealedContactInfo } from './publicDirectoryTypes';
 import DirectoryMap from './DirectoryMap';
@@ -187,6 +187,18 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
             OPTIMUS <span>ORIEN</span>
           </a>
           <nav className="public-dir-nav-links">
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigate('/');
+              }}
+              className="public-dir-nav-link"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+            >
+              <Home size={14} />
+              <span>Home</span>
+            </a>
             <a
               href="/schools"
               onClick={(e) => {

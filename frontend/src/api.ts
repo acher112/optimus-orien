@@ -151,22 +151,16 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
         }));
 
         const path = window.location.pathname;
-        const isAuthOrPublic = path === '/login' || path === '/register' || path === '/signin' ||
-          path === '/' || path.startsWith('/about') || path.startsWith('/privacy') ||
-          path.startsWith('/terms') || path.startsWith('/contact') || path.startsWith('/platform') ||
-          path.startsWith('/portals');
+        const isProtectedApp = path === '/app' || path.startsWith('/app/');
 
-        if (!isAuthOrPublic) {
-          if (path === '/admin' || path.startsWith('/admin')) {
-            window.history.replaceState(null, '', '/admin?session_expired=1');
-          } else {
-            window.history.replaceState(null, '', '/login?session_expired=1');
-          }
+        // Only redirect to login if the user was attempting to view the protected workspace
+        if (isProtectedApp) {
+          window.history.replaceState(null, '', '/login');
           window.dispatchEvent(new PopStateEvent('popstate'));
         }
       }
 
-      throw new Error('Your session has expired. Please sign in again.');
+      throw new Error('Authentication required.');
     }
 
     if (!ct.includes('application/json')) {

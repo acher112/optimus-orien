@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck, MapPin, Building2, CheckCircle2, Share2, AlertTriangle,
   Sparkles, Award, TrendingUp, Phone, Mail, Calendar, ExternalLink,
-  ChevronLeft, ArrowLeft, Send, Check, UserRound
+  ChevronLeft, ArrowLeft, Send, Check, UserRound, Home
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { PublicCampusDetailData, RevealedContactInfo } from './publicDirectoryTypes';
@@ -164,7 +164,26 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
   return (
     <div className="public-directory-container">
       {/* Top Breadcrumb Nav */}
-      <div style={{ background: '#ffffff', borderBottom: '1px solid var(--dir-border)', padding: '10px 24px' }}>
+      <div style={{ background: '#ffffff', borderBottom: '1px solid var(--dir-border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <button
+          onClick={() => onNavigate('/')}
+          style={{
+            background: 'none',
+            border: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            color: 'var(--dir-text-muted)',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+          }}
+          title="Go to Landing Page (Home)"
+        >
+          <Home size={15} color="var(--dir-primary)" />
+          <span>Home</span>
+        </button>
+        <span style={{ color: '#cbd5e1' }}>/</span>
         <button
           onClick={() => onNavigate('/schools')}
           style={{

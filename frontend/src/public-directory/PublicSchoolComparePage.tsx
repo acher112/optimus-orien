@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, ArrowLeft, Plus, X, Award, CheckCircle2, 
-  MapPin, Shield, Check, Minus, ExternalLink, RefreshCw, UserRound 
+  MapPin, Shield, Check, Minus, ExternalLink, RefreshCw, UserRound, Home 
 } from 'lucide-react';
 import { PublicCampusDetailData } from './publicDirectoryTypes';
 import './publicDirectory.css';
@@ -101,24 +101,43 @@ export const PublicSchoolComparePage: React.FC<ComparePageProps> = ({
         {/* Navigation & Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
           <div>
-            <button 
-              onClick={() => navigateTo('/schools')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'none',
-                border: 'none',
-                color: '#4f46e5',
-                fontWeight: 600,
-                fontSize: '0.92rem',
-                cursor: 'pointer',
-                marginBottom: '8px'
-              }}
-            >
-              <ArrowLeft size={16} />
-              <span>{isUrdu ? 'اسکولوں کی فہرست پر واپس' : 'Back to Campus Leaderboard'}</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <button 
+                onClick={() => navigateTo('/')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#4f46e5',
+                  fontWeight: 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <Home size={15} />
+                <span>{isUrdu ? 'ہوم' : 'Home'}</span>
+              </button>
+              <span style={{ color: '#cbd5e1' }}>/</span>
+              <button 
+                onClick={() => navigateTo('/schools')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  fontWeight: 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <ArrowLeft size={16} />
+                <span>{isUrdu ? 'اسکولوں کی فہرست پر واپس' : 'Back to Campus Leaderboard'}</span>
+              </button>
+            </div>
             <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 800, color: '#0f172a' }}>
               {isUrdu ? 'اسکولوں کا موازنہ' : 'Compare Campuses'}
             </h1>

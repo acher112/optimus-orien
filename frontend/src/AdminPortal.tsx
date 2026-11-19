@@ -5,7 +5,7 @@ import {
   X, ChevronRight, BarChart3, TrendingUp, Layers, Check, FileText,
   ArrowRight, Eye, ShieldAlert, Key, Mail, Lock, LogOut, ExternalLink,
   SlidersHorizontal, Percent, CreditCard, Sparkles, AlertTriangle,
-  Pencil, Trash2, Plus, UserPlus, History, Info, UserCheck, RotateCcw
+  Pencil, Trash2, Plus, UserPlus, History, Info, UserCheck, RotateCcw, Home
 } from 'lucide-react';
 import { request, login, type User } from './api';
 import { AdminPublicDirectoryTab } from './public-directory/AdminPublicDirectoryTab';
@@ -453,6 +453,30 @@ export default function AdminPortal({ user, notify, onSignOut, onGoToApp }: Admi
                 <ExternalLink size={15} /> Switch to School Workspace (/app)
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                window.history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(255, 255, 255, 0.12)',
+                color: '#ffffff',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                padding: '8px 14px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+              title="Go to Landing Page (Home)"
+            >
+              <Home size={15} /> Home
+            </button>
 
             <button
               type="button"
@@ -3334,6 +3358,52 @@ export function AdminLogin({
         padding: '36px 32px',
         boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
       }}>
+        {/* Top Navigation Row: Home */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <button
+            type="button"
+            onClick={() => {
+              window.history.pushState(null, '', '/');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: 8,
+              padding: '6px 12px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              color: '#334155',
+              cursor: 'pointer',
+            }}
+            title="Go to Landing Page (Home)"
+          >
+            <Home size={14} color="#4338ca" />
+            <span>Home (Landing Page)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.history.pushState(null, '', '/login');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '0.82rem',
+              color: '#6366f1',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            School Login →
+          </button>
+        </div>
+
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
             width: 54,
@@ -3407,25 +3477,6 @@ export function AdminLogin({
                 </button>
               )}
             </div>
-          </div>
-        )}
-
-        {typeof window !== 'undefined' && window.location.search.includes('session_expired=1') && (
-          <div style={{
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            color: '#1e40af',
-            padding: '12px 14px',
-            borderRadius: 10,
-            fontSize: 13,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: 20,
-            fontWeight: 500
-          }}>
-            <Clock size={16} color="#2563eb" style={{ flexShrink: 0 }} />
-            <span>Your session has expired. Please sign in again.</span>
           </div>
         )}
 
@@ -3634,6 +3685,31 @@ export function AdminUnauthorized({ user, onSignOut, onGoToApp }: { user: User; 
             }}
           >
             Return to School Workspace (/app)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.history.pushState(null, '', '/');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            style={{
+              padding: '11px',
+              borderRadius: 10,
+              border: '1px solid #e2e8f0',
+              background: '#f8fafc',
+              color: '#475569',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6
+            }}
+          >
+            <Home size={15} color="#4338ca" />
+            <span>Go to Landing Page (Home)</span>
           </button>
         </div>
       </div>

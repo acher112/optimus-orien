@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, ArrowLeft, BookOpen, CheckCircle, Scale, 
-  Lock, RefreshCw, AlertCircle, HelpCircle, FileText 
+  Lock, RefreshCw, AlertCircle, HelpCircle, FileText, Home 
 } from 'lucide-react';
 import { MethodologyConfigData } from './publicDirectoryTypes';
 import './publicDirectory.css';
@@ -64,24 +64,43 @@ export const PublicMethodologyPage: React.FC<MethodologyPageProps> = ({
     <div className={`pdir-page-container ${isUrdu ? 'rtl' : 'ltr'}`} style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <div style={{ maxWidth: '960px', margin: '0 auto', padding: '36px 20px' }}>
         {/* Navigation */}
-        <button 
-          onClick={() => navigateTo('/schools')}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'none',
-            border: 'none',
-            color: '#4f46e5',
-            fontWeight: 600,
-            fontSize: '0.92rem',
-            cursor: 'pointer',
-            marginBottom: '16px'
-          }}
-        >
-          <ArrowLeft size={16} />
-          <span>{isUrdu ? 'اسکول لیڈر بورڈ پر واپس' : 'Back to Leaderboard'}</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <button 
+            onClick={() => navigateTo('/')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'none',
+              border: 'none',
+              color: '#4f46e5',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              cursor: 'pointer'
+            }}
+          >
+            <Home size={15} />
+            <span>{isUrdu ? 'ہوم' : 'Home'}</span>
+          </button>
+          <span style={{ color: '#cbd5e1' }}>/</span>
+          <button 
+            onClick={() => navigateTo('/schools')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'none',
+              border: 'none',
+              color: '#64748b',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              cursor: 'pointer'
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>{isUrdu ? 'اسکول لیڈر بورڈ پر واپس' : 'Back to Leaderboard'}</span>
+          </button>
+        </div>
 
         {/* Hero Title */}
         <div style={{ background: '#ffffff', borderRadius: '24px', padding: '36px 32px', border: '1px solid #e2e8f0', marginBottom: '28px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
