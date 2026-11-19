@@ -300,13 +300,22 @@ def ensure_all_registered_campuses_synced() -> int:
         jitter_lat = matched_coords[0] + Decimal(str(((school.id % 7) - 3) * 0.012))
         jitter_lng = matched_coords[1] + Decimal(str(((school.id % 5) - 2) * 0.012))
 
-        # Look up principal if assigned in users
+        # Look up principal if assigned in users, staff, or school settings
         principal_user = User.objects.filter(school=school, role='principal').first()
         principal_name = ""
         show_principal = False
         if principal_user:
             principal_name = f"{principal_user.first_name} {principal_user.last_name}".strip() or principal_user.username
             show_principal = True
+        else:
+            try:
+                from core.views import resolve_school_principal_name
+                resolved = resolve_school_principal_name(school)
+                if resolved:
+                    principal_name = resolved
+                    show_principal = True
+            except Exception:
+                pass
 
         if not listing:
             base_slug = slugify(f"{school.name}-{city}") or f"campus-{school.id}"
@@ -350,7 +359,7 @@ def ensure_all_registered_campuses_synced() -> int:
                 listing.longitude = jitter_lng
                 updated = True
             # Sync principal if available and not yet set
-            if principal_user and not listing.principal_name:
+            if principal_name and not listing.principal_name:
                 listing.principal_name = principal_name
                 listing.show_principal_name = True
                 updated = True
@@ -361,7 +370,11 @@ def ensure_all_registered_campuses_synced() -> int:
                 listing.save()
                 synced_count += 1
 
-    refresh_public_snapshots()
+    try:
+        refresh_public_snapshots()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Failed to refresh public snapshots during sync: %s", exc)
     return synced_count
 
 
@@ -477,7 +490,7 @@ def refresh_public_snapshots(period_name: str = 'Current Academic Session') -> D
         # 2. Country Ranks
         country_groups: Dict[str, List[PublicRankSnapshot]] = {}
         for snap in snapshots_to_rank:
-            country_groups.setdefault(snap.listing.country, []).append(snap)
+            country_groups.setdefault(snap.listing.country or 'Pakistan', []).append(snap)
 
         for country, snaps in country_groups.items():
             snaps.sort(key=lambda s: s.aqi_score, reverse=True)
@@ -490,7 +503,7 @@ def refresh_public_snapshots(period_name: str = 'Current Academic Session') -> D
         # 3. Province Ranks
         prov_groups: Dict[Tuple[str, str], List[PublicRankSnapshot]] = {}
         for snap in snapshots_to_rank:
-            prov_groups.setdefault((snap.listing.country, snap.listing.province), []).append(snap)
+            prov_groups.setdefault((snap.listing.country or 'Pakistan', snap.listing.province or 'Punjab'), []).append(snap)
 
         for (country, prov), snaps in prov_groups.items():
             snaps.sort(key=lambda s: s.aqi_score, reverse=True)
@@ -503,7 +516,7 @@ def refresh_public_snapshots(period_name: str = 'Current Academic Session') -> D
         # 4. City Ranks
         city_groups: Dict[Tuple[str, str], List[PublicRankSnapshot]] = {}
         for snap in snapshots_to_rank:
-            city_groups.setdefault((snap.listing.country, snap.listing.city), []).append(snap)
+            city_groups.setdefault((snap.listing.country or 'Pakistan', snap.listing.city or 'Lahore'), []).append(snap)
 
         for (country, city), snaps in city_groups.items():
             snaps.sort(key=lambda s: s.aqi_score, reverse=True)
@@ -516,12 +529,12 @@ def refresh_public_snapshots(period_name: str = 'Current Academic Session') -> D
         # 5. Board Ranks
         all_boards = set()
         for snap in snapshots_to_rank:
-            for b in snap.listing.boards:
+            for b in (snap.listing.boards or []):
                 if b:
                     all_boards.add(b)
 
         for b in all_boards:
-            board_snaps = [s for s in snapshots_to_rank if b in s.listing.boards]
+            board_snaps = [s for s in snapshots_to_rank if b in (s.listing.boards or [])]
             board_snaps.sort(key=lambda s: s.aqi_score, reverse=True)
             for idx, snap in enumerate(board_snaps):
                 if not isinstance(snap.rank_board, dict):
@@ -534,12 +547,12 @@ def refresh_public_snapshots(period_name: str = 'Current Academic Session') -> D
         # 6. Level Ranks
         all_levels = set()
         for snap in snapshots_to_rank:
-            for lvl in snap.listing.levels:
+            for lvl in (snap.listing.levels or []):
                 if lvl:
                     all_levels.add(lvl)
 
         for lvl in all_levels:
-            lvl_snaps = [s for s in snapshots_to_rank if lvl in s.listing.levels]
+            lvl_snaps = [s for s in snapshots_to_rank if lvl in (s.listing.levels or [])]
             lvl_snaps.sort(key=lambda s: s.aqi_score, reverse=True)
             for idx, snap in enumerate(lvl_snaps):
                 if not isinstance(snap.rank_level, dict):

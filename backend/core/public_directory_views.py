@@ -27,7 +27,9 @@ Includes:
    - POST /api/v1/admin/public-directory/trigger-snapshot/
 """
 from decimal import Decimal
+import logging
 from typing import Dict, Any, List
+from django.conf import settings
 from django.utils import timezone
 from django.db.models import Q
 from django.core.paginator import Paginator, EmptyPage
@@ -87,73 +89,80 @@ def _serialize_card(listing: PublicCampusListing, snapshot: PublicRankSnapshot) 
     STRICT SECURITY RULE: Never includes official_phone, official_email,
     principal_direct_phone, or principal_direct_email.
     """
-    rank_mode = listing.rank_display_mode
+    rank_mode = listing.rank_display_mode or 'exact_rank'
 
     # Score & Average display logic
     score_display = None
-    if snapshot.aqi_score is not None:
+    if snapshot and snapshot.aqi_score is not None:
         if rank_mode != 'unranked_listing' or not snapshot.is_eligible:
-            score_display = float(snapshot.aqi_score)
+            try:
+                score_display = float(snapshot.aqi_score)
+            except Exception:
+                score_display = None
 
     # Rank display logic
     rank_overall_display = None
     rank_city_display = None
-    if snapshot.is_eligible and snapshot.rank_overall is not None:
+    if snapshot and snapshot.is_eligible and snapshot.rank_overall is not None:
         if rank_mode == 'exact_rank':
             rank_overall_display = snapshot.rank_overall
             rank_city_display = snapshot.rank_city
 
-    tier_display = snapshot.rank_tier if (snapshot.is_eligible and rank_mode in ('exact_rank', 'tier_only')) else ''
+    tier_display = snapshot.rank_tier if (snapshot and snapshot.is_eligible and rank_mode in ('exact_rank', 'tier_only')) else ''
 
     # Principal resolution: identify assigned principal or note unavailable
-    principal_val = listing.principal_name.strip() if listing.principal_name else ""
+    principal_val = (listing.principal_name or "").strip()
     if not principal_val and listing.school_id:
-        p_user = User.objects.filter(school_id=listing.school_id, role='principal').first()
-        if p_user:
-            principal_val = f"{p_user.first_name} {p_user.last_name}".strip() or p_user.username
+        try:
+            from core.views import resolve_school_principal_name
+            principal_val = resolve_school_principal_name(listing.school)
+        except Exception:
+            principal_val = ""
 
     # Principal consent rule: principal_name is publicly revealed only if consented
     has_principal_consent = bool(listing.show_principal_name and principal_val)
     principal_public_name = principal_val if has_principal_consent else None
     principal_display = principal_val if has_principal_consent else "Not available yet"
+
+    band_str = snapshot.band if snapshot else 'Not ranked yet (not enough published data)'
     average_display = f"{score_display:.1f}%" if score_display is not None else "Not available yet"
-    performance_display = f"{score_display:.1f}% • {snapshot.band}" if score_display is not None else snapshot.band
+    performance_display = f"{score_display:.1f}% • {band_str}" if score_display is not None else band_str
     location_parts = [p for p in [listing.city, listing.province, listing.country] if p]
     location_display = ", ".join(location_parts) if location_parts else "Registered Campus"
 
     return {
         'slug': listing.slug,
-        'display_name': listing.display_name,
-        'tagline': listing.tagline,
-        'logo_url': listing.logo_url,
-        'country': listing.country,
-        'province': listing.province,
-        'city': listing.city,
-        'address': listing.address,
+        'display_name': listing.display_name or (listing.school.name if listing.school else 'Campus'),
+        'tagline': listing.tagline or '',
+        'logo_url': listing.logo_url or '',
+        'country': listing.country or '',
+        'province': listing.province or '',
+        'city': listing.city or '',
+        'address': listing.address or '',
         'location_display': location_display,
-        'latitude': float(listing.latitude) if listing.latitude else None,
-        'longitude': float(listing.longitude) if listing.longitude else None,
-        'boards': listing.boards,
-        'levels': listing.levels,
-        'gender_type': listing.gender_type,
-        'medium': listing.medium,
+        'latitude': float(listing.latitude) if listing.latitude is not None else None,
+        'longitude': float(listing.longitude) if listing.longitude is not None else None,
+        'boards': listing.boards or [],
+        'levels': listing.levels or [],
+        'gender_type': listing.gender_type or 'co-ed',
+        'medium': listing.medium or 'english',
         'established_year': listing.established_year,
-        'admission_status': listing.admission_status,
+        'admission_status': listing.admission_status or 'open',
         'principal_name': principal_public_name,
         'principal_display': principal_display,
         'principal_title': listing.principal_title or 'Principal',
-        'contact_mode': listing.contact_mode,
+        'contact_mode': listing.contact_mode or 'enquiry_only',
         'rank_display_mode': rank_mode,
         'score': score_display,
         'average_display': average_display,
         'performance_display': performance_display,
-        'band': snapshot.band,
+        'band': band_str,
         'rank_overall': rank_overall_display,
         'rank_city': rank_city_display,
         'rank_tier': tier_display,
-        'score_delta': float(snapshot.score_delta) if snapshot.score_delta is not None else None,
-        'is_eligible': snapshot.is_eligible,
-        'updated_at': listing.updated_at.isoformat(),
+        'score_delta': float(snapshot.score_delta) if (snapshot and snapshot.score_delta is not None) else None,
+        'is_eligible': snapshot.is_eligible if snapshot else False,
+        'updated_at': listing.updated_at.isoformat() if listing.updated_at else timezone.now().isoformat(),
     }
 
 
@@ -170,133 +179,152 @@ def public_schools_list_view(request):
     Sorting: rank, name, score, improved
     Pagination: page, page_size (default 12, max 36)
     """
-    # Ensure all registered campuses in the platform are synced into directory (in non-test environments)
     import sys
-    is_testing = 'test' in sys.argv or getattr(settings, 'TESTING', False)
-    if not is_testing and PublicCampusListing.objects.count() < School.objects.count():
-        try:
-            ensure_all_registered_campuses_synced()
-        except Exception:
-            pass
+    logger = logging.getLogger(__name__)
 
-    # Public queries read live PublicCampusListing records representing registered campuses
-    qs = PublicCampusListing.objects.filter(status='live')
+    try:
+        is_testing = 'test' in sys.argv or getattr(settings, 'TESTING', False)
+        if not is_testing:
+            # Sync registered campuses if any are missing or if no live listings exist
+            school_count = School.objects.count()
+            live_count = PublicCampusListing.objects.filter(status='live').count()
+            if school_count > 0 and live_count < school_count:
+                try:
+                    ensure_all_registered_campuses_synced()
+                except Exception as sync_err:
+                    logger.exception("Error syncing registered campuses into public directory: %s", sync_err)
 
-    # Search query
-    q = request.GET.get('q', '').strip()
-    if q:
-        qs = qs.filter(
-            Q(display_name__icontains=q) |
-            Q(city__icontains=q) |
-            Q(tagline__icontains=q)
-        )
+        # Public queries read live PublicCampusListing records representing registered campuses
+        qs = PublicCampusListing.objects.filter(status='live')
 
-    # Geographic filters
-    country = request.GET.get('country', '').strip()
-    if country and country.lower() != 'all':
-        qs = qs.filter(country__iexact=country)
-
-    province = request.GET.get('province', '').strip()
-    if province and province.lower() != 'all':
-        qs = qs.filter(province__iexact=province)
-
-    city = request.GET.get('city', '').strip()
-    if city and city.lower() != 'all':
-        qs = qs.filter(city__iexact=city)
-
-    # Academic metadata filters
-    board = request.GET.get('board', '').strip()
-    if board and board.lower() != 'all':
-        qs = qs.filter(boards__contains=board)
-
-    level = request.GET.get('level', '').strip()
-    if level and level.lower() != 'all':
-        qs = qs.filter(levels__contains=level)
-
-    gender = request.GET.get('gender', '').strip()
-    if gender and gender.lower() != 'all':
-        qs = qs.filter(gender_type=gender)
-
-    medium = request.GET.get('medium', '').strip()
-    if medium and medium.lower() != 'all':
-        qs = qs.filter(medium=medium)
-
-    admission_open = request.GET.get('admission_open')
-    if admission_open in ('true', '1', 'True'):
-        qs = qs.filter(admission_status='open')
-
-    # Attach latest snapshot
-    listings = list(qs)
-    listing_ids = [l.id for l in listings]
-    latest_snapshots = {}
-    snapshots_qs = PublicRankSnapshot.objects.filter(listing_id__in=listing_ids).order_by('listing_id', '-generated_at')
-    for snap in snapshots_qs:
-        if snap.listing_id not in latest_snapshots:
-            latest_snapshots[snap.listing_id] = snap
-
-    # Pair listings with snapshot
-    items = []
-    for l in listings:
-        snap = latest_snapshots.get(l.id)
-        if not snap:
-            # Fallback placeholder snapshot
-            snap = PublicRankSnapshot(
-                listing=l,
-                period_name='Current',
-                band='Not ranked yet (not enough published data)',
-                is_eligible=False
+        # Search query
+        q = request.GET.get('q', '').strip()
+        if q:
+            qs = qs.filter(
+                Q(display_name__icontains=q) |
+                Q(city__icontains=q) |
+                Q(tagline__icontains=q)
             )
-        items.append((l, snap))
 
-    # Sorting
-    sort_by = request.GET.get('sort', 'rank')
-    if sort_by == 'name':
-        items.sort(key=lambda x: x[0].display_name.lower())
-    elif sort_by == 'score':
-        items.sort(key=lambda x: (x[1].aqi_score is not None, x[1].aqi_score or Decimal('-999.00')), reverse=True)
-    elif sort_by == 'improved':
-        items.sort(key=lambda x: (x[1].score_delta is not None, x[1].score_delta or Decimal('-999.00')), reverse=True)
-    else:  # default 'rank'
-        items.sort(
-            key=lambda x: (
-                x[1].is_eligible and x[1].rank_overall is not None,
-                -(x[1].rank_overall or 999999)
-            ),
-            reverse=True
-        )
+        # Geographic filters
+        country = request.GET.get('country', '').strip()
+        if country and country.lower() != 'all':
+            qs = qs.filter(country__iexact=country)
 
-    # Pagination
-    try:
-        page_size = min(int(request.GET.get('page_size', 12)), 36)
-    except ValueError:
-        page_size = 12
+        province = request.GET.get('province', '').strip()
+        if province and province.lower() != 'all':
+            qs = qs.filter(province__iexact=province)
 
-    try:
-        page_num = int(request.GET.get('page', 1))
-    except ValueError:
-        page_num = 1
+        city = request.GET.get('city', '').strip()
+        if city and city.lower() != 'all':
+            qs = qs.filter(city__iexact=city)
 
-    paginator = Paginator(items, page_size)
-    try:
-        page_obj = paginator.page(page_num)
-    except EmptyPage:
-        page_obj = []
+        # Academic metadata filters
+        board = request.GET.get('board', '').strip()
+        if board and board.lower() != 'all':
+            qs = qs.filter(boards__contains=board)
 
-    results = [_serialize_card(listing, snap) for listing, snap in page_obj]
+        level = request.GET.get('level', '').strip()
+        if level and level.lower() != 'all':
+            qs = qs.filter(levels__contains=level)
 
-    # Available filter values for frontend dropdowns
-    available_cities = list(PublicCampusListing.objects.filter(status='live').values_list('city', flat=True).distinct().order_by('city'))
-    available_countries = list(PublicCampusListing.objects.filter(status='live').values_list('country', flat=True).distinct().order_by('country'))
+        gender = request.GET.get('gender', '').strip()
+        if gender and gender.lower() != 'all':
+            qs = qs.filter(gender_type=gender)
 
-    return Response({
-        'count': paginator.count,
-        'num_pages': paginator.num_pages,
-        'current_page': page_num,
-        'page_size': page_size,
-        'available_cities': available_cities,
-        'available_countries': available_countries,
-        'results': results,
-    }, status=status.HTTP_200_OK)
+        medium = request.GET.get('medium', '').strip()
+        if medium and medium.lower() != 'all':
+            qs = qs.filter(medium=medium)
+
+        admission_open = request.GET.get('admission_open')
+        if admission_open in ('true', '1', 'True'):
+            qs = qs.filter(admission_status='open')
+
+        # Attach latest snapshot
+        listings = list(qs)
+        listing_ids = [l.id for l in listings]
+        latest_snapshots = {}
+        if listing_ids:
+            snapshots_qs = PublicRankSnapshot.objects.filter(listing_id__in=listing_ids).order_by('listing_id', '-generated_at')
+            for snap in snapshots_qs:
+                if snap.listing_id not in latest_snapshots:
+                    latest_snapshots[snap.listing_id] = snap
+
+        # Pair listings with snapshot
+        items = []
+        for l in listings:
+            snap = latest_snapshots.get(l.id)
+            if not snap:
+                # Fallback placeholder snapshot
+                snap = PublicRankSnapshot(
+                    listing=l,
+                    period_name='Current',
+                    band='Not ranked yet (not enough published data)',
+                    is_eligible=False
+                )
+            items.append((l, snap))
+
+        # Sorting
+        sort_by = request.GET.get('sort', 'rank')
+        if sort_by == 'name':
+            items.sort(key=lambda x: (x[0].display_name or '').lower())
+        elif sort_by == 'score':
+            items.sort(key=lambda x: (x[1].aqi_score is not None, x[1].aqi_score or Decimal('-999.00')), reverse=True)
+        elif sort_by == 'improved':
+            items.sort(key=lambda x: (x[1].score_delta is not None, x[1].score_delta or Decimal('-999.00')), reverse=True)
+        else:  # default 'rank'
+            items.sort(
+                key=lambda x: (
+                    x[1].is_eligible and x[1].rank_overall is not None,
+                    -(x[1].rank_overall or 999999)
+                ),
+                reverse=True
+            )
+
+        # Pagination
+        try:
+            page_size = min(int(request.GET.get('page_size', 12)), 36)
+        except (ValueError, TypeError):
+            page_size = 12
+
+        try:
+            page_num = int(request.GET.get('page', 1))
+        except (ValueError, TypeError):
+            page_num = 1
+
+        paginator = Paginator(items, page_size)
+        try:
+            page_obj = paginator.page(page_num)
+        except EmptyPage:
+            page_obj = []
+
+        results = [_serialize_card(listing, snap) for listing, snap in page_obj]
+
+        # Available filter values for frontend dropdowns
+        available_cities = list(PublicCampusListing.objects.filter(status='live').exclude(city='').values_list('city', flat=True).distinct().order_by('city'))
+        available_countries = list(PublicCampusListing.objects.filter(status='live').exclude(country='').values_list('country', flat=True).distinct().order_by('country'))
+
+        return Response({
+            'count': paginator.count,
+            'num_pages': paginator.num_pages,
+            'current_page': page_num,
+            'page_size': page_size,
+            'available_cities': available_cities,
+            'available_countries': available_countries,
+            'results': results,
+        }, status=status.HTTP_200_OK)
+
+    except Exception as exc:
+        logger.exception("Unexpected error in public_schools_list_view: %s", exc)
+        return Response({
+            'count': 0,
+            'num_pages': 1,
+            'current_page': 1,
+            'page_size': 12,
+            'available_cities': [],
+            'available_countries': [],
+            'results': [],
+        }, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
@@ -306,10 +334,10 @@ def public_school_detail_view(request, slug):
     Public campus profile detail endpoint.
     Excludes direct contact details (must be revealed on demand via reveal-contact gate).
     """
+    import sys
     try:
         listing = PublicCampusListing.objects.get(slug=slug, status='live')
     except PublicCampusListing.DoesNotExist:
-        import sys
         if not ('test' in sys.argv or getattr(settings, 'TESTING', False)):
             try:
                 ensure_all_registered_campuses_synced()
