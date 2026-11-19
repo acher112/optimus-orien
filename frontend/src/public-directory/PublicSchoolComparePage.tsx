@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, ArrowLeft, Plus, X, Award, CheckCircle2, 
-  MapPin, Shield, Check, Minus, ExternalLink, RefreshCw 
+  MapPin, Shield, Check, Minus, ExternalLink, RefreshCw, UserRound 
 } from 'lucide-react';
 import { PublicCampusDetailData } from './publicDirectoryTypes';
 import './publicDirectory.css';
@@ -256,6 +256,73 @@ export const PublicSchoolComparePage: React.FC<ComparePageProps> = ({
                 </thead>
 
                 <tbody>
+                  {/* Row: Campus Location */}
+                  <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '16px 20px', fontWeight: 700, color: '#334155', background: '#fcfcfd' }}>
+                      {isUrdu ? 'کیمپس کا مقام' : 'Campus Location'}
+                    </td>
+                    {schools.map(school => (
+                      <td key={school.slug} style={{ padding: '16px 20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: '#334155' }}>
+                          <MapPin size={14} color="#6366f1" />
+                          <span>{[school.city, school.province, school.country].filter(Boolean).join(', ') || school.location_display || 'Registered Campus'}</span>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Row: Campus Principal */}
+                  <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '16px 20px', fontWeight: 700, color: '#334155', background: '#fcfcfd' }}>
+                      {isUrdu ? 'پرنسپل' : 'Campus Principal'}
+                    </td>
+                    {schools.map(school => (
+                      <td key={school.slug} style={{ padding: '16px 20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}>
+                          <UserRound size={14} color="#6366f1" />
+                          <strong style={{ color: (school.principal_name || (school.principal_display && school.principal_display !== 'Not available yet')) ? '#0f172a' : '#94a3b8' }}>
+                            {school.principal_name || school.principal_display || (isUrdu ? 'فی الحال دستیاب نہیں' : 'Not available yet')}
+                          </strong>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Row: Academic Average & Performance Band */}
+                  <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '16px 20px', fontWeight: 700, color: '#334155', background: '#fcfcfd' }}>
+                      {isUrdu ? 'تعلیمی اوسط اور کارکردگی' : 'Academic Average & Performance'}
+                    </td>
+                    {schools.map(school => (
+                      <td key={school.slug} style={{ padding: '16px 20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ 
+                            width: '42px', 
+                            height: '42px', 
+                            borderRadius: '50%', 
+                            background: school.score !== null ? '#4f46e5' : '#94a3b8', 
+                            color: '#fff', 
+                            fontWeight: 800, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            fontSize: '0.92rem'
+                          }}>
+                            {school.score !== null ? `${Math.round(school.score)}%` : '—'}
+                          </div>
+                          <div>
+                            <span className={`pdir-badge ${getBandClass(school.band)}`}>
+                              {school.band}
+                            </span>
+                            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                              {school.score !== null ? `Average: ${school.score.toFixed(1)}%` : (school.average_display || 'Not available yet')}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+
                   {/* Row: Optimus Orien AQI Score & Band */}
                   <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '16px 20px', fontWeight: 700, color: '#334155', background: '#fcfcfd' }}>

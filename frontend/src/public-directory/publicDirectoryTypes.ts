@@ -21,10 +21,14 @@ export interface PublicCampusCardData {
   facilities?: string[];
   admission_status: 'open' | 'closed';
   principal_name: string | null;
+  principal_display?: string;
   principal_title: string | null;
+  location_display?: string;
   contact_mode: 'enquiry_only' | 'official_contact' | 'principal_direct';
   rank_display_mode: 'exact_rank' | 'tier_only' | 'unranked_listing';
   score: number | null;
+  average_display?: string;
+  performance_display?: string;
   band: string;
   rank_overall: number | null;
   rank_city: number | null;

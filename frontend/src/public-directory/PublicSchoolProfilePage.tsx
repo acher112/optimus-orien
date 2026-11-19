@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck, MapPin, Building2, CheckCircle2, Share2, AlertTriangle,
   Sparkles, Award, TrendingUp, Phone, Mail, Calendar, ExternalLink,
-  ChevronLeft, ArrowLeft, Send, Check
+  ChevronLeft, ArrowLeft, Send, Check, UserRound
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { PublicCampusDetailData, RevealedContactInfo } from './publicDirectoryTypes';
@@ -228,7 +228,7 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
                 <MapPin size={14} />
                 <span>
                   {profile.address ? `${profile.address}, ` : ''}
-                  {profile.city}, {profile.province}, {profile.country}
+                  {[profile.city, profile.province, profile.country].filter(Boolean).join(', ') || profile.location_display || 'Registered Campus'}
                 </span>
               </div>
             </div>
@@ -279,14 +279,14 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-                  {profile.score !== null ? `${profile.score}%` : 'N/A'}
+                  {profile.score !== null ? `${profile.score}%` : (profile.average_display || 'Not available yet')}
                 </div>
                 <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 4 }}>
-                  Verified Curriculum Assessment Metric
+                  Academic Average • Verified Curriculum Assessment Metric
                 </div>
               </div>
 
-              <div className={`aqi-pill ${profile.band.toLowerCase()}`} style={{ fontSize: '1rem', padding: '8px 16px' }}>
+              <div className={`aqi-pill ${profile.band ? profile.band.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'developing'}`} style={{ fontSize: '1rem', padding: '8px 16px' }}>
                 <Award size={18} />
                 <span>{profile.band}</span>
               </div>
@@ -411,12 +411,17 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
               Campus Administration & Contact
             </h3>
 
-            {profile.principal_name && (
-              <div style={{ marginBottom: 16, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Campus Principal</div>
-                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>{profile.principal_name}</div>
+            <div style={{ marginBottom: 16, padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <UserRound size={18} color="#4338ca" />
               </div>
-            )}
+              <div>
+                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Campus Principal</div>
+                <div style={{ fontWeight: 700, color: (profile.principal_name || (profile.principal_display && profile.principal_display !== 'Not available yet')) ? '#0f172a' : '#94a3b8', fontSize: '0.95rem' }}>
+                  {profile.principal_name || profile.principal_display || 'Not available yet'}
+                </div>
+              </div>
+            </div>
 
             {contactRevealed && contactInfo ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

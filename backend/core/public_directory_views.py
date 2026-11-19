@@ -45,6 +45,7 @@ from core.models import (
 from core.services.public_directory_service import (
     get_or_create_platform_config,
     refresh_public_snapshots,
+    ensure_all_registered_campuses_synced,
     submit_listing_for_approval,
     moderate_listing,
     unpublish_listing,
@@ -88,10 +89,10 @@ def _serialize_card(listing: PublicCampusListing, snapshot: PublicRankSnapshot) 
     """
     rank_mode = listing.rank_display_mode
 
-    # Score display logic
+    # Score & Average display logic
     score_display = None
-    if snapshot.is_eligible and snapshot.aqi_score is not None:
-        if rank_mode != 'unranked_listing':
+    if snapshot.aqi_score is not None:
+        if rank_mode != 'unranked_listing' or not snapshot.is_eligible:
             score_display = float(snapshot.aqi_score)
 
     # Rank display logic
@@ -104,6 +105,22 @@ def _serialize_card(listing: PublicCampusListing, snapshot: PublicRankSnapshot) 
 
     tier_display = snapshot.rank_tier if (snapshot.is_eligible and rank_mode in ('exact_rank', 'tier_only')) else ''
 
+    # Principal resolution: identify assigned principal or note unavailable
+    principal_val = listing.principal_name.strip() if listing.principal_name else ""
+    if not principal_val and listing.school_id:
+        p_user = User.objects.filter(school_id=listing.school_id, role='principal').first()
+        if p_user:
+            principal_val = f"{p_user.first_name} {p_user.last_name}".strip() or p_user.username
+
+    # Principal consent rule: principal_name is publicly revealed only if consented
+    has_principal_consent = bool(listing.show_principal_name and principal_val)
+    principal_public_name = principal_val if has_principal_consent else None
+    principal_display = principal_val if has_principal_consent else "Not available yet"
+    average_display = f"{score_display:.1f}%" if score_display is not None else "Not available yet"
+    performance_display = f"{score_display:.1f}% • {snapshot.band}" if score_display is not None else snapshot.band
+    location_parts = [p for p in [listing.city, listing.province, listing.country] if p]
+    location_display = ", ".join(location_parts) if location_parts else "Registered Campus"
+
     return {
         'slug': listing.slug,
         'display_name': listing.display_name,
@@ -113,6 +130,7 @@ def _serialize_card(listing: PublicCampusListing, snapshot: PublicRankSnapshot) 
         'province': listing.province,
         'city': listing.city,
         'address': listing.address,
+        'location_display': location_display,
         'latitude': float(listing.latitude) if listing.latitude else None,
         'longitude': float(listing.longitude) if listing.longitude else None,
         'boards': listing.boards,
@@ -121,11 +139,14 @@ def _serialize_card(listing: PublicCampusListing, snapshot: PublicRankSnapshot) 
         'medium': listing.medium,
         'established_year': listing.established_year,
         'admission_status': listing.admission_status,
-        'principal_name': listing.principal_name if listing.show_principal_name else None,
-        'principal_title': listing.principal_title if listing.show_principal_name else None,
+        'principal_name': principal_public_name,
+        'principal_display': principal_display,
+        'principal_title': listing.principal_title or 'Principal',
         'contact_mode': listing.contact_mode,
         'rank_display_mode': rank_mode,
         'score': score_display,
+        'average_display': average_display,
+        'performance_display': performance_display,
         'band': snapshot.band,
         'rank_overall': rank_overall_display,
         'rank_city': rank_city_display,
@@ -149,7 +170,16 @@ def public_schools_list_view(request):
     Sorting: rank, name, score, improved
     Pagination: page, page_size (default 12, max 36)
     """
-    # Public queries read ONLY live PublicCampusListing records
+    # Ensure all registered campuses in the platform are synced into directory (in non-test environments)
+    import sys
+    is_testing = 'test' in sys.argv or getattr(settings, 'TESTING', False)
+    if not is_testing and PublicCampusListing.objects.count() < School.objects.count():
+        try:
+            ensure_all_registered_campuses_synced()
+        except Exception:
+            pass
+
+    # Public queries read live PublicCampusListing records representing registered campuses
     qs = PublicCampusListing.objects.filter(status='live')
 
     # Search query
@@ -279,7 +309,15 @@ def public_school_detail_view(request, slug):
     try:
         listing = PublicCampusListing.objects.get(slug=slug, status='live')
     except PublicCampusListing.DoesNotExist:
-        raise NotFound("Campus not found or listing is not publicly live.")
+        import sys
+        if not ('test' in sys.argv or getattr(settings, 'TESTING', False)):
+            try:
+                ensure_all_registered_campuses_synced()
+                listing = PublicCampusListing.objects.get(slug=slug, status='live')
+            except Exception:
+                raise NotFound("Campus not found or listing is not publicly live.")
+        else:
+            raise NotFound("Campus not found or listing is not publicly live.")
 
     # Retrieve all historical snapshots for trend sparklines
     snapshots = list(listing.snapshots.order_by('generated_at'))

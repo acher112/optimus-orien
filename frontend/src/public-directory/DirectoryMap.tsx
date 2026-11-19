@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { MapPin, Navigation, Plus, Minus, X, ExternalLink, Award, Sparkles } from 'lucide-react';
+import { MapPin, Navigation, Plus, Minus, X, ExternalLink, Award, Sparkles, UserRound } from 'lucide-react';
 import { PublicCampusCardData } from './publicDirectoryTypes';
 
 interface DirectoryMapProps {
@@ -223,7 +223,7 @@ export default function DirectoryMap({ campuses, onSelectCampus }: DirectoryMapP
                     {selectedCampus.display_name}
                   </h4>
                   <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                    {selectedCampus.city}, {selectedCampus.country}
+                    {[selectedCampus.city, selectedCampus.province, selectedCampus.country].filter(Boolean).join(', ') || selectedCampus.location_display || 'Registered Campus'}
                   </div>
                 </div>
               </div>
@@ -236,33 +236,29 @@ export default function DirectoryMap({ campuses, onSelectCampus }: DirectoryMapP
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '10px 0' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  background:
-                    selectedCampus.band === 'Outstanding'
-                      ? 'var(--band-outstanding-bg)'
-                      : selectedCampus.band === 'Strong'
-                      ? 'var(--band-strong-bg)'
-                      : 'var(--band-steady-bg)',
-                  color: getPinColor(selectedCampus.band),
-                }}
-              >
-                <Sparkles size={12} />
-                {selectedCampus.band}
+            {/* Principal Info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: '#64748b', margin: '6px 0 10px 0' }}>
+              <UserRound size={13} color="#6366f1" />
+              <span>Principal:</span>
+              <strong style={{ color: (selectedCampus.principal_name || (selectedCampus.principal_display && selectedCampus.principal_display !== 'Not available yet')) ? '#334155' : '#94a3b8' }}>
+                {selectedCampus.principal_name || selectedCampus.principal_display || 'Not available yet'}
+              </strong>
+            </div>
+
+            {/* Academic Average and Performance */}
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '8px 10px', margin: '8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+              <div>
+                <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Academic Average</span>
+                <strong style={{ fontSize: '1rem', color: selectedCampus.score !== null ? '#0f172a' : '#64748b' }}>
+                  {selectedCampus.score !== null ? `${selectedCampus.score}%` : (selectedCampus.average_display || 'Not available yet')}
+                </strong>
               </div>
-              {selectedCampus.score !== null && (
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
-                  {selectedCampus.score}% <span style={{ fontSize: '0.72rem', color: '#64748b' }}>AQI</span>
-                </div>
-              )}
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Performance</span>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: getPinColor(selectedCampus.band) }}>
+                  {selectedCampus.band}
+                </span>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>

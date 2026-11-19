@@ -210,7 +210,159 @@ def calculate_campus_published_aqi(school: School) -> Optional[Decimal]:
             score = (total_obtained / total_max) * D_HUNDRED
             return score.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+    # 4. Fallback: Any calculated student results or recorded grades
+    all_calc_results = CalculatedStudentResult.objects.filter(
+        school_class__school=school,
+        completed=True
+    ).exclude(overall_percentage__isnull=True)
+    if all_calc_results.exists():
+        avg_val = all_calc_results.aggregate(avg=Avg('overall_percentage'))['avg']
+        if avg_val is not None:
+            return Decimal(str(avg_val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    all_grades_qs = Grade.objects.filter(
+        assessment__school_class__school=school
+    ).exclude(marks__isnull=True)
+    if all_grades_qs.exists():
+        total_obtained = Decimal('0.00')
+        total_max = Decimal('0.00')
+        for g in all_grades_qs.select_related('assessment'):
+            if g.assessment.max_marks > 0:
+                total_obtained += Decimal(str(g.marks))
+                total_max += Decimal(str(g.assessment.max_marks))
+        if total_max > 0:
+            score = (total_obtained / total_max) * D_HUNDRED
+            return score.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
     return None
+
+
+def ensure_all_registered_campuses_synced() -> int:
+    """
+    Ensures every registered School in the database has an active PublicCampusListing
+    and a PublicRankSnapshot so that all registered campuses appear on the leaderboard.
+    """
+    from django.utils.text import slugify
+    config = get_or_create_platform_config()
+    synced_count = 0
+
+    all_schools = School.objects.all()
+    city_coords = {
+        'lahore': (Decimal('31.5204'), Decimal('74.3587')),
+        'islamabad': (Decimal('33.6844'), Decimal('73.0479')),
+        'karachi': (Decimal('24.8607'), Decimal('67.0011')),
+        'rawalpindi': (Decimal('33.5651'), Decimal('73.0169')),
+        'peshawar': (Decimal('34.0151'), Decimal('71.5249')),
+        'quetta': (Decimal('30.1798'), Decimal('66.9750')),
+        'faisalabad': (Decimal('31.4504'), Decimal('73.1350')),
+        'multan': (Decimal('30.1575'), Decimal('71.5249')),
+        'sialkot': (Decimal('32.4945'), Decimal('74.5229')),
+        'gujranwala': (Decimal('32.1877'), Decimal('74.1945')),
+        'hyderabad': (Decimal('25.3960'), Decimal('68.3578')),
+        'london': (Decimal('51.5074'), Decimal('-0.1278')),
+        'dubai': (Decimal('25.2048'), Decimal('55.2708')),
+    }
+
+    for school in all_schools:
+        listing = PublicCampusListing.objects.filter(school=school).first()
+        city = (school.city or '').strip() or 'Lahore'
+        
+        # Determine country and province based on city
+        city_lower = city.lower()
+        if any(c in city_lower for c in ['london', 'manchester', 'birmingham', 'uk']):
+            country = 'United Kingdom'
+            province = 'Greater London' if 'london' in city_lower else 'Greater Manchester'
+        elif any(c in city_lower for c in ['dubai', 'abu dhabi', 'sharjah', 'uae']):
+            country = 'United Arab Emirates'
+            province = 'Dubai' if 'dubai' in city_lower else 'Abu Dhabi'
+        else:
+            country = 'Pakistan'
+            if 'karachi' in city_lower or 'hyderabad' in city_lower:
+                province = 'Sindh'
+            elif 'islamabad' in city_lower:
+                province = 'Federal Capital'
+            elif 'peshawar' in city_lower or 'abbottabad' in city_lower:
+                province = 'Khyber Pakhtunkhwa'
+            elif 'quetta' in city_lower:
+                province = 'Balochistan'
+            else:
+                province = 'Punjab'
+
+        matched_coords = None
+        for ck, coords in city_coords.items():
+            if ck in city_lower:
+                matched_coords = coords
+                break
+        if not matched_coords:
+            matched_coords = (Decimal('31.5204'), Decimal('74.3587'))
+
+        # Add gentle offset per school id so pins in same city do not overlap
+        jitter_lat = matched_coords[0] + Decimal(str(((school.id % 7) - 3) * 0.012))
+        jitter_lng = matched_coords[1] + Decimal(str(((school.id % 5) - 2) * 0.012))
+
+        # Look up principal if assigned in users
+        principal_user = User.objects.filter(school=school, role='principal').first()
+        principal_name = ""
+        show_principal = False
+        if principal_user:
+            principal_name = f"{principal_user.first_name} {principal_user.last_name}".strip() or principal_user.username
+            show_principal = True
+
+        if not listing:
+            base_slug = slugify(f"{school.name}-{city}") or f"campus-{school.id}"
+            slug = base_slug
+            counter = 1
+            while PublicCampusListing.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{school.id if counter == 1 else counter}"
+                counter += 1
+
+            listing = PublicCampusListing.objects.create(
+                school=school,
+                slug=slug,
+                display_name=school.name,
+                tagline=f"Empowering lifelong learners at {school.name}.",
+                about=f"{school.name} is a registered campus on Optimus Orien, dedicated to academic distinction and holistic student growth.",
+                city=city,
+                province=province,
+                country=country,
+                address=f"Campus Sector, {city}",
+                latitude=jitter_lat,
+                longitude=jitter_lng,
+                boards=['Federal Board (FBISE)', 'Cambridge (CAIE)'] if country == 'Pakistan' else ['Cambridge (CAIE)', 'Edexcel'],
+                levels=['Primary', 'Middle', 'Secondary'],
+                gender_type='co-ed',
+                medium='english',
+                admission_status='open',
+                principal_name=principal_name,
+                principal_title='Principal',
+                show_principal_name=show_principal,
+                contact_mode='enquiry_only',
+                rank_display_mode='exact_rank',
+                facilities=['Science Laboratories', 'Central Library', 'Computer & AI Lab', 'Sports Grounds & Track'],
+                status='live'
+            )
+            synced_count += 1
+        else:
+            updated = False
+            # Sync coordinates if missing
+            if listing.latitude is None or listing.longitude is None:
+                listing.latitude = jitter_lat
+                listing.longitude = jitter_lng
+                updated = True
+            # Sync principal if available and not yet set
+            if principal_user and not listing.principal_name:
+                listing.principal_name = principal_name
+                listing.show_principal_name = True
+                updated = True
+            if not listing.city and school.city:
+                listing.city = school.city
+                updated = True
+            if updated:
+                listing.save()
+                synced_count += 1
+
+    refresh_public_snapshots()
+    return synced_count
 
 
 # =============================================================================

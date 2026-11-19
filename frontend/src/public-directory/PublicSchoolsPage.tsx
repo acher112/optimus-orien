@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, SlidersHorizontal, Map, List, Award, TrendingUp, Sparkles,
   CheckCircle2, ArrowRight, X, Phone, Mail, Building2, MapPin,
-  ChevronRight, ArrowUpRight, ShieldCheck, Scale, ExternalLink, RefreshCw
+  ChevronRight, ArrowUpRight, ShieldCheck, Scale, ExternalLink, RefreshCw, UserRound
 } from 'lucide-react';
 import { PublicCampusCardData, RevealedContactInfo } from './publicDirectoryTypes';
 import DirectoryMap from './DirectoryMap';
@@ -80,6 +80,19 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
     }
   };
 
+  // Sync initial filters from URL query parameters (e.g. from homepage search or city pills)
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const q = urlParams.get('q') || urlParams.get('search');
+      if (q) setSearchQuery(q);
+      const c = urlParams.get('city');
+      if (c) setSelectedCity(c);
+      const country = urlParams.get('country');
+      if (country) setSelectedCountry(country);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetchSchools();
   }, [selectedCountry, selectedCity, selectedBoard, selectedLevel, selectedGender, selectedMedium, admissionOnly, sortBy]);
@@ -92,11 +105,15 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Top 3 for Podium (eligible and ranked)
+  // Top 3 for Podium
   const podiumCampuses = useMemo(() => {
     const eligible = campuses.filter((c) => c.is_eligible && c.rank_overall !== null && c.score !== null);
     const sorted = [...eligible].sort((a, b) => (a.rank_overall || 999) - (b.rank_overall || 999));
-    return sorted.slice(0, 3);
+    if (sorted.length >= 3) return sorted.slice(0, 3);
+    const topScored = [...campuses].filter((c) => c.score !== null).sort((a, b) => (b.score || 0) - (a.score || 0));
+    if (topScored.length >= 3) return topScored.slice(0, 3);
+    if (campuses.length >= 3) return campuses.slice(0, 3);
+    return [];
   }, [campuses]);
 
   // Comparison toggle
@@ -272,12 +289,20 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
               <h3 style={{ fontSize: '1.1rem', margin: '4px 0', fontWeight: 700 }}>
                 {podiumCampuses[1].display_name}
               </h3>
-              <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: 8 }}>
-                {podiumCampuses[1].city}, {podiumCampuses[1].country}
+              <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <MapPin size={12} />
+                <span>{[podiumCampuses[1].city, podiumCampuses[1].province, podiumCampuses[1].country].filter(Boolean).join(', ') || 'Registered Campus'}</span>
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <UserRound size={12} color="#6366f1" />
+                <span>Principal:</span>
+                <strong style={{ color: (podiumCampuses[1].principal_name || (podiumCampuses[1].principal_display && podiumCampuses[1].principal_display !== 'Not available yet')) ? '#334155' : '#94a3b8' }}>
+                  {podiumCampuses[1].principal_name || podiumCampuses[1].principal_display || 'Not available yet'}
+                </strong>
               </div>
               <div className="aqi-pill outstanding" style={{ justifyContent: 'center' }}>
                 <Sparkles size={14} />
-                <span>AQI {podiumCampuses[1].score}%</span>
+                <span>Average: {podiumCampuses[1].score !== null ? `${podiumCampuses[1].score}%` : (podiumCampuses[1].average_display || 'Not available yet')}</span>
                 <span>• {podiumCampuses[1].band}</span>
               </div>
             </div>
@@ -295,12 +320,20 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
               <h3 style={{ fontSize: '1.25rem', margin: '4px 0', fontWeight: 800 }}>
                 {podiumCampuses[0].display_name}
               </h3>
-              <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 10 }}>
-                {podiumCampuses[0].city}, {podiumCampuses[0].country}
+              <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <MapPin size={13} />
+                <span>{[podiumCampuses[0].city, podiumCampuses[0].province, podiumCampuses[0].country].filter(Boolean).join(', ') || 'Registered Campus'}</span>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <UserRound size={13} color="#6366f1" />
+                <span>Principal:</span>
+                <strong style={{ color: (podiumCampuses[0].principal_name || (podiumCampuses[0].principal_display && podiumCampuses[0].principal_display !== 'Not available yet')) ? '#334155' : '#94a3b8' }}>
+                  {podiumCampuses[0].principal_name || podiumCampuses[0].principal_display || 'Not available yet'}
+                </strong>
               </div>
               <div className="aqi-pill outstanding" style={{ justifyContent: 'center', fontSize: '0.95rem' }}>
                 <Award size={16} />
-                <span>AQI {podiumCampuses[0].score}%</span>
+                <span>Average: {podiumCampuses[0].score !== null ? `${podiumCampuses[0].score}%` : (podiumCampuses[0].average_display || 'Not available yet')}</span>
                 <span>• {podiumCampuses[0].band}</span>
               </div>
             </div>
@@ -314,12 +347,20 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
               <h3 style={{ fontSize: '1.1rem', margin: '4px 0', fontWeight: 700 }}>
                 {podiumCampuses[2].display_name}
               </h3>
-              <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: 8 }}>
-                {podiumCampuses[2].city}, {podiumCampuses[2].country}
+              <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <MapPin size={12} />
+                <span>{[podiumCampuses[2].city, podiumCampuses[2].province, podiumCampuses[2].country].filter(Boolean).join(', ') || 'Registered Campus'}</span>
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <UserRound size={12} color="#6366f1" />
+                <span>Principal:</span>
+                <strong style={{ color: (podiumCampuses[2].principal_name || (podiumCampuses[2].principal_display && podiumCampuses[2].principal_display !== 'Not available yet')) ? '#334155' : '#94a3b8' }}>
+                  {podiumCampuses[2].principal_name || podiumCampuses[2].principal_display || 'Not available yet'}
+                </strong>
               </div>
               <div className="aqi-pill outstanding" style={{ justifyContent: 'center' }}>
                 <Sparkles size={14} />
-                <span>AQI {podiumCampuses[2].score}%</span>
+                <span>Average: {podiumCampuses[2].score !== null ? `${podiumCampuses[2].score}%` : (podiumCampuses[2].average_display || 'Not available yet')}</span>
                 <span>• {podiumCampuses[2].band}</span>
               </div>
             </div>
@@ -518,13 +559,22 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
                         {campus.display_name}
                       </h3>
 
-                      <div className="campus-location">
+                      <div className="campus-location" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                         <MapPin size={12} />
                         <span>
-                          {campus.city}, {campus.province}, {campus.country}
+                          {[campus.city, campus.province, campus.country].filter(Boolean).join(', ') || campus.location_display || 'Registered Campus'}
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Campus Principal (always displayed with explicit fallback) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: '#64748b', marginTop: 8, marginBottom: 6 }}>
+                    <UserRound size={13} color="#6366f1" />
+                    <span>Principal:</span>
+                    <strong style={{ color: (campus.principal_name || (campus.principal_display && campus.principal_display !== 'Not available yet')) ? '#334155' : '#94a3b8' }}>
+                      {campus.principal_name || campus.principal_display || 'Not available yet'}
+                    </strong>
                   </div>
 
                   {campus.tagline && (
@@ -533,34 +583,44 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
                     </p>
                   )}
 
-                  {/* AQI Score and Band Gauge */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div className={`aqi-pill ${getBandClass(campus.band)}`}>
-                      <Sparkles size={13} />
-                      {campus.score !== null ? (
-                        <span>{campus.score}% • {campus.band}</span>
-                      ) : (
-                        <span>{campus.band}</span>
-                      )}
+                  {/* Academic Average & Performance Band Metric Block */}
+                  <div style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 12px', margin: '8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.02em' }}>
+                        Academic Average
+                      </span>
+                      <strong style={{ fontSize: '1.05rem', color: campus.score !== null ? '#0f172a' : '#64748b' }}>
+                        {campus.score !== null ? `${campus.score}%` : (campus.average_display || 'Not available yet')}
+                      </strong>
                     </div>
-
-                    {campus.score_delta !== null && campus.score_delta !== undefined && (
-                      <div
-                        style={{
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          color: campus.score_delta >= 0 ? '#059669' : '#dc2626',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 2,
-                        }}
-                        title="Change compared to previous academic term"
-                      >
-                        <TrendingUp size={13} />
-                        <span>{campus.score_delta >= 0 ? `+${campus.score_delta}` : campus.score_delta} pp</span>
-                      </div>
-                    )}
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.02em' }}>
+                        Performance Band
+                      </span>
+                      <span className={`aqi-pill ${getBandClass(campus.band)}`} style={{ padding: '3px 8px', fontSize: '0.76rem', display: 'inline-flex', marginTop: 2 }}>
+                        <Sparkles size={11} style={{ marginRight: 3 }} />
+                        {campus.band}
+                      </span>
+                    </div>
                   </div>
+
+                  {campus.score_delta !== null && campus.score_delta !== undefined && (
+                    <div
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: campus.score_delta >= 0 ? '#059669' : '#dc2626',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        marginBottom: 6,
+                      }}
+                      title="Change compared to previous academic term"
+                    >
+                      <TrendingUp size={13} />
+                      <span>{campus.score_delta >= 0 ? `+${campus.score_delta}` : campus.score_delta} pp vs previous term</span>
+                    </div>
+                  )}
 
                   {/* Boards & Admission Status */}
                   <div className="tag-list">
@@ -578,13 +638,6 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
                       <span className="admission-badge open">Admissions Open</span>
                     )}
                   </div>
-
-                  {/* Principal (if consented) */}
-                  {campus.principal_name && (
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 10 }}>
-                      Principal: <strong style={{ color: '#334155' }}>{campus.principal_name}</strong>
-                    </div>
-                  )}
 
                   {/* Card Action Buttons */}
                   <div
