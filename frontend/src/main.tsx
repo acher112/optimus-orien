@@ -9,7 +9,7 @@ import {
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle,
-  CreditCard, Lock, Crown, Globe, Home
+  CreditCard, Lock, Crown, Globe, Home, Share2
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -43,6 +43,7 @@ const PublicSchoolsPage = React.lazy(() => import('./public-directory/PublicScho
 const PublicSchoolProfilePage = React.lazy(() => import('./public-directory/PublicSchoolProfilePage'));
 const PublicSchoolComparePage = React.lazy(() => import('./public-directory/PublicSchoolComparePage').then(m => ({ default: m.PublicSchoolComparePage })));
 const PublicMethodologyPage = React.lazy(() => import('./public-directory/PublicMethodologyPage').then(m => ({ default: m.PublicMethodologyPage })));
+const NetworkPage = React.lazy(() => import('./network/NetworkPage'));
 const SchoolPublicProfileEditor = React.lazy(() => import('./public-directory/SchoolPublicProfileEditor').then(m => ({ default: m.SchoolPublicProfileEditor })));
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
@@ -130,6 +131,8 @@ const WORKSPACE_NAV = [
   { name: 'Teacher Performance', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Set Criteria', icon: SlidersHorizontal, childOf: 'Teacher Performance', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Evaluation', icon: Award, childOf: 'Teacher Performance', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
+  // Professional Academic Network (Stage 2)
+  { name: 'Network', icon: Share2, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
 ];
 
 function BriefcaseIcon(props: any) {
@@ -235,12 +238,14 @@ const NAV_GROUPS = [
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
+  { sublabel: 'PROFESSIONAL COMMUNITY', items: ['Network'] },
 ];
 
 // Mapping from navigation page names to minimum required subscription tier
 const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   // Free tier
   'Overview': 'free',
+  'Network': 'free',
   'Campuses': 'free',
   'Public Profile': 'free',
   'Campus setup': 'free',
@@ -2506,6 +2511,7 @@ function App() {
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
               {isItemUnlocked('Communication') && renderNavButton('Communication', 'Communication', MessageSquare)}
               {renderNavButton('Announcements', 'Announcements', Megaphone)}
+              {renderNavButton('Network', 'Network', Share2)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SYSTEM</div>
@@ -2527,6 +2533,7 @@ function App() {
               {isItemUnlocked('Examinations') && renderNavButton('Examinations', 'Examinations', Award)}
               {isItemUnlocked('Timetable') && renderNavButton('Timetable', 'Timetable', CalendarDays)}
               {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
+              {renderNavButton('Network', 'Student Achievers', Award)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SECURITY</div>
@@ -4206,6 +4213,17 @@ function App() {
                 />
               </ErrorBoundary>
             )
+          )}
+          {page === 'Network' && (
+            <ErrorBoundary fallbackTitle="Network">
+              <NetworkPage
+                user={user}
+                notify={notify}
+                activeCampusId={activeCampusId}
+                campuses={campuses}
+                onNavigate={switchPage}
+              />
+            </ErrorBoundary>
           )}
           </React.Suspense>
 

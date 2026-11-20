@@ -7,7 +7,7 @@ from . import (
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
     parent_views, landing_views, subscription_views, record_views, teacher_performance_views,
-    public_directory_views
+    public_directory_views, network_views
 )
 
 r = DefaultRouter()
@@ -372,6 +372,38 @@ urlpatterns = [
     path('teacher-performance/alerts/<int:alert_id>/action/', teacher_performance_views.teacher_performance_alert_action_view),
     path('teacher-performance/notes/', teacher_performance_views.teacher_performance_notes_view),
     path('teacher-performance/export/', teacher_performance_views.teacher_performance_export_view),
+
+    # Network Feature Endpoints
+    path('network/profile/me/', network_views.MyNetworkProfileView.as_view()),
+    path('network/profiles/<int:user_id>/', network_views.PublicNetworkProfileView.as_view()),
+    path('network/consent/', network_views.NetworkConsentView.as_view()),
+    path('network/consent/withdraw/', network_views.NetworkConsentWithdrawView.as_view()),
+    path('network/school-settings/', network_views.SchoolNetworkSettingsView.as_view()),
+    path('network/boards/principals/', network_views.PrincipalsBoardView.as_view()),
+    path('network/boards/teachers/', network_views.TeachersBoardView.as_view()),
+    path('network/boards/students/', network_views.StudentAchieversBoardView.as_view()),
+    path('network/boards/meta/', network_views.BoardMetadataView.as_view()),
+    path('network/requests/', network_views.ConnectionRequestsView.as_view()),
+    path('network/requests/received/', network_views.ReceivedRequestsView.as_view()),
+    path('network/requests/sent/', network_views.SentRequestsView.as_view()),
+    path('network/requests/<int:pk>/accept/', network_views.AcceptRequestView.as_view()),
+    path('network/requests/<int:pk>/decline/', network_views.DeclineRequestView.as_view()),
+    path('network/requests/<int:pk>/withdraw/', network_views.WithdrawRequestView.as_view()),
+    path('network/connections/', network_views.ConnectionsListView.as_view()),
+    path('network/connections/<int:peer_id>/', network_views.ConnectionsListView.as_view()),
+    path('network/connections/suggested/', network_views.SuggestedConnectionsView.as_view()),
+    path('network/block/', network_views.BlockUserView.as_view()),
+    path('network/block/<int:user_id>/', network_views.BlockUserView.as_view()),
+    path('network/mute/', network_views.MuteUserView.as_view()),
+    path('network/mute/<int:user_id>/', network_views.MuteUserView.as_view()),
+    path('network/report/', network_views.FileReportView.as_view()),
+    path('network/admin/moderation/', network_views.AdminModerationQueueView.as_view()),
+    path('network/admin/moderation/<int:pk>/resolve/', network_views.AdminResolveReportView.as_view()),
+    # E2EE Chat Endpoints (Stage 4)
+    path('network/chat/keys/bundle/', network_views.UserKeyBundleView.as_view()),
+    path('network/chat/keys/<int:user_id>/', network_views.PublicUserKeyBundleView.as_view()),
+    path('network/chat/conversations/', network_views.ConversationsView.as_view()),
+    path('network/chat/conversations/<int:conversation_id>/messages/', network_views.ConversationMessagesView.as_view()),
 
     path('', include(r.urls))
 

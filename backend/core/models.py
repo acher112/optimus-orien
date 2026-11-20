@@ -3235,4 +3235,422 @@ class SchoolPublicProfileDraft(models.Model):
         return f"Draft Profile for {self.school.name} (Opted in: {self.is_opted_in})"
 
 
+# =============================================================================
+# NETWORK FEATURE MODELS (CROSS-SCHOOL PROFESSIONAL NETWORKING & LEADERBOARDS)
+# =============================================================================
+
+class SchoolNetworkSetting(models.Model):
+    """
+    Campus-level controls for network visibility and board eligibility.
+    """
+    school = models.OneToOneField(School, on_delete=models.CASCADE, related_name='network_setting')
+    network_enabled = models.BooleanField(default=False, help_text='Master switch for campus participation in Network')
+    staff_board_enabled = models.BooleanField(default=False, help_text='Allows consenting faculty/principals to appear on boards')
+    student_board_enabled = models.BooleanField(default=False, help_text='Allows consented student achievers to appear on recognition boards')
+    updated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_network_settings')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "School Network Setting"
+
+    def __str__(self):
+        return f"Network Setting for {self.school.name} (Enabled: {self.network_enabled})"
+
+
+class NetworkProfile(models.Model):
+    """
+    Professional profile for verified adult educators and administrators.
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='network_profile')
+    headline = models.CharField(max_length=140, blank=True, default='')
+    bio = models.TextField(max_length=1000, blank=True, default='')
+    experience_years = models.PositiveIntegerField(default=0)
+    qualifications = models.JSONField(default=list, blank=True)
+    subjects = models.JSONField(default=list, blank=True)
+    interests = models.JSONField(default=list, blank=True)
+    city_display = models.CharField(max_length=100, blank=True, default='')
+    country_display = models.CharField(max_length=100, blank=True, default='')
+    rank_display_mode = models.CharField(
+        max_length=20,
+        choices=[('exact', 'Exact Rank'), ('tier_only', 'Tier Only'), ('none', 'No Rank')],
+        default='exact'
+    )
+    allow_requests_from = models.CharField(
+        max_length=25,
+        choices=[('anyone_verified', 'Anyone Verified'), ('my_city_country', 'My City / Country'), ('nobody', 'Nobody')],
+        default='anyone_verified'
+    )
+    show_school_name = models.BooleanField(default=True)
+    show_city = models.BooleanField(default=True)
+    show_online_status = models.BooleanField(default=False)
+    read_receipts_enabled = models.BooleanField(default=False)
+    is_platform_verified = models.BooleanField(default=False)
+    is_suspended = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Network Profile"
+
+    def __str__(self):
+        return f"NetworkProfile({self.user.username})"
+
+
+class NetworkConsent(models.Model):
+    """
+    Immutable versioned audit log of explicit user/guardian opt-in and withdrawal.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_consents')
+    consent_type = models.CharField(
+        max_length=30,
+        choices=[
+            ('principal_board', 'Principal Board'),
+            ('teacher_board', 'Teacher Board'),
+            ('student_recognition', 'Student Recognition'),
+            ('e2ee_chat', 'E2EE Chat')
+        ],
+        db_index=True
+    )
+    version = models.CharField(max_length=20, default='2026.1')
+    granted = models.BooleanField(default=True, db_index=True)
+    granted_at = models.DateTimeField(auto_now_add=True)
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    guardian_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='ward_network_consents'
+    )
+    written_consent_reference = models.CharField(max_length=100, blank=True, default='')
+
+    class Meta:
+        verbose_name = "Network Consent"
+        indexes = [
+            models.Index(fields=['user', 'consent_type', 'granted']),
+        ]
+
+    def __str__(self):
+        status_str = "Active" if self.granted and not self.withdrawn_at else "Withdrawn"
+        return f"Consent({self.user.username}, {self.consent_type}, {status_str})"
+
+
+class BoardSnapshot(models.Model):
+    """
+    Immutable, reproducible snapshot of board rankings from published assessment periods.
+    """
+    board_type = models.CharField(
+        max_length=20,
+        choices=[('principals', 'Principals'), ('teachers', 'Teachers'), ('students', 'Students')],
+        db_index=True
+    )
+    period_identifier = models.CharField(max_length=60, db_index=True)
+    academic_year_name = models.CharField(max_length=60, blank=True, default='')
+    subject_name = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    grade_level = models.CharField(max_length=30, blank=True, default='', db_index=True)
+    entity_type = models.CharField(
+        max_length=20,
+        choices=[('principal', 'Principal'), ('teacher', 'Teacher'), ('student', 'Student')]
+    )
+    entity_id = models.IntegerField(db_index=True)
+    display_name = models.CharField(max_length=150)
+    school_name = models.CharField(max_length=150, blank=True, default='')
+    campus_id = models.IntegerField(null=True, blank=True, db_index=True)
+    city = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    country = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    score = models.DecimalField(max_digits=5, decimal_places=2)
+    rank = models.PositiveIntegerField()
+    tier_label = models.CharField(max_length=50, blank=True, default='')
+    positive_band = models.CharField(max_length=50, blank=True, default='')
+    score_delta = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    is_most_improved = models.BooleanField(default=False, db_index=True)
+    student_count = models.PositiveIntegerField(default=0)
+    assessment_count = models.PositiveIntegerField(default=0)
+    is_eligible = models.BooleanField(default=True, db_index=True)
+    eligibility_reason = models.CharField(max_length=200, blank=True, default='')
+    config_version = models.CharField(max_length=30, default='1.0')
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Board Snapshot"
+        indexes = [
+            models.Index(fields=['board_type', 'period_identifier', 'rank']),
+            models.Index(fields=['board_type', 'period_identifier', 'subject_name', 'grade_level', 'rank']),
+            models.Index(fields=['entity_type', 'entity_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.board_type.capitalize()} Rank #{self.rank}: {self.display_name} ({self.score})"
+
+
+class BadgeAward(models.Model):
+    """
+    Audited accolades awarded based on board snapshots and institution verification.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='badge_awards')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True, related_name='badge_awards')
+    badge_type = models.CharField(
+        max_length=30,
+        choices=[
+            ('gold', 'Gold'),
+            ('silver', 'Silver'),
+            ('bronze', 'Bronze'),
+            ('most_improved', 'Most Improved'),
+            ('consistent_performer', 'Consistent Performer'),
+            ('school_verified', 'School Verified'),
+            ('platform_verified', 'Platform Verified')
+        ],
+        db_index=True
+    )
+    title = models.CharField(max_length=120)
+    period_identifier = models.CharField(max_length=60, blank=True, default='')
+    source_snapshot = models.ForeignKey(
+        BoardSnapshot, on_delete=models.SET_NULL, null=True, blank=True, related_name='awarded_badges'
+    )
+    awarded_at = models.DateTimeField(auto_now_add=True)
+    revoked = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    audit_note = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        verbose_name = "Badge Award"
+
+    def __str__(self):
+        recipient = self.user.username if self.user else (f"Student {self.student_id}" if self.student else "Unknown")
+        return f"Badge({self.badge_type}, {self.title} -> {recipient})"
+
+
+class ConnectionRequest(models.Model):
+    """
+    Pending connection invitation between two adult professionals.
+    """
+    from_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_connection_requests')
+    to_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_connection_requests')
+    note = models.CharField(max_length=200, blank=True, default='')
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('accepted', 'Accepted'),
+            ('declined', 'Declined'),
+            ('withdrawn', 'Withdrawn')
+        ],
+        default='pending',
+        db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Connection Request"
+        indexes = [
+            models.Index(fields=['to_user', 'status']),
+            models.Index(fields=['from_user', 'status']),
+        ]
+
+    def __str__(self):
+        return f"Request({self.from_user.username} -> {self.to_user.username}, {self.status})"
+
+
+class Connection(models.Model):
+    """
+    Active two-way mutual connection between two adult professionals.
+    """
+    user_a = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_connections_a')
+    user_b = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_connections_b')
+    status = models.CharField(
+        max_length=20,
+        choices=[('active', 'Active'), ('removed', 'Removed')],
+        default='active',
+        db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    removed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Connection"
+        constraints = [
+            models.CheckConstraint(check=models.Q(user_a__lt=models.F('user_b')), name='user_a_lt_user_b_connection'),
+            models.UniqueConstraint(fields=['user_a', 'user_b'], name='unique_network_connection_pair')
+        ]
+        indexes = [
+            models.Index(fields=['user_a', 'status']),
+            models.Index(fields=['user_b', 'status']),
+        ]
+
+    def __str__(self):
+        return f"Connection({self.user_a.username} <-> {self.user_b.username}, {self.status})"
+
+
+class Block(models.Model):
+    """
+    Safety block initiated by an adult user against another user.
+    """
+    blocker = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_blocks_initiated')
+    blocked = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_blocked_by')
+    reason = models.CharField(max_length=100, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Block"
+        constraints = [
+            models.UniqueConstraint(fields=['blocker', 'blocked'], name='unique_network_block_pair')
+        ]
+
+    def __str__(self):
+        return f"Block({self.blocker.username} blocked {self.blocked.username})"
+
+
+class Mute(models.Model):
+    """
+    Silences notification delivery from a peer without terminating connection.
+    """
+    muter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_mutes_initiated')
+    muted = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_muted_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Mute"
+        constraints = [
+            models.UniqueConstraint(fields=['muter', 'muted'], name='unique_network_mute_pair')
+        ]
+
+    def __str__(self):
+        return f"Mute({self.muter.username} muted {self.muted.username})"
+
+
+class Report(models.Model):
+    """
+    Misconduct report filed against a user for platform moderation.
+    """
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_reports_filed')
+    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_reports_received')
+    category = models.CharField(
+        max_length=30,
+        choices=[
+            ('harassment', 'Harassment'),
+            ('spam', 'Spam'),
+            ('inappropriate_content', 'Inappropriate Content'),
+            ('impersonation', 'Impersonation'),
+            ('other', 'Other')
+        ]
+    )
+    details = models.TextField(max_length=1000)
+    decrypted_evidence = models.JSONField(default=list, blank=True)
+    status = models.CharField(
+        max_length=30,
+        choices=[
+            ('pending', 'Pending'),
+            ('in_review', 'In Review'),
+            ('resolved_action_taken', 'Resolved Action Taken'),
+            ('dismissed', 'Dismissed')
+        ],
+        default='pending',
+        db_index=True
+    )
+    moderator_notes = models.TextField(blank=True, default='')
+    resolved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='network_reports_resolved'
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Report"
+
+    def __str__(self):
+        return f"Report({self.reporter.username} -> {self.reported_user.username}, {self.category}, {self.status})"
+
+
+class UserKeyBundle(models.Model):
+    """
+    Public cryptographic identity and pre-key materials for E2EE messaging.
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='network_key_bundle')
+    identity_key = models.TextField(help_text='Base64 public identity key')
+    signed_prekey = models.TextField(blank=True, default='', help_text='Base64 public signed prekey')
+    prekey_signature = models.TextField(blank=True, default='', help_text='Base64 signature of signed prekey')
+    one_time_keys = models.JSONField(default=list, blank=True, help_text='Array of base64 one-time public prekeys')
+    device_id = models.CharField(max_length=64, default='primary')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Key Bundle"
+
+    def __str__(self):
+        return f"KeyBundle({self.user.username})"
+
+
+class Conversation(models.Model):
+    """
+    One-to-one messaging channel between two connected adult professionals.
+    """
+    participant_a = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_conversations_a')
+    participant_b = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_conversations_b')
+    status = models.CharField(
+        max_length=20,
+        choices=[('active', 'Active'), ('blocked', 'Blocked'), ('closed', 'Closed')],
+        default='active',
+        db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_activity_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Conversation"
+        constraints = [
+            models.CheckConstraint(check=models.Q(participant_a__lt=models.F('participant_b')), name='part_a_lt_part_b_conv'),
+            models.UniqueConstraint(fields=['participant_a', 'participant_b'], name='unique_conversation_participants')
+        ]
+
+    def __str__(self):
+        return f"Conversation({self.participant_a.username} <-> {self.participant_b.username})"
+
+
+class EncryptedMessage(models.Model):
+    """
+    End-to-end encrypted message envelope. Plaintext is never stored on the server.
+    """
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='network_sent_messages')
+    ciphertext = models.TextField()
+    nonce = models.CharField(max_length=128)
+    sender_signature = models.TextField(blank=True, default='')
+    size_bytes = models.PositiveIntegerField(default=0)
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Encrypted Message"
+        indexes = [
+            models.Index(fields=['conversation', 'sent_at']),
+        ]
+
+    def __str__(self):
+        return f"EncryptedMessage({self.conversation_id}, sender={self.sender.username}, at={self.sent_at})"
+
+
+class NetworkAuditEvent(models.Model):
+    """
+    Compliance audit trail for consent, blocking, moderation, and cryptographic registration events.
+    """
+    event_type = models.CharField(max_length=60, db_index=True)
+    actor = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='network_audit_actions'
+    )
+    target_type = models.CharField(max_length=60, blank=True, default='')
+    target_id = models.IntegerField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Network Audit Event"
+        indexes = [
+            models.Index(fields=['event_type', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"NetworkAuditEvent({self.event_type}, actor={self.actor_id}, at={self.created_at})"
+
+
+
 

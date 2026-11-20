@@ -1,4 +1,4 @@
-import os
+import os, sys
 from pathlib import Path
 from dotenv import load_dotenv
 BASE_DIR=Path(__file__).resolve().parent
@@ -88,3 +88,6 @@ PADDLE_CLIENT_TOKEN = os.getenv('PADDLE_CLIENT_TOKEN', '')
 FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:5173')
 
 LOGGING={'version':1,'disable_existing_loggers':False,'handlers':{'console':{'class':'logging.StreamHandler'}},'loggers':{'django.request':{'handlers':['console'],'level':'WARNING','propagate':False},'core':{'handlers':['console'],'level':'INFO','propagate':False}}}
+
+if 'test' in sys.argv:
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
