@@ -2769,36 +2769,29 @@ function App() {
             )}
           </div>
           <div className="topbar-right">
-            <button
-              type="button"
-              className="icon-button"
-              title="Go to Landing Page (Home)"
-              onClick={() => {
-                window.history.pushState(null, '', '/');
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '5px 10px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 600,
-                color: 'var(--text-secondary, #475569)',
-                background: 'var(--bg-subtle, #f8fafc)',
-                border: '1px solid var(--border-color, #e2e8f0)',
-                cursor: 'pointer'
-              }}
-            >
-              <Home size={15} color="var(--brand-primary, #6366f1)" />
-              <span className="hide-on-mobile">Home</span>
-            </button>
             <span className="today">
               <CalendarDays size={16} />
               {new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date())}
             </span>
-            <button className="icon-button" title="Toggle theme" onClick={changeTheme}>
+            <button
+              type="button"
+              className="icon-button"
+              title="Go to Landing Page (Home)"
+              aria-label="Go to Landing Page (Home)"
+              onClick={() => {
+                window.history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+            >
+              <Home size={19} />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              title={dark ? 'Switch to Light mode' : 'Switch to Dark mode'}
+              aria-label="Toggle theme"
+              onClick={changeTheme}
+            >
               {dark ? <Sun size={19} /> : <Moon size={19} />}
             </button>
 
@@ -2937,6 +2930,13 @@ function App() {
                         <Building2 size={16} /> <span>Manage Campuses ({campuses.length})</span>
                       </button>
                     )}
+                    <button className="profile-menu-item" onClick={() => {
+                      setProfileMenuOpen(false);
+                      window.history.pushState(null, '', '/');
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}>
+                      <Home size={16} /> <span>Public Website (Home)</span>
+                    </button>
                     <button className="profile-menu-item" onClick={() => { changeTheme(); }}>
                       {dark ? <Sun size={16} /> : <Moon size={16} />} <span>{dark ? 'Switch to Light mode' : 'Switch to Dark mode'}</span>
                     </button>
