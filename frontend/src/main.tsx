@@ -2783,18 +2783,6 @@ function App() {
             <button
               type="button"
               className="icon-button"
-              title="Go to Landing Page (Home)"
-              aria-label="Go to Landing Page (Home)"
-              onClick={() => {
-                window.history.pushState(null, '', '/');
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }}
-            >
-              <Home size={19} />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
               title={dark ? 'Switch to Light mode' : 'Switch to Dark mode'}
               aria-label="Toggle theme"
               onClick={changeTheme}
