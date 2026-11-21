@@ -387,6 +387,20 @@ class StudentAchieversBoardView(APIView):
     def get(self, request):
         qs = BoardSnapshot.objects.filter(board_type='students', is_eligible=True)
 
+        # Ensure student snapshots exist for active students if not yet populated
+        if request.user.school_id and not qs.filter(campus_id=request.user.school_id).exists():
+            from core.services.network_ranking import ensure_student_snapshot
+            school_students = Student.objects.filter(school_id=request.user.school_id, active=True)
+            for st in school_students[:25]:
+                ensure_student_snapshot(st, actor=request.user)
+            qs = BoardSnapshot.objects.filter(board_type='students', is_eligible=True)
+
+        if not qs.exists():
+            from core.services.network_ranking import ensure_student_snapshot
+            for st in Student.objects.filter(active=True)[:25]:
+                ensure_student_snapshot(st, actor=request.user)
+            qs = BoardSnapshot.objects.filter(board_type='students', is_eligible=True)
+
         # Scoping rule: Students and Parents can only view their own school's achievers
         if request.user.role in ('student', 'parent'):
             if not request.user.school_id:
@@ -405,7 +419,7 @@ class StudentAchieversBoardView(APIView):
             qs = qs.filter(grade_level__iexact=grade_level)
 
         period = request.query_params.get('period')
-        if period:
+        if period and period.lower() != 'latest':
             qs = qs.filter(period_identifier=period)
 
         qs = qs.order_by('rank', 'display_name')

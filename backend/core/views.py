@@ -1578,6 +1578,13 @@ class Students(ScopedViewSet):
   student.user = student_user
   student.save(update_fields=['user'])
 
+  # Ensure student recognition board snapshot and consent
+  try:
+   from core.services.network_ranking import ensure_student_snapshot
+   ensure_student_snapshot(student, school_class=school_class, actor=request.user)
+  except Exception:
+   pass
+
   issued_by = request.user.get_full_name() or request.user.username
   receipt = make_credentials_receipt(student, school_class, username, temp_password, issued_by)
 

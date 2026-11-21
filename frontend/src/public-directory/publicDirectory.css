@@ -563,9 +563,14 @@
 
 /* Profile Detail View */
 .profile-hero {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  border-bottom: 1px solid var(--dir-border);
+  background: linear-gradient(135deg, #091e3a 0%, #0f2b48 50%, #172554 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   padding: 40px 20px;
+  color: #ffffff;
+}
+
+.profile-hero h1 {
+  color: #ffffff !important;
 }
 
 .profile-hero-inner {

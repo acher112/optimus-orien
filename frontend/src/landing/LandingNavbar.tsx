@@ -57,7 +57,8 @@ export default function LandingNavbar({
   return (
     <header className={`landing-navbar ${isScrolled ? 'is-scrolled' : ''}`}>
       <div className="nav-container">
-        <a href="#masthead" className="nav-brand" onClick={() => handleNavClick('masthead')}>
+        <a href="#masthead" className="nav-brand" onClick={() => handleNavClick('masthead')} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <img src="/brand-logo.png" alt="Optimus Orien" className="brand-logo-img" style={{ width: 34, height: 34 }} />
           <span className="nav-brand-title">OPTIMUS <span>ORIEN</span></span>
         </a>
 

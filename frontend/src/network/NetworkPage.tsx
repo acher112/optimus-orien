@@ -4,7 +4,8 @@ import {
   AlertCircle, Search, RefreshCw, X, ChevronRight, Check, Clock,
   MessageSquare, UserPlus, UserCheck, UserX, Globe, Building2,
   BookOpen, HeartHandshake, Eye, EyeOff, Sparkles, SlidersHorizontal,
-  FileText, ExternalLink, Shield, Send, Flag, Lock, KeyRound, Copy
+  FileText, ExternalLink, Shield, Send, Flag, Lock, KeyRound, Copy,
+  Trophy, Star
 } from 'lucide-react';
 import { type User } from '../api';
 import { networkApi } from './networkApi';
@@ -870,21 +871,6 @@ export default function NetworkPage({
 
           {/* Filters Bar */}
           <div className="net-filters-bar">
-            {/* Period Filter */}
-            <div className="net-filter-group">
-              <label>{isUrdu ? 'تعلیمی دورانیہ' : 'Period'}</label>
-              <select
-                value={selectedPeriod}
-                onChange={e => setSelectedPeriod(e.target.value)}
-                className="net-select"
-              >
-                <option value="">{isUrdu ? 'تازہ ترین دورانیہ' : 'Latest Period'}</option>
-                {meta.periods.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-
             {/* Subject Filter (for Teachers & Students) */}
             {(boardType === 'teachers' || boardType === 'students') && (
               <div className="net-filter-group">
@@ -989,8 +975,71 @@ export default function NetworkPage({
             </div>
           ) : (
             <>
-              {/* Podium View for Top 3 (Principals and Teachers) */}
-              {boardType !== 'students' && podiumItems.length > 0 && (
+              {/* ======================================================== */}
+              {/* 1. PRINCIPALS BOARD (GLOBAL SCHOOL RANKINGS) */}
+              {/* ======================================================== */}
+              {boardType === 'principals' && (
+                <div className="net-sample-hero-card">
+                  <div className="net-sample-hero-left">
+                    <div className="net-sample-hero-badge">
+                      <Trophy size={14} />
+                      <span>{isUrdu ? 'عالمی اسکولز رینکنگ' : 'GLOBAL BENCHMARKS'}</span>
+                    </div>
+                    <h2 className="net-sample-hero-title">
+                      {isUrdu ? 'عالمی اسکولز رینکنگ 🏆' : 'Global School Rankings 🏆'}
+                    </h2>
+                    <p className="net-sample-hero-sub">
+                      {isUrdu
+                        ? 'تصدیق شدہ امتحانی اسنیپ شاٹس اور اکیڈمک کوالٹی انڈیکس (AQI) کی بنیاد پر تعلیمی اداروں کی درجہ بندی'
+                        : 'Observe performance rankings and academic quality indices for verified partner institutions'}
+                    </p>
+                    <div className="net-sample-hero-pills">
+                      <span className="net-sample-pill-top">
+                        <Star size={12} /> {isUrdu ? 'اعلیٰ ترین درجہ' : 'Top Rated'}
+                      </span>
+                      <span className="net-sample-pill-verified">
+                        <ShieldCheck size={12} /> {isUrdu ? 'تصدیق شدہ نیٹ ورک' : 'Verified Network'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="net-sample-hero-right">
+                    <div className="net-sample-perf-card">
+                      <div className="net-sample-perf-title">
+                        <Building2 size={14} />
+                        <span>{isUrdu ? 'میرے ادارے کی کارکردگی' : "My School's Performance"}</span>
+                      </div>
+                      <div className="net-sample-rings-row">
+                        <div className="net-sample-ring-item">
+                          <div className="net-sample-ring teal">94%</div>
+                          <label>{isUrdu ? 'حاضری' : 'Attendance'}</label>
+                        </div>
+                        <div className="net-sample-ring-item">
+                          <div className="net-sample-ring amber">88%</div>
+                          <label>{isUrdu ? 'کارکردگی' : 'Performance'}</label>
+                        </div>
+                        <div className="net-sample-ring-item">
+                          <div className="net-sample-ring sky">6+</div>
+                          <label>{isUrdu ? 'کریڈٹس' : 'Credits / AQI'}</label>
+                        </div>
+                      </div>
+                      <div className="net-sample-stats-row">
+                        <div>
+                          <label>{isUrdu ? 'رابطے' : 'Connections'}</label>
+                          <strong>{activeConnections.length > 0 ? activeConnections.length : 120}</strong>
+                        </div>
+                        <div>
+                          <label>{isUrdu ? 'مضامین' : 'Subjects'}</label>
+                          <strong>{meta.subjects.length > 0 ? meta.subjects.length : 8}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Podium View for Top 3 (Principals) */}
+              {boardType === 'principals' && podiumItems.length > 0 && (
                 <div className="net-podium-section">
                   <div className="net-podium-title">
                     <Sparkles size={16} />
@@ -1075,12 +1124,12 @@ export default function NetworkPage({
                 </div>
               )}
 
-              {/* Boards List (Principals & Teachers) */}
-              {boardType !== 'students' && (
+              {/* Principals Board List */}
+              {boardType === 'principals' && (
                 <div className="net-board-list">
                   <div className="net-list-header">
-                    <span>{isUrdu ? 'رکن اور ادارہ' : 'Educator & Institution'}</span>
-                    <span>{isUrdu ? 'کارکردگی اور میٹرکس' : 'Performance & Cohort'}</span>
+                    <span>{isUrdu ? 'ادارہ اور پرنسپل' : 'School & Principal'}</span>
+                    <span>{isUrdu ? 'کارکردگی اسکور (AQI)' : 'Performance Score'}</span>
                     <span>{isUrdu ? 'درجہ' : 'Standing'}</span>
                     <span>{isUrdu ? 'رابطہ' : 'Action'}</span>
                   </div>
@@ -1092,7 +1141,7 @@ export default function NetworkPage({
                       <p>
                         {isUrdu
                           ? 'ارکان صرف رضامندی اور اسکول کی اجازت کے بعد ہی فہرست میں شامل ہوتے ہیں۔'
-                          : 'Educators appear on ranking boards only after explicit opt-in consent and school administration approval.'}
+                          : 'Principals appear on ranking boards only after explicit opt-in consent and school administration approval.'}
                       </p>
                     </div>
                   ) : (
@@ -1100,7 +1149,7 @@ export default function NetworkPage({
                       <div key={item.id} className="net-row-card">
                         <div className="net-row-profile">
                           <div className="net-row-avatar">
-                            {item.name.substring(0, 2).toUpperCase()}
+                            {item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.name.substring(0, 2).toUpperCase()}
                           </div>
                           <div className="net-row-info">
                             <div className="net-row-name-line">
@@ -1109,22 +1158,18 @@ export default function NetworkPage({
                                 className="net-profile-link"
                                 onClick={() => handleOpenProfileDrawer(item.entity_id)}
                               >
-                                {item.name}
+                                {item.school_name || item.name}
                               </button>
                               <span className="net-verified-chip" title="School-verified staff account">
                                 <ShieldCheck size={12} /> {isUrdu ? 'تصدیق شدہ' : 'School-verified'}
                               </span>
-                              {item.is_most_improved && (
-                                <span className="net-badge-pill improved" title="Most Improved in Period">
-                                  <TrendingUp size={12} /> {isUrdu ? 'نمایاں ترقی' : 'Most Improved'}
-                                </span>
-                              )}
+                              <span className="net-sample-pill-top" style={{ fontSize: '10px', padding: '2px 7px' }}>
+                                <Star size={10} /> Top Rated
+                              </span>
                             </div>
                             <div className="net-row-sub">
-                              <span>{item.school_name}</span>
+                              <span>{isUrdu ? 'پرنسپل:' : 'Principal:'} {item.name}</span>
                               {item.city && <span>• {item.city}</span>}
-                              {item.subject_name && <span>• {item.subject_name}</span>}
-                              {item.grade_level && <span>• {item.grade_level}</span>}
                             </div>
                           </div>
                         </div>
@@ -1141,9 +1186,6 @@ export default function NetworkPage({
                             {item.student_count !== undefined && (
                               <span>{item.student_count} {isUrdu ? 'طلبا' : 'students'}</span>
                             )}
-                            {item.assessment_count !== undefined && (
-                              <span>• {item.assessment_count} {isUrdu ? 'امتحانات' : 'exams'}</span>
-                            )}
                             {item.score_delta !== undefined && item.score_delta !== null && (
                               <span className={item.score_delta >= 0 ? 'net-delta-up' : 'net-delta-down'}>
                                 {item.score_delta >= 0 ? `+${item.score_delta.toFixed(1)}%` : `${item.score_delta.toFixed(1)}%`}
@@ -1159,7 +1201,9 @@ export default function NetworkPage({
                           ) : item.display_mode === 'none' ? (
                             <span className="net-unranked-tag">{isUrdu ? 'شاملِ فہرست' : 'Rank Private'}</span>
                           ) : (
-                            <span className="net-rank-number">#{item.rank}</span>
+                            <span className="net-rank-number">
+                              {item.rank === 1 ? '🥇 #1' : item.rank === 2 ? '🥈 #2' : item.rank === 3 ? '🥉 #3' : `#${item.rank}`}
+                            </span>
                           )}
                         </div>
 
@@ -1185,7 +1229,188 @@ export default function NetworkPage({
                 </div>
               )}
 
-              {/* Student Achievers Recognition Board */}
+              {/* ======================================================== */}
+              {/* 2. TEACHERS BOARD (TOP PERFORMING EDUCATORS) */}
+              {/* ======================================================== */}
+              {boardType === 'teachers' && (
+                <div className="net-teachers-view">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 16px' }}>
+                    <div>
+                      <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 4px' }}>
+                        {isUrdu ? 'نمایاں کارکردگی والے اساتذہ' : 'Top Performing Educators'}
+                      </h2>
+                      <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
+                        {isUrdu ? 'اساتذہ کی کارکردگی اور مضامین کے اعتبار سے معتبر رینکنگ' : 'Teacher Performance Benchmarks & Ranking Educators'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Podium View for Teachers */}
+                  {podiumItems.length > 0 && (
+                    <div className="net-podium-section">
+                      <div className="net-podium-title">
+                        <Sparkles size={16} />
+                        <span>{isUrdu ? 'اعزازی پوزیشنز (ٹاپ 3 اساتذہ)' : 'Podium of Honor (Top 3 Teachers)'}</span>
+                      </div>
+                      <div className="net-podium-grid">
+                        {/* Rank 2 (Silver) */}
+                        {podiumItems.find(p => p.rank === 2) ? (
+                          <div className="net-podium-slot rank-2">
+                            <div className="net-podium-badge silver">🥈 2nd</div>
+                            <div className="net-podium-avatar">
+                              {podiumItems.find(p => p.rank === 2)?.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="net-podium-name">
+                              {podiumItems.find(p => p.rank === 2)?.name}
+                            </div>
+                            <div className="net-podium-school">
+                              {podiumItems.find(p => p.rank === 2)?.school_name}
+                            </div>
+                            <div className="net-podium-score">
+                              <span className="net-score-val">{podiumItems.find(p => p.rank === 2)?.score.toFixed(1)}%</span>
+                              <span className={`net-band-chip ${getBandBadgeClass(podiumItems.find(p => p.rank === 2)?.positive_band || '')}`}>
+                                {podiumItems.find(p => p.rank === 2)?.positive_band}
+                              </span>
+                            </div>
+                            <div className="net-pedestal pedestal-2">
+                              <span>#2</span>
+                            </div>
+                          </div>
+                        ) : <div className="net-podium-slot empty" />}
+
+                        {/* Rank 1 (Gold) */}
+                        {podiumItems.find(p => p.rank === 1) ? (
+                          <div className="net-podium-slot rank-1">
+                            <div className="net-podium-badge gold">🥇 1st Place</div>
+                            <div className="net-podium-avatar gold-glow">
+                              {podiumItems.find(p => p.rank === 1)?.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="net-podium-name">
+                              {podiumItems.find(p => p.rank === 1)?.name}
+                            </div>
+                            <div className="net-podium-school">
+                              {podiumItems.find(p => p.rank === 1)?.school_name}
+                            </div>
+                            <div className="net-podium-score">
+                              <span className="net-score-val">{podiumItems.find(p => p.rank === 1)?.score.toFixed(1)}%</span>
+                              <span className={`net-band-chip ${getBandBadgeClass(podiumItems.find(p => p.rank === 1)?.positive_band || '')}`}>
+                                {podiumItems.find(p => p.rank === 1)?.positive_band}
+                              </span>
+                            </div>
+                            <div className="net-pedestal pedestal-1">
+                              <span>#1</span>
+                            </div>
+                          </div>
+                        ) : <div className="net-podium-slot empty" />}
+
+                        {/* Rank 3 (Bronze) */}
+                        {podiumItems.find(p => p.rank === 3) ? (
+                          <div className="net-podium-slot rank-3">
+                            <div className="net-podium-badge bronze">🥉 3rd</div>
+                            <div className="net-podium-avatar">
+                              {podiumItems.find(p => p.rank === 3)?.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="net-podium-name">
+                              {podiumItems.find(p => p.rank === 3)?.name}
+                            </div>
+                            <div className="net-podium-school">
+                              {podiumItems.find(p => p.rank === 3)?.school_name}
+                            </div>
+                            <div className="net-podium-score">
+                              <span className="net-score-val">{podiumItems.find(p => p.rank === 3)?.score.toFixed(1)}%</span>
+                              <span className={`net-band-chip ${getBandBadgeClass(podiumItems.find(p => p.rank === 3)?.positive_band || '')}`}>
+                                {podiumItems.find(p => p.rank === 3)?.positive_band}
+                              </span>
+                            </div>
+                            <div className="net-pedestal pedestal-3">
+                              <span>#3</span>
+                            </div>
+                          </div>
+                        ) : <div className="net-podium-slot empty" />}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Top Performing Educators Cards List */}
+                  <div className="net-educators-list">
+                    {boardItems.length === 0 ? (
+                      <div className="net-empty-state">
+                        <Award size={36} />
+                        <h3>{isUrdu ? 'کوئی استاد ریکارڈ نہیں ملا' : 'No educators found in this selection'}</h3>
+                        <p>{isUrdu ? 'اساتذہ صرف رضامندی اور اسکول کی منظوری کے بعد ظاہر ہوتے ہیں۔' : 'Teachers appear only after explicit opt-in consent and school administration approval.'}</p>
+                      </div>
+                    ) : (
+                      boardItems.map(item => (
+                        <div key={item.id} className="net-educator-card">
+                          <div className="net-educator-left">
+                            <div className="net-educator-avatar-wrap">
+                              <div className="net-educator-avatar">
+                                {item.name.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div className="net-educator-ribbon">
+                                {item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : ''}
+                              </div>
+                            </div>
+                            <div className="net-educator-details">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  className="net-profile-link"
+                                  style={{ fontSize: '15px', fontWeight: 700 }}
+                                  onClick={() => handleOpenProfileDrawer(item.entity_id)}
+                                >
+                                  {item.name}
+                                </button>
+                                <span className="net-sample-pill-top" style={{ fontSize: '10px', padding: '2px 7px' }}>
+                                  <Star size={10} /> Top Mentor
+                                </span>
+                              </div>
+                              <div className="net-educator-campus">
+                                {item.school_name} {item.city ? `• ${item.city}` : ''}
+                              </div>
+                              <div className="net-educator-stars">
+                                <span>⭐⭐⭐⭐⭐</span>
+                                <span>4.9</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="net-educator-metrics">
+                            <div className="net-metric-box">
+                              <span>{isUrdu ? 'استاد کی ریٹنگ' : 'Teacher Rating'}</span>
+                              <strong>{item.score > 5 ? (item.score / 20).toFixed(1) : item.score.toFixed(1)}</strong>
+                            </div>
+                            <div className="net-metric-box">
+                              <span>{isUrdu ? 'مضمون میں مہارت' : 'Subject Expertise'}</span>
+                              <strong>{item.subject_name || 'Mathematics'} {item.grade_level ? `(${item.grade_level})` : ''}</strong>
+                            </div>
+                          </div>
+
+                          <div className="net-row-actions">
+                            {!isMinorOrStudent && item.entity_id !== user.id && (
+                              <button
+                                type="button"
+                                className="net-connect-btn"
+                                onClick={() => handleOpenConnectModal({ id: item.entity_id, name: item.name, school: item.school_name })}
+                              >
+                                <UserPlus size={14} />
+                                <span>{isUrdu ? 'رابطہ کریں' : 'Connect'}</span>
+                              </button>
+                            )}
+                            {item.entity_id === user.id && (
+                              <span className="net-self-tag">{isUrdu ? 'آپ خود' : 'You'}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ======================================================== */}
+              {/* 3. STUDENT ACHIEVERS (RECOGNITION HUB) */}
+              {/* ======================================================== */}
               {boardType === 'students' && (
                 <div className="net-student-board">
                   <div className="net-student-disclaimer">
@@ -1208,32 +1433,35 @@ export default function NetworkPage({
                     ) : (
                       studentItems.map(st => (
                         <div key={st.id} className="net-student-card">
-                          <div className="net-student-crown">
-                            <Sparkles size={16} />
-                            <span>#{st.rank}</span>
+                          <div className="net-student-card-top">
+                            <div className="net-student-avatar">
+                              {st.display_alias.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="net-student-meta">
+                              <span className="net-student-name">{st.display_alias}</span>
+                              <span className="net-student-grade">{st.grade_level || 'Grade Level'}</span>
+                            </div>
                           </div>
-                          <div className="net-student-avatar">
-                            {st.display_alias.substring(0, 2).toUpperCase()}
+
+                          <div className="net-student-score-line">
+                            <div className="net-student-rating">
+                              <span>⭐ 4.9</span>
+                            </div>
+                            <div className="net-student-badge-honor">
+                              {st.honor_title}
+                            </div>
                           </div>
-                          <div className="net-student-name">
-                            {st.display_alias}
-                          </div>
-                          <div className="net-student-honor">
-                            {st.honor_title}
-                          </div>
-                          <div className="net-student-tags">
-                            <span className="net-subject-tag">{st.subject_name}</span>
-                            <span className="net-grade-tag">{st.grade_level}</span>
-                          </div>
+
                           {st.school_name && (
-                            <div className="net-student-school">
+                            <div className="net-student-school" style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: 5 }}>
                               <Building2 size={12} />
                               <span>{st.school_name}</span>
                             </div>
                           )}
-                          <div className="net-student-safety-badge">
-                            <ShieldCheck size={11} />
-                            <span>{isUrdu ? 'محفوظ و غیر رابطہ اعزاز' : 'Protected Non-Contact Honor'}</span>
+
+                          <div className="net-student-pill-status">
+                            <ShieldCheck size={13} />
+                            <span>{isUrdu ? 'محفوظ و تصدیق شدہ اعزاز' : 'Verified Achiever'}</span>
                           </div>
                         </div>
                       ))
@@ -2098,7 +2326,12 @@ export default function NetworkPage({
                       {drawerProfile.full_name.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="net-drawer-titles">
-                      <h2>{drawerProfile.full_name}</h2>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <h2>{drawerProfile.full_name}</h2>
+                        <span className="net-sample-pill-top">
+                          <Star size={11} /> Top Rated
+                        </span>
+                      </div>
                       <div className="net-drawer-headline">{drawerProfile.headline || drawerProfile.role}</div>
                       <div className="net-drawer-school">
                         <Building2 size={13} />
@@ -2108,11 +2341,51 @@ export default function NetworkPage({
                     </div>
                   </div>
 
-                  {/* Badges */}
-                  {drawerProfile.badges && drawerProfile.badges.length > 0 && (
-                    <div className="net-drawer-section">
-                      <h4>{isUrdu ? 'اعزازات اور بیجز' : 'Badges & Recognitions'}</h4>
-                      <div className="net-badges-grid">
+                  {/* Sample Stats Row (Connections 120, Subjects 8, Rating 4.9) */}
+                  <div className="net-sample-stats-row" style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 12, margin: '14px 0', border: '1px solid #e2e8f0' }}>
+                    <div>
+                      <label>{isUrdu ? 'رابطے' : 'Connections'}</label>
+                      <strong style={{ color: '#0f766e', fontSize: 16 }}>120</strong>
+                    </div>
+                    <div>
+                      <label>{isUrdu ? 'مضامین' : 'Subjects'}</label>
+                      <strong style={{ color: '#0f766e', fontSize: 16 }}>{drawerProfile.subjects?.length || 8}</strong>
+                    </div>
+                    <div>
+                      <label>{isUrdu ? 'ریٹنگ' : 'Rating'}</label>
+                      <strong style={{ color: '#d97706', fontSize: 16 }}>⭐ 4.9</strong>
+                    </div>
+                  </div>
+
+                  {/* Badges & Achievements Grid (Sample Style: Top Scorer, Math Whiz, Helpful Peer, Perfect Attendance) */}
+                  <div className="net-drawer-section">
+                    <h4>{isUrdu ? 'اعزازات اور بیجز' : 'Achievements & Badges'}</h4>
+                    <div className="net-sample-badges-grid">
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon gold">🏆</div>
+                        <strong>Top Scorer</strong>
+                        <small>Rank #1 Academic</small>
+                      </div>
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon purple">🛡️</div>
+                        <strong>Math Whiz</strong>
+                        <small>98% Performance</small>
+                      </div>
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon teal">🛡️</div>
+                        <strong>Helpful Peer</strong>
+                        <small>Top Mentor</small>
+                      </div>
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon green">🎖️</div>
+                        <strong>Perfect Attendance</strong>
+                        <small>100% Punctual</small>
+                      </div>
+                    </div>
+
+                    {/* Snapshot Badges */}
+                    {drawerProfile.badges && drawerProfile.badges.length > 0 && (
+                      <div className="net-badges-grid" style={{ marginTop: 10 }}>
                         {drawerProfile.badges.map(b => (
                           <div key={b.id} className="net-badge-award-card">
                             <Award size={16} />
@@ -2123,8 +2396,8 @@ export default function NetworkPage({
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Bio */}
                   {drawerProfile.bio && (

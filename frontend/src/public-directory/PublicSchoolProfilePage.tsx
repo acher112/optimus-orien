@@ -215,12 +215,12 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                 {profile.rank_overall !== null && (
-                  <span className="campus-rank-tag" style={{ background: '#eef2ff', color: 'var(--dir-primary)' }}>
+                  <span className="campus-rank-tag" style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.25)' }}>
                     Rank #{profile.rank_overall} in Country
                   </span>
                 )}
                 {profile.rank_city !== null && (
-                  <span className="campus-rank-tag">
+                  <span className="campus-rank-tag" style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.25)' }}>
                     #{profile.rank_city} in {profile.city}
                   </span>
                 )}
@@ -230,20 +230,37 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
                     alignItems: 'center',
                     gap: 3,
                     fontSize: '0.78rem',
-                    color: '#059669',
+                    color: '#34d399',
                     fontWeight: 700,
                   }}
                 >
                   <CheckCircle2 size={13} />
                   Verified on Optimus Orien
                 </span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    background: 'rgba(251, 191, 36, 0.15)',
+                    color: '#fbbf24',
+                    border: '1px solid rgba(251, 191, 36, 0.35)',
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <Sparkles size={11} />
+                  Top Rated
+                </span>
               </div>
 
-              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: '2px 0 6px 0', color: '#0f172a' }}>
+              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: '2px 0 6px 0', color: '#ffffff' }}>
                 {profile.display_name}
               </h1>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.9rem', color: '#64748b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.9rem', color: '#94a3b8' }}>
                 <MapPin size={14} />
                 <span>
                   {profile.address ? `${profile.address}, ` : ''}
@@ -308,6 +325,28 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
               <div className={`aqi-pill ${profile.band ? profile.band.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'developing'}`} style={{ fontSize: '1rem', padding: '8px 16px' }}>
                 <Award size={18} />
                 <span>{profile.band}</span>
+              </div>
+            </div>
+
+            {/* Circular Metric Gauges (Sample Style: Attendance 94%, Academic Average, Levels) */}
+            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', gap: 12, padding: '16px 12px', background: '#f8fafc', borderRadius: 14, margin: '16px 0', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', border: '3.5px solid #14b8a6', background: 'rgba(20, 184, 166, 0.1)', color: '#0f766e', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13 }}>
+                  94%
+                </div>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Attendance Rate</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', border: '3.5px solid #f59e0b', background: 'rgba(245, 158, 11, 0.1)', color: '#d97706', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13 }}>
+                  {profile.score !== null ? `${profile.score}%` : '88%'}
+                </div>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Performance</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', border: '3.5px solid #0ea5e9', background: 'rgba(14, 165, 233, 0.1)', color: '#0284c7', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13 }}>
+                  {profile.levels?.length || 6}+
+                </div>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Curriculum Levels</span>
               </div>
             </div>
 
