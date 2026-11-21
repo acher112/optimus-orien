@@ -23,11 +23,177 @@ from core.models import (
     School, User, AcademicYear, SchoolClass, Subject, Student, Enrollment,
     Assessment, Grade, ExamConfiguration, CalculatedStudentResult, PublishedResult,
     PlatformPublicDirectoryConfig, PublicCampusListing, PublicRankSnapshot,
-    PublicEnquiry, PublicListingConsent, PublicListingEvent, SchoolPublicProfileDraft
+    PublicEnquiry, PublicListingConsent, PublicListingEvent, SchoolPublicProfileDraft,
+    SchoolConfiguration
 )
 
 D_ZERO = Decimal('0.00')
 D_HUNDRED = Decimal('100.00')
+
+COUNTRY_CODE_MAP: Dict[str, str] = {
+    'US': 'United States',
+    'USA': 'United States',
+    'PK': 'Pakistan',
+    'PAK': 'Pakistan',
+    'GB': 'United Kingdom',
+    'UK': 'United Kingdom',
+    'AE': 'United Arab Emirates',
+    'UAE': 'United Arab Emirates',
+    'CA': 'Canada',
+    'AU': 'Australia',
+    'SA': 'Saudi Arabia',
+    'KSA': 'Saudi Arabia',
+    'QA': 'Qatar',
+    'OM': 'Oman',
+    'KW': 'Kuwait',
+    'BH': 'Bahrain',
+    'IN': 'India',
+    'BD': 'Bangladesh',
+    'MY': 'Malaysia',
+    'SG': 'Singapore',
+    'DE': 'Germany',
+    'FR': 'France',
+    'TR': 'Turkey',
+    'CN': 'China',
+}
+
+
+def resolve_location_from_config(school: School, config: Optional[Any] = None) -> Tuple[str, str, str, Optional[Decimal], Optional[Decimal]]:
+    """
+    Extracts resolved (country, province, city, lat, lng) from SchoolConfiguration.
+    Never defaults a non-Pakistan campus to Punjab/Pakistan.
+    """
+    if config is None:
+        try:
+            config = SchoolConfiguration.objects.filter(school=school).first()
+        except Exception:
+            config = None
+
+    raw_country = (config.country or '').strip() if config else ''
+    country = COUNTRY_CODE_MAP.get(raw_country.upper(), raw_country)
+
+    jurisdiction = (config.jurisdiction or '').strip() if config else ''
+    lat = None
+    lng = None
+    if config and isinstance(config.school_settings, dict):
+        if config.school_settings.get('lat') is not None:
+            try:
+                lat = Decimal(str(config.school_settings['lat']))
+            except Exception:
+                pass
+        if config.school_settings.get('lng') is not None:
+            try:
+                lng = Decimal(str(config.school_settings['lng']))
+            except Exception:
+                pass
+
+    city = ''
+    province = ''
+    if jurisdiction:
+        parts = [p.strip() for p in jurisdiction.split(',') if p.strip()]
+        if len(parts) >= 3:
+            city = parts[0]
+            province = parts[1]
+            if not country:
+                country = COUNTRY_CODE_MAP.get(parts[-1].upper(), parts[-1])
+        elif len(parts) == 2:
+            city = parts[0]
+            province = parts[1]
+        elif len(parts) == 1:
+            city = parts[0]
+            province = parts[0] if country and country != 'Pakistan' else 'Punjab'
+
+    # Fallback to city keywords if country still empty
+    if not country:
+        city_lower = (city or school.city or '').lower()
+        if any(c in city_lower for c in ['london', 'manchester', 'birmingham', 'uk']):
+            country = 'United Kingdom'
+            province = 'Greater London' if 'london' in city_lower else 'Greater Manchester'
+        elif any(c in city_lower for c in ['dubai', 'abu dhabi', 'sharjah', 'uae']):
+            country = 'United Arab Emirates'
+            province = 'Dubai' if 'dubai' in city_lower else 'Abu Dhabi'
+        elif any(c in city_lower for c in ['usa', 'united states', 'new york', 'california', 'texas', 'florida', 'chicago']):
+            country = 'United States'
+            province = province or 'USA'
+        else:
+            country = 'Pakistan'
+            if 'karachi' in city_lower or 'hyderabad' in city_lower:
+                province = 'Sindh'
+            elif 'islamabad' in city_lower:
+                province = 'Federal Capital'
+            elif 'peshawar' in city_lower or 'abbottabad' in city_lower:
+                province = 'Khyber Pakhtunkhwa'
+            elif 'quetta' in city_lower:
+                province = 'Balochistan'
+            else:
+                province = 'Punjab'
+
+    if not city:
+        city = (school.city or '').strip() or ('Usa' if country == 'United States' else 'Main Campus')
+    if not province:
+        province = 'USA' if country == 'United States' else (city if country != 'Pakistan' else 'Punjab')
+
+    return country, province, city, lat, lng
+
+
+def sync_school_configuration_to_public_directory(school: School, config: Optional[Any] = None) -> None:
+    """
+    Propagates campus identity (country, location/jurisdiction, coordinates)
+    and curricula (programmes) from SchoolConfiguration to both SchoolPublicProfileDraft
+    and PublicCampusListing.
+    """
+    if config is None:
+        try:
+            config = SchoolConfiguration.objects.filter(school=school).first()
+        except Exception:
+            config = None
+    if not config:
+        return
+
+    country, province, city, lat, lng = resolve_location_from_config(school, config)
+    programmes = [p.strip() for p in config.programmes if isinstance(p, str) and p.strip()] if isinstance(config.programmes, list) else []
+
+    # Update SchoolPublicProfileDraft
+    draft, _ = SchoolPublicProfileDraft.objects.get_or_create(school=school)
+    if country:
+        draft.country = country
+    if province:
+        draft.province = province
+    if city:
+        draft.city = city
+    if config.jurisdiction:
+        draft.address = config.jurisdiction
+    if lat is not None:
+        draft.latitude = lat
+    if lng is not None:
+        draft.longitude = lng
+    if programmes:
+        draft.boards = programmes
+    draft.save()
+
+    # Update PublicCampusListing if it exists
+    listing = PublicCampusListing.objects.filter(school=school).first()
+    if listing:
+        if country:
+            listing.country = country
+        if province:
+            listing.province = province
+        if city:
+            listing.city = city
+        if config.jurisdiction and (not listing.address or 'Campus Sector' in listing.address):
+            listing.address = config.jurisdiction
+        if lat is not None:
+            listing.latitude = lat
+        if lng is not None:
+            listing.longitude = lng
+        if programmes:
+            listing.boards = programmes
+        listing.save()
+
+    # Keep school.city aligned if changed
+    if city and school.city != city:
+        school.city = city
+        school.save(update_fields=['city'])
 
 BANNED_WORDS = [
     'needs focused support',
@@ -265,40 +431,30 @@ def ensure_all_registered_campuses_synced() -> int:
 
     for school in all_schools:
         listing = PublicCampusListing.objects.filter(school=school).first()
-        city = (school.city or '').strip() or 'Lahore'
-        
-        # Determine country and province based on city
-        city_lower = city.lower()
-        if any(c in city_lower for c in ['london', 'manchester', 'birmingham', 'uk']):
-            country = 'United Kingdom'
-            province = 'Greater London' if 'london' in city_lower else 'Greater Manchester'
-        elif any(c in city_lower for c in ['dubai', 'abu dhabi', 'sharjah', 'uae']):
-            country = 'United Arab Emirates'
-            province = 'Dubai' if 'dubai' in city_lower else 'Abu Dhabi'
-        else:
-            country = 'Pakistan'
-            if 'karachi' in city_lower or 'hyderabad' in city_lower:
-                province = 'Sindh'
-            elif 'islamabad' in city_lower:
-                province = 'Federal Capital'
-            elif 'peshawar' in city_lower or 'abbottabad' in city_lower:
-                province = 'Khyber Pakhtunkhwa'
-            elif 'quetta' in city_lower:
-                province = 'Balochistan'
-            else:
-                province = 'Punjab'
+        config = SchoolConfiguration.objects.filter(school=school).first()
+        country, province, city, cfg_lat, cfg_lng = resolve_location_from_config(school, config)
 
+        city_lower = city.lower()
         matched_coords = None
         for ck, coords in city_coords.items():
             if ck in city_lower:
                 matched_coords = coords
                 break
         if not matched_coords:
-            matched_coords = (Decimal('31.5204'), Decimal('74.3587'))
+            if country == 'United States':
+                matched_coords = (Decimal('37.0902'), Decimal('-95.7129'))
+            elif country == 'United Kingdom':
+                matched_coords = (Decimal('51.5074'), Decimal('-0.1278'))
+            elif country == 'United Arab Emirates':
+                matched_coords = (Decimal('25.2048'), Decimal('55.2708'))
+            else:
+                matched_coords = (Decimal('31.5204'), Decimal('74.3587'))
 
-        # Add gentle offset per school id so pins in same city do not overlap
-        jitter_lat = matched_coords[0] + Decimal(str(((school.id % 7) - 3) * 0.012))
-        jitter_lng = matched_coords[1] + Decimal(str(((school.id % 5) - 2) * 0.012))
+        jitter_lat = cfg_lat if cfg_lat is not None else (matched_coords[0] + Decimal(str(((school.id % 7) - 3) * 0.012)))
+        jitter_lng = cfg_lng if cfg_lng is not None else (matched_coords[1] + Decimal(str(((school.id % 5) - 2) * 0.012)))
+
+        configured_boards = [p.strip() for p in config.programmes if isinstance(p, str) and p.strip()] if (config and isinstance(config.programmes, list)) else []
+        boards = configured_boards if configured_boards else (['Federal Board (FBISE)', 'Cambridge (CAIE)'] if country == 'Pakistan' else ['Cambridge (CAIE)', 'Edexcel'])
 
         # Look up principal if assigned in users, staff, or school settings
         principal_user = User.objects.filter(school=school, role='principal').first()
@@ -325,6 +481,8 @@ def ensure_all_registered_campuses_synced() -> int:
                 slug = f"{base_slug}-{school.id if counter == 1 else counter}"
                 counter += 1
 
+            address_val = (config.jurisdiction or '').strip() if config and config.jurisdiction else f"Campus Sector, {city}"
+
             listing = PublicCampusListing.objects.create(
                 school=school,
                 slug=slug,
@@ -334,10 +492,10 @@ def ensure_all_registered_campuses_synced() -> int:
                 city=city,
                 province=province,
                 country=country,
-                address=f"Campus Sector, {city}",
+                address=address_val,
                 latitude=jitter_lat,
                 longitude=jitter_lng,
-                boards=['Federal Board (FBISE)', 'Cambridge (CAIE)'] if country == 'Pakistan' else ['Cambridge (CAIE)', 'Edexcel'],
+                boards=boards,
                 levels=['Primary', 'Middle', 'Secondary'],
                 gender_type='co-ed',
                 medium='english',
@@ -353,10 +511,27 @@ def ensure_all_registered_campuses_synced() -> int:
             synced_count += 1
         else:
             updated = False
-            # Sync coordinates if missing
+            # Sync location if changed in configuration
+            if country and listing.country != country:
+                listing.country = country
+                updated = True
+            if province and listing.province != province:
+                listing.province = province
+                updated = True
+            if city and listing.city != city:
+                listing.city = city
+                updated = True
+            if configured_boards and listing.boards != configured_boards:
+                listing.boards = configured_boards
+                updated = True
+            # Sync coordinates if missing or updated
             if listing.latitude is None or listing.longitude is None:
                 listing.latitude = jitter_lat
                 listing.longitude = jitter_lng
+                updated = True
+            elif cfg_lat is not None and (listing.latitude != cfg_lat or listing.longitude != cfg_lng):
+                listing.latitude = cfg_lat
+                listing.longitude = cfg_lng
                 updated = True
             # Sync principal if available and not yet set
             if principal_name and not listing.principal_name:
@@ -369,6 +544,9 @@ def ensure_all_registered_campuses_synced() -> int:
             if updated:
                 listing.save()
                 synced_count += 1
+
+        # Also sync draft profile to stay in lockstep
+        sync_school_configuration_to_public_directory(school, config)
 
     try:
         refresh_public_snapshots()
@@ -619,7 +797,9 @@ def submit_listing_for_approval(
     listing.address = draft.address
     listing.latitude = draft.latitude
     listing.longitude = draft.longitude
-    listing.boards = draft.boards or ['Federal Board']
+    config = SchoolConfiguration.objects.filter(school=school).first()
+    configured_boards = [p.strip() for p in config.programmes if isinstance(p, str) and p.strip()] if (config and isinstance(config.programmes, list)) else []
+    listing.boards = configured_boards or draft.boards or (['Cambridge (CAIE)'] if draft.country != 'Pakistan' else ['Federal Board (FBISE)'])
     listing.levels = draft.levels or ['Primary', 'Secondary']
     listing.gender_type = draft.gender_type
     listing.medium = draft.medium

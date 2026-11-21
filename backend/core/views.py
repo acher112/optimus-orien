@@ -2240,6 +2240,12 @@ def register_campus(request):
   config.full_clean()
   config.save()
 
+  try:
+   from core.services.public_directory_service import sync_school_configuration_to_public_directory
+   sync_school_configuration_to_public_directory(school, config)
+  except Exception:
+   pass
+
   record_event(
    actor=user,
    action='create',

@@ -43,6 +43,7 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
   // Available Filter Options from API
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [availableCountries, setAvailableCountries] = useState<string[]>([]);
+  const [availableBoards, setAvailableBoards] = useState<string[]>([]);
 
   // Mobile Filter Sheet Open State
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
@@ -72,6 +73,7 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
       setCampuses(data.results || []);
       if (data.available_cities) setAvailableCities(data.available_cities);
       if (data.available_countries) setAvailableCountries(data.available_countries);
+      if (data.available_boards) setAvailableBoards(data.available_boards);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Unable to load school leaderboard at this time.');
@@ -421,12 +423,20 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
             className="public-select"
             aria-label="Filter by examination board"
           >
-            <option value="all">All Boards</option>
-            <option value="Cambridge">Cambridge</option>
-            <option value="Federal Board">Federal Board</option>
-            <option value="Punjab Board">Punjab Board</option>
-            <option value="Sindh Board">Sindh Board</option>
-            <option value="Edexcel">Edexcel</option>
+            <option value="all">All Boards & Curricula</option>
+            {availableBoards.length > 0 ? (
+              availableBoards.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))
+            ) : (
+              <>
+                <option value="Cambridge">Cambridge</option>
+                <option value="Federal Board">Federal Board</option>
+                <option value="Punjab Board">Punjab Board</option>
+                <option value="Sindh Board">Sindh Board</option>
+                <option value="Edexcel">Edexcel</option>
+              </>
+            )}
           </select>
 
           {/* Level Filter */}

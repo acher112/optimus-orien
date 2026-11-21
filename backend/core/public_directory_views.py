@@ -42,12 +42,14 @@ from rest_framework.exceptions import ValidationError, PermissionDenied, NotFoun
 from core.models import (
     School, User, PublicCampusListing, PublicRankSnapshot,
     PublicEnquiry, PublicListingConsent, PublicListingEvent,
-    SchoolPublicProfileDraft, PlatformPublicDirectoryConfig
+    SchoolPublicProfileDraft, PlatformPublicDirectoryConfig,
+    SchoolConfiguration
 )
 from core.services.public_directory_service import (
     get_or_create_platform_config,
     refresh_public_snapshots,
     ensure_all_registered_campuses_synced,
+    sync_school_configuration_to_public_directory,
     submit_listing_for_approval,
     moderate_listing,
     unpublish_listing,
@@ -303,6 +305,13 @@ def public_schools_list_view(request):
         # Available filter values for frontend dropdowns
         available_cities = list(PublicCampusListing.objects.filter(status='live').exclude(city='').values_list('city', flat=True).distinct().order_by('city'))
         available_countries = list(PublicCampusListing.objects.filter(status='live').exclude(country='').values_list('country', flat=True).distinct().order_by('country'))
+        all_boards = set()
+        for b_list in PublicCampusListing.objects.filter(status='live').values_list('boards', flat=True):
+            if isinstance(b_list, list):
+                for b in b_list:
+                    if b and isinstance(b, str) and b.strip():
+                        all_boards.add(b.strip())
+        available_boards = sorted(list(all_boards))
 
         return Response({
             'count': paginator.count,
@@ -311,6 +320,7 @@ def public_schools_list_view(request):
             'page_size': page_size,
             'available_cities': available_cities,
             'available_countries': available_countries,
+            'available_boards': available_boards,
             'results': results,
         }, status=status.HTTP_200_OK)
 
@@ -555,6 +565,10 @@ def school_public_profile_view(request, school_id):
     School portal profile editor: GET current draft & status, PUT update draft.
     """
     school = _check_school_authority(request, school_id)
+    config = SchoolConfiguration.objects.filter(school=school).first()
+    if config:
+        sync_school_configuration_to_public_directory(school, config)
+
     draft, _ = SchoolPublicProfileDraft.objects.get_or_create(school=school)
     listing = PublicCampusListing.objects.filter(school=school).first()
 
@@ -611,7 +625,10 @@ def school_public_profile_view(request, school_id):
     if 'longitude' in data:
         draft.longitude = Decimal(str(data['longitude'])) if data['longitude'] is not None else None
 
-    if 'boards' in data and isinstance(data['boards'], list):
+    # Boards are synchronized from Campus Configuration settings
+    if config and isinstance(config.programmes, list) and config.programmes:
+        draft.boards = [p.strip() for p in config.programmes if isinstance(p, str) and p.strip()]
+    elif 'boards' in data and isinstance(data['boards'], list):
         draft.boards = data['boards']
     if 'levels' in data and isinstance(data['levels'], list):
         draft.levels = data['levels']

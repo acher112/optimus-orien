@@ -8,7 +8,6 @@ import LandingNavbar from './landing/LandingNavbar';
 import HeroSection from './landing/HeroSection';
 import FeaturesSection, { CoreFeatureItem } from './landing/FeaturesSection';
 import RolesSection from './landing/RolesSection';
-import StepsSection from './landing/StepsSection';
 import PricingCarouselSection, { PlanItem } from './landing/PricingCarouselSection';
 import PricingCalculatorSection from './landing/PricingCalculatorSection';
 import FaqSection, { FaqItem } from './landing/FaqSection';
@@ -108,32 +107,42 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
           subtitle={heroSlide?.subtitle}
         />
 
-        {/* Section 1.5: "Find a School" Leaderboard Teaser */}
-        <section style={{
-          maxWidth: '1200px',
-          margin: '-40px auto 60px',
-          padding: '0 20px',
-          position: 'relative',
-          zIndex: 10
-        }}>
+        {/* Section 1.5: "Find a School" Leaderboard Teaser (Expanded near full-screen) */}
+        <section
+          id="find-school-teaser"
+          style={{
+            width: 'calc(100% - 32px)',
+            maxWidth: 'calc(100vw - 32px)',
+            margin: '32px auto',
+            padding: 0,
+            position: 'relative',
+            zIndex: 10,
+            boxSizing: 'border-box'
+          }}
+        >
           <div style={{
             background: 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)',
             borderRadius: '24px',
-            padding: '36px 32px',
+            padding: 'clamp(32px, 5vw, 64px) clamp(24px, 4vw, 56px)',
+            minHeight: 'calc(100vh - 48px)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
             boxShadow: '0 20px 40px -15px rgba(15, 23, 42, 0.4)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
-            color: '#ffffff'
+            color: '#ffffff',
+            boxSizing: 'border-box'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '24px', marginBottom: '32px' }}>
               <div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(99, 102, 241, 0.2)', border: '1px solid rgba(99, 102, 241, 0.4)', color: '#a5b4fc', padding: '4px 12px', borderRadius: '100px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '10px' }}>
-                  <Award size={14} />
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(99, 102, 241, 0.2)', border: '1px solid rgba(99, 102, 241, 0.4)', color: '#a5b4fc', padding: '6px 14px', borderRadius: '100px', fontSize: '0.84rem', fontWeight: 700, marginBottom: '14px' }}>
+                  <Award size={16} />
                   <span>PUBLIC CAMPUS LEADERBOARD</span>
                 </div>
-                <h2 style={{ margin: '0 0 8px', fontSize: '1.8rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                <h2 style={{ margin: '0 0 12px', fontSize: 'clamp(1.8rem, 3.5vw, 2.75rem)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                   Find Top Performing Campuses on Optimus Orien
                 </h2>
-                <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.95rem', maxWidth: '600px', lineHeight: 1.5 }}>
+                <p style={{ margin: 0, color: '#94a3b8', fontSize: 'clamp(0.95rem, 1.2vw, 1.15rem)', maxWidth: '750px', lineHeight: 1.6 }}>
                   Parents and prospective families can discover registered institutions ranked by verified Academic Quality Index (AQI), curriculum boards, and facilities.
                 </p>
               </div>
@@ -145,19 +154,19 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                     background: '#4f46e5',
                     color: '#ffffff',
                     border: 'none',
-                    padding: '12px 20px',
+                    padding: '14px 24px',
                     borderRadius: '12px',
                     fontWeight: 700,
-                    fontSize: '0.92rem',
+                    fontSize: '0.98rem',
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)'
+                    gap: '10px',
+                    boxShadow: '0 4px 16px rgba(79, 70, 229, 0.4)'
                   }}
                 >
                   <span>Explore Full Leaderboard</span>
-                  <ArrowRight size={16} />
+                  <ArrowRight size={18} />
                 </button>
               </div>
             </div>
@@ -172,15 +181,15 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                 display: 'flex',
                 gap: '12px',
                 background: 'rgba(255, 255, 255, 0.08)',
-                padding: '8px',
-                borderRadius: '16px',
+                padding: '10px',
+                borderRadius: '18px',
                 backdropFilter: 'blur(8px)',
                 border: '1px solid rgba(255, 255, 255, 0.12)',
-                marginBottom: '20px'
+                marginBottom: '28px'
               }}
             >
               <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
-                <Search size={20} color="#94a3b8" style={{ position: 'absolute', left: '16px' }} />
+                <Search size={22} color="#94a3b8" style={{ position: 'absolute', left: '18px' }} />
                 <input
                   type="text"
                   placeholder="Search by school name, city (e.g. Lahore, Islamabad), or curriculum board..."
@@ -192,8 +201,8 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                     border: 'none',
                     outline: 'none',
                     color: '#ffffff',
-                    padding: '12px 16px 12px 48px',
-                    fontSize: '0.95rem'
+                    padding: '14px 18px 14px 54px',
+                    fontSize: '1.05rem'
                   }}
                 />
               </div>
@@ -203,10 +212,10 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                   background: '#ffffff',
                   color: '#0f172a',
                   border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '10px',
+                  padding: '14px 28px',
+                  borderRadius: '12px',
                   fontWeight: 700,
-                  fontSize: '0.9rem',
+                  fontSize: '0.95rem',
                   cursor: 'pointer'
                 }}
               >
@@ -215,7 +224,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
             </form>
 
             {/* Popular City Filter Pills */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.84rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '0.9rem' }}>
               <span style={{ color: '#94a3b8' }}>Popular locations:</span>
               {['Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Faisalabad'].map((city) => (
                 <button
@@ -226,10 +235,10 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                     background: 'rgba(255, 255, 255, 0.1)',
                     border: 'none',
                     color: '#e2e8f0',
-                    padding: '4px 12px',
+                    padding: '6px 16px',
                     borderRadius: '100px',
                     cursor: 'pointer',
-                    fontSize: '0.8rem',
+                    fontSize: '0.85rem',
                     fontWeight: 500
                   }}
                 >
@@ -239,7 +248,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
               <a
                 href="/schools/methodology"
                 onClick={(e) => { e.preventDefault(); navigate('/schools/methodology'); }}
-                style={{ marginLeft: 'auto', color: '#a5b4fc', textDecoration: 'underline', fontSize: '0.82rem' }}
+                style={{ marginLeft: 'auto', color: '#a5b4fc', textDecoration: 'underline', fontSize: '0.88rem' }}
               >
                 How We Compute Rankings
               </a>
@@ -252,9 +261,6 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
 
         {/* Section 4: Role-Based Experiences (CtaSection tabs) */}
         <RolesSection />
-
-        {/* Section 5: Simple for Schools Steps with Interactive Text Particle Scatter */}
-        <StepsSection />
 
         {/* Section 6: Student-Based Pricing Carousel */}
         <PricingCarouselSection

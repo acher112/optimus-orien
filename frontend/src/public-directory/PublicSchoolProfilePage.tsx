@@ -405,7 +405,7 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
               <div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>Affiliated Boards</div>
+                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>Curricula Offered</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
                   {profile.boards.map((b) => (
                     <span key={b} className="tag-badge">

@@ -647,3 +647,45 @@ class PublicDirectoryTestSuite(TestCase):
                     payload_str,
                     f"Banned punitive or negative word '{banned}' detected in public endpoint {url}!"
                 )
+
+    def test_campus_configuration_sync_to_public_directory(self):
+        """
+        Verifies that when a school has country='US', jurisdiction='Usa', and programmes in SchoolConfiguration,
+        these details are automatically collected and reflected in public profile draft, public listing,
+        and public leaderboard.
+        """
+        from core.models import SchoolConfiguration
+        from core.services.public_directory_service import (
+            ensure_all_registered_campuses_synced,
+            sync_school_configuration_to_public_directory
+        )
+
+        config, _ = SchoolConfiguration.objects.get_or_create(school=self.school_a)
+        config.country = 'US'
+        config.jurisdiction = 'Usa'
+        config.programmes = ['American High School Diploma (AP)', 'IB Diploma']
+        config.save()
+
+        sync_school_configuration_to_public_directory(self.school_a, config)
+
+        draft = SchoolPublicProfileDraft.objects.get(school=self.school_a)
+        self.assertEqual(draft.country, 'United States')
+        self.assertEqual(draft.city, 'Usa')
+        self.assertIn('American High School Diploma (AP)', draft.boards)
+        self.assertNotEqual(draft.province, 'Punjab')
+
+        ensure_all_registered_campuses_synced()
+        listing = PublicCampusListing.objects.get(school=self.school_a)
+        self.assertEqual(listing.country, 'United States')
+        self.assertEqual(listing.city, 'Usa')
+        self.assertIn('American High School Diploma (AP)', listing.boards)
+        self.assertNotEqual(listing.province, 'Punjab')
+
+        # Check public endpoint
+        res = self.client.get('/api/v1/public/schools/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        found = [r for r in res.data['results'] if r['slug'] == listing.slug]
+        self.assertTrue(len(found) > 0)
+        self.assertEqual(found[0]['country'], 'United States')
+        self.assertEqual(found[0]['city'], 'Usa')
+        self.assertIn('American High School Diploma (AP)', found[0]['boards'])

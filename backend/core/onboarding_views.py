@@ -91,6 +91,11 @@ def school_configuration(request,school_id):
    if new_curr and school.currency != new_curr:
     school.currency = new_curr
     school.save(update_fields=['currency'])
+  try:
+   from core.services.public_directory_service import sync_school_configuration_to_public_directory
+   sync_school_configuration_to_public_directory(school, config)
+  except Exception:
+   pass
   record_event(actor=request.user,action='school_setup_draft',obj=school,changed_fields=sorted(changed))
  return Response(payload(school,config))
 
@@ -131,6 +136,11 @@ def activate_school_configuration(request,school_id):
    if new_curr and school.currency != new_curr:
     school.currency = new_curr
     school.save(update_fields=['currency'])
+  try:
+   from core.services.public_directory_service import sync_school_configuration_to_public_directory
+   sync_school_configuration_to_public_directory(school, config)
+  except Exception:
+   pass
   record_event(actor=request.user,action='school_setup_activated',obj=school,
                changed_fields=['status','active_version'],after={'status':'active','active_version':config.active_version})
  return Response(payload(school,config))

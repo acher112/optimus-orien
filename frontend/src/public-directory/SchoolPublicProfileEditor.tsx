@@ -55,9 +55,9 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
     display_name: '',
     tagline: '',
     about: '',
-    country: 'Pakistan',
-    province: 'Punjab',
-    city: 'Lahore',
+    country: '',
+    province: '',
+    city: '',
     address: '',
     latitude: 31.5204 as number | null,
     longitude: 74.3587 as number | null,
@@ -106,9 +106,9 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
           display_name: data.display_name || '',
           tagline: data.tagline || '',
           about: data.about || '',
-          country: data.country || 'Pakistan',
-          province: data.province || 'Punjab',
-          city: data.city || 'Lahore',
+          country: data.country || '',
+          province: data.province || '',
+          city: data.city || '',
           address: data.address || '',
           latitude: data.latitude !== null && data.latitude !== undefined ? Number(data.latitude) : 31.5204,
           longitude: data.longitude !== null && data.longitude !== undefined ? Number(data.longitude) : 74.3587,
@@ -746,20 +746,28 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
 
                 <div style={{ marginBottom: '16px' }}>
                   <label className="pdir-field-label">
-                    Curriculum Boards Offered
+                    Curricula Offered (Configured from Campus Setup)
                   </label>
-                  <div className="pdir-chips-wrap">
-                    {COMMON_BOARDS.map(b => (
-                      <button
-                        key={b}
-                        type="button"
-                        onClick={() => toggleArrayItem('boards', b)}
-                        className={`pdir-chip-btn ${formData.boards.includes(b) ? 'active-primary' : ''}`}
-                      >
-                        {formData.boards.includes(b) ? '✓ ' : '+ '}{b}
-                      </button>
-                    ))}
-                  </div>
+                  <p style={{ margin: '0 0 8px 0', fontSize: '0.82rem', color: '#64748b' }}>
+                    Curricula are automatically collected and synchronized from your campus configuration settings.
+                  </p>
+                  {formData.boards && formData.boards.length > 0 ? (
+                    <div className="pdir-chips-wrap">
+                      {formData.boards.map(b => (
+                        <span
+                          key={b}
+                          className="pdir-chip-btn active-primary"
+                          style={{ cursor: 'default', userSelect: 'none' }}
+                        >
+                          ✓ {b}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', fontSize: '0.84rem', color: '#64748b' }}>
+                      No curricula configured yet. Go to <strong>Campus Configuration &gt; Curriculum</strong> to set up curricula for this campus.
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
@@ -1011,7 +1019,7 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>
                           <MapPin size={12} />
-                          <span>{formData.city || 'City'}, {formData.province || 'Province'}</span>
+                          <span>{[formData.city, formData.province, formData.country].filter(Boolean).join(', ') || 'Campus Location'}</span>
                         </div>
                       </div>
                     </div>
