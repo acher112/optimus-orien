@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Building2, Save, Send, CheckCircle2, 
   MapPin, Globe, Mail, Phone, Eye, Shield, Inbox, 
-  Clock, XCircle, RefreshCw, Check, Sparkles, ExternalLink
+  Clock, XCircle, RefreshCw, Check, Sparkles, ExternalLink,
+  Trophy, Star, Award
 } from 'lucide-react';
 import './publicDirectory.css';
 
@@ -977,78 +978,229 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
                 <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Updates as you type</span>
               </div>
 
-              {/* Preview Card */}
-              <div className="pdir-card" style={{ margin: 0, boxShadow: '0 8px 30px rgba(0,0,0,0.08)' }}>
-                <div className="pdir-card-header">
-                  <div className="pdir-card-title-group">
-                    <div className="pdir-card-avatar">
-                      {(formData.display_name || 'Campus').charAt(0)}
+              {/* Design Sample Preview Card */}
+              <div className="pdir-card" style={{ margin: 0, padding: 0, overflow: 'hidden', borderRadius: '20px', border: '1px solid #cbd5e1', boxShadow: '0 12px 36px rgba(15,23,42,0.12)' }}>
+                {/* Masthead Header matching sample */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #091e3a 0%, #0f2b48 50%, #172554 100%)',
+                  padding: '20px',
+                  color: '#ffffff',
+                  position: 'relative'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 12,
+                        background: 'linear-gradient(135deg, #0f766e, #047857)',
+                        color: '#fff',
+                        display: 'grid',
+                        placeItems: 'center',
+                        fontSize: 20,
+                        fontWeight: 800,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                      }}>
+                        {(formData.display_name || 'Campus').charAt(0)}
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>
+                            {formData.display_name || 'Your Campus Display Name'}
+                          </h3>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>
+                          <MapPin size={12} />
+                          <span>{formData.city || 'City'}, {formData.province || 'Province'}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="pdir-card-title">
-                        {formData.display_name || 'Your Campus Display Name'}
-                      </h3>
-                      <div className="pdir-card-location">
-                        <MapPin size={13} />
-                        <span>{formData.city || 'City'}, {formData.province || 'Province'}</span>
+
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: '#065f46',
+                      color: '#6ee7b7',
+                      border: '1px solid #047857',
+                      padding: '4px 10px',
+                      borderRadius: 20,
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <Star size={11} /> Top Rated
+                    </span>
+                  </div>
+
+                  {formData.tagline && (
+                    <p style={{ fontSize: '0.8rem', color: '#cbd5e1', margin: '10px 0 0', fontStyle: 'italic' }}>
+                      "{formData.tagline}"
+                    </p>
+                  )}
+                </div>
+
+                <div style={{ padding: '20px', background: '#ffffff' }}>
+                  {/* Performance Heading & Circular Gauges matching sample */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <strong style={{ fontSize: '0.85rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Trophy size={14} color="#d97706" />
+                        <span>My School's Performance</span>
+                      </strong>
+                      <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 size={12} /> Verified
+                      </span>
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-around',
+                      alignItems: 'center',
+                      background: '#f8fafc',
+                      borderRadius: 14,
+                      padding: '12px 8px',
+                      border: '1px solid #e2e8f0'
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{
+                          width: 46,
+                          height: 46,
+                          borderRadius: '50%',
+                          border: '3.5px solid #14b8a6',
+                          background: 'rgba(20, 184, 166, 0.1)',
+                          color: '#0f766e',
+                          display: 'grid',
+                          placeItems: 'center',
+                          fontWeight: 800,
+                          fontSize: 12
+                        }}>
+                          94%
+                        </div>
+                        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Attendance</span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{
+                          width: 46,
+                          height: 46,
+                          borderRadius: '50%',
+                          border: '3.5px solid #f59e0b',
+                          background: 'rgba(245, 158, 11, 0.1)',
+                          color: '#d97706',
+                          display: 'grid',
+                          placeItems: 'center',
+                          fontWeight: 800,
+                          fontSize: 12
+                        }}>
+                          {listingMeta.score ? Math.round(listingMeta.score) : 88}%
+                        </div>
+                        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Performance</span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{
+                          width: 46,
+                          height: 46,
+                          borderRadius: '50%',
+                          border: '3.5px solid #0ea5e9',
+                          background: 'rgba(14, 165, 233, 0.1)',
+                          color: '#0284c7',
+                          display: 'grid',
+                          placeItems: 'center',
+                          fontWeight: 800,
+                          fontSize: 12
+                        }}>
+                          {formData.levels.length || 6}+
+                        </div>
+                        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Credits</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="pdir-badge badge-band-outstanding">
-                    {listingMeta.band || 'Outstanding'}
-                  </div>
-                </div>
-
-                {formData.tagline && (
-                  <p style={{ fontSize: '0.86rem', color: '#475569', margin: '4px 0 12px', fontStyle: 'italic' }}>
-                    "{formData.tagline}"
-                  </p>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>
-                  <div>
-                    <span style={{ fontSize: '0.74rem', color: '#64748b', display: 'block' }}>Academic Quality</span>
-                    <strong style={{ fontSize: '1.25rem', color: '#0f172a' }}>
-                      {listingMeta.score ? Math.round(listingMeta.score) : 88}%
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span style={{ fontSize: '0.74rem', color: '#64748b', display: 'block' }}>Leaderboard Rank</span>
-                    <strong style={{ fontSize: '1.25rem', color: '#4f46e5' }}>
-                      {formData.rank_display_mode === 'exact_rank' ? `#${listingMeta.rank_overall || 1}` : formData.rank_display_mode === 'tier_only' ? 'Top 10%' : 'Listed'}
-                    </strong>
+                  {/* Stats Row matching sample */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-around',
+                    padding: '8px 0 12px',
+                    borderBottom: '1px solid #f1f5f9',
+                    fontSize: '0.8rem'
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem', display: 'block' }}>Connections</span>
+                      <strong style={{ color: '#0f766e', fontSize: '0.95rem' }}>120</strong>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem', display: 'block' }}>Subjects</span>
+                      <strong style={{ color: '#0f766e', fontSize: '0.95rem' }}>{formData.boards.length || 8}</strong>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem', display: 'block' }}>Rating</span>
+                      <strong style={{ color: '#d97706', fontSize: '0.95rem' }}>⭐ 4.9</strong>
+                    </div>
                   </div>
 
-                  <div>
-                    <span style={{ fontSize: '0.74rem', color: '#64748b', display: 'block' }}>Admissions</span>
-                    <span className={`pdir-badge ${formData.admission_status === 'open' ? 'badge-admission-open' : 'badge-admission-closed'}`} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
-                      {formData.admission_status === 'open' ? 'Open' : 'Closed'}
+                  {/* 4 Colorful Badges & Achievements matching sample */}
+                  <div style={{ marginTop: 14 }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 8 }}>
+                      Achievements & Badges
                     </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 4, background: '#f8fafc', padding: '8px 4px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #fbbf24, #d97706)', display: 'grid', placeItems: 'center', fontSize: 14, color: '#fff' }}>🏆</div>
+                        <strong style={{ fontSize: 9, color: '#0f172a' }}>Top Scorer</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 4, background: '#f8fafc', padding: '8px 4px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #a855f7, #7e22ce)', display: 'grid', placeItems: 'center', fontSize: 14, color: '#fff' }}>🛡️</div>
+                        <strong style={{ fontSize: 9, color: '#0f172a' }}>Math Whiz</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 4, background: '#f8fafc', padding: '8px 4px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #14b8a6, #0f766e)', display: 'grid', placeItems: 'center', fontSize: 14, color: '#fff' }}>🛡️</div>
+                        <strong style={{ fontSize: 9, color: '#0f172a' }}>Helpful Peer</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 4, background: '#f8fafc', padding: '8px 4px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #22c55e, #15803d)', display: 'grid', placeItems: 'center', fontSize: 14, color: '#fff' }}>🎖️</div>
+                        <strong style={{ fontSize: 9, color: '#0f172a' }}>Attendance</strong>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {formData.boards.slice(0, 3).map(b => (
-                    <span key={b} className="pdir-tag" style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '0.74rem' }}>
-                      {b}
-                    </span>
-                  ))}
-                  {formData.levels.slice(0, 2).map(l => (
-                    <span key={l} className="pdir-tag" style={{ fontSize: '0.74rem' }}>
-                      {l}
-                    </span>
-                  ))}
-                </div>
-
-                <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-                  <button className="pdir-btn-secondary" style={{ flex: 1, fontSize: '0.82rem', padding: '8px' }}>
-                    Contact Campus
-                  </button>
-                  <button className="pdir-btn-primary" style={{ flex: 1, fontSize: '0.82rem', padding: '8px' }}>
-                    View Profile
-                  </button>
+                  {/* Dark Teal Action Buttons matching sample */}
+                  <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      style={{
+                        flex: 1,
+                        fontSize: '0.82rem',
+                        padding: '9px 12px',
+                        borderRadius: 8,
+                        background: '#ffffff',
+                        border: '1px solid #0f766e',
+                        color: '#0f766e',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Contact Campus
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        flex: 1,
+                        fontSize: '0.82rem',
+                        padding: '9px 12px',
+                        borderRadius: 8,
+                        background: '#0f766e',
+                        border: '1px solid #0d9488',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(15, 118, 110, 0.25)'
+                      }}
+                    >
+                      View Profile
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

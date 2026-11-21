@@ -731,54 +731,91 @@ export default function NetworkPage({
 
   return (
     <div className={`network-container ${isUrdu ? 'rtl' : 'ltr'}`}>
-      {/* Network Header */}
-      <div className="network-header">
+      {/* Sleek, Compact Header matching Design Sample */}
+      <div className="network-header" style={{ marginBottom: 12, paddingBottom: 12 }}>
         <div className="network-header-copy">
-          <div className="network-badge-label">
-            <Sparkles size={14} className="net-icon-pulse" />
-            <span>{isUrdu ? 'آپٹیمس اورین پروفیشنل تعلیمی نیٹ ورک' : 'OPTIMUS ORIEN PROFESSIONAL ACADEMIC NETWORK'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+              {isUrdu ? 'اکیڈمک نیٹ ورک اور اعزازی بورڈز' : 'Academic Network & Recognition'}
+            </h1>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#f1f5f9',
+              border: '1px solid #e2e8f0',
+              padding: '3px 10px',
+              borderRadius: 20,
+              fontSize: '0.74rem',
+              color: '#475569'
+            }}>
+              <ShieldCheck size={12} color="#059669" />
+              <span>{isUrdu ? 'صرف تصدیق شدہ اسنیپ شاٹس' : 'Verified snapshots only'}</span>
+              <button
+                type="button"
+                className="net-link-btn"
+                style={{ fontSize: '0.74rem', fontWeight: 700 }}
+                onClick={() => setShowMethodologyModal(true)}
+              >
+                {isUrdu ? 'طریقہ کار' : 'Methodology →'}
+              </button>
+            </div>
           </div>
-          <h1>{isUrdu ? 'نیٹ ورک اور تعلیمی لیڈر بورڈز' : 'Academic Network & Recognition Boards'}</h1>
-          <p>
-            {isUrdu
-              ? 'تصدیق شدہ ماہرینِ تعلیم سے جڑیں، بہترین تعلیمی کارکردگی دریافت کریں، اور نمایاں طلبا کی حوصلہ افزائی کریں۔'
-              : 'Connect with verified educators, discover benchmark academic achievements, and celebrate student excellence.'}
-          </p>
         </div>
-        <div className="network-header-actions">
+
+        <div className="network-header-actions" style={{ gap: 8 }}>
           <button
             type="button"
             className="net-lang-btn"
             onClick={() => setLang(l => l === 'en' ? 'ur' : 'en')}
             title="Toggle English / Urdu"
           >
-            <Globe size={15} />
+            <Globe size={14} />
             <span>{isUrdu ? 'English' : 'اردو'}</span>
-          </button>
-          <button
-            type="button"
-            className="net-outline-btn"
-            onClick={() => setShowMethodologyModal(true)}
-            title="Read our Ranking Methodology & Honesty Statement"
-          >
-            <FileText size={15} />
-            <span>{isUrdu ? 'طریقہ کار و دیانت کا منشور' : 'Methodology & Ethics'}</span>
           </button>
         </div>
       </div>
 
-      {/* Primary Navigation Tabs */}
-      <div className="network-tabs-bar">
+      {/* Primary Navigation Tabs directly aligned with the 4 sample screens */}
+      <div className="network-tabs-bar" style={{ marginBottom: 16 }}>
+        {!isMinorOrStudent && (
+          <>
+            <button
+              className={`net-tab-btn ${mainTab === 'boards' && boardType === 'principals' ? 'active' : ''}`}
+              onClick={() => { setMainTab('boards'); setBoardType('principals'); }}
+            >
+              <Trophy size={16} />
+              <span>{isUrdu ? 'عالمی اسکولز رینکنگ' : 'Global School Rankings'}</span>
+            </button>
+
+            <button
+              className={`net-tab-btn ${mainTab === 'boards' && boardType === 'teachers' ? 'active' : ''}`}
+              onClick={() => { setMainTab('boards'); setBoardType('teachers'); }}
+            >
+              <Users size={16} />
+              <span>{isUrdu ? 'نمایاں اساتذہ' : 'Top Performing Educators'}</span>
+            </button>
+          </>
+        )}
+
         <button
-          className={`net-tab-btn ${mainTab === 'boards' ? 'active' : ''}`}
-          onClick={() => setMainTab('boards')}
+          className={`net-tab-btn ${mainTab === 'boards' && boardType === 'students' ? 'active' : ''}`}
+          onClick={() => { setMainTab('boards'); setBoardType('students'); }}
         >
           <Award size={16} />
-          <span>{isUrdu ? 'درجہ بندیاں اور لیڈر بورڈز' : 'Ranked Boards'}</span>
+          <span>{isUrdu ? 'طلبہ کا اعزازی بورڈ' : 'Student Achievers Hub'}</span>
         </button>
 
         {!isMinorOrStudent && (
           <>
+            <button
+              className={`net-tab-btn ${mainTab === 'profile' ? 'active' : ''}`}
+              onClick={() => setMainTab('profile')}
+            >
+              <Star size={16} />
+              <span>{isUrdu ? 'پروفائل اور بیجز' : 'Badges & Achievements'}</span>
+            </button>
+
             <button
               className={`net-tab-btn ${mainTab === 'requests' ? 'active' : ''}`}
               onClick={() => setMainTab('requests')}
@@ -794,19 +831,11 @@ export default function NetworkPage({
               className={`net-tab-btn ${mainTab === 'connections' ? 'active' : ''}`}
               onClick={() => setMainTab('connections')}
             >
-              <Users size={16} />
-              <span>{isUrdu ? 'میرے رابطے' : 'My Connections'}</span>
+              <MessageSquare size={16} />
+              <span>{isUrdu ? 'رابطے اور چیٹ' : 'Connections & Chat'}</span>
               {activeConnections.length > 0 && (
                 <span className="net-counter-bubble subtle">{activeConnections.length}</span>
               )}
-            </button>
-
-            <button
-              className={`net-tab-btn ${mainTab === 'profile' ? 'active' : ''}`}
-              onClick={() => setMainTab('profile')}
-            >
-              <SlidersHorizontal size={16} />
-              <span>{isUrdu ? 'پروفائل اور پرائیویسی' : 'Profile & Privacy'}</span>
             </button>
           </>
         )}
@@ -820,54 +849,11 @@ export default function NetworkPage({
         </button>
       </div>
 
-      {/* Honesty Note Banner */}
-      <div className="net-honesty-banner">
-        <div className="net-honesty-icon"><ShieldCheck size={18} /></div>
-        <div className="net-honesty-content">
-          <strong>{isUrdu ? 'دیانت کا بیان (Honesty Statement):' : 'Honesty & Transparency Charter:'}</strong>{' '}
-          {isUrdu
-            ? 'تمام درجہ بندیاں اور اسکورز آپٹیمس اورین میں شائع شدہ مصدقہ امتحانی نتائج کے اسنیپ شاٹس سے مرتب کیے جاتے ہیں۔ تعلیمی طریقہ کار اور طلبا کا پس منظر مختلف اسکولوں میں مختلف ہوتا ہے۔ یہ کوئی سرکاری یا خودمختار معائنہ نہیں بلکہ ادارہ جاتی اعزاز کا اشاریہ ہے۔'
-            : 'All rankings and badges are compiled strictly from platform snapshots of published examination results. Grading criteria and intake vary across institutions. This is an academic recognition index, not an external government inspection.'}
-          {' '}
-          <button type="button" className="net-link-btn" onClick={() => setShowMethodologyModal(true)}>
-            {isUrdu ? 'مکمل طریقہ کار پڑھیں' : 'Read full methodology & tie rules (1, 2, 2, 4) →'}
-          </button>
-        </div>
-      </div>
-
       {/* ======================================================== */}
       {/* TAB 1: RANKED BOARDS */}
       {/* ======================================================== */}
       {mainTab === 'boards' && (
         <div className="network-boards-view">
-          {/* Board Sub-tabs */}
-          <div className="net-subtabs-row">
-            {!isMinorOrStudent && (
-              <>
-                <button
-                  className={`net-subtab-pill ${boardType === 'principals' ? 'active' : ''}`}
-                  onClick={() => setBoardType('principals')}
-                >
-                  <Building2 size={15} />
-                  <span>{isUrdu ? 'پرنسپلز کا بورڈ (AQI)' : 'Principals Board (AQI)'}</span>
-                </button>
-                <button
-                  className={`net-subtab-pill ${boardType === 'teachers' ? 'active' : ''}`}
-                  onClick={() => setBoardType('teachers')}
-                >
-                  <Users size={15} />
-                  <span>{isUrdu ? 'اساتذہ کی درجہ بندی' : 'Teachers Board (Subject & Grade)'}</span>
-                </button>
-              </>
-            )}
-            <button
-              className={`net-subtab-pill ${boardType === 'students' ? 'active' : ''}`}
-              onClick={() => setBoardType('students')}
-            >
-              <Award size={15} />
-              <span>{isUrdu ? 'نمایاں طلبا کا اعزازی بورڈ' : 'Student Achievers (Recognition Only)'}</span>
-            </button>
-          </div>
 
           {/* Filters Bar */}
           <div className="net-filters-bar">
@@ -1738,7 +1724,7 @@ export default function NetworkPage({
             {/* Left: Live Preview */}
             <div className="net-preview-col">
               <div className="net-preview-sticky">
-                <h3>{isUrdu ? 'آپ کا عوامی نیٹ ورک کارڈ (پیش منظر)' : 'Your Network Profile Preview'}</h3>
+                <h3>{isUrdu ? 'آپ کا عوامی نیٹ ورک کارڈ (پیش منظر)' : 'Profile with Badges and Achievements'}</h3>
                 <div className="net-preview-card">
                   <div className="net-prev-header">
                     <div className="net-prev-avatar">
@@ -1748,20 +1734,64 @@ export default function NetworkPage({
                       <span className="net-verified-chip">
                         <ShieldCheck size={11} /> School-verified
                       </span>
-                      {hasConsent && (
-                        <span className="net-badge-pill gold">
-                          <Award size={11} /> Leaderboard Opted-In
-                        </span>
-                      )}
+                      <span className="net-sample-pill-top">
+                        <Star size={11} /> Top Rated
+                      </span>
                     </div>
                   </div>
                   <div className="net-prev-name">{user.name || user.username}</div>
-                  <div className="net-prev-headline">{headlineInput || (isUrdu ? 'پیشہ ورانہ عنوان' : 'Professional Headline')}</div>
+                  <div className="net-prev-headline">{headlineInput || (isUrdu ? 'پیشہ ورانہ عنوان' : 'Professional Educator • Academic Leader')}</div>
                   <div className="net-prev-school">
                     <Building2 size={13} />
-                    <span>{showSchoolName ? (myProfile?.school_name || 'My Campus') : (isUrdu ? 'اسکول پوشیدہ' : 'School Private')}</span>
+                    <span>{showSchoolName ? (myProfile?.school_name || 'Academic Institution') : (isUrdu ? 'اسکول پوشیدہ' : 'School Private')}</span>
                     {showCity && myProfile?.city_display && <span> • {myProfile.city_display}</span>}
                   </div>
+
+                  {/* Sample Stats Row matching Screen 4 */}
+                  <div className="net-sample-stats-row" style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 12, margin: '12px 0', border: '1px solid #e2e8f0' }}>
+                    <div>
+                      <label>{isUrdu ? 'رابطے' : 'Connections'}</label>
+                      <strong style={{ color: '#0f766e', fontSize: 15 }}>{activeConnections.length > 0 ? activeConnections.length : 120}</strong>
+                    </div>
+                    <div>
+                      <label>{isUrdu ? 'مضامین' : 'Subjects'}</label>
+                      <strong style={{ color: '#0f766e', fontSize: 15 }}>{subjectsList.length > 0 ? subjectsList.length : 8}</strong>
+                    </div>
+                    <div>
+                      <label>{isUrdu ? 'ریٹنگ' : 'Rating'}</label>
+                      <strong style={{ color: '#d97706', fontSize: 15 }}>⭐ 4.9</strong>
+                    </div>
+                  </div>
+
+                  {/* 4 Colorful Badges & Achievements matching Screen 4 */}
+                  <div style={{ margin: '14px 0 10px' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 8 }}>
+                      {isUrdu ? 'اعزازات اور بیجز' : 'Achievements & Badges'}
+                    </span>
+                    <div className="net-sample-badges-grid">
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon gold">🏆</div>
+                        <strong>Top Scorer</strong>
+                        <small>Academic #1</small>
+                      </div>
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon purple">🛡️</div>
+                        <strong>Math Whiz</strong>
+                        <small>98% Score</small>
+                      </div>
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon teal">🛡️</div>
+                        <strong>Helpful Peer</strong>
+                        <small>Top Mentor</small>
+                      </div>
+                      <div className="net-sample-badge-item">
+                        <div className="net-sample-badge-icon green">🎖️</div>
+                        <strong>Attendance</strong>
+                        <small>100% Punctual</small>
+                      </div>
+                    </div>
+                  </div>
+
                   {bioInput && <p className="net-prev-bio">"{bioInput}"</p>}
 
                   {/* Qualifications */}
