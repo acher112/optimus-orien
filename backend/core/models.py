@@ -24,7 +24,7 @@ class School(models.Model):
  name=models.CharField(max_length=160)
  code=models.CharField(max_length=32)
  city=models.CharField(max_length=120,blank=True)
- currency=models.CharField(max_length=8,default='PKR',help_text='ISO currency code, e.g. PKR, USD')
+ currency=models.CharField(max_length=8,default='USD',help_text='ISO currency code, e.g. PKR, USD')
  attendance_alert_threshold=models.DecimalField(max_digits=5,decimal_places=2,default=80,validators=[MinValueValidator(0),MaxValueValidator(100)])
  grade_alert_threshold=models.DecimalField(max_digits=5,decimal_places=2,default=60,validators=[MinValueValidator(0),MaxValueValidator(100)])
  discussion_enabled=models.BooleanField(default=True)
@@ -773,7 +773,7 @@ class SalaryStructure(models.Model):
     basic = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     allowances = models.JSONField(default=list, blank=True)
     fixed_deductions = models.JSONField(default=list, blank=True)
-    currency = models.CharField(max_length=8, default='PKR')
+    currency = models.CharField(max_length=8, default='USD')
     created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 

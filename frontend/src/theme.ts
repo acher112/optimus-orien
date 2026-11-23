@@ -32,7 +32,7 @@ export const THEME_COLORS = THEME_PRESETS.map(p => ({
 export type ThemeColor = string;
 
 export function resolveHex(input?: string): string {
-  if (!input) return '#715ee8';
+  if (!input) return '#06b6d4';
   const trimmed = input.trim();
   const found = THEME_PRESETS.find(
     p => p.id.toLowerCase() === trimmed.toLowerCase() || p.hex.toLowerCase() === trimmed.toLowerCase()
@@ -40,7 +40,7 @@ export function resolveHex(input?: string): string {
   if (found) return found.hex;
   if (trimmed.startsWith('#')) return trimmed;
   if (/^[0-9a-fA-F]{3,8}$/.test(trimmed)) return `#${trimmed}`;
-  return '#715ee8';
+  return '#06b6d4';
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -50,7 +50,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   }
   const num = parseInt(hex, 16);
   if (isNaN(num)) {
-    return { r: 113, g: 94, b: 232 };
+    return { r: 6, g: 182, b: 212 };
   }
   return {
     r: (num >> 16) & 255,
@@ -67,9 +67,9 @@ function adjustBrightness(hex: string, percent: number): string {
 }
 
 export function getStoredTheme(): { mode: ThemeMode; colorHex: string; color: string } {
-  if (typeof window === 'undefined') return { mode: 'light', colorHex: '#715ee8', color: '#715ee8' };
+  if (typeof window === 'undefined') return { mode: 'light', colorHex: '#06b6d4', color: '#06b6d4' };
   const mode = (localStorage.getItem('optimus_theme_mode') as ThemeMode) || 'light';
-  const raw = localStorage.getItem('optimus_accent_hex') || '#715ee8';
+  const raw = localStorage.getItem('optimus_accent_hex') || '#06b6d4';
   const colorHex = resolveHex(raw);
   return { mode, colorHex, color: colorHex };
 }
@@ -77,7 +77,7 @@ export function getStoredTheme(): { mode: ThemeMode; colorHex: string; color: st
 export function applyTheme(mode: ThemeMode, colorInput?: string) {
   if (typeof window === 'undefined') return;
 
-  const hex = resolveHex(colorInput || localStorage.getItem('optimus_accent_hex') || '#715ee8');
+  const hex = resolveHex(colorInput || localStorage.getItem('optimus_accent_hex') || '#06b6d4');
   localStorage.setItem('optimus_theme_mode', mode);
   localStorage.setItem('optimus_accent_hex', hex);
 

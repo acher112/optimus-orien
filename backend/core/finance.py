@@ -307,7 +307,7 @@ def summary(request):
     requested_currency = request.query_params.get('currency')
 
     currency_mismatch = False
-    active_currency = 'PKR'
+    active_currency = 'USD'
     if len(currencies_present) > 1:
         if requested_currency and requested_currency in currencies_present:
             active_currency = requested_currency

@@ -1,7 +1,7 @@
 import { ALL_CURRENCIES } from './localeData';
 
 export function getCurrencySymbol(curr?: string): string {
-  if (!curr) return 'Rs';
+  if (!curr) return '$';
   const c = curr.toUpperCase().trim();
   if (c === 'USD') return '$';
   if (c === 'PKR') return 'Rs';

@@ -1449,7 +1449,7 @@ def defaulters(request):
         '90+': {'count': 0, 'total': Decimal('0.00')}
     }
     total_all_outstanding = Decimal('0.00')
-    default_currency = 'PKR'
+    default_currency = 'USD'
 
     for s in student_map.values():
         if s['total_outstanding'] < min_amount:
@@ -1586,7 +1586,7 @@ def defaulter_send_reminder(request, student_id):
     if total_unpaid <= Decimal('0.00'):
         raise ValidationError({'detail': f'{student.full_name} has no overdue balance.'})
 
-    currency = student.school.currency or 'PKR'
+    currency = student.school.currency or 'USD'
     due_str = str(oldest_due) if oldest_due else 'past due date'
     amount_str = str(total_unpaid.quantize(Decimal('0.01')))
 
@@ -1649,7 +1649,7 @@ def fees_summary(request):
         monthly[m] = monthly.get(m, Decimal('0.00')) + p.amount
 
     primary_school = schools.first()
-    curr = primary_school.currency if primary_school and primary_school.currency else 'PKR'
+    curr = primary_school.currency if primary_school and primary_school.currency else 'USD'
 
     return Response({
         'currency': curr,

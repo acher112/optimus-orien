@@ -56,8 +56,8 @@ def payload(school,config):
  data_conf = ConfigurationSerializer(config).data if config else None
  if data_conf and isinstance(data_conf.get('school_settings'), dict):
   if not data_conf['school_settings'].get('currency'):
-   data_conf['school_settings']['currency'] = getattr(school, 'currency', 'PKR')
- return {'school':{'id':school.pk,'name':school.name,'code':school.code,'organisation':school.organisation_id,'currency':getattr(school,'currency','PKR')},
+   data_conf['school_settings']['currency'] = getattr(school, 'currency', 'USD')
+ return {'school':{'id':school.pk,'name':school.name,'code':school.code,'organisation':school.organisation_id,'currency':getattr(school,'currency','USD')},
          'configuration':data_conf,
          'readiness':readiness(config),
          'versions':list(config.versions.values('version','activated_at')[:12]) if config else []}

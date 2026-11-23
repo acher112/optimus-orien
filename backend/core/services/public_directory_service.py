@@ -87,20 +87,23 @@ def resolve_location_from_config(school: School, config: Optional[Any] = None) -
             except Exception:
                 pass
 
-    city = ''
+    city = (school.city or '').strip()
     province = ''
     if jurisdiction:
         parts = [p.strip() for p in jurisdiction.split(',') if p.strip()]
         if len(parts) >= 3:
-            city = parts[0]
+            if not city:
+                city = parts[0]
             province = parts[1]
             if not country:
                 country = COUNTRY_CODE_MAP.get(parts[-1].upper(), parts[-1])
         elif len(parts) == 2:
-            city = parts[0]
+            if not city:
+                city = parts[0]
             province = parts[1]
         elif len(parts) == 1:
-            city = parts[0]
+            if not city:
+                city = parts[0]
             province = parts[0] if country and country != 'Pakistan' else 'Punjab'
 
     # Fallback to city keywords if country still empty

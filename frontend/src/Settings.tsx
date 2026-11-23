@@ -21,6 +21,7 @@ import { updateProfile, changePassword, type User } from './api';
 import { applyTheme, getStoredTheme, resolveHex, THEME_PRESETS, type ThemeMode } from './theme';
 import PasswordField from './PasswordField';
 import { UserProfileView, type UserProfileData } from './UserProfileView';
+import { AVATAR_PRESETS, DEFAULT_AVATAR_URI, getEffectiveAvatar } from './avatarPresets';
 import './style.css';
 
 interface SettingsProps {
@@ -542,21 +543,63 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
           )}
 
           <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, padding: 12, background: 'var(--brand-primary-light, #f7f6fe)', borderRadius: 14 }}>
-              <div style={{ width: 64, height: 64, borderRadius: 16, background: avatarColor, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 22, fontWeight: 800, overflow: 'hidden', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                {avatarImage ? <img src={avatarImage} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (firstName[0] || 'U') + (lastName[0] || '')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 8, padding: 16, background: 'var(--brand-primary-light, #ecfeff)', borderRadius: 14, border: '1px solid #cffafe' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ width: 64, height: 64, borderRadius: 16, background: avatarColor, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 22, fontWeight: 800, overflow: 'hidden', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                  <img src={getEffectiveAvatar(avatarImage)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <label className="action-btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                      <Upload size={13} /> Upload photo
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
+                    </label>
+                    {avatarImage && (
+                      <button type="button" className="action-btn-sm delete-btn" onClick={() => setAvatarImage('')}>
+                        <Trash2 size={13} /> Reset to Default
+                      </button>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 11, color: '#64748b', margin: '6px 0 0' }}>Upload a custom picture or choose any avatar preset option below.</p>
+                </div>
               </div>
-              <div>
-                <label className="action-btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                  <Upload size={13} /> Upload profile photo
-                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
-                </label>
-                {avatarImage && (
-                  <button type="button" className="action-btn-sm delete-btn" style={{ marginLeft: 8 }} onClick={() => setAvatarImage('')}>
-                    <Trash2 size={13} /> Remove
-                  </button>
-                )}
-                <p style={{ fontSize: 11, color: '#888', margin: '5px 0 0' }}>JPG, PNG or WebP image. Stored with your account profile.</p>
+
+              {/* Selectable Avatar Presets */}
+              <div style={{ borderTop: '1px dashed #a5f3fc', paddingTop: 10, marginTop: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#0891b2', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Choose Preset Avatar Style</span>
+                  {avatarImage && (
+                    <button type="button" style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setAvatarImage('')}>
+                      Default avatar
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))', gap: 8 }}>
+                  {AVATAR_PRESETS.map((preset) => {
+                    const isSelected = (avatarImage || DEFAULT_AVATAR_URI) === preset.dataUri;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        style={{
+                          aspectRatio: '1',
+                          borderRadius: 12,
+                          border: isSelected ? '2px solid #06b6d4' : '2px solid transparent',
+                          padding: 2,
+                          background: isSelected ? '#cffafe' : 'transparent',
+                          cursor: 'pointer',
+                          boxShadow: isSelected ? '0 0 0 2px rgba(6,182,212,0.3)' : 'none',
+                          transform: isSelected ? 'scale(1.05)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        title={`${preset.name} (${preset.roleHint})`}
+                        onClick={() => setAvatarImage(preset.dataUri)}
+                      >
+                        <img src={preset.dataUri} alt={preset.name} style={{ width: '100%', height: '100%', borderRadius: 9, objectFit: 'cover', display: 'block' }} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

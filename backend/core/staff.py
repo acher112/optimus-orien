@@ -416,7 +416,7 @@ def staff_list(request):
             except InvalidOperation:
                 raise ValidationError({'salary': 'Enter a valid base salary amount.'})
         if salary_val > 0:
-                currency = getattr(school, 'currency', None) or 'PKR'
+                currency = getattr(school, 'currency', None) or 'USD'
                 SalaryStructure.objects.create(
                     staff=s,
                     effective_from=hired,

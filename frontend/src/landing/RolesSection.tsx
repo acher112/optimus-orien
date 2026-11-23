@@ -1,8 +1,31 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Shield, School, UserCheck, BookOpen, HeartHandshake } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Shield,
+  School,
+  UserCheck,
+  BookOpen,
+  BarChart3,
+  Users,
+  CreditCard,
+  GraduationCap,
+  Sparkles,
+  Layers,
+  Calendar,
+  Award,
+  FileText,
+  Activity,
+} from 'lucide-react';
 
 interface RolesSectionProps {
   locale?: string;
+}
+
+interface PortalFunction {
+  title: string;
+  desc: string;
+  icon: React.ReactNode;
 }
 
 interface PortalSlide {
@@ -10,9 +33,10 @@ interface PortalSlide {
   roleName: string;
   badge: string;
   url: string;
-  image: string;
+  summary: string;
   description: string;
   icon: React.ReactNode;
+  functions: PortalFunction[];
 }
 
 export default function RolesSection() {
@@ -26,45 +50,124 @@ export default function RolesSection() {
       roleName: 'Super Admin Portal',
       badge: 'Multi-Campus Executive Governance',
       url: 'portal.optimus-orien.io/super_admin',
-      image: '/images/dashboard-admin.png',
+      summary: 'Executive command center for multi-campus governance, institutional finance reconciliation, cross-campus rankings, and systemic HR oversight.',
       description: 'Comprehensive multi-campus oversight, institutional finances, staff directories, and systemic executive analytics in one unified cockpit.',
       icon: <Shield size={16} />,
+      functions: [
+        {
+          title: 'Campus Network Topology & Governance',
+          desc: 'Provision new campuses, configure school codes, manage jurisdiction profiles, and assign regional campus principals with enterprise role-based access.',
+          icon: <Layers size={18} />,
+        },
+        {
+          title: 'Institutional Financial Cockpit',
+          desc: 'Synchronized fee collection audits, voucher generation, fee structures, concession approvals, and automated financial accounting in default USD currency.',
+          icon: <CreditCard size={18} />,
+        },
+        {
+          title: 'Cross-Campus Academic Quality Index',
+          desc: 'Systemic benchmarking of campus SPI, curriculum pass rates, normalized grade distributions, and executive inspection-ready compliance audits.',
+          icon: <BarChart3 size={18} />,
+        },
+        {
+          title: 'Enterprise Staff Directory & Payroll',
+          desc: 'Centralized faculty records, designation hierarchies, automated salary tier management, and systemic educator onboarding across all branches.',
+          icon: <Users size={18} />,
+        },
+      ],
     },
     {
       id: 'principal',
       roleName: 'Principal Portal',
       badge: 'Campus Leadership & Quality Oversight',
       url: 'portal.optimus-orien.io/principal',
-      image: '/images/dashboard-principal.png',
+      summary: 'Campus leadership cockpit engineered for operational excellence, teacher efficacy, longitudinal student risk prevention, and academic logistics.',
       description: 'Real-time campus diagnostics, teacher efficacy analytics, early intervention triggers, and longitudinal student trajectory trends.',
       icon: <School size={16} />,
+      functions: [
+        {
+          title: 'Campus Performance Pulse & Health Index',
+          desc: 'Live campus dashboard tracking daily student and faculty attendance rates, syllabus completion percentage, and department-level academic benchmarks.',
+          icon: <Activity size={18} />,
+        },
+        {
+          title: 'Early Warning & At-Risk Intervention Engine',
+          desc: 'Automated multi-factor detection identifying learners facing academic dip or attendance declines, complete with collaborative intervention plans.',
+          icon: <Sparkles size={18} />,
+        },
+        {
+          title: 'Faculty Efficacy & Classroom Audits',
+          desc: 'Track teacher attendance regularity, classroom lesson plan coverage, grade submission punctuality, and peer review outcomes.',
+          icon: <UserCheck size={18} />,
+        },
+        {
+          title: 'Examination Logistics & Master Timetable',
+          desc: 'Schedule term examinations, publish seating blueprints, manage custom grading scales, and review provisional grade transcripts.',
+          icon: <Calendar size={18} />,
+        },
+      ],
     },
     {
       id: 'teacher',
       roleName: 'Teacher Portal',
       badge: 'Classroom Analytics & Early Alerts',
       url: 'portal.optimus-orien.io/teacher',
-      image: '/images/dashboard-teacher.png',
+      summary: 'Daily educator workstation built for swift single-click attendance, continuous assessment scoring, formative observation logs, and study materials.',
       description: 'Streamlined daily attendance, frictionless gradebook entries, behavior observations, and proactive intervention notes.',
       icon: <UserCheck size={16} />,
+      functions: [
+        {
+          title: 'Frictionless 1-Click Attendance',
+          desc: 'Mark whole-classroom attendance in seconds with intelligent defaults, multi-period tracking, and immediate absence notifications to administration.',
+          icon: <UserCheck size={18} />,
+        },
+        {
+          title: 'Continuous Assessment Gradebook',
+          desc: 'Score homework, term quizzes, assignments, and periodic exams with instant weighted calculations, letter grade mapping, and GPA aggregation.',
+          icon: <GraduationCap size={18} />,
+        },
+        {
+          title: 'Formative Observations & Risk Notes',
+          desc: 'Record classroom behavior remarks, academic intervention notes, and student psychological evaluation observations for leadership review.',
+          icon: <FileText size={18} />,
+        },
+        {
+          title: 'Curriculum & Study Materials Distribution',
+          desc: 'Upload class handouts, reference documents, video links, and reading materials directly linked to subject syllabi and classroom cohorts.',
+          icon: <BookOpen size={18} />,
+        },
+      ],
     },
     {
       id: 'student',
       roleName: 'Student Portal',
       badge: 'Personal Progress & Growth Profile',
       url: 'portal.optimus-orien.io/student',
-      image: '/images/dashboard-student.png',
+      summary: 'Interactive learner dashboard offering continuous progress transcripts, class schedules, interactive quiz competitions, and community networking.',
       description: 'Clear visibility into assignments, exam timetables, assessment feedback, and continuous academic growth metrics.',
       icon: <BookOpen size={16} />,
-    },
-    {
-      id: 'parent',
-      roleName: 'Parent Portal',
-      badge: 'Parent Engagement & Real-Time Alerts',
-      url: 'portal.optimus-orien.io/parent',
-      image: '/images/dashboard-parent.png',
-      description: 'Instant attendance verification, automated fee receipts, direct teacher communication, and holistic academic progress tracking.',
-      icon: <HeartHandshake size={16} />,
+      functions: [
+        {
+          title: 'Verified Academic Growth & Report Cards',
+          desc: 'Live breakdown of subject scores, teacher feedback comments, historical grade trends, and verifiable official terminal transcripts.',
+          icon: <Award size={18} />,
+        },
+        {
+          title: 'Daily Class Schedule & Lecture Blueprint',
+          desc: 'Up-to-the-minute timetable showing periods, classroom locations, assigned educators, and upcoming assignment submission deadlines.',
+          icon: <Calendar size={18} />,
+        },
+        {
+          title: 'Online Assessments & Quiz Olympiads',
+          desc: 'Take official timed competitions and practice challenge quizzes across science, mathematics, and humanities with instant scoring and badges.',
+          icon: <Sparkles size={18} />,
+        },
+        {
+          title: 'Educational Community & Peer Networking',
+          desc: 'Explore institutional leaderboards, follow peer achievement highlights, and interact in verified subject interest learning groups.',
+          icon: <Users size={18} />,
+        },
+      ],
     },
   ];
 
@@ -194,15 +297,32 @@ export default function RolesSection() {
               <span className="portal-badge-chip">{current.badge}</span>
             </div>
 
-            {/* Big High-Res Portal Image */}
-            <div className="portal-image-frame">
-              <img
-                key={current.id}
-                src={current.image}
-                alt={`${current.roleName} preview`}
-                className="portal-hero-img"
-                loading="eager"
-              />
+            {/* Rich Portal Description & Operational Capabilities Showcase */}
+            <div className="portal-image-frame portal-showcase-frame">
+              <div className="portal-content-showcase">
+                <div className="portal-showcase-hero">
+                  <div className="portal-showcase-meta">
+                    <span className="portal-showcase-chip">{current.badge}</span>
+                    <span className="portal-showcase-endpoint">{current.url}</span>
+                  </div>
+                  <h3 className="portal-showcase-title">{current.roleName} Capabilities & Operations</h3>
+                  <p className="portal-showcase-summary">{current.summary}</p>
+                </div>
+
+                <div className="portal-functions-grid">
+                  {current.functions.map((fn, idx) => (
+                    <div key={idx} className="portal-function-card">
+                      <div className="portal-function-icon-wrap">
+                        {fn.icon}
+                      </div>
+                      <div className="portal-function-text">
+                        <h4 className="portal-function-title">{fn.title}</h4>
+                        <p className="portal-function-desc">{fn.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Slide Caption and Details */}

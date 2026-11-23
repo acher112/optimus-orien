@@ -316,7 +316,7 @@ def user_payload(u):
   'allow_org_admin_student_access': getattr(u.organisation, 'allow_org_admin_student_access', False) if u.organisation else False,
   'school': u.school_id,
   'school_name': u.school.name if u.school else None,
-  'currency': school_currency or 'PKR',
+  'currency': school_currency or 'USD',
   'is_staff': u.is_staff,
   'must_change_password': getattr(u, 'must_change_password', False),
   'student_id': student_id,
@@ -2001,6 +2001,7 @@ def create_account(request):
   return Response({'detail':'Gender must be male, female, other, or not_recorded'},status=400)
  student_id=data.get('student_id')
  class_id=data.get('class_id')
+ avatar_image=(data.get('avatar_image') or '').strip()
  
  VALID_ROLES=['organisation_admin','school_admin','principal','teacher','student','parent']
  if not username and email:
@@ -2063,6 +2064,7 @@ def create_account(request):
    role=role,
    school=school,
    organisation=user.organisation or (school.organisation if school else None),
+   avatar_image=avatar_image,
    is_active=True
   )
   new_user.set_password(password)

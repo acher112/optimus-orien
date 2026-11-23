@@ -5,7 +5,7 @@
    ========================================================================== */
 
 :root {
-  --bg-color: #f7f9fc;
+  --bg-color: #ffffff;
   --text-primary: #1a1a2e;
   --text-secondary: #52525b;
   --text-muted: #71717a;
@@ -142,14 +142,14 @@ body {
   width: 100%;
   padding: 1rem 0;
   z-index: 100;
-  background: transparent;
+  background: #ffffff;
   transition: all 0.3s ease;
 }
 
 .landing-navbar.is-scrolled {
   position: fixed;
   top: 0;
-  background: rgba(255, 255, 255, 0.85);
+  background: #ffffff;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
@@ -386,21 +386,21 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background-color: var(--brand-purple-dark);
+  background-color: #10b981;
   color: #fff;
-  border: 2px solid var(--brand-purple-dark);
+  border: 2px solid #10b981;
   padding: 0.85rem 2rem;
   font-size: 1.05rem;
   border-radius: 9999px;
   font-weight: 600;
   text-decoration: none;
   transition: all 0.2s ease;
-  box-shadow: var(--shadow-active-purple);
+  box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4);
 }
 
 .btn-hero-primary:hover {
-  background-color: #5936a2;
-  border-color: #5936a2;
+  background-color: #059669;
+  border-color: #059669;
   transform: translateY(-2px);
 }
 
@@ -408,21 +408,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background-color: #ffffff;
-  color: var(--text-primary);
-  border: 2px solid #e2e8f0;
+  background-color: #f97316;
+  color: #ffffff;
+  border: 2px solid #f97316;
   padding: 0.85rem 2rem;
   font-size: 1.05rem;
   border-radius: 9999px;
   font-weight: 600;
   text-decoration: none;
   transition: all 0.2s ease;
+  box-shadow: 0 10px 20px -5px rgba(249, 115, 22, 0.4);
 }
 
 .btn-hero-secondary:hover {
-  border-color: var(--brand-purple-dark);
-  color: var(--brand-purple-dark);
-  background-color: #fbfbfd;
+  border-color: #ea580c;
+  color: #ffffff;
+  background-color: #ea580c;
   transform: translateY(-2px);
 }
 
@@ -736,6 +737,133 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.portal-showcase-frame {
+  max-height: none;
+  min-height: auto;
+  padding: 2rem 2.25rem;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  display: block;
+}
+
+.portal-content-showcase {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: portalFadeIn 0.35s ease;
+}
+
+.portal-showcase-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.portal-showcase-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.portal-showcase-chip {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0891b2;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.portal-showcase-endpoint {
+  font-size: 0.8rem;
+  font-family: monospace;
+  color: #64748b;
+}
+
+.portal-showcase-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.portal-showcase-summary {
+  font-size: 0.925rem;
+  line-height: 1.55;
+  color: #475569;
+  margin: 0;
+  max-width: 820px;
+}
+
+.portal-functions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .portal-showcase-frame {
+    padding: 1.25rem;
+  }
+  .portal-functions-grid {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+}
+
+.portal-function-card {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 1.15rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.portal-function-card:hover {
+  transform: translateY(-2px);
+  border-color: #06b6d4;
+  box-shadow: 0 8px 18px rgba(6, 182, 212, 0.12);
+}
+
+.portal-function-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #ecfeff;
+  color: #0891b2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.portal-function-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.portal-function-title {
+  margin: 0;
+  font-size: 0.925rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.portal-function-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #64748b;
 }
 
 .portal-hero-img {

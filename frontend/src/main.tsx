@@ -19,6 +19,7 @@ import {
 } from './api';
 import { queryCache } from './queryCache';
 import { getCurrencySymbol, formatMoney } from './currency';
+import { AVATAR_PRESETS, DEFAULT_AVATAR_URI, getEffectiveAvatar } from './avatarPresets';
 import PlanAndBilling from './PlanAndBilling';
 import FeatureLockedScreen from './FeatureLockedScreen';
 import RegistrationPlanSelection from './RegistrationPlanSelection';
@@ -2806,12 +2807,8 @@ function App() {
           )}
 
           <div className="account">
-            <div className="avatar" style={{ overflow: 'hidden', background: user.avatar_color ? `${user.avatar_color}22` : '#e9e1ff', color: user.avatar_color || '#7862d7' }}>
-              {user.avatar_image ? (
-                <img src={user.avatar_image} alt={user.name} className="avatar-img-round" />
-              ) : (
-                initials(user.name)
-              )}
+            <div className="avatar" style={{ overflow: 'hidden', background: user.avatar_color ? `${user.avatar_color}22` : '#e9e1ff', color: user.avatar_color || '#06b6d4' }}>
+              <img src={getEffectiveAvatar(user.avatar_image)} alt={user.name} className="avatar-img-round" />
             </div>
             <div>
               <b>{user.name}</b>
@@ -3012,12 +3009,8 @@ function App() {
                 aria-label="User profile"
                 onClick={() => setProfileMenuOpen(v => !v)}
               >
-                <div className="avatar small" style={{ background: user.avatar_color ? `${user.avatar_color}22` : '#e9e1ff', color: user.avatar_color || '#7862d7', overflow: 'hidden' }}>
-                  {user.avatar_image ? (
-                    <img src={user.avatar_image} alt={user.name} className="avatar-img-round" />
-                  ) : (
-                    initials(user.name)
-                  )}
+                <div className="avatar small" style={{ background: user.avatar_color ? `${user.avatar_color}22` : '#e9e1ff', color: user.avatar_color || '#06b6d4', overflow: 'hidden' }}>
+                  <img src={getEffectiveAvatar(user.avatar_image)} alt={user.name} className="avatar-img-round" />
                 </div>
                 <ChevronDown size={14} color="#8890a4" />
               </button>
@@ -3025,13 +3018,9 @@ function App() {
               {profileMenuOpen && (
                 <div className="profile-dropdown-menu">
                   <div className="profile-dropdown-header">
-                    <div className="profile-large-avatar" style={{ background: user.avatar_color || '#715ee8' }}>
-                      {user.avatar_image ? (
-                        <img src={user.avatar_image} alt={user.name} className="avatar-img-round" />
-                      ) : (
-                        initials(user.name)
-                      )}
-                      <label className="profile-upload-overlay" title="Upload profile picture">
+                    <div className="profile-large-avatar" style={{ background: user.avatar_color || '#06b6d4' }}>
+                      <img src={getEffectiveAvatar(user.avatar_image)} alt={user.name} className="avatar-img-round" />
+                      <label className="profile-upload-overlay" title="Upload custom photo">
                         <Camera size={20} />
                         <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProfilePicUpload} />
                       </label>
@@ -3041,14 +3030,55 @@ function App() {
                     <div className="profile-email">{user.email || `@${user.username}`}</div>
                     <div className="profile-photo-buttons">
                       <label className="profile-photo-btn">
-                        <Upload size={12} /> {user.avatar_image ? 'Change photo' : 'Add photo'}
+                        <Upload size={12} /> {user.avatar_image ? 'Upload custom' : 'Upload photo'}
                         <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProfilePicUpload} />
                       </label>
                       {user.avatar_image && (
                         <button className="profile-photo-btn" style={{ color: '#ef4444' }} onClick={handleRemovePhoto}>
-                          <Trash2 size={12} /> Remove
+                          <Trash2 size={12} /> Default
                         </button>
                       )}
+                    </div>
+
+                    {/* Selectable Avatar Presets */}
+                    <div className="profile-avatar-presets-wrap">
+                      <div className="profile-avatar-presets-title">
+                        <span>Choose Avatar Option</span>
+                        {user.avatar_image && (
+                          <button
+                            type="button"
+                            className="avatar-reset-link"
+                            onClick={handleRemovePhoto}
+                            title="Reset to default system avatar"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <div className="profile-avatar-presets-grid">
+                        {AVATAR_PRESETS.map((preset) => {
+                          const isSelected = (user.avatar_image || DEFAULT_AVATAR_URI) === preset.dataUri;
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              className={`profile-avatar-preset-btn ${isSelected ? 'selected' : ''}`}
+                              title={`${preset.name} • ${preset.roleHint}`}
+                              onClick={async () => {
+                                try {
+                                  const updated = await updateProfile({ avatar_image: preset.dataUri });
+                                  setUser(updated);
+                                  notify(`Avatar set to ${preset.name}`);
+                                } catch (err) {
+                                  notify(err instanceof Error ? err.message : 'Could not set avatar');
+                                }
+                              }}
+                            >
+                              <img src={preset.dataUri} alt={preset.name} />
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                   <div className="profile-menu-items">
@@ -6343,7 +6373,6 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
   const [schoolStudentMap, setSchoolStudentMap] = useState<Record<number, Array<{ id: number; name: string }>>>({});
   const [accountForm, setAccountForm] = useState<Record<number, Record<string, string>>>({});
   const [accountSaving, setAccountSaving] = useState<Record<number, boolean>>({});
-  const [campusViewTab, setCampusViewTab] = useState<'roster' | 'mapping' | 'timetable'>('roster');
 
   const sortedSchools = useMemo(() => {
     return [...schools].sort((a: any, b: any) => {
@@ -6501,37 +6530,12 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
 
   return (
     <>
-      {/* SS4 Top Navigation Tabs */}
-      <div className="campus-ops-tabs">
-        <button
-          type="button"
-          className={`campus-ops-tab${campusViewTab === 'roster' ? ' active' : ''}`}
-          onClick={() => setCampusViewTab('roster')}
-        >
-          CAMPUS ROSTER
-        </button>
-        <button
-          type="button"
-          className={`campus-ops-tab${campusViewTab === 'mapping' ? ' active' : ''}`}
-          onClick={() => setCampusViewTab('mapping')}
-        >
-          BRANCH MAPPING
-        </button>
-        <button
-          type="button"
-          className={`campus-ops-tab${campusViewTab === 'timetable' ? ' active' : ''}`}
-          onClick={() => setCampusViewTab('timetable')}
-        >
-          UNIFIED TIMETABLE
-        </button>
-      </div>
-
-      {/* SS4 Operational Directory Header */}
+      {/* Operational Directory Header */}
       <div className="campus-ops-header-wrap">
         <div>
           <span className="campus-ops-eyebrow">ENTERPRISE ARCHITECTURE</span>
-          <h1 className="campus-ops-title">BRANCHES OPERATIONAL DIRECTORY</h1>
-          <p className="campus-ops-subtitle">ACTIVE CARD INDEX OF EVERY SCHOOL BRANCH, WITH CORE PRINCIPAL MAPPING AND METRICS</p>
+          <h1 className="campus-ops-title">CAMPUS OPERATIONAL DIRECTORY</h1>
+          <p className="campus-ops-subtitle">ACTIVE CARD INDEX OF EVERY SCHOOL CAMPUS, WITH CORE PRINCIPAL MAPPING AND METRICS</p>
         </div>
         {isOrgAdmin && (
           <button className="primary-btn" onClick={() => { setAddForm({ campus_type: 'Branch Campus', country: 'PK', timezone: 'Asia/Karachi', attendance_alert_threshold: '80', grade_alert_threshold: '60' }); setAddModal(true); }}>
@@ -6544,83 +6548,6 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
         <div className="empty"><span><Building2 size={25} /></span><strong>Loading campuses…</strong></div>
       ) : schools.length === 0 ? (
         <div className="empty"><span><Building2 size={25} /></span><strong>Nothing to show yet</strong><p>No campuses found. Register your first campus to get started.</p></div>
-      ) : campusViewTab === 'mapping' ? (
-        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 4px 18px rgba(0,0,0,0.02)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-            <div>
-              <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 800 }}>Institutional Branch Sector Mapping</h3>
-              <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Topology overview of all registered campuses, principals, jurisdiction, and active streams.</p>
-            </div>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="audit-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Branch / Campus</th>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Sector / City</th>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Code</th>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Assigned Principal</th>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Enrolled Learners</th>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Faculty Staff</th>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Academic SPI</th>
-                  <th style={{ textAlign: 'left', padding: '10px 12px' }}>Health Index</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedSchools.map((s: any) => {
-                  const grade = s.academic_average != null ? Number(s.academic_average) : 0;
-                  const attendance = s.attendance_rate != null ? Number(s.attendance_rate) : 0;
-                  return (
-                    <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '12px', fontWeight: 800, color: '#0f172a' }}>{s.name}</td>
-                      <td style={{ padding: '12px', color: '#475569' }}>{s.city || 'Central Sector'}</td>
-                      <td style={{ padding: '12px' }}><span className="campus-code">{s.code}</span></td>
-                      <td style={{ padding: '12px', color: '#1e293b', fontWeight: 600 }}>{s.principal_name || 'Unassigned'}</td>
-                      <td style={{ padding: '12px', fontWeight: 700 }}>{Number(s.total_students) || 0} Learners</td>
-                      <td style={{ padding: '12px' }}>{Number(s.total_employees) || 0} Educators</td>
-                      <td style={{ padding: '12px', fontWeight: 800, color: '#4f46e5' }}>{grade.toFixed(1)}%</td>
-                      <td style={{ padding: '12px', fontWeight: 700, color: attendance >= 80 ? '#16a34a' : (attendance > 0 ? '#d97706' : '#64748b') }}>{Math.round(attendance)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : campusViewTab === 'timetable' ? (
-        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 4px 18px rgba(0,0,0,0.02)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-            <div>
-              <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 800 }}>Unified Multi-Campus Timetable & Schedule Synchronization</h3>
-              <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Operational periods, active shifts, and synchronized master timetable across all branches.</p>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-            {sortedSchools.map((s: any) => (
-              <div key={s.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 18, background: '#f8fafc' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <strong style={{ fontSize: 14, color: '#0f172a' }}>{s.name}</strong>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: '#eff6ff', color: '#2563eb' }}>{s.code}</span>
-                </div>
-                <p style={{ margin: '0 0 10px 0', fontSize: 11, color: '#64748b' }}>Timezone: {s.timezone || 'Asia/Karachi'} • Shift: Morning (08:00 - 14:00)</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
-                    <span>Active Periods:</span> <strong>8 Periods / Day</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
-                    <span>Assembly & Homeroom:</span> <strong>08:00 - 08:30</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
-                    <span>Recess / Break:</span> <strong>11:00 - 11:30</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
-                    <span>Dismissal:</span> <strong>14:00</strong>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       ) : (
         <div className="campus-grid">
           {sortedSchools.map((s: any, i: number) => {

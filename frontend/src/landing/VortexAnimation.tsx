@@ -50,7 +50,7 @@ export default function VortexAnimation() {
 
       const clusterConfigs = [
         { cx: width * 0.5, cy: height * 0.5, scale: 1.2, fraction: 0.75, color: '#9b51e0', alpha: 0.65 }, // Center (Purple)
-        { cx: width * 0.2, cy: height * 0.35, scale: 0.25, fraction: 0.1, color: '#F96E2A', alpha: 0.75 },  // Middle-Left (Orange)
+        { cx: width * 0.14, cy: height * 0.16, scale: 0.22, fraction: 0.1, color: '#F96E2A', alpha: 0.75 },  // Top-Left (Orange)
         { cx: width * 0.85, cy: height * 0.15, scale: 0.3, fraction: 0.15, color: '#80ced6', alpha: 0.75 }, // Top-Right (Cyan)
       ];
 
