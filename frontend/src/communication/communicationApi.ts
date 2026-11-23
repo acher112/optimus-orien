@@ -210,7 +210,12 @@ export const communicationApi = {
   // 2. Community
   getDirectory: (category: 'students' | 'teachers' | 'principals' | 'schools', search = '') => {
     const q = new URLSearchParams({ category, search }).toString();
-    return request<{ category: string; count: number; results: CommunityDirectoryItem[] }>(
+    return request<{
+      category: string;
+      count: number;
+      results: CommunityDirectoryItem[];
+      category_counts?: { students: number; teachers: number; principals: number; schools: number };
+    }>(
       `/api/v1/communication/community/directory/?${q}`
     );
   },
@@ -262,5 +267,9 @@ export const communicationApi = {
   getPeerScores: (id: number) =>
     request<{ challenge_id: number; title: string; author: string; standings: any[] }>(
       `/api/v1/communication/assessments/peer-scores/${id}/`
+    ),
+  getCompetitionStandings: (id: number) =>
+    request<{ competition_id: number; title: string; standings: any[] }>(
+      `/api/v1/communication/assessments/competitions/${id}/standings/`
     )
 };

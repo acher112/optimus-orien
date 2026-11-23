@@ -44,6 +44,7 @@ export default function OnlineAssessmentsView({ notify }: OnlineAssessmentsViewP
 
   // Rules & Standings Modal
   const [rulesModalComp, setRulesModalComp] = useState<QuizCompetitionItem | null>(null);
+  const [rulesStandings, setRulesStandings] = useState<any[]>([]);
 
   // Peer Scores Comparison Modal
   const [peerScoresModalData, setPeerScoresModalData] = useState<any | null>(null);
@@ -209,6 +210,18 @@ export default function OnlineAssessmentsView({ notify }: OnlineAssessmentsViewP
     }
   };
 
+  // Open Rules & Standings modal with live DB records
+  const handleOpenRules = async (comp: QuizCompetitionItem) => {
+    setRulesModalComp(comp);
+    setRulesStandings([]);
+    try {
+      const res = await communicationApi.getCompetitionStandings(comp.id);
+      setRulesStandings(res.standings || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Handle Question Answer Change
   const handleAnswerChange = (qId: number, val: any) => {
     setUserAnswers((prev) => ({ ...prev, [String(qId)]: val }));
@@ -304,7 +317,7 @@ export default function OnlineAssessmentsView({ notify }: OnlineAssessmentsViewP
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTop: '1px solid rgba(241, 245, 249, 0.9)' }}>
                       <button
                         className="comm-btn-rules"
-                        onClick={() => setRulesModalComp(comp)}
+                        onClick={() => handleOpenRules(comp)}
                       >
                         Rules, Schedule &amp; Standings
                       </button>
@@ -796,27 +809,23 @@ export default function OnlineAssessmentsView({ notify }: OnlineAssessmentsViewP
                         </tr>
                       </thead>
                       <tbody>
-                        <tr>
-                          <td><span className="comm-rank-pill" style={{ background: '#fef3c7', color: '#92400e' }}>1</span></td>
-                          <td><strong>Ayesha Khan</strong><div style={{ fontSize: 12, color: '#64748b' }}>Beaconhouse Gulberg Campus</div></td>
-                          <td><strong className="comm-mono" style={{ color: '#7c3aed' }}>97.5%</strong></td>
-                          <td>100.0%</td>
-                          <td className="comm-tabular">14m 20s</td>
-                        </tr>
-                        <tr>
-                          <td><span className="comm-rank-pill" style={{ background: '#f1f5f9', color: '#334155' }}>2</span></td>
-                          <td><strong>Liam Vance-Sterling</strong><div style={{ fontSize: 12, color: '#64748b' }}>Albion Collegiate Academy</div></td>
-                          <td><strong className="comm-mono" style={{ color: '#7c3aed' }}>95.0%</strong></td>
-                          <td>95.0%</td>
-                          <td className="comm-tabular">15m 12s</td>
-                        </tr>
-                        <tr>
-                          <td><span className="comm-rank-pill" style={{ background: '#fef3c7', color: '#92400e' }}>3</span></td>
-                          <td><strong>Zara Al-Hashimi</strong><div style={{ fontSize: 12, color: '#64748b' }}>Al-Noor Horizon School</div></td>
-                          <td><strong className="comm-mono" style={{ color: '#7c3aed' }}>92.5%</strong></td>
-                          <td>90.0%</td>
-                          <td className="comm-tabular">16m 05s</td>
-                        </tr>
+                        {rulesStandings.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#64748b' }}>
+                              No attempts recorded yet for this competition. Be the first to attempt and establish Rank #1!
+                            </td>
+                          </tr>
+                        ) : (
+                          rulesStandings.map((st, idx) => (
+                            <tr key={idx}>
+                              <td><span className="comm-rank-pill">{st.rank}</span></td>
+                              <td><strong>{st.name}</strong><div style={{ fontSize: 12, color: '#64748b' }}>{st.school}</div></td>
+                              <td><strong className="comm-mono" style={{ color: '#7c3aed' }}>{st.score}%</strong></td>
+                              <td><span style={{ color: '#059669', fontWeight: 600 }}>{st.accuracy}%</span></td>
+                              <td className="comm-tabular">{st.time}</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>

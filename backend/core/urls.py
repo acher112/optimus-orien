@@ -425,6 +425,7 @@ urlpatterns = [
     path('communication/assessments/join/<str:code>/', communication_views.AssessmentsJoinByCodeView.as_view()),
     path('communication/assessments/leaderboard/', communication_views.AssessmentsLeaderboardView.as_view()),
     path('communication/assessments/peer-scores/<int:pk>/', communication_views.AssessmentsPeerScoresView.as_view()),
+    path('communication/assessments/competitions/<int:pk>/standings/', communication_views.AssessmentsCompetitionStandingsView.as_view()),
 
     path('', include(r.urls))
 

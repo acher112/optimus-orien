@@ -18,6 +18,12 @@ interface CommunityViewProps {
 export default function CommunityView({ notify }: CommunityViewProps) {
   const [activeTab, setActiveTab] = useState<'discover' | 'connections'>('discover');
   const [category, setCategory] = useState<'students' | 'teachers' | 'principals' | 'schools'>('students');
+  const [categoryCounts, setCategoryCounts] = useState({
+    students: 0,
+    teachers: 0,
+    principals: 0,
+    schools: 0
+  });
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<CommunityDirectoryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,6 +49,9 @@ export default function CommunityView({ notify }: CommunityViewProps) {
     try {
       const res = await communicationApi.getDirectory(category, search);
       setItems(res.results || []);
+      if (res.category_counts) {
+        setCategoryCounts(res.category_counts);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -147,25 +156,25 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                 className={`comm-cat-pill ${category === 'students' ? 'active' : ''}`}
                 onClick={() => setCategory('students')}
               >
-                Students (6)
+                Students {categoryCounts.students > 0 ? `(${categoryCounts.students})` : ''}
               </button>
               <button
                 className={`comm-cat-pill ${category === 'teachers' ? 'active' : ''}`}
                 onClick={() => setCategory('teachers')}
               >
-                Teachers (5)
+                Teachers {categoryCounts.teachers > 0 ? `(${categoryCounts.teachers})` : ''}
               </button>
               <button
                 className={`comm-cat-pill ${category === 'principals' ? 'active' : ''}`}
                 onClick={() => setCategory('principals')}
               >
-                Principals (5)
+                Principals {categoryCounts.principals > 0 ? `(${categoryCounts.principals})` : ''}
               </button>
               <button
                 className={`comm-cat-pill ${category === 'schools' ? 'active' : ''}`}
                 onClick={() => setCategory('schools')}
               >
-                Schools (6)
+                Schools {categoryCounts.schools > 0 ? `(${categoryCounts.schools})` : ''}
               </button>
             </div>
 
