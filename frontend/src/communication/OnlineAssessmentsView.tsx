@@ -229,7 +229,7 @@ export default function OnlineAssessmentsView({ notify }: OnlineAssessmentsViewP
 
   return (
     <div className="comm-page-wrapper">
-      <div className="comm-container">
+      <div className="comm-suite-container">
         {/* Top Kicker */}
         <div className="comm-kicker comm-kicker-assessments">
           <Award size={13} /> Online Assessments &amp; Quiz Competitions

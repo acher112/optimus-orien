@@ -210,7 +210,7 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
               }}
               className="public-dir-nav-link active"
             >
-              Find a School (اسکول تلاش کریں)
+              Find a School
             </a>
             <a
               href="/schools/methodology"

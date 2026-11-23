@@ -53,8 +53,8 @@ export default function NetworkPage({
   const isSchoolAdmin = ['organisation_admin', 'school_admin'].includes(user.role);
 
   // Language & RTL
-  const [lang, setLang] = useState<'en' | 'ur'>('en');
-  const isUrdu = lang === 'ur';
+  const [lang] = useState<'en'>('en');
+  const isUrdu = false;
 
   // Primary navigation tabs
   // Students and parents ONLY have access to the Student Achievers recognition board and safety guidelines
@@ -764,15 +764,6 @@ export default function NetworkPage({
         </div>
 
         <div className="network-header-actions" style={{ gap: 8 }}>
-          <button
-            type="button"
-            className="net-lang-btn"
-            onClick={() => setLang(l => l === 'en' ? 'ur' : 'en')}
-            title="Toggle English / Urdu"
-          >
-            <Globe size={14} />
-            <span>{isUrdu ? 'English' : 'اردو'}</span>
-          </button>
         </div>
       </div>
 

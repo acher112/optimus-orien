@@ -15,7 +15,7 @@ export const PublicMethodologyPage: React.FC<MethodologyPageProps> = ({
   onNavigate, 
   lang = 'en' 
 }) => {
-  const isUrdu = lang === 'ur';
+  const isUrdu = false;
   const [data, setData] = useState<MethodologyConfigData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 

@@ -15,7 +15,7 @@ export const PublicSchoolComparePage: React.FC<ComparePageProps> = ({
   onNavigate, 
   lang = 'en' 
 }) => {
-  const isUrdu = lang === 'ur';
+  const isUrdu = false;
   const [schools, setSchools] = useState<PublicCampusDetailData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);

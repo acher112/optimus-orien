@@ -104,7 +104,7 @@ export default function LandingNavbar({
                 borderRadius: '8px'
               }}
             >
-              {locale === 'ur' ? 'اسکول تلاش کریں' : 'Find a School'}
+              Find a School
             </a>
             <a
               href="#contact"

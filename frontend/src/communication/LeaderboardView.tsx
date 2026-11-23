@@ -104,7 +104,7 @@ export default function LeaderboardView({ notify }: LeaderboardViewProps) {
 
   return (
     <div className="comm-page-wrapper">
-      <div className="comm-container">
+      <div className="comm-suite-container">
         {/* Top Kicker */}
         <div className="comm-kicker comm-kicker-leaderboard">
           <Trophy size={13} /> Institutional &amp; Stratified Academic Leaderboards

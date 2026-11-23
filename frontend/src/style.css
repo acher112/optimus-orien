@@ -5053,3 +5053,78 @@ html, body {
   }
 }
 
+/* ==========================================================================
+   Sidebar Typography & Contrast Enhancements (Requested Bold Styling)
+   ========================================================================== */
+.sidebar .nav-label {
+  font-size: 11px !important;
+  color: #334155 !important;
+  font-weight: 850 !important;
+  letter-spacing: 1.4px !important;
+  text-transform: uppercase !important;
+  margin: 18px 16px 8px !important;
+}
+
+.sidebar .nav-sublabel {
+  font-size: 9.5px !important;
+  color: #475569 !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.3px !important;
+  text-transform: uppercase !important;
+  margin: 14px 16px 6px !important;
+}
+
+.sidebar .nav-item {
+  font-size: 13.5px !important;
+  font-weight: 750 !important;
+  color: #334155 !important;
+  padding: 10px 14px !important;
+}
+
+.sidebar .nav-item:hover {
+  background: #f1f0fe !important;
+  color: #4f46e5 !important;
+  font-weight: 800 !important;
+}
+
+.sidebar .nav-item.selected {
+  background: #ede9fe !important;
+  color: #5b21b6 !important;
+  font-weight: 850 !important;
+}
+
+.sidebar .nav-item-title {
+  font-weight: 750 !important;
+  color: inherit !important;
+}
+
+.sidebar .workspace-name b {
+  font-size: 12.5px !important;
+  font-weight: 850 !important;
+  color: #1e293b !important;
+}
+
+.sidebar .workspace-name small {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+}
+
+/* Dark mode sidebar contrast */
+.dark .sidebar .nav-label {
+  color: #cbd5e1 !important;
+}
+
+.dark .sidebar .nav-sublabel {
+  color: #94a3b8 !important;
+}
+
+.dark .sidebar .nav-item {
+  color: #e2e8f0 !important;
+}
+
+.dark .sidebar .nav-item.selected {
+  background: #312e81 !important;
+  color: #e0e7ff !important;
+}
+
