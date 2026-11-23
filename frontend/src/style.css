@@ -5209,3 +5209,17 @@ html, body {
   stroke: var(--brand-primary-dark-text, #22d3ee) !important;
 }
 
+/* Breadcrumb Campus Pill - Dynamic Theme Color */
+.breadcrumb-campus-pill {
+  background: var(--brand-primary-light, rgba(6, 182, 212, 0.12)) !important;
+  color: var(--brand-primary-text, var(--brand-primary, #06b6d4)) !important;
+  border: 1px solid var(--brand-primary-border, rgba(6, 182, 212, 0.28)) !important;
+}
+
+.dark .breadcrumb-campus-pill {
+  background: var(--brand-primary-dark-bg, rgba(6, 182, 212, 0.22)) !important;
+  color: var(--brand-primary-dark-text, #22d3ee) !important;
+  border-color: rgba(6, 182, 212, 0.4) !important;
+}
+
+

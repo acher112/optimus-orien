@@ -2424,7 +2424,7 @@ function App() {
                           <b>{c.name}</b>
                           <small>{campObj.principal_name ? `Principal: ${campObj.principal_name} • ` : ''}Teaching Branch</small>
                         </div>
-                        {isSelected && <Check size={16} color="var(--brand-primary, #715ee8)" />}
+                        {isSelected && <Check size={16} color="var(--brand-primary, #06b6d4)" />}
                       </button>
                     );
                   })}
@@ -2471,7 +2471,7 @@ function App() {
                   <b>All Campuses</b>
                   <small>Network-wide aggregated view</small>
                 </div>
-                {activeCampusId === null && <Check size={16} color="var(--brand-primary, #715ee8)" />}
+                {activeCampusId === null && <Check size={16} color="var(--brand-primary, #06b6d4)" />}
               </button>
 
               {campuses.map(c => {
@@ -2492,7 +2492,7 @@ function App() {
                       <b>{c.name}</b>
                       <small>{c.principal_name ? `Principal: ${c.principal_name} • ` : ''}{c.code || 'Campus'} {c.city ? `• ${c.city}` : ''}</small>
                     </div>
-                    {isSelected && <Check size={16} color="var(--brand-primary, #715ee8)" />}
+                    {isSelected && <Check size={16} color="var(--brand-primary, #06b6d4)" />}
                   </button>
                 );
               })}
@@ -2839,7 +2839,23 @@ function App() {
             <button className="mobile-menu" onClick={() => setSidebar(true)} aria-label="Open menu"><Menu size={21} /></button>
             <div className="breadcrumb">
               Workspace <ChevronRight size={14} /> <strong>{page === 'Overview' && user.role === 'teacher' ? 'My Home' : page === 'Plan & Billing' ? 'Upgrade Plans' : page}</strong>
-              {activeCampus && <span style={{ marginLeft: 8, padding: '2px 8px', background: '#eeeaff', color: '#6353d8', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{activeCampus.name}</span>}
+              {activeCampus && (
+                <span
+                  className="breadcrumb-campus-pill"
+                  style={{
+                    marginLeft: 8,
+                    padding: '2px 8px',
+                    background: 'var(--brand-primary-light, rgba(6, 182, 212, 0.12))',
+                    color: 'var(--brand-primary-text, var(--brand-primary, #06b6d4))',
+                    border: '1px solid var(--brand-primary-border, rgba(6, 182, 212, 0.28))',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 700
+                  }}
+                >
+                  {activeCampus.name}
+                </span>
+              )}
               {user.role === 'teacher' && teacherScope?.badges && teacherScope.badges.map((b: any, idx: number) => (
                 <span key={idx} style={{
                   marginLeft: 6,
@@ -2870,7 +2886,7 @@ function App() {
                   boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
                 }}
               >
-                <Building2 size={15} color="var(--brand-primary, #6366f1)" />
+                <Building2 size={15} color="var(--brand-primary, #06b6d4)" />
                 <select
                   style={{
                     border: 'none',
@@ -2942,7 +2958,7 @@ function App() {
                 <div className="notification-menu">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
                     <b style={{ fontSize: 13, color: '#1e293b' }}>Recent notifications & announcements</b>
-                    {loadingNotifs && <RefreshCw size={13} className="spin" style={{ color: '#6366f1' }} />}
+                    {loadingNotifs && <RefreshCw size={13} className="spin" style={{ color: 'var(--brand-primary, #06b6d4)' }} />}
                   </div>
                   {popNotifs.length > 0 ? (
                     <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -3484,7 +3500,7 @@ function App() {
                     {(activeCampus || campuses.length > 0) && (
                       <>
                         <span style={{ color: '#cbd5e1' }}>•</span>
-                        <span style={{ color: 'var(--brand-primary, #6366f1)', fontWeight: 600 }}>
+                        <span style={{ color: 'var(--brand-primary, #06b6d4)', fontWeight: 600 }}>
                           Campus: {activeCampus ? activeCampus.name : 'All Campuses'}
                         </span>
                         {activeCampus?.principal_name && (
@@ -3502,7 +3518,7 @@ function App() {
                   {campuses.length > 1 && ['organisation_admin', 'school_admin'].includes(user.role) ? (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', maxWidth: '100%', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                        <Building2 size={16} color="var(--brand-primary, #06b6d4)" />
                         <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Campus:</span>
                       </div>
                       <select
@@ -3546,7 +3562,7 @@ function App() {
                   ) : (
                     (activeCampus || (campuses.length > 0 && campuses[0])) && (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', maxWidth: '100%', flexWrap: 'wrap' }}>
-                        <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                        <Building2 size={16} color="var(--brand-primary, #06b6d4)" />
                         <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>
                           Campus: {(activeCampus || campuses[0]).name}
                         </span>
@@ -4437,7 +4453,7 @@ function App() {
                       </label>
                     ) : (
                       <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e2e8f0' }}>
-                        <Building2 size={16} color="var(--brand-primary, #6366f1)" />
+                        <Building2 size={16} color="var(--brand-primary, #06b6d4)" />
                         <span>Assigned Campus: <strong>{activeCampus ? activeCampus.name : (campuses[0]?.name || 'Assigned Campus')}</strong></span>
                       </div>
                     )}
