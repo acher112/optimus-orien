@@ -6043,59 +6043,6 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
       </div>
       <div className="login-right">
         <div className="login-form-wrap login-card">
-          {/* Top Navigation Bar: Home & Find a School */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <button
-              type="button"
-              onClick={() => {
-                window.history.pushState(null, '', '/');
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: '#f8fafc',
-                border: '1px solid #cbd5e1',
-                borderRadius: 8,
-                padding: '7px 14px',
-                fontSize: '0.84rem',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                transition: 'all 0.15s ease'
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#334155'; }}
-              title="Return to Landing Page (Home)"
-            >
-              <Home size={15} color="#4f46e5" />
-              <span>Home (Landing Page)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                window.history.pushState(null, '', '/schools');
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '0.84rem',
-                fontWeight: 600,
-                color: '#4f46e5',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4
-              }}
-            >
-              <span>Find a School →</span>
-            </button>
-          </div>
-
           <div className="login-welcome-icon"><GraduationCap size={26} /></div>
 
           <div className="login-tabs">
@@ -6218,7 +6165,7 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
                   <button
                     type="button"
                     className="text-link-btn"
-                    style={{ fontSize: 12, color: 'var(--brand-primary, #6366f1)', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                    style={{ fontSize: 12, color: 'var(--brand-primary, #06b6d4)', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
                     onClick={() => { switchTab('forgot'); setForgotStep(1); }}
                   >
                     Forgot password?
@@ -7058,7 +7005,7 @@ function AuditChangesCell({ changes, action }: { changes: any; action?: any }) {
             {d.from === null || d.from === undefined ? '—' : String(d.from)}
           </span>
           <span style={{ color: '#cbd5e1' }}>→</span>
-          <span style={{ fontWeight: 600, color: 'var(--brand-primary, #715ee8)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--brand-primary, #06b6d4)' }}>
             {d.to === null || d.to === undefined ? '—' : String(d.to)}
           </span>
         </div>
@@ -7113,7 +7060,7 @@ function AuditChangesCell({ changes, action }: { changes: any; action?: any }) {
               border: 'none',
               padding: 0,
               fontSize: 10,
-              color: 'var(--brand-primary, #715ee8)',
+              color: 'var(--brand-primary, #06b6d4)',
               cursor: 'pointer',
               textDecoration: 'underline'
             }}

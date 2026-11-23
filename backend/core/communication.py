@@ -84,7 +84,7 @@ def _message_row(m):
         'sender_id': m.sender_id,
         'sender_name': m.sender.get_full_name() or m.sender.username,
         'sender_role': m.sender.role,
-        'sender_avatar_color': getattr(m.sender, 'avatar_color', '#8276da'),
+        'sender_avatar_color': getattr(m.sender, 'avatar_color', '#06b6d4'),
         'message': m.message,
         'is_teacher_answer': bool(m.is_teacher_answer),
         'reply_to': reply_snippet,

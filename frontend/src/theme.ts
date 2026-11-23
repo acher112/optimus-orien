@@ -69,6 +69,16 @@ function adjustBrightness(hex: string, percent: number): string {
 export function getStoredTheme(): { mode: ThemeMode; colorHex: string; color: string } {
   if (typeof window === 'undefined') return { mode: 'light', colorHex: '#06b6d4', color: '#06b6d4' };
   const mode = (localStorage.getItem('optimus_theme_mode') as ThemeMode) || 'light';
+  
+  // Migrate legacy default purple/indigo to new default Aqua Cyan (#06b6d4)
+  if (localStorage.getItem('optimus_theme_migrated_cyan') !== 'true') {
+    const existing = localStorage.getItem('optimus_accent_hex');
+    if (!existing || existing === '#715ee8' || existing === '#6366f1' || existing === 'purple' || existing === 'indigo' || existing === '#8276da') {
+      localStorage.setItem('optimus_accent_hex', '#06b6d4');
+    }
+    localStorage.setItem('optimus_theme_migrated_cyan', 'true');
+  }
+
   const raw = localStorage.getItem('optimus_accent_hex') || '#06b6d4';
   const colorHex = resolveHex(raw);
   return { mode, colorHex, color: colorHex };

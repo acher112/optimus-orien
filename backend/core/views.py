@@ -308,7 +308,7 @@ def user_payload(u):
   'first_name': u.first_name,
   'last_name': u.last_name,
   'email': u.email,
-  'avatar_color': getattr(u, 'avatar_color', '#8276da'),
+  'avatar_color': getattr(u, 'avatar_color', '#06b6d4'),
   'avatar_image': getattr(u, 'avatar_image', ''),
   'role': u.role,
   'organisation': u.organisation_id,

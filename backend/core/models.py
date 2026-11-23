@@ -46,7 +46,7 @@ class User(AbstractUser):
  role=models.CharField(max_length=32,choices=ROLE_CHOICES,default='teacher')
  organisation=models.ForeignKey(Organisation,null=True,blank=True,on_delete=models.PROTECT)
  school=models.ForeignKey(School,null=True,blank=True,on_delete=models.PROTECT)
- avatar_color=models.CharField(max_length=12,default='#8276da')
+ avatar_color=models.CharField(max_length=12,default='#06b6d4')
  avatar_image=models.TextField(blank=True,default='')
  must_change_password=models.BooleanField(default=False,help_text='Force password change on next login')
  def clean(self):

@@ -262,7 +262,7 @@ def student_dashboard(request):
             'class_id': school_class.id if school_class else None,
             'class_name': class_name,
             'section': school_class.section if school_class else '',
-            'avatar_color': getattr(student.user, 'avatar_color', '#8276da') if student.user else '#8276da'
+            'avatar_color': getattr(student.user, 'avatar_color', '#06b6d4') if student.user else '#06b6d4'
         },
         'attendance': {
             'rate': att_rate,
