@@ -3652,5 +3652,104 @@ class NetworkAuditEvent(models.Model):
         return f"NetworkAuditEvent({self.event_type}, actor={self.actor_id}, at={self.created_at})"
 
 
+# =============================================================================
+# ONLINE ASSESSMENTS & QUIZ COMPETITIONS MODELS
+# =============================================================================
+
+class QuizCompetition(models.Model):
+    """
+    Official Worldwide Competitions and Student Practice Challenges.
+    """
+    title = models.CharField(max_length=200, db_index=True)
+    sponsor_school = models.ForeignKey(School, null=True, blank=True, on_delete=models.SET_NULL, related_name='sponsored_competitions')
+    sponsor_name = models.CharField(max_length=150, blank=True, default='')
+    subject = models.CharField(max_length=100, db_index=True)
+    grade_level = models.CharField(max_length=50, default='Grade 8')
+    curriculum = models.CharField(max_length=100, default='Cambridge IGCSE')
+    duration_minutes = models.PositiveIntegerField(default=15)
+    max_participants = models.PositiveIntegerField(default=1000)
+    registered_count = models.PositiveIntegerField(default=0)
+    eligible_countries = models.CharField(max_length=200, default='All Countries')
+    question_format_desc = models.CharField(max_length=200, default='Numerical, MCQ, True/False, Matching')
+    total_marks = models.PositiveIntegerField(default=40)
+    is_official = models.BooleanField(default=True, db_index=True)
+    difficulty = models.CharField(max_length=50, default='Intermediate')  # Foundation, Intermediate, Advanced, Olympiad
+    scope = models.CharField(max_length=50, default='public')  # public, school, invite_only
+    invite_code = models.CharField(max_length=30, blank=True, default='', db_index=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_quizzes')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Quiz Competition"
+        ordering = ['-is_official', '-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({'Official' if self.is_official else 'Practice Drill'})"
+
+
+class QuizQuestion(models.Model):
+    """
+    Questions belonging to an assessment/competition.
+    Supports numerical input, multiple choice, true/false, and concept matching.
+    """
+    competition = models.ForeignKey(QuizCompetition, on_delete=models.CASCADE, related_name='questions')
+    order = models.PositiveIntegerField(default=1)
+    prompt = models.TextField()
+    question_type = models.CharField(
+        max_length=50,
+        default='multiple_choice',
+        choices=[
+            ('numerical', 'Numerical Value'),
+            ('multiple_choice', 'Multiple Choice Single Select'),
+            ('true_false', 'True or False'),
+            ('matching', 'Concept / Unit Matching Pairs'),
+            ('multi_select', 'Multiple Select'),
+            ('fill_blank', 'Fill in the Blank'),
+            ('short_text', 'Short Text Answer'),
+            ('ordering', 'Ordering / Sequencing')
+        ]
+    )
+    options = models.JSONField(default=list, blank=True)
+    correct_answer = models.JSONField(default=dict, blank=True)
+    tolerance = models.FloatField(null=True, blank=True, default=0.0)
+    unit = models.CharField(max_length=50, blank=True, default='')
+    explanation = models.TextField(blank=True, default='')
+    marks = models.PositiveIntegerField(default=10)
+
+    class Meta:
+        verbose_name = "Quiz Question"
+        ordering = ['competition', 'order']
+
+    def __str__(self):
+        return f"Q{self.order}: {self.prompt[:40]}... ({self.competition.title})"
+
+
+class QuizAttempt(models.Model):
+    """
+    Candidate attempts with automatic grading, score %, accuracy %, completion time,
+    single-attempt enforcement for official competitions, and step-by-step review.
+    """
+    competition = models.ForeignKey(QuizCompetition, on_delete=models.CASCADE, related_name='attempts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_attempts')
+    student = models.ForeignKey(Student, null=True, blank=True, on_delete=models.SET_NULL, related_name='quiz_attempts')
+    score_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    raw_score = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
+    total_marks = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
+    accuracy_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    time_spent_seconds = models.PositiveIntegerField(default=0)
+    submitted_answers = models.JSONField(default=dict, blank=True)
+    graded_breakdown = models.JSONField(default=list, blank=True)
+    is_official = models.BooleanField(default=True, db_index=True)
+    submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Quiz Attempt"
+        ordering = ['-score_percentage', 'time_spent_seconds', '-submitted_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.competition.title}: {self.score_percentage}% ({self.time_spent_seconds}s)"
+
+
+
 
 

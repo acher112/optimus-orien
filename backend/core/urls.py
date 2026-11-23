@@ -7,7 +7,7 @@ from . import (
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
     parent_views, landing_views, subscription_views, record_views, teacher_performance_views,
-    public_directory_views, network_views
+    public_directory_views, network_views, communication_views
 )
 
 r = DefaultRouter()
@@ -404,6 +404,27 @@ urlpatterns = [
     path('network/chat/keys/<int:user_id>/', network_views.PublicUserKeyBundleView.as_view()),
     path('network/chat/conversations/', network_views.ConversationsView.as_view()),
     path('network/chat/conversations/<int:conversation_id>/messages/', network_views.ConversationMessagesView.as_view()),
+
+    # Communication Suite Endpoints (Leaderboard, Community, Online Assessments)
+    path('communication/leaderboard/schools/', communication_views.LeaderboardSchoolsView.as_view()),
+    path('communication/leaderboard/principals/', communication_views.LeaderboardPrincipalsView.as_view()),
+    path('communication/leaderboard/teachers/', communication_views.LeaderboardTeachersView.as_view()),
+    path('communication/leaderboard/students/', communication_views.LeaderboardStudentsView.as_view()),
+    path('communication/leaderboard/schools/<int:pk>/', communication_views.SchoolDetailModalView.as_view()),
+    path('communication/leaderboard/methodology/', communication_views.RankingMethodologyView.as_view()),
+    path('communication/leaderboard/privacy/', communication_views.PrivacySettingsView.as_view()),
+
+    path('communication/community/directory/', communication_views.CommunityDirectoryView.as_view()),
+    path('communication/community/profile/<str:member_type>/<int:pk>/', communication_views.MemberProfileDetailView.as_view()),
+    path('communication/community/connections/', communication_views.CommunityConnectionsView.as_view()),
+
+    path('communication/assessments/competitions/', communication_views.AssessmentsCompetitionsListView.as_view()),
+    path('communication/assessments/competitions/<int:pk>/', communication_views.AssessmentsCompetitionDetailView.as_view()),
+    path('communication/assessments/competitions/<int:pk>/attempt/', communication_views.AssessmentsAttemptSubmitView.as_view()),
+    path('communication/assessments/create-quiz/', communication_views.AssessmentsCreateQuizView.as_view()),
+    path('communication/assessments/join/<str:code>/', communication_views.AssessmentsJoinByCodeView.as_view()),
+    path('communication/assessments/leaderboard/', communication_views.AssessmentsLeaderboardView.as_view()),
+    path('communication/assessments/peer-scores/<int:pk>/', communication_views.AssessmentsPeerScoresView.as_view()),
 
     path('', include(r.urls))
 

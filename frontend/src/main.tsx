@@ -9,7 +9,7 @@ import {
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle,
-  CreditCard, Lock, Crown, Globe, Home, Share2
+  CreditCard, Lock, Crown, Globe, Home, Share2, Trophy
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -43,7 +43,9 @@ const PublicSchoolsPage = React.lazy(() => import('./public-directory/PublicScho
 const PublicSchoolProfilePage = React.lazy(() => import('./public-directory/PublicSchoolProfilePage'));
 const PublicSchoolComparePage = React.lazy(() => import('./public-directory/PublicSchoolComparePage').then(m => ({ default: m.PublicSchoolComparePage })));
 const PublicMethodologyPage = React.lazy(() => import('./public-directory/PublicMethodologyPage').then(m => ({ default: m.PublicMethodologyPage })));
-const NetworkPage = React.lazy(() => import('./network/NetworkPage'));
+const LeaderboardView = React.lazy(() => import('./communication/LeaderboardView'));
+const CommunityView = React.lazy(() => import('./communication/CommunityView'));
+const OnlineAssessmentsView = React.lazy(() => import('./communication/OnlineAssessmentsView'));
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
@@ -88,6 +90,7 @@ const ViewLoadingSkeleton = () => (
   </div>
 );
 import './style.css';
+import './communication/communication.css';
 
 const WORKSPACE_NAV = [
   { name: 'Overview', icon: LayoutDashboard },
@@ -117,7 +120,10 @@ const WORKSPACE_NAV = [
   { name: 'At-risk list', icon: AlertCircle, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Risk criteria', icon: SlidersHorizontal, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Review cases', icon: ShieldAlert, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
-  { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student'] },
+  { name: 'Communication', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
+  { name: 'Leaderboard', icon: Trophy, childOf: 'Communication', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
+  { name: 'Community', icon: Globe, childOf: 'Communication', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
+  { name: 'Online Assessments & Quiz Competitions', icon: ClipboardCheck, childOf: 'Communication', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -129,8 +135,6 @@ const WORKSPACE_NAV = [
   { name: 'Teacher Performance', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Set Criteria', icon: SlidersHorizontal, childOf: 'Teacher Performance', roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Evaluation', icon: Award, childOf: 'Teacher Performance', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
-  // Professional Academic Network (Stage 2)
-  { name: 'Network', icon: Share2, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent'] },
 ];
 
 function BriefcaseIcon(props: any) {
@@ -232,18 +236,20 @@ const NAV_GROUPS = [
   { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
   { sublabel: 'RECORD & ARCHIVE', items: ['Record'] },
   { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance', 'Set Criteria', 'Evaluation'] },
-  { sublabel: 'COMMUNICATION & BROADCASTS', items: ['Communication', 'Announcements'] },
+  { sublabel: 'COMMUNICATION & NETWORKING', items: ['Communication', 'Leaderboard', 'Community', 'Online Assessments & Quiz Competitions', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
-  { sublabel: 'PROFESSIONAL COMMUNITY', items: ['Network'] },
 ];
 
 // Mapping from navigation page names to minimum required subscription tier
 const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   // Free tier
   'Overview': 'free',
-  'Network': 'free',
+  'Communication': 'free',
+  'Leaderboard': 'free',
+  'Community': 'free',
+  'Online Assessments & Quiz Competitions': 'free',
   'Campuses': 'free',
   'Campus setup': 'free',
   'Academic years': 'free',
@@ -289,7 +295,6 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   'Fees': 'standard',
   'Student Fees': 'standard',
   'Data import': 'standard',
-  'Communication': 'standard',
   'Staff Salaries': 'standard',
   'Finance': 'standard',
   'Reports': 'standard',
@@ -816,8 +821,12 @@ function App() {
 
   useEffect(() => {
     const handleLocationChange = () => {
+      const p = window.location.pathname.toLowerCase();
       setCurrentPathname(window.location.pathname);
       setCurrentSearch(window.location.search);
+      if (p.includes('leaderboard')) setPage('Leaderboard');
+      else if (p.includes('community')) setPage('Community');
+      else if (p.includes('assessment') || p.includes('quiz')) setPage('Online Assessments & Quiz Competitions');
     };
     window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('optimus_navigate', handleLocationChange);
@@ -886,6 +895,13 @@ function App() {
   });
   const [page, setPage] = useState<string>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const p = window.location.pathname.toLowerCase();
+        if (p.includes('leaderboard')) return 'Leaderboard';
+        if (p.includes('community')) return 'Community';
+        if (p.includes('assessment') || p.includes('quiz')) return 'Online Assessments & Quiz Competitions';
+        if (p.includes('communication')) return 'Communication';
+      }
       const storedUserStr = localStorage.getItem('optimus_user');
       if (storedUserStr) {
         const u = JSON.parse(storedUserStr);
@@ -1494,6 +1510,17 @@ function App() {
     setResourceFilters(filters);
     setSidebar(false);
     scrollToPageTop();
+    if (typeof window !== 'undefined') {
+      const slugMap: Record<string, string> = {
+        'Leaderboard': 'leaderboard',
+        'Community': 'community',
+        'Online Assessments & Quiz Competitions': 'assessments',
+        'Communication': 'communication'
+      };
+      if (slugMap[target]) {
+        try { window.history.pushState(null, '', `/app/${slugMap[target]}`); } catch {}
+      }
+    }
   };
 
   const handleResourceFilterChange = useCallback((newFilters: Record<string, any>) => {
@@ -2505,10 +2532,61 @@ function App() {
               {isItemUnlocked('Teacher Performance') && renderNavButton('Evaluation', 'My Performance', Award)}
               {teacherScope?.can_view_my_class && isItemUnlocked('Review cases') && renderNavButton('Review cases', 'Review Cases', ShieldAlert)}
 
-              <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION</div>
-              {isItemUnlocked('Communication') && renderNavButton('Communication', 'Communication', MessageSquare)}
+              <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION & NETWORKING</div>
+              <div className="nav-dropdown-group">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const isOpen = openDropdowns['Communication'];
+                    if (isOpen) {
+                      toggleDropdown('Communication');
+                    } else {
+                      setOpenDropdowns(prev => ({ ...prev, Communication: true }));
+                      switchPage('Leaderboard');
+                    }
+                  }}
+                  className={'nav-item nav-dropdown-btn ' + (['Communication', 'Leaderboard', 'Community', 'Online Assessments & Quiz Competitions'].includes(page) ? 'selected ' : '') + (openDropdowns['Communication'] ? 'dropdown-open' : '')}
+                >
+                  <MessageSquare size={19} strokeWidth={1.9} />
+                  <span className="nav-item-title">Communication</span>
+                  <span
+                    className={'nav-chevron-wrap' + (openDropdowns['Communication'] ? ' open' : '')}
+                    onClick={(e) => toggleDropdown('Communication', e)}
+                    title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
+                  >
+                    <ChevronDown size={15} strokeWidth={2.2} />
+                  </span>
+                </button>
+                {openDropdowns['Communication'] && (
+                  <div className="nav-dropdown-children">
+                    <button
+                      type="button"
+                      onClick={() => switchPage('Leaderboard')}
+                      className={'nav-item nav-child nav-child-leaderboard ' + (page === 'Leaderboard' ? 'selected' : '')}
+                    >
+                      <Trophy size={14} strokeWidth={1.8} />
+                      <span>Leaderboard</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchPage('Community')}
+                      className={'nav-item nav-child nav-child-community ' + (page === 'Community' ? 'selected' : '')}
+                    >
+                      <Globe size={14} strokeWidth={1.8} />
+                      <span>Community</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchPage('Online Assessments & Quiz Competitions')}
+                      className={'nav-item nav-child nav-child-assessments ' + (['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) ? 'selected' : '')}
+                    >
+                      <ClipboardCheck size={14} strokeWidth={1.8} />
+                      <span>Online Assessments</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               {renderNavButton('Announcements', 'Announcements', Megaphone)}
-              {renderNavButton('Network', 'Network', Share2)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SYSTEM</div>
@@ -2529,8 +2607,60 @@ function App() {
               {isItemUnlocked('Study materials') && renderNavButton('Study materials', 'Study Materials', BookOpen)}
               {isItemUnlocked('Examinations') && renderNavButton('Examinations', 'Examinations', Award)}
               {isItemUnlocked('Timetable') && renderNavButton('Timetable', 'Timetable', CalendarDays)}
+              <div className="nav-dropdown-group">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const isOpen = openDropdowns['Communication'];
+                    if (isOpen) {
+                      toggleDropdown('Communication');
+                    } else {
+                      setOpenDropdowns(prev => ({ ...prev, Communication: true }));
+                      switchPage('Leaderboard');
+                    }
+                  }}
+                  className={'nav-item nav-dropdown-btn ' + (['Communication', 'Leaderboard', 'Community', 'Online Assessments & Quiz Competitions'].includes(page) ? 'selected ' : '') + (openDropdowns['Communication'] ? 'dropdown-open' : '')}
+                >
+                  <MessageSquare size={19} strokeWidth={1.9} />
+                  <span className="nav-item-title">Communication</span>
+                  <span
+                    className={'nav-chevron-wrap' + (openDropdowns['Communication'] ? ' open' : '')}
+                    onClick={(e) => toggleDropdown('Communication', e)}
+                    title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
+                  >
+                    <ChevronDown size={15} strokeWidth={2.2} />
+                  </span>
+                </button>
+                {openDropdowns['Communication'] && (
+                  <div className="nav-dropdown-children">
+                    <button
+                      type="button"
+                      onClick={() => switchPage('Leaderboard')}
+                      className={'nav-item nav-child nav-child-leaderboard ' + (page === 'Leaderboard' ? 'selected' : '')}
+                    >
+                      <Trophy size={14} strokeWidth={1.8} />
+                      <span>Leaderboard</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchPage('Community')}
+                      className={'nav-item nav-child nav-child-community ' + (page === 'Community' ? 'selected' : '')}
+                    >
+                      <Globe size={14} strokeWidth={1.8} />
+                      <span>Community</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchPage('Online Assessments & Quiz Competitions')}
+                      className={'nav-item nav-child nav-child-assessments ' + (['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) ? 'selected' : '')}
+                    >
+                      <ClipboardCheck size={14} strokeWidth={1.8} />
+                      <span>Online Assessments</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
-              {renderNavButton('Network', 'Student Achievers', Award)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SECURITY</div>
@@ -2546,7 +2676,11 @@ function App() {
               {NAV_GROUPS.map(group => {
                 const isAdmin = group.adminLabel;
                 if (isAdmin && !['organisation_admin', 'school_admin'].includes(user.role)) return null;
-                const navItems = WORKSPACE_NAV.filter(item => group.items.includes(item.name) && ((item as any).roles ? (item as any).roles.includes(user.role) : (!item.adminOnly || ['organisation_admin', 'school_admin'].includes(user.role))));
+                const navItems = WORKSPACE_NAV.filter(item => group.items.includes(item.name) && (
+                  user.is_superuser ||
+                  ['platform_admin', 'owner'].includes(user.role) ||
+                  ((item as any).roles ? (item as any).roles.includes(user.role) : (!item.adminOnly || ['organisation_admin', 'school_admin'].includes(user.role)))
+                ));
                 // Filter out items that are currently locked (they are moved to Paid Features dropdown)
                 const visibleNavItems = navItems.filter((item: any) => {
                   if (item.childOf) {
@@ -2565,7 +2699,7 @@ function App() {
                       const children = visibleNavItems.filter((c: any) => c.childOf === name);
                       const isDropdown = children.length > 0;
                       const isChildActive = isDropdown && children.some((c: any) => c.name === page);
-                      const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page)) || (name === 'Teacher Performance' && ['Evaluation', 'Set Criteria', 'Teacher Evaluation', 'Teacher Criteria'].includes(page));
+                      const isSelfActive = page === name || (name === 'Student fees' && ['Fees', 'Student Fees'].includes(page)) || (name === 'Teacher Performance' && ['Evaluation', 'Set Criteria', 'Teacher Evaluation', 'Teacher Criteria'].includes(page)) || (name === 'Communication' && ['Leaderboard', 'Community', 'Online Assessments & Quiz Competitions', 'Online Assessments'].includes(page));
                       const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
 
                       if (isDropdown) {
@@ -2597,13 +2731,17 @@ function App() {
                               <div className="nav-dropdown-children">
                                 {children.map((child: any) => {
                                   const ChildIcon = child.icon;
-                                  const isChildSelected = page === child.name;
+                                  const isChildSelected = page === child.name || (child.name === 'Online Assessments & Quiz Competitions' && ['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page));
+                                  let childExtraClass = '';
+                                  if (child.name === 'Leaderboard') childExtraClass = ' nav-child-leaderboard';
+                                  else if (child.name === 'Community') childExtraClass = ' nav-child-community';
+                                  else if (child.name.includes('Assessments') || child.name.includes('Quiz')) childExtraClass = ' nav-child-assessments';
                                   return (
                                     <button
                                       key={child.name}
                                       type="button"
                                       onClick={() => switchPage(child.name)}
-                                      className={'nav-item nav-child ' + (isChildSelected ? 'selected' : '')}
+                                      className={'nav-item nav-child' + childExtraClass + ' ' + (isChildSelected ? 'selected' : '')}
                                     >
                                       <ChildIcon size={14} strokeWidth={1.8} />
                                       <span>{child.name}</span>
@@ -4191,15 +4329,19 @@ function App() {
               </ErrorBoundary>
             )
           )}
-          {page === 'Network' && (
-            <ErrorBoundary fallbackTitle="Network">
-              <NetworkPage
-                user={user}
-                notify={notify}
-                activeCampusId={activeCampusId}
-                campuses={campuses}
-                onNavigate={switchPage}
-              />
+          {page === 'Leaderboard' && (
+            <ErrorBoundary fallbackTitle="Leaderboard">
+              <LeaderboardView notify={notify} />
+            </ErrorBoundary>
+          )}
+          {page === 'Community' && (
+            <ErrorBoundary fallbackTitle="Community">
+              <CommunityView notify={notify} />
+            </ErrorBoundary>
+          )}
+          {['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) && (
+            <ErrorBoundary fallbackTitle="Online Assessments">
+              <OnlineAssessmentsView notify={notify} />
             </ErrorBoundary>
           )}
           </React.Suspense>
