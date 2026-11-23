@@ -92,6 +92,7 @@ const ViewLoadingSkeleton = () => (
 );
 import './style.css';
 import './communication/communication.css';
+import { getNavColorConfig } from './sidebarColors';
 
 const WORKSPACE_NAV = [
   { name: 'Overview', icon: LayoutDashboard },
@@ -1611,15 +1612,26 @@ function App() {
     extraBadge?: React.ReactNode
   ) => {
     const isSelected = page === targetPage;
+    const navColor = getNavColorConfig(targetPage);
     return (
       <button
         key={targetPage}
         type="button"
         onClick={() => switchPage(targetPage)}
         className={'nav-item ' + (isSelected ? 'selected' : '')}
+        style={{
+          '--nav-color': navColor.color,
+          '--nav-bg': navColor.bg,
+          '--nav-border': navColor.border,
+          '--nav-grad-start': navColor.gradStart,
+          '--nav-grad-end': navColor.gradEnd,
+          '--nav-glow': navColor.glow,
+        } as React.CSSProperties}
       >
-        <IconComponent size={19} strokeWidth={1.9} />
-        <span>{label}</span>
+        <span className="nav-icon-badge">
+          <IconComponent size={17} strokeWidth={2.1} />
+        </span>
+        <span className="nav-item-title">{label}</span>
         {extraBadge}
       </button>
     );
@@ -2535,55 +2547,115 @@ function App() {
 
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION & NETWORKING</div>
               <div className="nav-dropdown-group">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const isOpen = openDropdowns['Communication'];
-                    if (isOpen) {
-                      toggleDropdown('Communication');
-                    } else {
-                      setOpenDropdowns(prev => ({ ...prev, Communication: true }));
-                      switchPage('Leaderboard');
-                    }
-                  }}
-                  className={'nav-item nav-dropdown-btn ' + (['Communication', 'Leaderboard', 'Community', 'Online Assessments & Quiz Competitions'].includes(page) ? 'selected ' : '') + (openDropdowns['Communication'] ? 'dropdown-open' : '')}
-                >
-                  <MessageSquare size={19} strokeWidth={1.9} />
-                  <span className="nav-item-title">Communication</span>
-                  <span
-                    className={'nav-chevron-wrap' + (openDropdowns['Communication'] ? ' open' : '')}
-                    onClick={(e) => toggleDropdown('Communication', e)}
-                    title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
-                  >
-                    <ChevronDown size={15} strokeWidth={2.2} />
-                  </span>
-                </button>
+                {(() => {
+                  const commColor = getNavColorConfig('Communication');
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isOpen = openDropdowns['Communication'];
+                        if (isOpen) {
+                          toggleDropdown('Communication');
+                        } else {
+                          setOpenDropdowns(prev => ({ ...prev, Communication: true }));
+                          switchPage('Leaderboard');
+                        }
+                      }}
+                      className={'nav-item nav-dropdown-btn ' + (['Communication', 'Leaderboard', 'Community', 'Online Assessments & Quiz Competitions'].includes(page) ? 'selected ' : '') + (openDropdowns['Communication'] ? 'dropdown-open' : '')}
+                      style={{
+                        '--nav-color': commColor.color,
+                        '--nav-bg': commColor.bg,
+                        '--nav-border': commColor.border,
+                        '--nav-grad-start': commColor.gradStart,
+                        '--nav-grad-end': commColor.gradEnd,
+                        '--nav-glow': commColor.glow,
+                      } as React.CSSProperties}
+                    >
+                      <span className="nav-icon-badge">
+                        <MessageSquare size={17} strokeWidth={2.1} />
+                      </span>
+                      <span className="nav-item-title">Communication</span>
+                      <span
+                        className={'nav-chevron-wrap' + (openDropdowns['Communication'] ? ' open' : '')}
+                        onClick={(e) => toggleDropdown('Communication', e)}
+                        title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
+                      >
+                        <ChevronDown size={15} strokeWidth={2.2} />
+                      </span>
+                    </button>
+                  );
+                })()}
                 {openDropdowns['Communication'] && (
                   <div className="nav-dropdown-children">
-                    <button
-                      type="button"
-                      onClick={() => switchPage('Leaderboard')}
-                      className={'nav-item nav-child nav-child-leaderboard ' + (page === 'Leaderboard' ? 'selected' : '')}
-                    >
-                      <Trophy size={14} strokeWidth={1.8} />
-                      <span>Leaderboard</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchPage('Community')}
-                      className={'nav-item nav-child nav-child-community ' + (page === 'Community' ? 'selected' : '')}
-                    >
-                      <Globe size={14} strokeWidth={1.8} />
-                      <span>Community</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchPage('Online Assessments & Quiz Competitions')}
-                      className={'nav-item nav-child nav-child-assessments ' + (['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) ? 'selected' : '')}
-                    >
-                      <ClipboardCheck size={14} strokeWidth={1.8} />
-                      <span>Online Assessments</span>
-                    </button>
+                    {(() => {
+                      const lbColor = getNavColorConfig('Leaderboard');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => switchPage('Leaderboard')}
+                          className={'nav-item nav-child nav-child-leaderboard ' + (page === 'Leaderboard' ? 'selected' : '')}
+                          style={{
+                            '--nav-color': lbColor.color,
+                            '--nav-bg': lbColor.bg,
+                            '--nav-border': lbColor.border,
+                            '--nav-grad-start': lbColor.gradStart,
+                            '--nav-grad-end': lbColor.gradEnd,
+                            '--nav-glow': lbColor.glow,
+                          } as React.CSSProperties}
+                        >
+                          <span className="nav-icon-badge nav-icon-badge-sm">
+                            <Trophy size={14} strokeWidth={2} />
+                          </span>
+                          <span>Leaderboard</span>
+                        </button>
+                      );
+                    })()}
+                    {(() => {
+                      const commChildColor = getNavColorConfig('Community');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => switchPage('Community')}
+                          className={'nav-item nav-child nav-child-community ' + (page === 'Community' ? 'selected' : '')}
+                          style={{
+                            '--nav-color': commChildColor.color,
+                            '--nav-bg': commChildColor.bg,
+                            '--nav-border': commChildColor.border,
+                            '--nav-grad-start': commChildColor.gradStart,
+                            '--nav-grad-end': commChildColor.gradEnd,
+                            '--nav-glow': commChildColor.glow,
+                          } as React.CSSProperties}
+                        >
+                          <span className="nav-icon-badge nav-icon-badge-sm">
+                            <Globe size={14} strokeWidth={2} />
+                          </span>
+                          <span>Community</span>
+                        </button>
+                      );
+                    })()}
+                    {(() => {
+                      const assessColor = getNavColorConfig('Online Assessments & Quiz Competitions');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => switchPage('Online Assessments & Quiz Competitions')}
+                          className={'nav-item nav-child nav-child-assessments ' + (['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) ? 'selected' : '')}
+                          style={{
+                            '--nav-color': assessColor.color,
+                            '--nav-bg': assessColor.bg,
+                            '--nav-border': assessColor.border,
+                            '--nav-grad-start': assessColor.gradStart,
+                            '--nav-grad-end': assessColor.gradEnd,
+                            '--nav-glow': assessColor.glow,
+                          } as React.CSSProperties}
+                        >
+                          <span className="nav-icon-badge nav-icon-badge-sm">
+                            <ClipboardCheck size={14} strokeWidth={2} />
+                          </span>
+                          <span>Online Assessments</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -2609,55 +2681,115 @@ function App() {
               {isItemUnlocked('Examinations') && renderNavButton('Examinations', 'Examinations', Award)}
               {isItemUnlocked('Timetable') && renderNavButton('Timetable', 'Timetable', CalendarDays)}
               <div className="nav-dropdown-group">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const isOpen = openDropdowns['Communication'];
-                    if (isOpen) {
-                      toggleDropdown('Communication');
-                    } else {
-                      setOpenDropdowns(prev => ({ ...prev, Communication: true }));
-                      switchPage('Leaderboard');
-                    }
-                  }}
-                  className={'nav-item nav-dropdown-btn ' + (['Communication', 'Leaderboard', 'Community', 'Online Assessments & Quiz Competitions'].includes(page) ? 'selected ' : '') + (openDropdowns['Communication'] ? 'dropdown-open' : '')}
-                >
-                  <MessageSquare size={19} strokeWidth={1.9} />
-                  <span className="nav-item-title">Communication</span>
-                  <span
-                    className={'nav-chevron-wrap' + (openDropdowns['Communication'] ? ' open' : '')}
-                    onClick={(e) => toggleDropdown('Communication', e)}
-                    title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
-                  >
-                    <ChevronDown size={15} strokeWidth={2.2} />
-                  </span>
-                </button>
+                {(() => {
+                  const commColor = getNavColorConfig('Communication');
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isOpen = openDropdowns['Communication'];
+                        if (isOpen) {
+                          toggleDropdown('Communication');
+                        } else {
+                          setOpenDropdowns(prev => ({ ...prev, Communication: true }));
+                          switchPage('Leaderboard');
+                        }
+                      }}
+                      className={'nav-item nav-dropdown-btn ' + (['Communication', 'Leaderboard', 'Community', 'Online Assessments & Quiz Competitions'].includes(page) ? 'selected ' : '') + (openDropdowns['Communication'] ? 'dropdown-open' : '')}
+                      style={{
+                        '--nav-color': commColor.color,
+                        '--nav-bg': commColor.bg,
+                        '--nav-border': commColor.border,
+                        '--nav-grad-start': commColor.gradStart,
+                        '--nav-grad-end': commColor.gradEnd,
+                        '--nav-glow': commColor.glow,
+                      } as React.CSSProperties}
+                    >
+                      <span className="nav-icon-badge">
+                        <MessageSquare size={17} strokeWidth={2.1} />
+                      </span>
+                      <span className="nav-item-title">Communication</span>
+                      <span
+                        className={'nav-chevron-wrap' + (openDropdowns['Communication'] ? ' open' : '')}
+                        onClick={(e) => toggleDropdown('Communication', e)}
+                        title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
+                      >
+                        <ChevronDown size={15} strokeWidth={2.2} />
+                      </span>
+                    </button>
+                  );
+                })()}
                 {openDropdowns['Communication'] && (
                   <div className="nav-dropdown-children">
-                    <button
-                      type="button"
-                      onClick={() => switchPage('Leaderboard')}
-                      className={'nav-item nav-child nav-child-leaderboard ' + (page === 'Leaderboard' ? 'selected' : '')}
-                    >
-                      <Trophy size={14} strokeWidth={1.8} />
-                      <span>Leaderboard</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchPage('Community')}
-                      className={'nav-item nav-child nav-child-community ' + (page === 'Community' ? 'selected' : '')}
-                    >
-                      <Globe size={14} strokeWidth={1.8} />
-                      <span>Community</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchPage('Online Assessments & Quiz Competitions')}
-                      className={'nav-item nav-child nav-child-assessments ' + (['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) ? 'selected' : '')}
-                    >
-                      <ClipboardCheck size={14} strokeWidth={1.8} />
-                      <span>Online Assessments</span>
-                    </button>
+                    {(() => {
+                      const lbColor = getNavColorConfig('Leaderboard');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => switchPage('Leaderboard')}
+                          className={'nav-item nav-child nav-child-leaderboard ' + (page === 'Leaderboard' ? 'selected' : '')}
+                          style={{
+                            '--nav-color': lbColor.color,
+                            '--nav-bg': lbColor.bg,
+                            '--nav-border': lbColor.border,
+                            '--nav-grad-start': lbColor.gradStart,
+                            '--nav-grad-end': lbColor.gradEnd,
+                            '--nav-glow': lbColor.glow,
+                          } as React.CSSProperties}
+                        >
+                          <span className="nav-icon-badge nav-icon-badge-sm">
+                            <Trophy size={14} strokeWidth={2} />
+                          </span>
+                          <span>Leaderboard</span>
+                        </button>
+                      );
+                    })()}
+                    {(() => {
+                      const commChildColor = getNavColorConfig('Community');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => switchPage('Community')}
+                          className={'nav-item nav-child nav-child-community ' + (page === 'Community' ? 'selected' : '')}
+                          style={{
+                            '--nav-color': commChildColor.color,
+                            '--nav-bg': commChildColor.bg,
+                            '--nav-border': commChildColor.border,
+                            '--nav-grad-start': commChildColor.gradStart,
+                            '--nav-grad-end': commChildColor.gradEnd,
+                            '--nav-glow': commChildColor.glow,
+                          } as React.CSSProperties}
+                        >
+                          <span className="nav-icon-badge nav-icon-badge-sm">
+                            <Globe size={14} strokeWidth={2} />
+                          </span>
+                          <span>Community</span>
+                        </button>
+                      );
+                    })()}
+                    {(() => {
+                      const assessColor = getNavColorConfig('Online Assessments & Quiz Competitions');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => switchPage('Online Assessments & Quiz Competitions')}
+                          className={'nav-item nav-child nav-child-assessments ' + (['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) ? 'selected' : '')}
+                          style={{
+                            '--nav-color': assessColor.color,
+                            '--nav-bg': assessColor.bg,
+                            '--nav-border': assessColor.border,
+                            '--nav-grad-start': assessColor.gradStart,
+                            '--nav-grad-end': assessColor.gradEnd,
+                            '--nav-glow': assessColor.glow,
+                          } as React.CSSProperties}
+                        >
+                          <span className="nav-icon-badge nav-icon-badge-sm">
+                            <ClipboardCheck size={14} strokeWidth={2} />
+                          </span>
+                          <span>Online Assessments</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -2704,6 +2836,7 @@ function App() {
                       const isOpen = openDropdowns[name] !== undefined ? openDropdowns[name] : isChildActive;
 
                       if (isDropdown) {
+                        const parentColor = getNavColorConfig(name);
                         return (
                           <div key={name} className="nav-dropdown-group">
                             <button
@@ -2717,8 +2850,18 @@ function App() {
                                 }
                               }}
                               className={'nav-item nav-dropdown-btn ' + (isSelfActive || isChildActive ? 'selected ' : '') + (isOpen ? 'dropdown-open' : '')}
+                              style={{
+                                '--nav-color': parentColor.color,
+                                '--nav-bg': parentColor.bg,
+                                '--nav-border': parentColor.border,
+                                '--nav-grad-start': parentColor.gradStart,
+                                '--nav-grad-end': parentColor.gradEnd,
+                                '--nav-glow': parentColor.glow,
+                              } as React.CSSProperties}
                             >
-                              <Icon size={19} strokeWidth={1.9} />
+                              <span className="nav-icon-badge">
+                                <Icon size={17} strokeWidth={2.1} />
+                              </span>
                               <span className="nav-item-title">{name}</span>
                               <span
                                 className={'nav-chevron-wrap' + (isOpen ? ' open' : '')}
@@ -2733,6 +2876,7 @@ function App() {
                                 {children.map((child: any) => {
                                   const ChildIcon = child.icon;
                                   const isChildSelected = page === child.name || (child.name === 'Online Assessments & Quiz Competitions' && ['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page));
+                                  const childColor = getNavColorConfig(child.name);
                                   let childExtraClass = '';
                                   if (child.name === 'Leaderboard') childExtraClass = ' nav-child-leaderboard';
                                   else if (child.name === 'Community') childExtraClass = ' nav-child-community';
@@ -2743,9 +2887,19 @@ function App() {
                                       type="button"
                                       onClick={() => switchPage(child.name)}
                                       className={'nav-item nav-child' + childExtraClass + ' ' + (isChildSelected ? 'selected' : '')}
+                                      style={{
+                                        '--nav-color': childColor.color,
+                                        '--nav-bg': childColor.bg,
+                                        '--nav-border': childColor.border,
+                                        '--nav-grad-start': childColor.gradStart,
+                                        '--nav-grad-end': childColor.gradEnd,
+                                        '--nav-glow': childColor.glow,
+                                      } as React.CSSProperties}
                                     >
-                                      <ChildIcon size={14} strokeWidth={1.8} />
-                                      <span>{child.name}</span>
+                                      <span className="nav-icon-badge nav-icon-badge-sm">
+                                        <ChildIcon size={14} strokeWidth={2} />
+                                      </span>
+                                      <span className="nav-item-title">{child.name}</span>
                                     </button>
                                   );
                                 })}

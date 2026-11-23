@@ -5140,38 +5140,168 @@ html, body {
   margin: 14px 16px 6px !important;
 }
 
-.sidebar .nav-item {
-  font-size: 13.5px !important;
-  font-weight: 750 !important;
+/* ==========================================================================
+   Sidebar Typography & Colorful Badges (Optimus Orien Design System)
+   ========================================================================== */
+.sidebar .nav-label {
+  font-size: 11px !important;
   color: #334155 !important;
-  padding: 10px 14px !important;
-}
-
-.sidebar .nav-item:hover {
-  background: var(--brand-primary-light, rgba(6, 182, 212, 0.12)) !important;
-  color: var(--brand-primary-hover, #0891b2) !important;
-  font-weight: 800 !important;
-}
-
-.sidebar .nav-item:hover svg {
-  color: var(--brand-primary-hover, #0891b2) !important;
-  stroke: var(--brand-primary-hover, #0891b2) !important;
-}
-
-.sidebar .nav-item.selected {
-  background: var(--brand-primary-light, rgba(6, 182, 212, 0.15)) !important;
-  color: var(--brand-primary-text, var(--brand-primary, #06b6d4)) !important;
   font-weight: 850 !important;
+  letter-spacing: 1.4px !important;
+  text-transform: uppercase !important;
+  margin: 18px 16px 8px !important;
 }
 
-.sidebar .nav-item.selected svg {
-  color: var(--brand-primary-text, var(--brand-primary, #06b6d4)) !important;
-  stroke: var(--brand-primary-text, var(--brand-primary, #06b6d4)) !important;
+.sidebar .nav-sublabel {
+  font-size: 9.5px !important;
+  color: #475569 !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.3px !important;
+  text-transform: uppercase !important;
+  margin: 14px 16px 6px !important;
+}
+
+.sidebar .nav-item {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+  padding: 7px 12px !important;
+  margin: 3px 0 !important;
+  border-radius: 12px !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: #334155 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  cursor: pointer;
+  text-align: left !important;
+  width: 100% !important;
+}
+
+/* Colorful Icon Badge */
+.nav-icon-badge {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--nav-bg, rgba(6, 182, 212, 0.12));
+  border: 1px solid var(--nav-border, rgba(6, 182, 212, 0.25));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-icon-badge svg {
+  color: var(--nav-color, #06b6d4) !important;
+  stroke: var(--nav-color, #06b6d4) !important;
+  transition: transform 0.2s ease, stroke 0.2s ease, color 0.2s ease;
+}
+
+.nav-icon-badge-sm {
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  border-radius: 7px !important;
+}
+
+/* Hover State */
+.sidebar .nav-item:hover {
+  background: rgba(241, 245, 249, 0.85) !important;
+  color: #0f172a !important;
+  font-weight: 750 !important;
+}
+
+.sidebar .nav-item:hover .nav-icon-badge {
+  transform: translateY(-1px) scale(1.05);
+  border-color: var(--nav-color, #06b6d4);
+  box-shadow: 0 4px 12px var(--nav-glow, rgba(0, 0, 0, 0.12));
+}
+
+/* Selected / Active State */
+.sidebar .nav-item.selected {
+  background: var(--nav-bg, rgba(6, 182, 212, 0.10)) !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  border-color: var(--nav-border, rgba(6, 182, 212, 0.20)) !important;
+}
+
+/* Active vertical indicator bar on left edge (from Image 3) */
+.sidebar .nav-item.selected::before {
+  content: '';
+  position: absolute;
+  left: 0px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3.5px;
+  height: 22px;
+  border-radius: 0 4px 4px 0;
+  background: var(--nav-color, #06b6d4);
+  box-shadow: 0 0 8px var(--nav-color, #06b6d4);
+}
+
+/* Radiant gradient badge with glow on selected state (from Image 2) */
+.sidebar .nav-item.selected .nav-icon-badge {
+  background: linear-gradient(135deg, var(--nav-grad-start, #06b6d4), var(--nav-grad-end, #0891b2)) !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 14px var(--nav-glow, rgba(6, 182, 212, 0.45)) !important;
+  transform: scale(1.03);
+}
+
+.sidebar .nav-item.selected .nav-icon-badge svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
 }
 
 .sidebar .nav-item-title {
   font-weight: 750 !important;
   color: inherit !important;
+  flex: 1 !important;
+  text-align: left !important;
+}
+
+.sidebar .nav-dropdown-children {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 1.5px solid rgba(226, 232, 240, 0.8);
+  margin-top: 3px;
+  margin-bottom: 6px;
+}
+
+.sidebar .nav-child {
+  font-size: 12.5px !important;
+  font-weight: 650 !important;
+  padding: 6px 10px !important;
+  gap: 9px !important;
+  border-radius: 9px !important;
+}
+
+.sidebar .nav-chevron-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.sidebar .nav-item:hover .nav-chevron-wrap {
+  color: #475569;
+}
+
+.sidebar .nav-item.selected .nav-chevron-wrap {
+  color: var(--nav-color, #06b6d4);
 }
 
 .sidebar .workspace-name b {
@@ -5196,17 +5326,31 @@ html, body {
 }
 
 .dark .sidebar .nav-item {
-  color: #e2e8f0 !important;
+  color: #cbd5e1 !important;
+}
+
+.dark .sidebar .nav-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
 }
 
 .dark .sidebar .nav-item.selected {
-  background: var(--brand-primary-dark-bg, rgba(6, 182, 212, 0.25)) !important;
-  color: var(--brand-primary-dark-text, #22d3ee) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
-.dark .sidebar .nav-item.selected svg {
-  color: var(--brand-primary-dark-text, #22d3ee) !important;
-  stroke: var(--brand-primary-dark-text, #22d3ee) !important;
+.dark .nav-icon-badge {
+  background: var(--nav-bg, rgba(6, 182, 212, 0.20)) !important;
+  border-color: var(--nav-border, rgba(6, 182, 212, 0.35)) !important;
+}
+
+.dark .sidebar .nav-item.selected .nav-icon-badge {
+  background: linear-gradient(135deg, var(--nav-grad-start, #06b6d4), var(--nav-grad-end, #0891b2)) !important;
+}
+
+.dark .sidebar .nav-dropdown-children {
+  border-left-color: rgba(51, 65, 85, 0.7);
 }
 
 /* Breadcrumb Campus Pill - Dynamic Theme Color */
