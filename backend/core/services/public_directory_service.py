@@ -136,22 +136,98 @@ def resolve_location_from_config(school: School, config: Optional[Any] = None) -
     return country, province, city, lat, lng
 
 
-def sync_school_configuration_to_public_directory(school: School, config: Optional[Any] = None) -> None:
+def sync_school_configuration_to_public_directory(school: School, config: Optional[Any] = None) -> Optional[PublicCampusListing]:
     """
     Propagates campus identity (country, location/jurisdiction, coordinates)
     and curricula (programmes) from SchoolConfiguration to both SchoolPublicProfileDraft
     and PublicCampusListing.
+    Automatically creates or updates the live PublicCampusListing so the campus
+    is immediately discoverable in 'Find a School' without requiring a separate
+    public profile setup page.
     """
+    from django.utils.text import slugify
+
     if config is None:
         try:
             config = SchoolConfiguration.objects.filter(school=school).first()
         except Exception:
             config = None
-    if not config:
-        return
 
     country, province, city, lat, lng = resolve_location_from_config(school, config)
-    programmes = [p.strip() for p in config.programmes if isinstance(p, str) and p.strip()] if isinstance(config.programmes, list) else []
+    programmes = [p.strip() for p in config.programmes if isinstance(p, str) and p.strip()] if (config and isinstance(config.programmes, list)) else []
+
+    # Map medium from config.language
+    lang_code = (getattr(config, 'language', '') or '').lower().strip() if config else ''
+    if 'ur' in lang_code:
+        medium = 'urdu'
+    elif lang_code and lang_code not in ('en', 'english'):
+        medium = 'bilingual'
+    else:
+        medium = 'english'
+
+    # Fallback boards based on country if not configured
+    boards = programmes if programmes else (
+        ['Federal Board (FBISE)', 'Cambridge (CAIE)'] if country == 'Pakistan' else
+        (['US Common Core', 'AP / College Board'] if country == 'United States' else ['Cambridge (CAIE)', 'Edexcel'])
+    )
+
+    # Coordinate fallback if lat/lng not explicitly provided
+    city_lower = (city or '').lower()
+    city_coords = {
+        'lahore': (Decimal('31.5204'), Decimal('74.3587')),
+        'islamabad': (Decimal('33.6844'), Decimal('73.0479')),
+        'karachi': (Decimal('24.8607'), Decimal('67.0011')),
+        'rawalpindi': (Decimal('33.5651'), Decimal('73.0169')),
+        'peshawar': (Decimal('34.0151'), Decimal('71.5249')),
+        'quetta': (Decimal('30.1798'), Decimal('66.9750')),
+        'faisalabad': (Decimal('31.4504'), Decimal('73.1350')),
+        'multan': (Decimal('30.1575'), Decimal('71.5249')),
+        'sialkot': (Decimal('32.4945'), Decimal('74.5229')),
+        'gujranwala': (Decimal('32.1877'), Decimal('74.1945')),
+        'hyderabad': (Decimal('25.3960'), Decimal('68.3578')),
+        'london': (Decimal('51.5074'), Decimal('-0.1278')),
+        'dubai': (Decimal('25.2048'), Decimal('55.2708')),
+        'new york': (Decimal('40.7128'), Decimal('-74.0060')),
+        'los angeles': (Decimal('34.0522'), Decimal('-118.2437')),
+        'chicago': (Decimal('41.8781'), Decimal('-87.6298')),
+        'houston': (Decimal('29.7604'), Decimal('-95.3698')),
+    }
+    matched_coords = None
+    for ck, coords in city_coords.items():
+        if ck in city_lower:
+            matched_coords = coords
+            break
+    if not matched_coords:
+        if country == 'United States':
+            matched_coords = (Decimal('37.0902'), Decimal('-95.7129'))
+        elif country == 'United Kingdom':
+            matched_coords = (Decimal('51.5074'), Decimal('-0.1278'))
+        elif country == 'United Arab Emirates':
+            matched_coords = (Decimal('25.2048'), Decimal('55.2708'))
+        else:
+            matched_coords = (Decimal('31.5204'), Decimal('74.3587'))
+
+    final_lat = lat if lat is not None else (matched_coords[0] + Decimal(str(((school.id % 7) - 3) * 0.012)))
+    final_lng = lng if lng is not None else (matched_coords[1] + Decimal(str(((school.id % 5) - 2) * 0.012)))
+
+    # Look up principal if assigned in users, staff, or school settings
+    principal_user = User.objects.filter(school=school, role='principal').first()
+    principal_name = ""
+    show_principal = False
+    if principal_user:
+        principal_name = f"{principal_user.first_name} {principal_user.last_name}".strip() or principal_user.username
+        show_principal = True
+    else:
+        try:
+            from core.views import resolve_school_principal_name
+            resolved = resolve_school_principal_name(school)
+            if resolved:
+                principal_name = resolved
+                show_principal = True
+        except Exception:
+            pass
+
+    address_val = (config.jurisdiction or '').strip() if config and config.jurisdiction else f"Campus Sector, {city}"
 
     # Update SchoolPublicProfileDraft
     draft, _ = SchoolPublicProfileDraft.objects.get_or_create(school=school)
@@ -161,39 +237,117 @@ def sync_school_configuration_to_public_directory(school: School, config: Option
         draft.province = province
     if city:
         draft.city = city
-    if config.jurisdiction:
+    if config and config.jurisdiction:
         draft.address = config.jurisdiction
-    if lat is not None:
-        draft.latitude = lat
-    if lng is not None:
-        draft.longitude = lng
-    if programmes:
-        draft.boards = programmes
+    draft.latitude = final_lat
+    draft.longitude = final_lng
+    if boards:
+        draft.boards = boards
+    if principal_name:
+        draft.principal_name = principal_name
+        draft.show_principal_name = True
     draft.save()
 
-    # Update PublicCampusListing if it exists
+    # Create or update PublicCampusListing
     listing = PublicCampusListing.objects.filter(school=school).first()
-    if listing:
-        if country:
+    if not listing:
+        base_slug = slugify(f"{school.name}-{city}") or f"campus-{school.id}"
+        slug = base_slug
+        counter = 1
+        while PublicCampusListing.objects.filter(slug=slug).exists():
+            slug = f"{base_slug}-{school.id if counter == 1 else counter}"
+            counter += 1
+
+        listing = PublicCampusListing.objects.create(
+            school=school,
+            slug=slug,
+            display_name=school.name,
+            tagline=f"Empowering lifelong learners at {school.name}.",
+            about=f"{school.name} is a registered campus on Optimus Orien, dedicated to academic distinction and holistic student growth.",
+            city=city,
+            province=province,
+            country=country,
+            address=address_val,
+            latitude=final_lat,
+            longitude=final_lng,
+            boards=boards,
+            levels=['Primary', 'Middle', 'Secondary'],
+            gender_type='co-ed',
+            medium=medium,
+            admission_status='open',
+            principal_name=principal_name,
+            principal_title='Principal',
+            show_principal_name=show_principal,
+            contact_mode='enquiry_only',
+            rank_display_mode='exact_rank',
+            facilities=['Science Laboratories', 'Central Library', 'Computer & AI Lab', 'Sports Grounds & Track'],
+            status='live'
+        )
+    else:
+        updated = False
+        if listing.display_name != school.name:
+            listing.display_name = school.name
+            updated = True
+        if country and listing.country != country:
             listing.country = country
-        if province:
+            updated = True
+        if province and listing.province != province:
             listing.province = province
-        if city:
+            updated = True
+        if city and listing.city != city:
             listing.city = city
-        if config.jurisdiction and (not listing.address or 'Campus Sector' in listing.address):
+            updated = True
+        if config and config.jurisdiction and (not listing.address or 'Campus Sector' in listing.address or listing.address != config.jurisdiction):
             listing.address = config.jurisdiction
-        if lat is not None:
+            updated = True
+        if lat is not None and listing.latitude != lat:
             listing.latitude = lat
-        if lng is not None:
+            updated = True
+        elif listing.latitude is None:
+            listing.latitude = final_lat
+            updated = True
+        if lng is not None and listing.longitude != lng:
             listing.longitude = lng
-        if programmes:
-            listing.boards = programmes
-        listing.save()
+            updated = True
+        elif listing.longitude is None:
+            listing.longitude = final_lng
+            updated = True
+        if boards and listing.boards != boards:
+            listing.boards = boards
+            updated = True
+        if listing.status != 'live':
+            listing.status = 'live'
+            updated = True
+        if listing.medium != medium:
+            listing.medium = medium
+            updated = True
+        if principal_name and not listing.principal_name:
+            listing.principal_name = principal_name
+            listing.show_principal_name = True
+            updated = True
+        if updated:
+            listing.save()
 
     # Keep school.city aligned if changed
     if city and school.city != city:
         school.city = city
         school.save(update_fields=['city'])
+
+    # Ensure PublicRankSnapshot exists
+    snapshot = PublicRankSnapshot.objects.filter(listing=listing).first()
+    if not snapshot:
+        try:
+            refresh_public_snapshots()
+        except Exception:
+            PublicRankSnapshot.objects.create(
+                listing=listing,
+                period_name='Current Academic Session',
+                academic_year='2025-2026',
+                band='Not ranked yet (not enough published data)',
+                is_eligible=False
+            )
+
+    return listing
 
 BANNED_WORDS = [
     'needs focused support',
@@ -406,147 +560,17 @@ def calculate_campus_published_aqi(school: School) -> Optional[Decimal]:
 def ensure_all_registered_campuses_synced() -> int:
     """
     Ensures every registered School in the database has an active PublicCampusListing
-    and a PublicRankSnapshot so that all registered campuses appear on the leaderboard.
+    and a PublicRankSnapshot so that all registered campuses appear on the leaderboard,
+    synced directly from campus configuration.
     """
-    from django.utils.text import slugify
-    config = get_or_create_platform_config()
     synced_count = 0
-
     all_schools = School.objects.all()
-    city_coords = {
-        'lahore': (Decimal('31.5204'), Decimal('74.3587')),
-        'islamabad': (Decimal('33.6844'), Decimal('73.0479')),
-        'karachi': (Decimal('24.8607'), Decimal('67.0011')),
-        'rawalpindi': (Decimal('33.5651'), Decimal('73.0169')),
-        'peshawar': (Decimal('34.0151'), Decimal('71.5249')),
-        'quetta': (Decimal('30.1798'), Decimal('66.9750')),
-        'faisalabad': (Decimal('31.4504'), Decimal('73.1350')),
-        'multan': (Decimal('30.1575'), Decimal('71.5249')),
-        'sialkot': (Decimal('32.4945'), Decimal('74.5229')),
-        'gujranwala': (Decimal('32.1877'), Decimal('74.1945')),
-        'hyderabad': (Decimal('25.3960'), Decimal('68.3578')),
-        'london': (Decimal('51.5074'), Decimal('-0.1278')),
-        'dubai': (Decimal('25.2048'), Decimal('55.2708')),
-    }
 
     for school in all_schools:
-        listing = PublicCampusListing.objects.filter(school=school).first()
         config = SchoolConfiguration.objects.filter(school=school).first()
-        country, province, city, cfg_lat, cfg_lng = resolve_location_from_config(school, config)
-
-        city_lower = city.lower()
-        matched_coords = None
-        for ck, coords in city_coords.items():
-            if ck in city_lower:
-                matched_coords = coords
-                break
-        if not matched_coords:
-            if country == 'United States':
-                matched_coords = (Decimal('37.0902'), Decimal('-95.7129'))
-            elif country == 'United Kingdom':
-                matched_coords = (Decimal('51.5074'), Decimal('-0.1278'))
-            elif country == 'United Arab Emirates':
-                matched_coords = (Decimal('25.2048'), Decimal('55.2708'))
-            else:
-                matched_coords = (Decimal('31.5204'), Decimal('74.3587'))
-
-        jitter_lat = cfg_lat if cfg_lat is not None else (matched_coords[0] + Decimal(str(((school.id % 7) - 3) * 0.012)))
-        jitter_lng = cfg_lng if cfg_lng is not None else (matched_coords[1] + Decimal(str(((school.id % 5) - 2) * 0.012)))
-
-        configured_boards = [p.strip() for p in config.programmes if isinstance(p, str) and p.strip()] if (config and isinstance(config.programmes, list)) else []
-        boards = configured_boards if configured_boards else (['Federal Board (FBISE)', 'Cambridge (CAIE)'] if country == 'Pakistan' else ['Cambridge (CAIE)', 'Edexcel'])
-
-        # Look up principal if assigned in users, staff, or school settings
-        principal_user = User.objects.filter(school=school, role='principal').first()
-        principal_name = ""
-        show_principal = False
-        if principal_user:
-            principal_name = f"{principal_user.first_name} {principal_user.last_name}".strip() or principal_user.username
-            show_principal = True
-        else:
-            try:
-                from core.views import resolve_school_principal_name
-                resolved = resolve_school_principal_name(school)
-                if resolved:
-                    principal_name = resolved
-                    show_principal = True
-            except Exception:
-                pass
-
-        if not listing:
-            base_slug = slugify(f"{school.name}-{city}") or f"campus-{school.id}"
-            slug = base_slug
-            counter = 1
-            while PublicCampusListing.objects.filter(slug=slug).exists():
-                slug = f"{base_slug}-{school.id if counter == 1 else counter}"
-                counter += 1
-
-            address_val = (config.jurisdiction or '').strip() if config and config.jurisdiction else f"Campus Sector, {city}"
-
-            listing = PublicCampusListing.objects.create(
-                school=school,
-                slug=slug,
-                display_name=school.name,
-                tagline=f"Empowering lifelong learners at {school.name}.",
-                about=f"{school.name} is a registered campus on Optimus Orien, dedicated to academic distinction and holistic student growth.",
-                city=city,
-                province=province,
-                country=country,
-                address=address_val,
-                latitude=jitter_lat,
-                longitude=jitter_lng,
-                boards=boards,
-                levels=['Primary', 'Middle', 'Secondary'],
-                gender_type='co-ed',
-                medium='english',
-                admission_status='open',
-                principal_name=principal_name,
-                principal_title='Principal',
-                show_principal_name=show_principal,
-                contact_mode='enquiry_only',
-                rank_display_mode='exact_rank',
-                facilities=['Science Laboratories', 'Central Library', 'Computer & AI Lab', 'Sports Grounds & Track'],
-                status='live'
-            )
+        listing = sync_school_configuration_to_public_directory(school, config)
+        if listing:
             synced_count += 1
-        else:
-            updated = False
-            # Sync location if changed in configuration
-            if country and listing.country != country:
-                listing.country = country
-                updated = True
-            if province and listing.province != province:
-                listing.province = province
-                updated = True
-            if city and listing.city != city:
-                listing.city = city
-                updated = True
-            if configured_boards and listing.boards != configured_boards:
-                listing.boards = configured_boards
-                updated = True
-            # Sync coordinates if missing or updated
-            if listing.latitude is None or listing.longitude is None:
-                listing.latitude = jitter_lat
-                listing.longitude = jitter_lng
-                updated = True
-            elif cfg_lat is not None and (listing.latitude != cfg_lat or listing.longitude != cfg_lng):
-                listing.latitude = cfg_lat
-                listing.longitude = cfg_lng
-                updated = True
-            # Sync principal if available and not yet set
-            if principal_name and not listing.principal_name:
-                listing.principal_name = principal_name
-                listing.show_principal_name = True
-                updated = True
-            if not listing.city and school.city:
-                listing.city = school.city
-                updated = True
-            if updated:
-                listing.save()
-                synced_count += 1
-
-        # Also sync draft profile to stay in lockstep
-        sync_school_configuration_to_public_directory(school, config)
 
     try:
         refresh_public_snapshots()

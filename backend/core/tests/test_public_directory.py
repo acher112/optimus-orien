@@ -689,3 +689,47 @@ class PublicDirectoryTestSuite(TestCase):
         self.assertEqual(found[0]['country'], 'United States')
         self.assertEqual(found[0]['city'], 'Usa')
         self.assertIn('American High School Diploma (AP)', found[0]['boards'])
+
+    def test_auto_create_live_listing_from_campus_setup_without_separate_public_profile(self):
+        """
+        Verifies that campus details from SchoolConfiguration automatically create
+        a live PublicCampusListing and PublicRankSnapshot for 'Find a School' without
+        needing any separate public profile editor or approval steps.
+        """
+        from core.models import SchoolConfiguration
+        from core.services.public_directory_service import sync_school_configuration_to_public_directory
+
+        new_school = School.objects.create(
+            name="Apex Academy",
+            organisation=self.org,
+            city="New York"
+        )
+        config, _ = SchoolConfiguration.objects.get_or_create(school=new_school)
+        config.country = 'US'
+        config.jurisdiction = 'New York, USA'
+        config.language = 'en'
+        config.programmes = ['US Common Core', 'AP / College Board']
+        config.save()
+
+        # Sync campus configuration
+        listing = sync_school_configuration_to_public_directory(new_school, config)
+
+        self.assertIsNotNone(listing)
+        self.assertEqual(listing.status, 'live')
+        self.assertEqual(listing.display_name, "Apex Academy")
+        self.assertEqual(listing.country, 'United States')
+        self.assertEqual(listing.city, 'New York')
+        self.assertEqual(listing.address, 'New York, USA')
+        self.assertEqual(listing.medium, 'english')
+        self.assertIn('US Common Core', listing.boards)
+        self.assertIn('AP / College Board', listing.boards)
+
+        # Verify it is immediately accessible via public listing API
+        res = self.client.get('/api/v1/public/schools/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        slug_match = [r for r in res.data['results'] if r['slug'] == listing.slug]
+        self.assertEqual(len(slug_match), 1)
+        self.assertEqual(slug_match[0]['display_name'], "Apex Academy")
+        self.assertEqual(slug_match[0]['country'], "United States")
+        self.assertEqual(slug_match[0]['city'], "New York")
+        self.assertIn("US Common Core", slug_match[0]['boards'])

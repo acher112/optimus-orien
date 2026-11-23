@@ -44,7 +44,6 @@ const PublicSchoolProfilePage = React.lazy(() => import('./public-directory/Publ
 const PublicSchoolComparePage = React.lazy(() => import('./public-directory/PublicSchoolComparePage').then(m => ({ default: m.PublicSchoolComparePage })));
 const PublicMethodologyPage = React.lazy(() => import('./public-directory/PublicMethodologyPage').then(m => ({ default: m.PublicMethodologyPage })));
 const NetworkPage = React.lazy(() => import('./network/NetworkPage'));
-const SchoolPublicProfileEditor = React.lazy(() => import('./public-directory/SchoolPublicProfileEditor').then(m => ({ default: m.SchoolPublicProfileEditor })));
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
@@ -93,7 +92,6 @@ import './style.css';
 const WORKSPACE_NAV = [
   { name: 'Overview', icon: LayoutDashboard },
   { name: 'Campuses', icon: Building2, adminOnly: true },
-  { name: 'Public Profile', icon: Globe, adminOnly: true, roles: ['organisation_admin', 'school_admin', 'owner', 'platform_admin'] },
   { name: 'Campus setup', icon: Settings2, adminOnly: true },
   { name: 'Academic years', icon: CalendarDays, adminOnly: true },
   { name: 'Classes', icon: Users },
@@ -212,14 +210,14 @@ const FORBIDDEN_TEACHER_PAGES = [
   'Finance', 'Plan & Billing', 'Student fees', 'Fee overview', 'Fee structure', 'Collect fee',
   'Vouchers', 'Defaulters', 'Concessions', 'Receipts', 'Fees',
   'Staff', 'Staff Salaries', 'Salaries',
-  'Campuses', 'Public Profile', 'Campus setup', 'Academic years',
+  'Campuses', 'Campus setup', 'Academic years',
   'Audit log', 'Permissions', 'Data import', 'Platform owner',
   'Reports', 'Risk criteria', 'Students at Risk', 'At-risk list',
   'Set Criteria', 'Teacher Criteria'
 ];
 
 const NAV_GROUPS = [
-  { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses', 'Public Profile'] },
+  { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses'] },
   { sublabel: 'ACADEMIC CONFIGURATION', adminLabel: true, items: ['Campus setup', 'Academic years'] },
   { sublabel: 'ACADEMIC STRUCTURE', items: ['Classes', 'Subjects'] },
   {
@@ -247,7 +245,6 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   'Overview': 'free',
   'Network': 'free',
   'Campuses': 'free',
-  'Public Profile': 'free',
   'Campus setup': 'free',
   'Academic years': 'free',
   'Classes': 'free',
@@ -3875,14 +3872,6 @@ function App() {
                 localStorage.setItem('optimus_active_campus_id', String(campusId));
                 switchPage(targetPage, { ...(initialFilters || {}), school: String(campusId) });
               }}
-            />
-          )}
-          {page === 'Public Profile' && (
-            <SchoolPublicProfileEditor
-              user={user}
-              activeCampuses={campuses}
-              notify={notify}
-              onNavigate={switchPage}
             />
           )}
           {page === 'Audit log' && (
