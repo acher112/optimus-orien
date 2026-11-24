@@ -1078,6 +1078,17 @@ body {
   transform: translateY(-2px);
 }
 
+.btn-select-plan.btn-plan-premium {
+  background-color: #fb923c;
+  box-shadow: 0 10px 22px -5px rgba(251, 146, 60, 0.45);
+}
+
+.btn-select-plan.btn-plan-premium:hover {
+  background-color: #f97316;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px -5px rgba(249, 115, 22, 0.55);
+}
+
 /* ==========================================================================
    INTERACTIVE PRICING CALCULATOR SECTION
    ========================================================================== */

@@ -118,7 +118,7 @@ export default function PricingCalculatorSection({
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
               <button
                 type="button"
                 className="btn-select-plan"
@@ -126,15 +126,6 @@ export default function PricingCalculatorSection({
               >
                 <span>Choose Standard Tier</span>
                 <ArrowRight size={16} />
-              </button>
-
-              <button
-                type="button"
-                className="btn-hero-secondary"
-                style={{ justifyContent: 'center', fontSize: '0.9rem', padding: '0.65rem' }}
-                onClick={onOpenContact}
-              >
-                Book Standard Demo
               </button>
             </div>
           </div>
@@ -217,23 +208,14 @@ export default function PricingCalculatorSection({
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
               <button
                 type="button"
-                className="btn-select-plan"
+                className="btn-select-plan btn-plan-premium"
                 onClick={() => onSelectPlan('premium')}
               >
                 <span>Choose Premium Tier</span>
                 <ArrowRight size={16} />
-              </button>
-
-              <button
-                type="button"
-                className="btn-hero-secondary"
-                style={{ justifyContent: 'center', fontSize: '0.9rem', padding: '0.65rem' }}
-                onClick={onOpenContact}
-              >
-                Book Premium Demo
               </button>
             </div>
           </div>
