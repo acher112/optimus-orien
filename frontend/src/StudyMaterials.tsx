@@ -5,7 +5,7 @@ import {
   CheckCircle2, Clock, Trash2, Edit3, Archive, Eye, Users, Layers,
   ChevronDown, X, Sparkles, Filter, ShieldCheck, ArrowRight
 } from 'lucide-react';
-import { list, request, fetchCsrfToken, type User } from './api';
+import { list, request, csrfFetch, type User } from './api';
 import ExportMenu, { type ExportColumn } from './ExportMenu';
 import { FilterBar } from './FilterBar';
 
@@ -192,27 +192,11 @@ export default function StudyMaterials({
       formData.append('status', uploadStatus);
       if (uploadVisibleFrom) formData.append('visible_from', uploadVisibleFrom);
 
-      let token = await fetchCsrfToken().catch(() => '');
-      let res = await fetch('/api/v1/materials/', {
+      const res = await csrfFetch('/api/v1/materials/', {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          ...(token ? { 'X-CSRFToken': token } : {})
-        },
         body: formData
       });
-
-      if (!res.ok && res.status === 403) {
-        token = await fetchCsrfToken(true).catch(() => '');
-        res = await fetch('/api/v1/materials/', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            ...(token ? { 'X-CSRFToken': token } : {})
-          },
-          body: formData
-        });
-      }
 
       if (!res.ok) {
         let errorMsg = 'Upload failed';
@@ -270,27 +254,11 @@ export default function StudyMaterials({
       const formData = new FormData();
       formData.append('file', replaceFile);
 
-      let token = await fetchCsrfToken().catch(() => '');
-      let res = await fetch(`/api/v1/materials/${replacingMaterial.id}/replace/`, {
+      const res = await csrfFetch(`/api/v1/materials/${replacingMaterial.id}/replace/`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          ...(token ? { 'X-CSRFToken': token } : {})
-        },
         body: formData
       });
-
-      if (!res.ok && res.status === 403) {
-        token = await fetchCsrfToken(true).catch(() => '');
-        res = await fetch(`/api/v1/materials/${replacingMaterial.id}/replace/`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            ...(token ? { 'X-CSRFToken': token } : {})
-          },
-          body: formData
-        });
-      }
 
       if (!res.ok) {
         let errorMsg = 'File replacement failed';

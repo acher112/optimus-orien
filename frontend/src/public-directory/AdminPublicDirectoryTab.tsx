@@ -4,6 +4,7 @@ import {
   RefreshCw, Search, Eye, Filter, Check, X, Sliders, Trash2, 
   ExternalLink, Calendar, Users, Award 
 } from 'lucide-react';
+import { csrfFetch } from '../api';
 import './publicDirectory.css';
 
 interface AdminPublicDirectoryTabProps {
@@ -90,7 +91,7 @@ export const AdminPublicDirectoryTab: React.FC<AdminPublicDirectoryTabProps> = (
   const handleApprove = async (slug: string) => {
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/v1/admin/public-directory/listings/${slug}/approve/`, {
+      const res = await csrfFetch(`/api/v1/admin/public-directory/listings/${slug}/approve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include'
@@ -117,7 +118,7 @@ export const AdminPublicDirectoryTab: React.FC<AdminPublicDirectoryTabProps> = (
     }
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/v1/admin/public-directory/listings/${rejectModal.slug}/reject/`, {
+      const res = await csrfFetch(`/api/v1/admin/public-directory/listings/${rejectModal.slug}/reject/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -147,7 +148,7 @@ export const AdminPublicDirectoryTab: React.FC<AdminPublicDirectoryTabProps> = (
     }
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/v1/admin/public-directory/listings/${unpublishModal.slug}/unpublish/`, {
+      const res = await csrfFetch(`/api/v1/admin/public-directory/listings/${unpublishModal.slug}/unpublish/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -173,7 +174,7 @@ export const AdminPublicDirectoryTab: React.FC<AdminPublicDirectoryTabProps> = (
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     try {
-      const res = await fetch('/api/v1/admin/public-directory/config/', {
+      const res = await csrfFetch('/api/v1/admin/public-directory/config/', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -196,7 +197,7 @@ export const AdminPublicDirectoryTab: React.FC<AdminPublicDirectoryTabProps> = (
   const handleTriggerSnapshot = async () => {
     setTriggeringSnapshot(true);
     try {
-      const res = await fetch('/api/v1/admin/public-directory/trigger-snapshot/', {
+      const res = await csrfFetch('/api/v1/admin/public-directory/trigger-snapshot/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

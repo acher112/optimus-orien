@@ -4,6 +4,7 @@ import {
   CheckCircle2, ArrowRight, X, Phone, Mail, Building2, MapPin,
   ChevronRight, ArrowUpRight, ShieldCheck, Scale, ExternalLink, RefreshCw, UserRound, Home
 } from 'lucide-react';
+import { csrfFetch } from '../api';
 import { PublicCampusCardData, RevealedContactInfo } from './publicDirectoryTypes';
 import DirectoryMap from './DirectoryMap';
 import './publicDirectory.css';
@@ -140,7 +141,7 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
 
     setRevealing(true);
     try {
-      const res = await fetch(`/api/v1/public/schools/${slug}/reveal-contact/`, {
+      const res = await csrfFetch(`/api/v1/public/schools/${slug}/reveal-contact/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

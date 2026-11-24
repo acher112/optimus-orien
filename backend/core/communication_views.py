@@ -7,7 +7,7 @@ Fully connected to the live database (ZERO hardcoded / dummy mock data):
 """
 import random
 from decimal import Decimal, ROUND_HALF_UP
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, Case, When, IntegerField
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -24,7 +24,7 @@ from core.models import (
     School, Organisation, User, Student, CalculatedStudentResult,
     CalculatedSubjectResult, PublicCampusListing,
     SchoolNetworkSetting, NetworkProfile, ConnectionRequest, Connection,
-    QuizCompetition, QuizQuestion, QuizAttempt
+    QuizCompetition, QuizQuestion, QuizAttempt, Notification
 )
 
 
@@ -499,44 +499,83 @@ class PrivacySettingsView(CommunicationBaseAPIView):
 # 2. COMMUNITY VIEWS (100% Real DB Queries)
 # =============================================================================
 
+def _apply_multiword_search(queryset, query, fields):
+    words = [w for w in (query or '').strip().split() if w]
+    if not words or not fields:
+        return queryset
+    clause = Q()
+    for w in words:
+        word_q = Q()
+        for f in fields:
+            word_q |= Q(**{f"{f}__icontains": w})
+        clause &= word_q
+    return queryset.filter(clause)
+
+
+def _user_institution_label(u):
+    if getattr(u, 'school', None):
+        return u.school.name
+    if getattr(u, 'organisation', None):
+        return u.organisation.name
+    return 'Optimus Network'
+
+
+def _user_role_label(u):
+    if u.role == 'teacher':
+        return 'Educator'
+    if u.role == 'organisation_admin':
+        return 'Institution Director'
+    if u.role in ('principal', 'school_admin'):
+        return 'Principal / Admin'
+    if u.role == 'parent':
+        return 'Parent'
+    return 'Learner'
+
+
 class CommunityDirectoryView(CommunicationBaseAPIView):
     """
-    Searches and lists real students, teachers, principals, and schools from SQLite.
-    Includes live connection state for the authenticated user.
+    Searches and lists real students, teachers, principals, and schools across all campuses
+    and registered institutions. Includes live connection state for the authenticated user.
     """
     def get(self, request):
         category = request.query_params.get('category', 'students')
         query = request.query_params.get('search', '').strip().lower()
         user = request.user if request.user.is_authenticated else None
 
-        # Build set of connected peer IDs if user is logged in
+        # Build set of connected peer IDs and request maps if user is logged in
         connected_ids = set()
         sent_request_ids = set()
+        sent_request_map = {}
         received_request_ids = set()
+        received_request_map = {}
         if user:
             for c in Connection.objects.filter(Q(user_a=user) | Q(user_b=user), status='active'):
                 peer_id = c.user_b_id if c.user_a_id == user.id else c.user_a_id
                 connected_ids.add(peer_id)
             for req in ConnectionRequest.objects.filter(from_user=user, status='pending'):
                 sent_request_ids.add(req.to_user_id)
+                sent_request_map[req.to_user_id] = req.id
             for req in ConnectionRequest.objects.filter(to_user=user, status='pending'):
                 received_request_ids.add(req.from_user_id)
+                received_request_map[req.from_user_id] = req.id
 
         data = []
 
         if category == 'students':
-            students_qs = Student.objects.select_related('school', 'user').all()
+            students_qs = Student.objects.select_related('school', 'school__organisation', 'user').order_by(
+                Case(When(user_id__isnull=False, then=0), default=1, output_field=IntegerField()),
+                '-id'
+            )
             if query:
-                students_qs = students_qs.filter(
-                    Q(first_name__icontains=query) |
-                    Q(last_name__icontains=query) |
-                    Q(school__name__icontains=query) |
-                    Q(school__city__icontains=query)
+                students_qs = _apply_multiword_search(
+                    students_qs,
+                    query,
+                    ['first_name', 'last_name', 'admission_number', 'user__username', 'school__name', 'school__city', 'school__organisation__name']
                 )
 
-            for st in students_qs[:60]:
+            for st in students_qs[:100]:
                 school = st.school
-                school_name = school.name if school else 'Optimus Campus'
+                school_name = school.name if school else (st.school.organisation.name if school and school.organisation else 'Optimus Campus')
                 city = school.city if school else 'National'
                 listing = PublicCampusListing.objects.filter(school=school).first() if school else None
                 curriculum = infer_curriculum(city, listing.boards if listing else None)
@@ -548,14 +587,20 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
                 avg_val = round_dec(avg_res) if avg_res is not None else 0.0
 
                 peer_user_id = st.user_id
-                if user and peer_user_id == user.id:
+                has_account = bool(peer_user_id)
+                req_id = None
+                if not peer_user_id:
+                    conn_status = 'no_account'
+                elif user and peer_user_id == user.id:
                     conn_status = 'active_user'
-                elif peer_user_id and peer_user_id in connected_ids:
+                elif peer_user_id in connected_ids:
                     conn_status = 'connected'
-                elif peer_user_id and peer_user_id in sent_request_ids:
+                elif peer_user_id in sent_request_ids:
                     conn_status = 'sent_request'
-                elif peer_user_id and peer_user_id in received_request_ids:
+                    req_id = sent_request_map.get(peer_user_id)
+                elif peer_user_id in received_request_ids:
                     conn_status = 'received_request'
+                    req_id = received_request_map.get(peer_user_id)
                 else:
                     conn_status = 'not_connected'
 
@@ -570,8 +615,12 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
 
                 data.append({
                     'id': st.id,
+                    'user_id': peer_user_id,
+                    'target_type': 'student',
+                    'has_account': has_account,
+                    'request_id': req_id,
                     'name': f"{st.first_name} {st.last_name}".strip() or f"Student #{st.id}",
-                    'handle': f"@{st.first_name.lower()}.{st.id}" if st.first_name else f"@learner.{st.id}",
+                    'handle': f"@{st.user.username}" if st.user else (f"@{st.first_name.lower()}.{st.id}" if st.first_name else f"@learner.{st.id}"),
                     'grade': getattr(st, 'grade_level', None) or 'Senior Cohort',
                     'school': school_name,
                     'city': city,
@@ -583,30 +632,32 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
                 })
 
         elif category == 'teachers':
-            teachers_qs = User.objects.filter(role='teacher').select_related('school')
+            teachers_qs = User.objects.filter(role='teacher', is_active=True).select_related('school', 'organisation').order_by('-id')
             if query:
-                teachers_qs = teachers_qs.filter(
-                    Q(first_name__icontains=query) |
-                    Q(last_name__icontains=query) |
-                    Q(username__icontains=query) |
-                    Q(school__name__icontains=query)
+                teachers_qs = _apply_multiword_search(
+                    teachers_qs,
+                    query,
+                    ['first_name', 'last_name', 'username', 'school__name', 'school__city', 'organisation__name']
                 )
 
-            for t in teachers_qs[:60]:
+            for t in teachers_qs[:100]:
                 school = t.school
-                school_name = school.name if school else 'Affiliated Campus'
+                school_name = _user_institution_label(t) if (t.school or t.organisation) else 'Affiliated Campus'
                 city = school.city if school else 'National'
                 listing = PublicCampusListing.objects.filter(school=school).first() if school else None
                 curriculum = infer_curriculum(city, listing.boards if listing else None)
 
+                req_id = None
                 if user and t.id == user.id:
                     conn_status = 'active_user'
                 elif t.id in connected_ids:
                     conn_status = 'connected'
                 elif t.id in sent_request_ids:
                     conn_status = 'sent_request'
+                    req_id = sent_request_map.get(t.id)
                 elif t.id in received_request_ids:
                     conn_status = 'received_request'
+                    req_id = received_request_map.get(t.id)
                 else:
                     conn_status = 'not_connected'
 
@@ -615,6 +666,10 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
 
                 data.append({
                     'id': t.id,
+                    'user_id': t.id,
+                    'target_type': 'teacher',
+                    'has_account': True,
+                    'request_id': req_id,
                     'name': t.get_full_name() or t.username,
                     'subject': 'Sciences & Mathematics' if t.id % 2 == 0 else 'Pure Mathematics',
                     'school': school_name,
@@ -627,26 +682,35 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
                 })
 
         elif category == 'principals':
-            principals_qs = User.objects.filter(role__in=['principal', 'school_admin']).select_related('school')
+            principals_qs = User.objects.filter(
+                role__in=['principal', 'school_admin', 'organisation_admin'],
+                is_active=True
+            ).select_related('school', 'organisation').order_by('-id')
             if query:
-                principals_qs = principals_qs.filter(
-                    Q(first_name__icontains=query) |
-                    Q(last_name__icontains=query) |
-                    Q(username__icontains=query) |
-                    Q(school__name__icontains=query)
+                principals_qs = _apply_multiword_search(
+                    principals_qs,
+                    query,
+                    ['first_name', 'last_name', 'username', 'school__name', 'school__city', 'organisation__name']
                 )
 
-            for p in principals_qs[:60]:
+            for p in principals_qs[:100]:
                 school = p.school
-                school_name = school.name if school else 'Institutional Network'
+                school_name = _user_institution_label(p)
                 city = school.city if school else 'National'
                 listing = PublicCampusListing.objects.filter(school=school).first() if school else None
                 curriculum = infer_curriculum(city, listing.boards if listing else None)
 
+                req_id = None
                 if user and p.id == user.id:
                     conn_status = 'active_user'
                 elif p.id in connected_ids:
                     conn_status = 'connected'
+                elif p.id in sent_request_ids:
+                    conn_status = 'sent_request'
+                    req_id = sent_request_map.get(p.id)
+                elif p.id in received_request_ids:
+                    conn_status = 'received_request'
+                    req_id = received_request_map.get(p.id)
                 else:
                     conn_status = 'not_connected'
 
@@ -655,23 +719,25 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
 
                 data.append({
                     'id': p.id,
+                    'user_id': p.id,
+                    'target_type': 'principal',
+                    'has_account': True,
+                    'request_id': req_id,
                     'name': p.get_full_name() or p.username,
                     'school': school_name,
                     'city': city,
                     'curriculum': curriculum,
-                    'tenure': '7+ Years',
+                    'tenure': _user_role_label(p),
                     'status': conn_status,
                     'avatar_color': color
                 })
 
         else:  # schools
-            schools_qs = School.objects.all().select_related('organisation')
+            schools_qs = School.objects.all().select_related('organisation').order_by('-id')
             if query:
-                schools_qs = schools_qs.filter(
-                    Q(name__icontains=query) | Q(city__icontains=query)
-                )
+                schools_qs = _apply_multiword_search(schools_qs, query, ['name', 'city', 'organisation__name'])
 
-            for s in schools_qs[:60]:
+            for s in schools_qs[:100]:
                 student_count = Student.objects.filter(school=s).count()
                 avg_res = CalculatedStudentResult.objects.filter(
                     student__school=s,
@@ -685,6 +751,7 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
 
                 data.append({
                     'id': s.id,
+                    'target_type': 'school',
                     'name': s.name,
                     'city': f"{s.city or 'National'}",
                     'curriculum': curriculum,
@@ -696,8 +763,8 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
 
         category_counts = {
             'students': Student.objects.count(),
-            'teachers': User.objects.filter(role='teacher').count(),
-            'principals': User.objects.filter(role__in=['principal', 'school_admin']).count(),
+            'teachers': User.objects.filter(role='teacher', is_active=True).count(),
+            'principals': User.objects.filter(role__in=['principal', 'school_admin', 'organisation_admin'], is_active=True).count(),
             'schools': School.objects.count()
         }
 
@@ -751,8 +818,9 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
 
             return Response({
                 'id': st.id,
+                'user_id': st.user_id,
                 'name': f"{st.first_name} {st.last_name}".strip() or f"Student #{st.id}",
-                'handle': f"@{st.first_name.lower()}.{st.id}" if st.first_name else f"@learner.{st.id}",
+                'handle': f"@{st.user.username}" if st.user else (f"@{st.first_name.lower()}.{st.id}" if st.first_name else f"@learner.{st.id}"),
                 'bio': f"Verified learner enrolled at {school_name}. Active participant in academic evaluations and competitive Olympiads.",
                 'school': school_name,
                 'city': f"{city}, {country}",
@@ -774,46 +842,52 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
                 'verified_records': verified_records
             })
         else:
-            t = User.objects.filter(pk=pk, role='teacher').select_related('school').first()
+            allowed_roles = ['teacher'] if member_type == 'teacher' else ['principal', 'school_admin', 'organisation_admin', 'teacher']
+            t = User.objects.filter(pk=pk, role__in=allowed_roles).select_related('school', 'organisation').first()
             if not t:
-                return Response({'error': 'Teacher not found'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'Member profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
             school = t.school
-            school_name = school.name if school else 'Optimus Campus'
+            school_name = _user_institution_label(t)
             city = school.city if school else 'National'
             listing = PublicCampusListing.objects.filter(school=school).first() if school else None
             country = infer_country(city, listing.country if listing else None)
             curriculum = infer_curriculum(city, listing.boards if listing else None)
+            is_leader = t.role in ('principal', 'school_admin', 'organisation_admin')
 
             return Response({
                 'id': t.id,
+                'user_id': t.id,
                 'name': t.get_full_name() or t.username,
-                'title': 'Faculty Senior Instructor',
+                'title': _user_role_label(t) if is_leader else 'Faculty Senior Instructor',
                 'school': school_name,
-                'bio': f"Educator at {school_name} specializing in {curriculum} pedagogy and learning development.",
+                'bio': f"{'Academic leader' if is_leader else 'Educator'} at {school_name} advancing {curriculum} excellence and institutional collaboration.",
                 'city': f"{city}, {country}",
-                'experience': '8+ Years',
+                'experience': 'Leadership' if is_leader else '8+ Years',
                 'curriculum': curriculum,
                 'status': 'verified_educator',
                 'student_cohorts': 45,
                 'pass_rate': '97.5%',
                 'distinction_rate': '74.0%',
-                'certifications': ['Verified Institutional Faculty', 'Curriculum Senior Examiner'],
-                'subjects': ['Advanced Mathematics', 'Physics & Applied Sciences']
+                'certifications': ['Verified Institutional Leadership' if is_leader else 'Verified Institutional Faculty', 'Curriculum Senior Examiner'],
+                'subjects': ['Institutional Strategy' if is_leader else 'Advanced Mathematics', 'Academic Quality']
             })
 
 
 class CommunityConnectionsView(CommunicationBaseAPIView):
     """
-    Manages real database connections and requests using Connection and ConnectionRequest models.
+    Manages real database connections and requests using Connection and ConnectionRequest models,
+    and dispatches live in-app notifications on connection requests and acceptances.
     """
     def get(self, request):
-        user = request.user if request.user.is_authenticated else User.objects.first()
-        if not user:
+        if not request.user.is_authenticated:
             return Response({'received': [], 'connected': [], 'sent': [], 'received_count': 0, 'connected_count': 0})
+        user = request.user
 
         # Received Requests
-        received_reqs = ConnectionRequest.objects.filter(to_user=user, status='pending').select_related('from_user', 'from_user__school')
+        received_reqs = ConnectionRequest.objects.filter(
+            to_user=user, status='pending'
+        ).select_related('from_user', 'from_user__school', 'from_user__organisation').order_by('-created_at')
         received = []
         for req in received_reqs:
             u = req.from_user
@@ -821,8 +895,8 @@ class CommunityConnectionsView(CommunicationBaseAPIView):
                 'request_id': req.id,
                 'user_id': u.id,
                 'name': u.get_full_name() or u.username,
-                'school': u.school.name if u.school else 'Optimus Network',
-                'grade': 'Educator' if u.role == 'teacher' else ('Principal' if u.role == 'principal' else 'Learner'),
+                'school': _user_institution_label(u),
+                'grade': _user_role_label(u),
                 'city': u.school.city if u.school else 'National',
                 'avatar_color': '#10b981',
                 'sent_at': req.created_at.strftime('%Y-%m-%d')
@@ -832,7 +906,10 @@ class CommunityConnectionsView(CommunicationBaseAPIView):
         connections = Connection.objects.filter(
             Q(user_a=user) | Q(user_b=user),
             status='active'
-        ).select_related('user_a', 'user_a__school', 'user_b', 'user_b__school')
+        ).select_related(
+            'user_a', 'user_a__school', 'user_a__organisation',
+            'user_b', 'user_b__school', 'user_b__organisation'
+        ).order_by('-created_at')
 
         connected = []
         for c in connections:
@@ -840,15 +917,17 @@ class CommunityConnectionsView(CommunicationBaseAPIView):
             connected.append({
                 'peer_id': peer.id,
                 'name': peer.get_full_name() or peer.username,
-                'school': peer.school.name if peer.school else 'Optimus Network',
-                'grade': 'Educator' if peer.role == 'teacher' else ('Principal' if peer.role == 'principal' else 'Learner'),
+                'school': _user_institution_label(peer),
+                'grade': _user_role_label(peer),
                 'city': peer.school.city if peer.school else 'National',
                 'avatar_color': '#0ea5e9',
                 'connected_since': c.created_at.strftime('%b %Y')
             })
 
         # Sent Requests
-        sent_reqs = ConnectionRequest.objects.filter(from_user=user, status='pending').select_related('to_user')
+        sent_reqs = ConnectionRequest.objects.filter(
+            from_user=user, status='pending'
+        ).select_related('to_user', 'to_user__school', 'to_user__organisation').order_by('-created_at')
         sent = []
         for req in sent_reqs:
             u = req.to_user
@@ -856,7 +935,8 @@ class CommunityConnectionsView(CommunicationBaseAPIView):
                 'request_id': req.id,
                 'user_id': u.id,
                 'name': u.get_full_name() or u.username,
-                'school': u.school.name if u.school else 'Optimus Network',
+                'school': _user_institution_label(u),
+                'grade': _user_role_label(u),
                 'sent_at': req.created_at.strftime('%Y-%m-%d')
             })
 
@@ -869,56 +949,163 @@ class CommunityConnectionsView(CommunicationBaseAPIView):
         })
 
     def post(self, request):
-        user = request.user if request.user.is_authenticated else User.objects.first()
-        if not user:
-            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
 
-        action = request.data.get('action')  # 'connect', 'accept', 'decline', 'remove'
+        action = request.data.get('action')  # 'connect', 'accept', 'decline', 'withdraw', 'remove'
         target_id = request.data.get('target_id')
+        target_user_id = request.data.get('target_user_id')
+        target_type = (request.data.get('target_type') or '').strip().lower()
+        request_id = request.data.get('request_id')
+
+        def _resolve_target_user():
+            if target_user_id:
+                return User.objects.filter(pk=target_user_id, is_active=True).first()
+            if target_type == 'student' and target_id:
+                st = Student.objects.filter(pk=target_id).select_related('user').first()
+                return st.user if (st and st.user and st.user.is_active) else None
+            if target_id:
+                u = User.objects.filter(pk=target_id, is_active=True).first()
+                if u:
+                    return u
+                if target_type not in ('teacher', 'principal'):
+                    st = Student.objects.filter(pk=target_id).select_related('user').first()
+                    return st.user if (st and st.user and st.user.is_active) else None
+            return None
 
         if action == 'connect':
-            target_user = User.objects.filter(pk=target_id).first()
+            target_user = _resolve_target_user()
             if not target_user:
-                # If target_id was a Student id, try finding student's user
-                st = Student.objects.filter(pk=target_id).first()
-                target_user = st.user if st and st.user else None
-
-            if target_user and target_user.id != user.id:
-                ConnectionRequest.objects.get_or_create(
-                    from_user=user,
-                    to_user=target_user,
-                    defaults={'status': 'pending'}
+                msg = (
+                    'This student does not have an active portal account yet.'
+                    if target_type == 'student'
+                    else 'Recipient user account not found.'
                 )
+                return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
-        elif action == 'accept':
-            req = ConnectionRequest.objects.filter(pk=target_id).first()
-            if req and req.to_user_id == user.id:
-                req.status = 'accepted'
-                req.responded_at = timezone.now()
-                req.save()
-                u_a, u_b = (req.from_user, req.to_user) if req.from_user_id < req.to_user_id else (req.to_user, req.from_user)
+            if target_user.id == user.id:
+                return Response({'detail': 'You cannot send a connection request to yourself.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            u_a_id, u_b_id = (user.id, target_user.id) if user.id < target_user.id else (target_user.id, user.id)
+            if Connection.objects.filter(user_a_id=u_a_id, user_b_id=u_b_id, status='active').exists():
+                return Response({'status': 'success', 'action': action, 'target_id': target_user.id, 'detail': 'You are already connected with this member.'})
+
+            # If target_user already sent a pending request to user, accept it reciprocally!
+            reciprocal = ConnectionRequest.objects.filter(from_user=target_user, to_user=user, status='pending').first()
+            if reciprocal:
+                reciprocal.status = 'accepted'
+                reciprocal.responded_at = timezone.now()
+                reciprocal.save(update_fields=['status', 'responded_at'])
+                u_a, u_b = (target_user, user) if target_user.id < user.id else (user, target_user)
                 Connection.objects.update_or_create(
                     user_a=u_a,
                     user_b=u_b,
-                    defaults={'status': 'active'}
+                    defaults={'status': 'active', 'removed_at': None}
                 )
+                accepter_name = user.get_full_name() or user.username
+                accepter_inst = _user_institution_label(user)
+                Notification.objects.create(
+                    user=target_user,
+                    title=f"Connection Accepted by {accepter_name}"[:180],
+                    body=f"{accepter_name} ({accepter_inst}) accepted your connection request. You are now connected!"[:400]
+                )
+                return Response({'status': 'success', 'action': 'accept', 'target_id': target_user.id, 'detail': 'Connection established!'})
+
+            existing_pending = ConnectionRequest.objects.filter(from_user=user, to_user=target_user, status='pending').first()
+            if existing_pending:
+                return Response({'status': 'success', 'action': action, 'target_id': target_user.id, 'detail': 'Connection request already sent and pending.'})
+
+            req = ConnectionRequest.objects.create(
+                from_user=user,
+                to_user=target_user,
+                status='pending'
+            )
+            sender_name = user.get_full_name() or user.username
+            sender_inst = _user_institution_label(user)
+            Notification.objects.create(
+                user=target_user,
+                title=f"Connection Request from {sender_name}"[:180],
+                body=f"{sender_name} ({sender_inst}) sent you a connection request. Open Communication → Community → Connections & Requests to respond."[:400]
+            )
+            return Response({
+                'status': 'success',
+                'action': action,
+                'target_id': target_user.id,
+                'request_id': req.id,
+                'detail': f"Connection request sent to {target_user.get_full_name() or target_user.username}."
+            })
+
+        elif action == 'accept':
+            lookup_pk = request_id or target_id
+            req = ConnectionRequest.objects.filter(pk=lookup_pk, to_user=user, status='pending').first() if lookup_pk else None
+            if not req:
+                peer_user = _resolve_target_user()
+                if peer_user:
+                    req = ConnectionRequest.objects.filter(from_user=peer_user, to_user=user, status='pending').first()
+
+            if not req:
+                return Response({'detail': 'Pending connection request not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            req.status = 'accepted'
+            req.responded_at = timezone.now()
+            req.save(update_fields=['status', 'responded_at'])
+            u_a, u_b = (req.from_user, req.to_user) if req.from_user_id < req.to_user_id else (req.to_user, req.from_user)
+            Connection.objects.update_or_create(
+                user_a=u_a,
+                user_b=u_b,
+                defaults={'status': 'active', 'removed_at': None}
+            )
+            accepter_name = user.get_full_name() or user.username
+            accepter_inst = _user_institution_label(user)
+            Notification.objects.create(
+                user=req.from_user,
+                title=f"Connection Accepted by {accepter_name}"[:180],
+                body=f"{accepter_name} ({accepter_inst}) accepted your connection request. You are now connected!"[:400]
+            )
+            return Response({'status': 'success', 'action': action, 'target_id': target_id, 'detail': 'Connection request accepted!'})
 
         elif action == 'decline':
-            req = ConnectionRequest.objects.filter(pk=target_id, to_user=user).first()
+            lookup_pk = request_id or target_id
+            req = ConnectionRequest.objects.filter(pk=lookup_pk, to_user=user, status='pending').first() if lookup_pk else None
+            if not req:
+                peer_user = _resolve_target_user()
+                if peer_user:
+                    req = ConnectionRequest.objects.filter(from_user=peer_user, to_user=user, status='pending').first()
             if req:
                 req.status = 'declined'
                 req.responded_at = timezone.now()
-                req.save()
+                req.save(update_fields=['status', 'responded_at'])
+            return Response({'status': 'success', 'action': action, 'target_id': target_id, 'detail': 'Connection request declined.'})
+
+        elif action == 'withdraw':
+            lookup_pk = request_id or target_id
+            req = ConnectionRequest.objects.filter(pk=lookup_pk, from_user=user, status='pending').first() if lookup_pk else None
+            if not req:
+                peer_user = _resolve_target_user()
+                if peer_user:
+                    req = ConnectionRequest.objects.filter(from_user=user, to_user=peer_user, status='pending').first()
+            if req:
+                req.status = 'withdrawn'
+                req.responded_at = timezone.now()
+                req.save(update_fields=['status', 'responded_at'])
+            return Response({'status': 'success', 'action': action, 'target_id': target_id, 'detail': 'Connection request withdrawn.'})
 
         elif action == 'remove':
-            peer_id = target_id
-            u_a_id, u_b_id = (user.id, peer_id) if user.id < peer_id else (peer_id, user.id)
-            Connection.objects.filter(user_a_id=u_a_id, user_b_id=u_b_id).update(
-                status='removed',
-                removed_at=timezone.now()
-            )
+            peer_id = target_user_id or target_id
+            if not target_user_id and target_type == 'student' and target_id:
+                st = Student.objects.filter(pk=target_id).first()
+                if st and st.user_id:
+                    peer_id = st.user_id
+            if peer_id:
+                u_a_id, u_b_id = (user.id, int(peer_id)) if user.id < int(peer_id) else (int(peer_id), user.id)
+                Connection.objects.filter(user_a_id=u_a_id, user_b_id=u_b_id).update(
+                    status='removed',
+                    removed_at=timezone.now()
+                )
+            return Response({'status': 'success', 'action': action, 'target_id': target_id, 'detail': 'Connection removed.'})
 
-        return Response({'status': 'success', 'action': action, 'target_id': target_id, 'detail': f"Action '{action}' processed."})
+        return Response({'detail': f"Unsupported connection action '{action}'."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # =============================================================================

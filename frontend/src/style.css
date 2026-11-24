@@ -4400,21 +4400,37 @@ html, body {
     overflow: hidden !important;
     gap: 8px !important;
   }
+  .mobile-menu {
+    flex-shrink: 0 !important;
+  }
   .breadcrumb {
     min-width: 0 !important;
+    flex: 1 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
     font-size: 12px !important;
     gap: 6px !important;
   }
-  .breadcrumb strong {
+  .breadcrumb strong,
+  .breadcrumb-page-title {
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 120px !important;
+    max-width: 100% !important;
     display: inline-block !important;
     vertical-align: middle !important;
+  }
+  .breadcrumb:has(.breadcrumb-campus-pill) .breadcrumb-page-title {
+    display: none !important;
+  }
+  .breadcrumb-campus-pill {
+    margin-left: 0 !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: inline-block !important;
   }
   .topbar-campus-filter {
     display: none !important;
@@ -5116,6 +5132,9 @@ html, body {
 @media (max-width: 760px) {
   .topbar-right {
     gap: 6px !important;
+  }
+  .topbar-right .today {
+    display: none !important;
   }
   .topbar-right .icon-button {
     width: 32px !important;

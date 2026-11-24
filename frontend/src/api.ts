@@ -79,9 +79,55 @@ if (typeof window !== 'undefined') {
   fetchCsrfToken().catch(() => {});
 }
 
+export async function csrfFetch(url: RequestInfo | URL, options: RequestInit = {}): Promise<Response> {
+  const method = (options.method || 'GET').toUpperCase();
+  const isSafe = ['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method);
+  if (!isSafe) {
+    const cookieVal = getCookieCsrf();
+    if (cookieVal) {
+      csrfToken = cookieVal;
+    } else if (!csrfToken) {
+      await fetchCsrfToken(true);
+    }
+  }
+
+  const buildInit = (token: string): RequestInit => {
+    const headersObj: Record<string, string> = {};
+    if (options.headers) {
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((v, k) => { headersObj[k] = v; });
+      } else if (Array.isArray(options.headers)) {
+        options.headers.forEach(([k, v]) => { headersObj[k] = v; });
+      } else {
+        Object.assign(headersObj, options.headers);
+      }
+    }
+    if (!isSafe && token && !headersObj['X-CSRFToken'] && !headersObj['x-csrftoken']) {
+      headersObj['X-CSRFToken'] = token;
+    }
+    return {
+      credentials: 'include',
+      ...options,
+      headers: headersObj
+    };
+  };
+
+  let res = await fetch(url, buildInit(csrfToken));
+  if (!res.ok && res.status === 403 && !isSafe) {
+    let clonedText = '';
+    try { clonedText = await res.clone().text(); } catch {}
+    if (clonedText.toLowerCase().includes('csrf')) {
+      const freshToken = await fetchCsrfToken(true);
+      res = await fetch(url, buildInit(freshToken));
+    }
+  }
+  return res;
+}
+
 export async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
-  if (method !== 'GET') {
+  const isSafe = ['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method);
+  if (!isSafe) {
     const cookieVal = getCookieCsrf();
     if (cookieVal) {
       csrfToken = cookieVal;
@@ -98,7 +144,7 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     cache: options.cache || (isAuthMe ? 'no-store' : 'default'),
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(method !== 'GET' && token ? { 'X-CSRFToken': token } : {}),
+      ...(!isSafe && token ? { 'X-CSRFToken': token } : {}),
       ...(isAuthMe ? { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } : {}),
       ...(options.headers || {})
     }
@@ -107,7 +153,7 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
   let response = await makeReq(csrfToken);
 
   // If 403 CSRF failure occurs on a mutation, get fresh token and retry once
-  if (!response.ok && response.status === 403 && method !== 'GET') {
+  if (!response.ok && response.status === 403 && !isSafe) {
     let clonedText = '';
     try { clonedText = await response.clone().text(); } catch {}
     if (clonedText.toLowerCase().includes('csrf')) {
@@ -189,7 +235,11 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     return {} as T;
   }
   try {
-    return JSON.parse(text) as T;
+    const parsed = JSON.parse(text) as any;
+    if (parsed && typeof parsed === 'object' && typeof parsed.csrfToken === 'string' && parsed.csrfToken) {
+      csrfToken = parsed.csrfToken;
+    }
+    return parsed as T;
   } catch {
     return {} as T;
   }

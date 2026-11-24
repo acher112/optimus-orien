@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Download, ChevronDown, FileSpreadsheet, FileText, FileCheck, RefreshCw, AlertCircle } from 'lucide-react';
-import { getCookieCsrf, fetchCsrfToken } from './api';
+import { csrfFetch } from './api';
 
 export interface ExportColumn {
   key: string;
@@ -82,17 +82,12 @@ export default function ExportMenu({
       } else {
         // Use universal client-side export
         const rowData = typeof rows === 'function' ? rows() : (rows || []);
-        let csrf = getCookieCsrf();
-        if (!csrf) {
-          csrf = await fetchCsrfToken(true);
-        }
 
-        response = await fetch('/api/v1/export/', {
+        response = await csrfFetch('/api/v1/export/', {
           method: 'POST',
           credentials: 'include',
           headers: {
-            'Content-Type': 'application/json',
-            ...(csrf ? { 'X-CSRFToken': csrf } : {})
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             title,

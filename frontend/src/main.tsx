@@ -4,7 +4,7 @@ import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Award, Banknote, BarChart3, Bell, BookOpen,
   Briefcase,
   Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft,
-  ChevronRight, ClipboardCheck, ClipboardList, Download, FileBarChart, GraduationCap,
+  ClipboardCheck, ClipboardList, Download, FileBarChart, GraduationCap,
   HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, MoreHorizontal,
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
@@ -553,7 +553,7 @@ const resourceInfo: Record<string, { api: string; title: string; desc: string; c
 };
 
 export function getNotificationCategory(n: any): {
-  id: 'attendance' | 'announcements' | 'billing' | 'academic' | 'system';
+  id: 'attendance' | 'announcements' | 'billing' | 'academic' | 'community' | 'system';
   label: string;
   badgeColor: string;
   badgeBg: string;
@@ -563,6 +563,16 @@ export function getNotificationCategory(n: any): {
   const t = (n?.title || '').toLowerCase();
   const b = (n?.body || '').toLowerCase();
 
+  if (t.includes('connection') || b.includes('connection request') || b.includes('community')) {
+    return {
+      id: 'community',
+      label: 'Community',
+      badgeColor: '#0f766e',
+      badgeBg: '#ccfbf1',
+      badgeBorder: '#99f6e4',
+      icon: Users
+    };
+  }
   if (t.includes('attendance') || b.includes('attendance') || t.includes('absent') || t.includes('leave')) {
     return {
       id: 'attendance',
@@ -1320,7 +1330,7 @@ function App() {
         });
       });
 
-      (notifList || []).slice(0, 10).forEach((n: any) => {
+      (notifList || []).slice(0, 15).forEach((n: any) => {
         const isAnn = n.title?.toLowerCase().includes('announcement');
         if (!items.some(it => it.title === n.title || it.title === n.title.replace(/^\[.*?\]\s*(Announcement:\s*)?/i, ''))) {
           items.push({
@@ -1334,6 +1344,7 @@ function App() {
         }
       });
 
+      items.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
       setPopNotifs(items);
     } catch {
       // ignore
@@ -1343,9 +1354,20 @@ function App() {
   }, [user]);
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+    fetchHeaderNotifications();
+    const timer = window.setInterval(() => {
       fetchHeaderNotifications();
-    }
+    }, 25000);
+    const onFocus = () => fetchHeaderNotifications();
+    const onRefresh = () => fetchHeaderNotifications();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('optimus:refresh-notifications', onRefresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('optimus:refresh-notifications', onRefresh);
+    };
   }, [user, fetchHeaderNotifications]);
 
   const dynColor = useMemo(() => [accentHex, '#23b7a0', '#f29d50', '#6c9eff', '#e477a1', '#b4a0e9'], [accentHex]);
@@ -2992,18 +3014,17 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu" onClick={() => setSidebar(true)} aria-label="Open menu"><Menu size={21} /></button>
             <div className="breadcrumb">
-              Workspace <ChevronRight size={14} /> <strong>{page === 'Overview' && user.role === 'teacher' ? 'My Home' : page === 'Plan & Billing' ? 'Upgrade Plans' : page}</strong>
+              <strong className="breadcrumb-page-title">{page === 'Overview' && user.role === 'teacher' ? 'My Home' : page === 'Plan & Billing' ? 'Upgrade Plans' : page}</strong>
               {activeCampus && (
                 <span
                   className="breadcrumb-campus-pill"
                   style={{
-                    marginLeft: 8,
-                    padding: '2px 8px',
+                    padding: '3px 10px',
                     background: 'var(--brand-primary-light, rgba(6, 182, 212, 0.12))',
                     color: 'var(--brand-primary-text, var(--brand-primary, #06b6d4))',
                     border: '1px solid var(--brand-primary-border, rgba(6, 182, 212, 0.28))',
                     borderRadius: 6,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700
                   }}
                 >

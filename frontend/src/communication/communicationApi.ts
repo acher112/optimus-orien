@@ -76,13 +76,17 @@ export interface SchoolDetailModalData {
 
 export interface CommunityDirectoryItem {
   id: number;
+  user_id?: number | null;
+  target_type?: 'student' | 'teacher' | 'principal' | 'school' | string;
+  has_account?: boolean;
+  request_id?: number | null;
   name: string;
   handle?: string;
   grade?: string;
   school?: string;
   city?: string;
   curriculum?: string;
-  status: 'active_user' | 'connected' | 'received_request' | 'sent_request' | 'not_connected' | 'verified' | 'provisional';
+  status: 'active_user' | 'connected' | 'received_request' | 'sent_request' | 'not_connected' | 'no_account' | 'verified' | 'provisional';
   avatar_color?: string;
   badges?: string[];
   average?: number;
@@ -219,16 +223,20 @@ export const communicationApi = {
       `/api/v1/communication/community/directory/?${q}`
     );
   },
-  getMemberProfile: (type: 'student' | 'teacher', id: number) =>
+  getMemberProfile: (type: 'student' | 'teacher' | 'principal', id: number) =>
     request<StudentProfileData>(`/api/v1/communication/community/profile/${type}/${id}/`),
   getConnections: () =>
     request<{ received: any[]; connected: any[]; sent: any[]; received_count: number; connected_count: number }>(
       '/api/v1/communication/community/connections/'
     ),
-  handleConnectionAction: (action: string, target_id: number) =>
-    request<{ status: string; detail: string }>('/api/v1/communication/community/connections/', {
+  handleConnectionAction: (
+    action: string,
+    target_id: number,
+    extra?: { target_user_id?: number | null; target_type?: string; request_id?: number | null }
+  ) =>
+    request<{ status: string; detail: string; action?: string; request_id?: number }>('/api/v1/communication/community/connections/', {
       method: 'POST',
-      body: JSON.stringify({ action, target_id })
+      body: JSON.stringify({ action, target_id, ...(extra || {}) })
     }),
 
   // 3. Online Assessments & Quiz Competitions

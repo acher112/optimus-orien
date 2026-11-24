@@ -5,6 +5,7 @@ import {
   Clock, XCircle, RefreshCw, Check, Sparkles, ExternalLink,
   Trophy, Star, Award
 } from 'lucide-react';
+import { csrfFetch } from '../api';
 import './publicDirectory.css';
 
 interface SchoolPublicProfileEditorProps {
@@ -177,7 +178,7 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/v1/schools/${selectedSchoolId}/public-profile/`, {
+      const res = await csrfFetch(`/api/v1/schools/${selectedSchoolId}/public-profile/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -204,7 +205,7 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/v1/schools/${selectedSchoolId}/public-profile/submit/`, {
+      const res = await csrfFetch(`/api/v1/schools/${selectedSchoolId}/public-profile/submit/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -234,7 +235,7 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
     }
     setUnpublishing(true);
     try {
-      const res = await fetch(`/api/v1/schools/${selectedSchoolId}/public-profile/unpublish/`, {
+      const res = await csrfFetch(`/api/v1/schools/${selectedSchoolId}/public-profile/unpublish/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -256,7 +257,7 @@ export const SchoolPublicProfileEditor: React.FC<SchoolPublicProfileEditorProps>
   // Handle Enquiry Status
   const handleMarkEnquiryHandled = async (enquiryId: number) => {
     try {
-      const res = await fetch(`/api/v1/schools/${selectedSchoolId}/public-enquiries/${enquiryId}/handle/`, {
+      const res = await csrfFetch(`/api/v1/schools/${selectedSchoolId}/public-enquiries/${enquiryId}/handle/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

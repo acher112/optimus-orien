@@ -39,9 +39,10 @@ export default function CommunityView({ notify }: CommunityViewProps) {
 
   // Member Profile Modal
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
-  const [selectedProfileType, setSelectedProfileType] = useState<'student' | 'teacher'>('student');
+  const [selectedProfileType, setSelectedProfileType] = useState<'student' | 'teacher' | 'principal'>('student');
   const [profileData, setProfileData] = useState<StudentProfileData | any>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [actionPendingKey, setActionPendingKey] = useState<string | null>(null);
 
   // Fetch Directory Items
   const loadDirectory = useCallback(async () => {
@@ -70,6 +71,10 @@ export default function CommunityView({ notify }: CommunityViewProps) {
   }, []);
 
   useEffect(() => {
+    loadConnections();
+  }, [loadConnections]);
+
+  useEffect(() => {
     if (activeTab === 'discover') {
       loadDirectory();
     } else {
@@ -78,9 +83,10 @@ export default function CommunityView({ notify }: CommunityViewProps) {
   }, [activeTab, loadDirectory, loadConnections]);
 
   // Open profile modal
-  const handleOpenProfile = async (id: number, type: 'student' | 'teacher') => {
+  const handleOpenProfile = async (id: number, type: 'student' | 'teacher' | 'principal') => {
     setSelectedProfileId(id);
     setSelectedProfileType(type);
+    setProfileData(null);
     setProfileLoading(true);
     try {
       const res = await communicationApi.getMemberProfile(type, id);
@@ -93,14 +99,25 @@ export default function CommunityView({ notify }: CommunityViewProps) {
   };
 
   // Handle connection action
-  const handleAction = async (action: string, targetId: number) => {
+  const handleAction = async (
+    action: string,
+    targetId: number,
+    extra?: { target_user_id?: number | null; target_type?: string; request_id?: number | null }
+  ) => {
+    const key = `${action}-${targetId}-${extra?.target_user_id || ''}`;
+    setActionPendingKey(key);
     try {
-      await communicationApi.handleConnectionAction(action, targetId);
-      notify?.(`Connection action '${action}' completed.`);
-      loadDirectory();
-      loadConnections();
-    } catch (err) {
+      const res = await communicationApi.handleConnectionAction(action, targetId, extra);
+      notify?.(res?.detail || `Connection action '${action}' completed.`, 'success');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('optimus:refresh-notifications'));
+      }
+      await Promise.all([loadDirectory(), loadConnections()]);
+    } catch (err: any) {
       console.error(err);
+      notify?.(err?.message || 'Could not process connection request.', 'error');
+    } finally {
+      setActionPendingKey(null);
     }
   };
 
@@ -257,34 +274,74 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTop: '1px solid rgba(241, 245, 249, 0.9)' }}>
-                      <button
-                        className="comm-cat-pill"
-                        style={{ padding: '6px 12px', fontSize: 12 }}
-                        onClick={() => handleOpenProfile(it.id, category === 'teachers' ? 'teacher' : 'student')}
-                      >
-                        View Profile
-                      </button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTop: '1px solid rgba(241, 245, 249, 0.9)', gap: 8, flexWrap: 'wrap' }}>
+                      {category !== 'schools' ? (
+                        <button
+                          className="comm-cat-pill"
+                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          onClick={() => handleOpenProfile(it.id, category === 'teachers' ? 'teacher' : category === 'principals' ? 'principal' : 'student')}
+                        >
+                          View Profile
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
+                          {it.students || 0} Enrolled Learners
+                        </span>
+                      )}
 
-                      {it.status === 'connected' ? (
+                      {category === 'schools' ? (
+                        <span style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 8, background: it.status === 'verified' ? '#ecfdf5' : '#f1f5f9', color: it.status === 'verified' ? '#047857' : '#64748b', fontWeight: 700 }}>
+                          {it.status === 'verified' ? 'Verified School' : 'Registered Campus'}
+                        </span>
+                      ) : it.status === 'no_account' ? (
+                        <span
+                          title="This student has not activated a portal login account yet."
+                          style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 8, background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0', fontWeight: 600 }}
+                        >
+                          No Portal Account
+                        </span>
+                      ) : it.status === 'connected' ? (
                         <span className="comm-badge-connected">
                           <CheckCircle2 size={13} /> Connected
                         </span>
                       ) : it.status === 'received_request' ? (
                         <button
                           className="comm-btn-connect"
-                          onClick={() => handleAction('accept', it.id)}
+                          disabled={actionPendingKey !== null}
+                          onClick={() => handleAction('accept', it.request_id || it.id, {
+                            target_user_id: it.user_id,
+                            target_type: it.target_type,
+                            request_id: it.request_id
+                          })}
                         >
                           Accept Request
                         </button>
                       ) : it.status === 'sent_request' ? (
-                        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Request Sent</span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 12, color: '#0d9488', fontWeight: 700 }}>Request Sent</span>
+                          <button
+                            className="comm-cat-pill"
+                            style={{ padding: '4px 8px', fontSize: 11 }}
+                            disabled={actionPendingKey !== null}
+                            onClick={() => handleAction('withdraw', it.request_id || it.id, {
+                              target_user_id: it.user_id,
+                              target_type: it.target_type,
+                              request_id: it.request_id
+                            })}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       ) : it.status === 'active_user' ? (
                         <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 6, background: '#ede9fe', color: '#7c3aed', fontWeight: 700 }}>You</span>
                       ) : (
                         <button
                           className="comm-btn-connect"
-                          onClick={() => handleAction('connect', it.id)}
+                          disabled={actionPendingKey !== null}
+                          onClick={() => handleAction('connect', it.id, {
+                            target_user_id: it.user_id,
+                            target_type: it.target_type || (category === 'teachers' ? 'teacher' : category === 'principals' ? 'principal' : 'student')
+                          })}
                         >
                           <UserPlus size={13} /> Connect
                         </button>
@@ -321,11 +378,58 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-                        <button className="comm-cat-pill" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => handleAction('decline', req.request_id)}>
+                        <button
+                          className="comm-cat-pill"
+                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          disabled={actionPendingKey !== null}
+                          onClick={() => handleAction('decline', req.request_id, { target_user_id: req.user_id, request_id: req.request_id })}
+                        >
                           Ignore
                         </button>
-                        <button className="comm-btn-connect" onClick={() => handleAction('accept', req.request_id)}>
+                        <button
+                          className="comm-btn-connect"
+                          disabled={actionPendingKey !== null}
+                          onClick={() => handleAction('accept', req.request_id, { target_user_id: req.user_id, request_id: req.request_id })}
+                        >
                           Accept
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sent Invitations */}
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, color: '#1e1633' }}>
+                Sent Requests ({connections.sent?.length || 0})
+              </h3>
+              {!connections.sent || connections.sent.length === 0 ? (
+                <div style={{ padding: 20, background: '#fffdf9', border: '1px solid rgba(254, 230, 133, 0.8)', borderRadius: 14, color: '#64748b', fontSize: 13 }}>
+                  No pending outgoing requests.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                  {connections.sent.map((req) => (
+                    <div key={req.request_id} className="comm-card" style={{ padding: 16 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f59e0b', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {req.name.charAt(0)}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633' }}>{req.name}</div>
+                          <div style={{ fontSize: 12, color: '#64748b' }}>{req.school} {req.grade ? `• ${req.grade}` : ''} • Sent {req.sent_at}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                        <button
+                          className="comm-cat-pill"
+                          style={{ padding: '5px 12px', fontSize: 11.5 }}
+                          disabled={actionPendingKey !== null}
+                          onClick={() => handleAction('withdraw', req.request_id, { target_user_id: req.user_id, request_id: req.request_id })}
+                        >
+                          Withdraw Request
                         </button>
                       </div>
                     </div>
@@ -339,26 +443,37 @@ export default function CommunityView({ notify }: CommunityViewProps) {
               <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, color: '#1e1633' }}>
                 Active Network ({connections.connected?.length || 0})
               </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-                {connections.connected?.map((peer) => (
-                  <div key={peer.peer_id} className="comm-card" style={{ padding: 16 }}>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: peer.avatar_color || '#0ea5e9', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {peer.name.charAt(0)}
+              {!connections.connected || connections.connected.length === 0 ? (
+                <div style={{ padding: 20, background: '#fffdf9', border: '1px solid rgba(254, 230, 133, 0.8)', borderRadius: 14, color: '#64748b', fontSize: 13 }}>
+                  You have no active connections yet. Discover students, educators, and schools to connect!
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                  {connections.connected.map((peer) => (
+                    <div key={peer.peer_id} className="comm-card" style={{ padding: 16 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: peer.avatar_color || '#0ea5e9', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {peer.name.charAt(0)}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633' }}>{peer.name}</div>
+                          <div style={{ fontSize: 12, color: '#64748b' }}>{peer.school} • {peer.grade}</div>
+                        </div>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633' }}>{peer.name}</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>{peer.school} • {peer.grade}</div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
+                        <button
+                          className="comm-cat-pill"
+                          style={{ padding: '5px 12px', fontSize: 11.5 }}
+                          disabled={actionPendingKey !== null}
+                          onClick={() => handleAction('remove', peer.peer_id, { target_user_id: peer.peer_id })}
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
-                      <button className="comm-cat-pill" style={{ padding: '5px 12px', fontSize: 11.5 }} onClick={() => handleAction('remove', peer.peer_id)}>
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -396,7 +511,7 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                     <div className="comm-profile-hero">
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#ea580c', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          Verified Institutional Learner
+                          {selectedProfileType === 'student' ? 'Verified Institutional Learner' : selectedProfileType === 'teacher' ? 'Verified Faculty Educator' : 'Verified Institutional Leader'}
                         </span>
                         <h3 style={{ fontSize: 17, fontWeight: 800, color: '#1e1633', margin: '4px 0 6px 0' }}>{profileData.name}</h3>
                         <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.55, margin: 0 }}>

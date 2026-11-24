@@ -5,6 +5,7 @@ import {
   ChevronLeft, ArrowLeft, Send, Check, UserRound, Home
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { csrfFetch } from '../api';
 import { PublicCampusDetailData, RevealedContactInfo } from './publicDirectoryTypes';
 import './publicDirectory.css';
 
@@ -68,7 +69,7 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
     if (contactRevealed) return;
     setRevealing(true);
     try {
-      const res = await fetch(`/api/v1/public/schools/${slug}/reveal-contact/`, {
+      const res = await csrfFetch(`/api/v1/public/schools/${slug}/reveal-contact/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -94,7 +95,7 @@ export default function PublicSchoolProfilePage({ slug, onNavigate }: PublicScho
     setEnquiryError(null);
 
     try {
-      const res = await fetch(`/api/v1/public/schools/${slug}/enquiry/`, {
+      const res = await csrfFetch(`/api/v1/public/schools/${slug}/enquiry/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

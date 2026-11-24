@@ -4,7 +4,7 @@ import {
   Filter, Plus, RefreshCw, AlertCircle, CheckCircle2, ChevronRight, X,
   TrendingUp, Calendar, AlertTriangle
 } from 'lucide-react';
-import { type User } from './api';
+import { type User, csrfFetch } from './api';
 import './record.css';
 
 interface RecordProps {
@@ -248,7 +248,7 @@ export default function Record({
       return;
     }
     try {
-      const res = await fetch(`/api/v1/records/events/${voidModal.type}/${voidModal.eventId}/void/`, {
+      const res = await csrfFetch(`/api/v1/records/events/${voidModal.type}/${voidModal.eventId}/void/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

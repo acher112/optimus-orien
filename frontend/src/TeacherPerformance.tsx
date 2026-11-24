@@ -5,7 +5,7 @@ import {
   ShieldAlert, BookOpen, Clock, HeartHandshake, Globe, Check,
   BarChart3, Layers, FileText
 } from 'lucide-react';
-import { type User } from './api';
+import { type User, csrfFetch } from './api';
 import { getScoreColorStyle, getRiskBadgeStyle, getDifferenceStyle } from './performanceColors';
 import './record.css';
 
@@ -236,7 +236,7 @@ export default function TeacherPerformance({
   const handleTestPreview = async () => {
     setSimulating(true);
     try {
-      const res = await fetch('/api/v1/teacher-performance/criteria/preview/', {
+      const res = await csrfFetch('/api/v1/teacher-performance/criteria/preview/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -266,7 +266,7 @@ export default function TeacherPerformance({
       return;
     }
     try {
-      const res = await fetch('/api/v1/teacher-performance/criteria/', {
+      const res = await csrfFetch('/api/v1/teacher-performance/criteria/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -291,7 +291,7 @@ export default function TeacherPerformance({
   // Alert Action (Confirm, Resolve, etc.)
   const handleAlertAction = async (alertId: number, action: string) => {
     try {
-      const res = await fetch(`/api/v1/teacher-performance/alerts/${alertId}/action/`, {
+      const res = await csrfFetch(`/api/v1/teacher-performance/alerts/${alertId}/action/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -319,7 +319,7 @@ export default function TeacherPerformance({
       return;
     }
     try {
-      const res = await fetch('/api/v1/teacher-performance/notes/', {
+      const res = await csrfFetch('/api/v1/teacher-performance/notes/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

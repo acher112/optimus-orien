@@ -7,6 +7,7 @@ from core.models import (
     Enrollment,
     FinanceCategory,
     FinanceEntry,
+    Notification,
     Organisation,
     School,
     SchoolClass,
@@ -14,6 +15,8 @@ from core.models import (
     Subject,
     SubjectMessage,
     User,
+    ConnectionRequest,
+    Connection,
 )
 
 
@@ -180,3 +183,92 @@ class CommunicationAndProfileTests(TestCase):
         self.assertIn('Salaries', exp_cats)
         self.assertIn('Rent', exp_cats)
         self.assertEqual(res.data['total_expense'], 70000.0)
+
+    def test_cross_campus_and_cross_org_student_connection_and_notifications(self):
+        """
+        Verify sending connection requests across campuses & other registered accounts
+        resolves the student's actual user (never colliding Student.id vs User.id),
+        dispatches Notification objects to both recipient and requester, and updates statuses.
+        """
+        # Another campus in same org + another registered institution with its own student
+        other_campus = School.objects.create(organisation=self.org, name='South Campus', code='SOUTH')
+        other_org = Organisation.objects.create(name='Bright Future Academy', code='bright-future')
+        other_org_school = School.objects.create(organisation=other_org, name='Islamabad Flagship', code='ISB-1')
+
+        # Unlinked seed student whose Student.id will collide with a low User.id (like self.admin.id)
+        unlinked_student = Student.objects.create(
+            school=other_campus, admission_number='UNLINKED-1', first_name='NoAccount', last_name='Learner',
+            enrolled_on='2026-09-01', user=None
+        )
+
+        other_student_user = User.objects.create_user(
+            username='isb_student_1', password='Password123!', role='student',
+            organisation=other_org, school=other_org_school, first_name='Zara', last_name='Tariq'
+        )
+        other_student = Student.objects.create(
+            school=other_org_school, admission_number='ISB-ADM-9', first_name='Zara', last_name='Tariq',
+            enrolled_on='2026-09-01', user=other_student_user
+        )
+
+        # 1. Admin searches directory for Zara Tariq
+        self.client.force_authenticate(user=self.admin)
+        dir_res = self.client.get('/api/v1/communication/community/directory/?category=students&search=Zara+Tariq')
+        self.assertEqual(dir_res.status_code, 200)
+        results = dir_res.data['results']
+        self.assertEqual(len(results), 1)
+        item = results[0]
+        self.assertEqual(item['user_id'], other_student_user.id)
+        self.assertTrue(item['has_account'])
+        self.assertEqual(item['status'], 'not_connected')
+
+        # 2. Unlinked student shows status 'no_account' and rejects connect with 400 (never hits unrelated User.id!)
+        dir_unlinked = self.client.get('/api/v1/communication/community/directory/?category=students&search=NoAccount')
+        self.assertEqual(dir_unlinked.status_code, 200)
+        self.assertEqual(dir_unlinked.data['results'][0]['status'], 'no_account')
+        bad_conn = self.client.post('/api/v1/communication/community/connections/', {
+            'action': 'connect',
+            'target_id': unlinked_student.id,
+            'target_type': 'student',
+            'target_user_id': None,
+        }, format='json')
+        self.assertEqual(bad_conn.status_code, 400)
+        self.assertFalse(ConnectionRequest.objects.filter(from_user=self.admin).exists())
+
+        # 3. Admin sends connection request to other registered account's student
+        conn_res = self.client.post('/api/v1/communication/community/connections/', {
+            'action': 'connect',
+            'target_id': other_student.id,
+            'target_user_id': other_student_user.id,
+            'target_type': 'student',
+        }, format='json')
+        self.assertEqual(conn_res.status_code, 200)
+        req_id = conn_res.data['request_id']
+        self.assertTrue(ConnectionRequest.objects.filter(id=req_id, from_user=self.admin, to_user=other_student_user, status='pending').exists())
+
+        # Directory now shows 'sent_request'
+        dir_after = self.client.get('/api/v1/communication/community/directory/?category=students&search=Zara')
+        self.assertEqual(dir_after.data['results'][0]['status'], 'sent_request')
+
+        # 4. Verify Notification created for recipient student AND visible in /api/v1/notifications/
+        self.client.force_authenticate(user=other_student_user)
+        notif_res = self.client.get('/api/v1/notifications/')
+        self.assertEqual(notif_res.status_code, 200)
+        notif_titles = [n['title'] for n in notif_res.data['results']]
+        self.assertTrue(any('Connection Request' in t for t in notif_titles))
+
+        # Recipient sees incoming request & accepts it
+        inbox_res = self.client.get('/api/v1/communication/community/connections/')
+        self.assertEqual(inbox_res.data['received_count'], 1)
+        self.assertEqual(inbox_res.data['received'][0]['request_id'], req_id)
+
+        accept_res = self.client.post('/api/v1/communication/community/connections/', {
+            'action': 'accept',
+            'target_id': req_id,
+            'request_id': req_id,
+        }, format='json')
+        self.assertEqual(accept_res.status_code, 200)
+
+        # Mutual Connection is active & Admin got acceptance notification
+        u_a, u_b = min(self.admin.id, other_student_user.id), max(self.admin.id, other_student_user.id)
+        self.assertTrue(Connection.objects.filter(user_a_id=u_a, user_b_id=u_b, status='active').exists())
+        self.assertTrue(Notification.objects.filter(user=self.admin, title__icontains='Connection Accepted').exists())

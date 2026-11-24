@@ -13,7 +13,7 @@ from core.models import (
     User, Student, School, SchoolNetworkSetting, NetworkProfile,
     NetworkConsent, BoardSnapshot, BadgeAward, ConnectionRequest,
     Connection, Block, Mute, Report, NetworkAuditEvent, Conversation,
-    UserKeyBundle, EncryptedMessage
+    UserKeyBundle, EncryptedMessage, Notification
 )
 
 
@@ -419,6 +419,16 @@ def send_connection_request(from_user: User, to_user: User, note: str = "") -> C
         target_id=to_user.id,
         metadata={'request_id': req.id}
     )
+
+    if not Mute.objects.filter(muter=to_user, muted=from_user).exists():
+        sender_name = from_user.get_full_name() or from_user.username
+        sender_school = from_user.school.name if from_user.school else (from_user.organisation.name if from_user.organisation else 'Optimus Network')
+        Notification.objects.create(
+            user=to_user,
+            title=f"Connection Request from {sender_name}"[:180],
+            body=f"{sender_name} ({sender_school}) sent you a connection request."[:400]
+        )
+
     return req
 
 
@@ -457,6 +467,15 @@ def accept_connection_request(request_id: int, responder: User) -> ConnectionReq
             target_id=req.from_user_id,
             metadata={'connection_id': conn.id}
         )
+
+        if not Mute.objects.filter(muter=req.from_user, muted=responder).exists():
+            accepter_name = responder.get_full_name() or responder.username
+            accepter_school = responder.school.name if responder.school else (responder.organisation.name if responder.organisation else 'Optimus Network')
+            Notification.objects.create(
+                user=req.from_user,
+                title=f"Connection Accepted by {accepter_name}"[:180],
+                body=f"{accepter_name} ({accepter_school}) accepted your connection request. You are now connected!"[:400]
+            )
     return req
 
 
