@@ -6543,7 +6543,16 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
     e.preventDefault();
     setSaving(true);
     try {
-      await registerCampus(addForm);
+      const payload: Record<string, any> = {
+        ...addForm,
+        attendance_alert_threshold: addForm.attendance_alert_threshold !== '' && addForm.attendance_alert_threshold != null
+          ? Number(addForm.attendance_alert_threshold)
+          : 80,
+        grade_alert_threshold: addForm.grade_alert_threshold !== '' && addForm.grade_alert_threshold != null
+          ? Number(addForm.grade_alert_threshold)
+          : 60,
+      };
+      await registerCampus(payload);
       setAddModal(false);
       setAddForm({ campus_type: 'Branch Campus', country: 'PK', timezone: 'Asia/Karachi', attendance_alert_threshold: '80', grade_alert_threshold: '60' });
       notify('Campus registered successfully with initialised configuration');
@@ -6578,8 +6587,12 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
         code: editForm.code,
         city: editForm.city,
         principal_name: editForm.principal_name,
-        attendance_alert_threshold: Number(editForm.attendance_alert_threshold),
-        grade_alert_threshold: Number(editForm.grade_alert_threshold),
+        attendance_alert_threshold: editForm.attendance_alert_threshold !== '' && editForm.attendance_alert_threshold != null
+          ? Number(editForm.attendance_alert_threshold)
+          : 80,
+        grade_alert_threshold: editForm.grade_alert_threshold !== '' && editForm.grade_alert_threshold != null
+          ? Number(editForm.grade_alert_threshold)
+          : 60,
       });
       setEditModal(false);
       setEditCampus(null);
@@ -6976,8 +6989,8 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
                 <label>Campus code <span className="required">*</span><input required value={editForm.code || ''} onChange={e => setEditField('code', e.target.value)} /></label>
                 <label>Principal name<input value={editForm.principal_name || ''} onChange={e => setEditField('principal_name', e.target.value)} placeholder="e.g. Dr. Ahmed Khan" /></label>
                 <label>City<input value={editForm.city || ''} onChange={e => setEditField('city', e.target.value)} /></label>
-                <label>Attendance alert threshold (%)<input type="number" min="0" max="100" value={editForm.attendance_alert_threshold || '80'} onChange={e => setEditField('attendance_alert_threshold', e.target.value)} /></label>
-                <label>Academic alert threshold (%)<input type="number" min="0" max="100" value={editForm.grade_alert_threshold || '60'} onChange={e => setEditField('grade_alert_threshold', e.target.value)} /></label>
+                <label>Attendance alert threshold (%)<input type="number" min="0" max="100" value={editForm.attendance_alert_threshold ?? ''} onChange={e => setEditField('attendance_alert_threshold', e.target.value)} /></label>
+                <label>Academic alert threshold (%)<input type="number" min="0" max="100" value={editForm.grade_alert_threshold ?? ''} onChange={e => setEditField('grade_alert_threshold', e.target.value)} /></label>
               </div>
               <div className="modal-footer">
                 <button type="button" className="outline-btn" onClick={() => setEditModal(false)}>Cancel</button>
@@ -7046,8 +7059,8 @@ function CampusesPage({ user, notify, onSetupSchool, onCampusesChanged, onSelect
                 <div className="modal-section-title">3. Official Communications & Thresholds</div>
                 <label>Official campus email<input type="email" value={addForm.contact_email || ''} onChange={e => setAddField('contact_email', e.target.value)} placeholder="admin.campus@institution.edu" /></label>
                 <label>Contact phone<input value={addForm.contact_phone || ''} onChange={e => setAddField('contact_phone', e.target.value)} placeholder="+92 21 34567890" /></label>
-                <label>Attendance alert threshold (%)<input type="number" min="0" max="100" value={addForm.attendance_alert_threshold || '80'} onChange={e => setAddField('attendance_alert_threshold', e.target.value)} /></label>
-                <label>Academic alert threshold (%)<input type="number" min="0" max="100" value={addForm.grade_alert_threshold || '60'} onChange={e => setAddField('grade_alert_threshold', e.target.value)} /></label>
+                <label>Attendance alert threshold (%)<input type="number" min="0" max="100" value={addForm.attendance_alert_threshold ?? ''} onChange={e => setAddField('attendance_alert_threshold', e.target.value)} /></label>
+                <label>Academic alert threshold (%)<input type="number" min="0" max="100" value={addForm.grade_alert_threshold ?? ''} onChange={e => setAddField('grade_alert_threshold', e.target.value)} /></label>
               </div>
               <div className="modal-footer">
                 <button type="button" className="outline-btn" onClick={() => setAddModal(false)}>Cancel</button>

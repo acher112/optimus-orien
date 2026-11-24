@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   BookOpen, Upload, Download, FileText, FileSpreadsheet, FileVideo,
-  FileImage, FileArchive, Search, Plus, RefreshCw, AlertCircle,
+  FileImage, FileArchive, FileAudio, Search, Plus, RefreshCw, AlertCircle,
   CheckCircle2, Clock, Trash2, Edit3, Archive, Eye, Users, Layers,
   ChevronDown, X, Sparkles, Filter, ShieldCheck, ArrowRight
 } from 'lucide-react';
@@ -377,11 +377,13 @@ export default function StudyMaterials({
   const getFileIcon = (filename: string, contentType: string) => {
     const ext = filename.split('.').pop()?.toLowerCase() || '';
     if (ext === 'pdf' || contentType.includes('pdf')) return <FileText size={20} color="#e11d48" />;
-    if (['doc', 'docx'].includes(ext) || contentType.includes('word')) return <FileText size={20} color="#2563eb" />;
-    if (['xls', 'xlsx', 'csv'].includes(ext) || contentType.includes('spreadsheet') || contentType.includes('excel')) return <FileSpreadsheet size={20} color="#059669" />;
-    if (['mp4', 'mov', 'avi'].includes(ext) || contentType.includes('video')) return <FileVideo size={20} color="#7c3aed" />;
-    if (['png', 'jpg', 'jpeg'].includes(ext) || contentType.includes('image')) return <FileImage size={20} color="#d97706" />;
-    if (['zip', 'rar'].includes(ext)) return <FileArchive size={20} color="#475569" />;
+    if (['doc', 'docx', 'odt', 'rtf'].includes(ext) || contentType.includes('word')) return <FileText size={20} color="#2563eb" />;
+    if (['xls', 'xlsx', 'csv', 'ods'].includes(ext) || contentType.includes('spreadsheet') || contentType.includes('excel')) return <FileSpreadsheet size={20} color="#059669" />;
+    if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'wmv'].includes(ext) || contentType.includes('video')) return <FileVideo size={20} color="#7c3aed" />;
+    if (['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'wma'].includes(ext) || contentType.includes('audio')) return <FileAudio size={20} color="#06b6d4" />;
+    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff'].includes(ext) || contentType.includes('image')) return <FileImage size={20} color="#d97706" />;
+    if (['ppt', 'pptx', 'odp'].includes(ext) || contentType.includes('presentation') || contentType.includes('powerpoint')) return <FileText size={20} color="#ea580c" />;
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <FileArchive size={20} color="#475569" />;
     return <BookOpen size={20} color="#64748b" />;
   };
 
@@ -820,7 +822,7 @@ export default function StudyMaterials({
                       <Upload size={32} color="#6366f1" style={{ margin: '0 auto 8px' }} />
                       <div style={{ fontWeight: 600, fontSize: '14px' }}>Click to browse or drag file here</div>
                       <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                        PDF, DOCX, XLSX, PPTX, MP4, PNG, JPG (Max 20 MB)
+                        PDF, DOCX, XLSX, PPTX, Images, Audio, Video (Max 20 MB)
                       </div>
                     </div>
                   )}

@@ -181,14 +181,8 @@ export default function RolesSection() {
     setCurrentIndex((prev) => (prev - 1 + total) % total);
   }, [total]);
 
-  // Auto-play timer (changes every 4.5 seconds, pauses when hovered or touched)
-  useEffect(() => {
-    if (isHovered) return;
-    const interval = setInterval(() => {
-      nextSlide();
-    }, 4500);
-    return () => clearInterval(interval);
-  }, [isHovered, nextSlide]);
+  // Auto-play timer disabled per user preference so slides only change on user navigation
+  // (Left manual navigation via arrows, dots, swipe, and keyboard intact)
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -29,19 +29,8 @@ export default function Communication({
   return (
     <div style={{ minHeight: '100vh', background: '#fbf8f3' }}>
       {/* Top Suite Tab Switcher */}
-      <div style={{
-        background: 'rgba(255, 253, 249, 0.95)',
-        backdropFilter: 'blur(8px)',
-        borderBottom: '1px solid rgba(254, 230, 133, 0.8)',
-        padding: '12px 32px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        position: 'sticky',
-        top: 0,
-        zIndex: 20
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 16, fontWeight: 800, fontSize: 15, color: '#1e1633' }}>
+      <div className="comm-suite-top-bar">
+        <div className="comm-suite-top-brand">
           <div style={{
             width: 30,
             height: 30,
@@ -50,7 +39,8 @@ export default function Communication({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#fff'
+            color: '#fff',
+            flexShrink: 0
           }}>
             <MessageSquare size={16} />
           </div>

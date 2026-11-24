@@ -311,3 +311,68 @@ class OwnerChangesExportsMaterialsTests(AccessFixture):
         self.assertGreater(new_notifs, initial_notifs)
         latest_notif = Notification.objects.filter(user=self.student_user).order_by('-created_at').first()
         self.assertIn('Physics Problem Set 3', latest_notif.body)
+
+    def test_upload_with_naive_visible_from_succeeds(self):
+        """Uploading material with naive ISO datetime (from HTML datetime-local input) must not crash with 500."""
+        self.sign(self.school_admin)
+        f = SimpleUploadedFile("lecture_schedule.pdf", b"%PDF-1.4\nSchedule\n%%EOF", content_type="application/pdf")
+        res = self.client.post('/api/v1/materials/', {
+            'file': f,
+            'title': 'Scheduled Material',
+            'school_class': self.c1.id,
+            'status': 'published',
+            'visible_from': '2026-11-24T18:30:00'
+        })
+        self.assertEqual(res.status_code, 201)
+        mat_id = res.json()['id']
+        m = StudyMaterial.objects.get(pk=mat_id)
+        self.assertIsNotNone(m.visible_from)
+        self.assertFalse(timezone.is_naive(m.visible_from))
+
+    def test_upload_various_media_types_audio_video_image_doc(self):
+        """Supports images (jpeg/png/webp), audio (mp3/wav), video (mp4/webm), and docs (docx/txt)."""
+        self.sign(self.school_admin)
+
+        # 1. JPEG image
+        jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+        f_img = SimpleUploadedFile("diagram.jpeg", jpeg_bytes, content_type="image/jpeg")
+        res_img = self.client.post('/api/v1/materials/', {
+            'file': f_img,
+            'title': 'Cell Structure Diagram',
+            'school_class': self.c1.id,
+            'status': 'published'
+        })
+        self.assertEqual(res_img.status_code, 201)
+
+        # 2. Audio MP3 (with ID3 header)
+        mp3_bytes = b"ID3\x03\x00\x00\x00\x00\x00\x00\xff\xfb\x90\x64" + b"\x00" * 100
+        f_audio = SimpleUploadedFile("pronunciation.mp3", mp3_bytes, content_type="audio/mpeg")
+        res_audio = self.client.post('/api/v1/materials/', {
+            'file': f_audio,
+            'title': 'French Pronunciation Guide',
+            'school_class': self.c1.id,
+            'status': 'published'
+        })
+        self.assertEqual(res_audio.status_code, 201)
+
+        # 3. Video MP4 (with ftyp box)
+        mp4_bytes = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00isommp42" + b"\x00" * 100
+        f_video = SimpleUploadedFile("experiment.mp4", mp4_bytes, content_type="video/mp4")
+        res_video = self.client.post('/api/v1/materials/', {
+            'file': f_video,
+            'title': 'Chemistry Experiment Clip',
+            'school_class': self.c1.id,
+            'status': 'published'
+        })
+        self.assertEqual(res_video.status_code, 201)
+
+        # 4. Docx (PK zip)
+        docx_bytes = b"PK\x03\x04\x14\x00\x00\x00" + b"\x00" * 100
+        f_doc = SimpleUploadedFile("syllabus.docx", docx_bytes, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        res_doc = self.client.post('/api/v1/materials/', {
+            'file': f_doc,
+            'title': 'Syllabus Docx',
+            'school_class': self.c1.id,
+            'status': 'published'
+        })
+        self.assertEqual(res_doc.status_code, 201)

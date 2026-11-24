@@ -30,11 +30,19 @@ from core.services.exports import handle_export
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
 
 ALLOWED_EXTENSIONS = {
+    # Documents & presentations & sheets
     'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
-    'txt', 'csv', 'png', 'jpg', 'jpeg', 'mp4'
+    'txt', 'csv', 'rtf', 'odt', 'ods', 'odp',
+    # Images
+    'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff',
+    # Audio
+    'mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'wma',
+    # Video
+    'mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'wmv'
 }
 
 MIME_TYPE_MAP = {
+    # Documents
     'pdf': 'application/pdf',
     'doc': 'application/msword',
     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -42,13 +50,54 @@ MIME_TYPE_MAP = {
     'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'xls': 'application/vnd.ms-excel',
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'odt': 'application/vnd.oasis.opendocument.text',
+    'ods': 'application/vnd.oasis.opendocument.spreadsheet',
+    'odp': 'application/vnd.oasis.opendocument.presentation',
+    'rtf': 'application/rtf',
     'txt': 'text/plain',
     'csv': 'text/csv',
+    # Images
     'png': 'image/png',
     'jpg': 'image/jpeg',
     'jpeg': 'image/jpeg',
+    'webp': 'image/webp',
+    'gif': 'image/gif',
+    'bmp': 'image/bmp',
+    'tiff': 'image/tiff',
+    # Audio
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'm4a': 'audio/mp4',
+    'ogg': 'audio/ogg',
+    'aac': 'audio/aac',
+    'flac': 'audio/flac',
+    'wma': 'audio/x-ms-wma',
+    # Video
     'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'avi': 'video/x-msvideo',
+    'mkv': 'video/x-matroska',
+    'webm': 'video/webm',
+    'm4v': 'video/x-m4v',
+    '3gp': 'video/3gpp',
+    'wmv': 'video/x-ms-wmv',
 }
+
+
+def _parse_visible_from(val):
+    """Safely parse visible_from datetime, guaranteeing a timezone-aware datetime."""
+    if not val:
+        return None
+    try:
+        s = str(val).strip()
+        if not s:
+            return None
+        dt = datetime.fromisoformat(s)
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt
+    except Exception:
+        return None
 
 
 def _validate_file_signature(uploaded_file, ext):
@@ -68,10 +117,16 @@ def _validate_file_signature(uploaded_file, ext):
     if header.startswith(b'\x7fELF'):
         raise ValidationError({'file': 'Executable binaries are strictly prohibited.'})
 
+    # Reject Mach-O executables
+    if header.startswith(b'\xfe\xed\xfa\xce') or header.startswith(b'\xce\xfa\xed\xfe') or \
+       header.startswith(b'\xfe\xed\xfa\xcf') or header.startswith(b'\xcf\xfa\xed\xfe') or \
+       header.startswith(b'\xca\xfe\xba\xbe'):
+        raise ValidationError({'file': 'Executable binaries are strictly prohibited.'})
+
     # Reject script/html content
     lower_h = header.lower()
-    if b'<script' in lower_h or b'<html' in lower_h or b'<!doctype' in lower_h or b'<?php' in lower_h or b'<svg' in lower_h:
-        raise ValidationError({'file': 'HTML, scripts, SVG, or PHP code cannot be uploaded as study materials.'})
+    if b'<script' in lower_h or b'<html' in lower_h or b'<!doctype' in lower_h or b'<?php' in lower_h:
+        raise ValidationError({'file': 'HTML, scripts, or PHP code cannot be uploaded as study materials.'})
 
     if ext == 'pdf':
         if not header.startswith(b'%PDF-'):
@@ -82,18 +137,53 @@ def _validate_file_signature(uploaded_file, ext):
     elif ext in ('jpg', 'jpeg'):
         if not header.startswith(b'\xff\xd8\xff'):
             raise ValidationError({'file': 'Invalid JPEG image file signature.'})
-    elif ext in ('docx', 'pptx', 'xlsx'):
-        # Office OpenXML files are ZIP archives starting with PK\x03\x04
+    elif ext == 'gif':
+        if not (header.startswith(b'GIF87a') or header.startswith(b'GIF89a')):
+            raise ValidationError({'file': 'Invalid GIF image file signature.'})
+    elif ext == 'webp':
+        if not (header.startswith(b'RIFF') and header[8:12] == b'WEBP'):
+            raise ValidationError({'file': 'Invalid WEBP image file signature.'})
+    elif ext == 'bmp':
+        if not header.startswith(b'BM'):
+            raise ValidationError({'file': 'Invalid BMP image file signature.'})
+    elif ext == 'tiff':
+        if not (header.startswith(b'II*\x00') or header.startswith(b'MM\x00*')):
+            raise ValidationError({'file': 'Invalid TIFF image file signature.'})
+    elif ext in ('docx', 'pptx', 'xlsx', 'odt', 'ods', 'odp'):
+        # Office OpenXML / ODF files are ZIP archives starting with PK\x03\x04
         if not header.startswith(b'PK\x03\x04'):
             raise ValidationError({'file': f'Invalid Office {ext.upper()} document signature.'})
     elif ext in ('doc', 'ppt', 'xls'):
         # OLE Compound Document Header
         if not header.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
             raise ValidationError({'file': f'Invalid legacy Office {ext.upper()} document signature.'})
-    elif ext == 'mp4':
-        # MP4 files contain 'ftyp' within first 16 bytes
-        if b'ftyp' not in header[:16]:
-            raise ValidationError({'file': 'Invalid MP4 video file signature.'})
+    elif ext == 'rtf':
+        if not header.startswith(b'{\\rtf'):
+            raise ValidationError({'file': 'Invalid RTF document signature.'})
+    elif ext in ('mp4', 'm4v', 'm4a', 'mov', '3gp'):
+        # ISO Base Media File Format: 'ftyp' in first 32 bytes or QuickTime atom
+        if b'ftyp' not in header[:32] and not (len(header) >= 8 and header[4:8] in (b'moov', b'mdat', b'wide', b'free')):
+            raise ValidationError({'file': f'Invalid {ext.upper()} media file signature.'})
+    elif ext in ('mkv', 'webm'):
+        if not header.startswith(b'\x1a\x45\xdf\xa3'):
+            raise ValidationError({'file': f'Invalid {ext.upper()} video file signature.'})
+    elif ext == 'avi':
+        if not (header.startswith(b'RIFF') and header[8:12] == b'AVI '):
+            raise ValidationError({'file': 'Invalid AVI video file signature.'})
+    elif ext == 'wav':
+        if not (header.startswith(b'RIFF') and header[8:12] == b'WAVE'):
+            raise ValidationError({'file': 'Invalid WAV audio file signature.'})
+    elif ext == 'mp3':
+        is_id3 = header.startswith(b'ID3')
+        is_sync = len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0
+        if not (is_id3 or is_sync):
+            raise ValidationError({'file': 'Invalid MP3 audio file signature.'})
+    elif ext == 'ogg':
+        if not header.startswith(b'OggS'):
+            raise ValidationError({'file': 'Invalid OGG audio file signature.'})
+    elif ext == 'flac':
+        if not header.startswith(b'fLaC'):
+            raise ValidationError({'file': 'Invalid FLAC audio file signature.'})
     elif ext in ('txt', 'csv'):
         # Ensure plain text without binary null bytes
         if b'\x00' in header:
@@ -305,12 +395,7 @@ def materials_list(request):
     if status_val not in ('draft', 'published', 'archived'):
         status_val = 'published'
 
-    visible_from = None
-    if data.get('visible_from'):
-        try:
-            visible_from = datetime.fromisoformat(data['visible_from'])
-        except Exception:
-            pass
+    visible_from = _parse_visible_from(data.get('visible_from'))
 
     # File extraction & validation
     uploaded_file = request.FILES.get('file')
@@ -439,15 +524,8 @@ def material_detail(request, pk):
             material.status = s
             changed_fields.append('status')
     if 'visible_from' in data:
-        if data['visible_from']:
-            try:
-                material.visible_from = datetime.fromisoformat(data['visible_from'])
-                changed_fields.append('visible_from')
-            except Exception:
-                pass
-        else:
-            material.visible_from = None
-            changed_fields.append('visible_from')
+        material.visible_from = _parse_visible_from(data['visible_from'])
+        changed_fields.append('visible_from')
 
     if changed_fields:
         material.save(update_fields=changed_fields + ['updated_at'])

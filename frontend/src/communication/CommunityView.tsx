@@ -107,11 +107,6 @@ export default function CommunityView({ notify }: CommunityViewProps) {
   return (
     <div className="comm-page-wrapper">
       <div className="comm-suite-container">
-        {/* Top Kicker */}
-        <div className="comm-kicker comm-kicker-community">
-          <Users size={13} /> Educational Community &amp; Verified Networking
-        </div>
-
         {/* Signature Teal · Emerald · Lime Hero Banner */}
         <div className="comm-hero-banner comm-hero-community">
           <div className="comm-hero-content">
