@@ -56,79 +56,13 @@ body {
   text-align: right;
 }
 
-/* Ambient Animated Orbs */
-.bg-orbs {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  contain: strict;
-  transform: translateZ(0);
-  will-change: transform;
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.6;
-  animation: floatOrb 20s infinite ease-in-out alternate;
-  transform: translateZ(0);
-  will-change: transform;
-}
-
-.orb-1 {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, var(--brand-accent-light) 0%, transparent 70%);
-  top: -10%;
-  left: -10%;
-}
-
-.orb-2 {
-  width: 800px;
-  height: 800px;
-  background: radial-gradient(circle, #5c3c92 0%, transparent 70%);
-  bottom: -20%;
-  right: -10%;
-  animation-delay: -5s;
-  opacity: 0.3;
-}
-
+/* Ambient Animated Orbs - Completely removed per request */
+.bg-orbs,
+.orb,
+.orb-1,
+.orb-2,
 .orb-3 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, var(--brand-blue) 0%, transparent 70%);
-  top: 40%;
-  left: 30%;
-  animation-delay: -10s;
-  opacity: 0.2;
-}
-
-@keyframes floatOrb {
-  0% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(50px, 30px, 0) scale(1.1); }
-  100% { transform: translate3d(-30px, -50px, 0) scale(0.9); }
-}
-
-@media (max-width: 768px) {
-  .bg-orbs .orb-2 {
-    display: none !important;
-  }
-  .bg-orbs .orb-1 {
-    width: 300px;
-    height: 300px;
-    filter: blur(35px);
-  }
-  .bg-orbs .orb-3 {
-    width: 250px;
-    height: 250px;
-    filter: blur(35px);
-  }
+  display: none !important;
 }
 
 /* ==========================================================================
@@ -500,13 +434,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--brand-primary, #06b6d4);
+  color: #ffffff !important;
   transition: transform 0.3s ease;
+}
+
+.feature-icon-wrapper svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
 }
 
 .feature-card:hover .feature-icon-wrapper {
   transform: scale(1.08);
-  border-color: var(--brand-primary, #06b6d4);
+  border-color: rgba(255, 255, 255, 0.4) !important;
 }
 
 .feature-content h3 {
@@ -1687,6 +1626,12 @@ body {
 }
 
 @media (max-width: 768px) {
+  .nav-container {
+    padding: 0 1.25rem !important;
+  }
+  .nav-brand-title {
+    font-size: 1.25rem !important;
+  }
   .hamburger {
     display: flex;
   }
@@ -1880,7 +1825,7 @@ body {
   max-height: 550px;
   overflow: visible;
   max-width: 850px;
-  background: radial-gradient(circle, rgba(155, 81, 224, 0.05) 0%, transparent 70%);
+  background: transparent;
   border-radius: 24px;
 }
 

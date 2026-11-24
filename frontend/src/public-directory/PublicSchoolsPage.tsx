@@ -186,7 +186,6 @@ export default function PublicSchoolsPage({ onNavigate, authenticated }: PublicS
             }}
             className="public-dir-brand"
           >
-            <img src="/brand-logo.png" alt="Optimus Orien" className="brand-logo-img" style={{ width: 30, height: 30 }} />
             <span>OPTIMUS <span>ORIEN</span></span>
           </a>
           <nav className="public-dir-nav-links">

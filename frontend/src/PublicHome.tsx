@@ -83,13 +83,6 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
 
   return (
     <div className="landing-root" dir="ltr">
-      {/* Floating Animated Orbs */}
-      <div className="bg-orbs" aria-hidden="true">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="orb orb-3" />
-      </div>
-
       {/* Navigation Bar */}
       <LandingNavbar
         authenticated={authenticated}
