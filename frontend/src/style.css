@@ -6,10 +6,10 @@
 .modal-fields select:focus{border-color:#7d69e4;box-shadow:0 0 0 3px #7d69e422}
 .dark .modal-fields select{background:#292b40;color:#f0f1f8;border-color:#45435d}
 
-.nav-sublabel{font-size:9px;color:#c0c5d4;letter-spacing:1.4px;font-weight:800;margin:14px 16px 5px;text-transform:uppercase}
-.nav-sublabel-admin{color:#bbb5f0}
-.dark .nav-sublabel{color:#6b6e8a}
-.dark .nav-sublabel-admin{color:#8f89c9}
+.nav-sublabel{font-size:9px;color:#10b981;letter-spacing:1.4px;font-weight:600;margin:14px 16px 5px;text-transform:uppercase}
+.nav-sublabel-admin{color:#10b981}
+.dark .nav-sublabel{color:#34d399}
+.dark .nav-sublabel-admin{color:#34d399}
 
 .campus-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;margin-top:4px}
 .campus-card{background:#fff;border-radius:18px;border:1px solid #eceefa;padding:24px;display:flex;flex-direction:column;gap:16px;transition:box-shadow .2s}
@@ -5120,127 +5120,130 @@ html, body {
 }
 
 /* ==========================================================================
-   Sidebar Typography & Contrast Enhancements (Requested Bold Styling)
+   Sidebar Typography, Badges & Interactive States (Clean Theme Design)
    ========================================================================== */
-.sidebar .nav-label {
-  font-size: 11px !important;
-  color: #334155 !important;
-  font-weight: 850 !important;
-  letter-spacing: 1.4px !important;
+
+/* 3. Section Headings - Light green color, clean weight (ss3 & ss5) */
+.sidebar .nav-label,
+.sidebar .nav-sublabel,
+.nav-sublabel,
+.nav-sublabel-admin {
+  color: #10b981 !important; /* Crisp light emerald green */
+  font-weight: 600 !important;
+  letter-spacing: 1.3px !important;
   text-transform: uppercase !important;
-  margin: 18px 16px 8px !important;
+}
+
+.sidebar .nav-label {
+  font-size: 10.5px !important;
+  margin: 16px 16px 6px !important;
 }
 
 .sidebar .nav-sublabel {
   font-size: 9.5px !important;
-  color: #475569 !important;
-  font-weight: 800 !important;
-  letter-spacing: 1.3px !important;
-  text-transform: uppercase !important;
   margin: 14px 16px 6px !important;
 }
 
-/* ==========================================================================
-   Sidebar Typography & Colorful Badges (Optimus Orien Design System)
-   ========================================================================== */
-.sidebar .nav-label {
-  font-size: 11px !important;
-  color: #334155 !important;
-  font-weight: 850 !important;
-  letter-spacing: 1.4px !important;
-  text-transform: uppercase !important;
-  margin: 18px 16px 8px !important;
+.dark .sidebar .nav-label,
+.dark .sidebar .nav-sublabel,
+.dark .nav-sublabel,
+.dark .nav-sublabel-admin {
+  color: #34d399 !important; /* Light green on dark mode */
 }
 
-.sidebar .nav-sublabel {
-  font-size: 9.5px !important;
-  color: #475569 !important;
-  font-weight: 800 !important;
-  letter-spacing: 1.3px !important;
-  text-transform: uppercase !important;
-  margin: 14px 16px 6px !important;
-}
-
+/* 1. Nav items - Bold removed, theme colors, clean spacing */
 .sidebar .nav-item {
   position: relative !important;
   display: flex !important;
   align-items: center !important;
   gap: 12px !important;
-  padding: 6px 8px !important;
-  margin: 3px 0 !important;
+  padding: 6px 10px !important;
+  margin: 2px 0 !important;
   border-radius: 10px !important;
   font-size: 13.5px !important;
-  font-weight: 700 !important;
+  font-weight: 450 !important; /* Bold removed */
   color: #334155 !important;
   background: transparent !important;
   border: 1px solid transparent !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease !important;
   cursor: pointer;
   text-align: left !important;
   width: 100% !important;
 }
 
-/* Colorful Glowing Icon Badge - Exact Replica of AI Studio Reference */
+.sidebar .nav-item-title {
+  font-weight: 450 !important; /* Bold removed */
+  color: inherit !important;
+  flex: 1 !important;
+  text-align: left !important;
+}
+
+/* 1. Icons & Badges - Shadow removed, other colors removed, theme color applied */
 .nav-icon-badge {
-  width: 34px !important;
-  height: 34px !important;
-  min-width: 34px !important;
-  min-height: 34px !important;
-  border-radius: 10px !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  border-radius: 9px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   flex-shrink: 0 !important;
   background: #ffffff !important;
-  border: 1.5px solid var(--nav-border, rgba(6, 182, 212, 0.40)) !important;
-  box-shadow: 0 0 16px var(--nav-glow, rgba(6, 182, 212, 0.45)), 0 2px 6px rgba(0, 0, 0, 0.04) !important;
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1px solid var(--brand-primary-border, rgba(6, 182, 212, 0.25)) !important;
+  box-shadow: none !important; /* Shadow color completely removed */
+  transition: all 0.18s ease !important;
   position: relative !important;
 }
 
 .nav-icon-badge svg {
-  color: var(--nav-color, #06b6d4) !important;
-  stroke: var(--nav-color, #06b6d4) !important;
-  width: 18px !important;
-  height: 18px !important;
-  transition: transform 0.2s ease, stroke 0.2s ease, color 0.2s ease !important;
+  color: var(--brand-primary, #06b6d4) !important; /* Theme color on all icons */
+  stroke: var(--brand-primary, #06b6d4) !important;
+  width: 17px !important;
+  height: 17px !important;
+  transition: transform 0.18s ease, stroke 0.18s ease, color 0.18s ease !important;
 }
 
 .nav-icon-badge-sm {
-  width: 28px !important;
-  height: 28px !important;
-  min-width: 28px !important;
-  min-height: 28px !important;
-  border-radius: 8px !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  border-radius: 7px !important;
 }
 
 .nav-icon-badge-sm svg {
-  width: 15px !important;
-  height: 15px !important;
+  width: 14px !important;
+  height: 14px !important;
 }
 
-/* Hover State */
+/* Hover State - Theme color applied, no shadow, no bold */
 .sidebar .nav-item:hover {
-  background: transparent !important;
-  color: #0f172a !important;
+  background: var(--brand-primary-light, rgba(6, 182, 212, 0.08)) !important;
+  color: var(--brand-primary, #06b6d4) !important;
+  border-color: transparent !important;
 }
 
 .sidebar .nav-item:hover .nav-icon-badge {
-  transform: translateY(-1px) scale(1.08) !important;
-  border-color: var(--nav-color, #06b6d4) !important;
-  box-shadow: 0 0 22px var(--nav-glow, rgba(6, 182, 212, 0.60)), 0 4px 10px rgba(0, 0, 0, 0.06) !important;
+  border-color: var(--brand-primary, #06b6d4) !important;
+  box-shadow: none !important; /* No shadow color */
+  transform: none !important;
 }
 
 .sidebar .nav-item:hover .nav-item-title {
-  color: #0f172a !important;
-  font-weight: 750 !important;
+  color: var(--brand-primary, #06b6d4) !important;
+  font-weight: 450 !important;
 }
 
-/* Selected / Active State */
+.sidebar .nav-item:hover .nav-chevron-wrap {
+  color: var(--brand-primary, #06b6d4) !important;
+}
+
+/* Selected / Active State - Theme color applied, no shadow, no bold */
 .sidebar .nav-item.selected {
-  background: transparent !important;
-  color: #0f172a !important;
-  border-color: transparent !important;
+  background: var(--brand-primary-light, rgba(6, 182, 212, 0.14)) !important;
+  color: var(--brand-primary-text, var(--brand-primary, #06b6d4)) !important;
+  border: 1px solid var(--brand-primary-border, rgba(6, 182, 212, 0.28)) !important;
 }
 
 .sidebar .nav-item.selected::before {
@@ -5248,34 +5251,31 @@ html, body {
 }
 
 .sidebar .nav-item.selected .nav-item-title {
-  color: #0f172a !important;
-  font-weight: 800 !important;
+  color: var(--brand-primary-text, var(--brand-primary, #06b6d4)) !important;
+  font-weight: 500 !important; /* Clean weight, bold removed */
 }
 
-/* Selected state: Extra radiant glow on the icon badge */
 .sidebar .nav-item.selected .nav-icon-badge {
   background: #ffffff !important;
-  border-color: var(--nav-color, #06b6d4) !important;
-  box-shadow: 0 0 22px var(--nav-glow, rgba(6, 182, 212, 0.65)), 0 3px 8px rgba(0, 0, 0, 0.06) !important;
-  transform: scale(1.04) !important;
+  border-color: var(--brand-primary, #06b6d4) !important;
+  box-shadow: none !important; /* No shadow color */
+  transform: none !important;
 }
 
 .sidebar .nav-item.selected .nav-icon-badge svg {
-  color: var(--nav-color, #06b6d4) !important;
-  stroke: var(--nav-color, #06b6d4) !important;
+  color: var(--brand-primary, #06b6d4) !important;
+  stroke: var(--brand-primary, #06b6d4) !important;
 }
 
-.sidebar .nav-item-title {
-  font-weight: 750 !important;
-  color: inherit !important;
-  flex: 1 !important;
-  text-align: left !important;
+.sidebar .nav-item.selected .nav-chevron-wrap {
+  color: var(--brand-primary, #06b6d4) !important;
 }
 
+/* Nav Dropdown Children & Sub-links */
 .sidebar .nav-dropdown-children {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   margin-left: 12px;
   padding-left: 10px;
   border-left: 1.5px solid rgba(226, 232, 240, 0.8);
@@ -5285,10 +5285,10 @@ html, body {
 
 .sidebar .nav-child {
   font-size: 12.5px !important;
-  font-weight: 650 !important;
-  padding: 6px 10px !important;
+  font-weight: 450 !important; /* Bold removed */
+  padding: 5px 10px !important;
   gap: 9px !important;
-  border-radius: 9px !important;
+  border-radius: 8px !important;
 }
 
 .sidebar .nav-chevron-wrap {
@@ -5300,61 +5300,111 @@ html, body {
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
-.sidebar .nav-item:hover .nav-chevron-wrap {
-  color: #475569;
-}
-
-.sidebar .nav-item.selected .nav-chevron-wrap {
-  color: var(--nav-color, #06b6d4);
-}
-
+/* Campus pill / workspace name in sidebar - remove bold */
 .sidebar .workspace-name b {
   font-size: 12.5px !important;
-  font-weight: 850 !important;
+  font-weight: 600 !important; /* Bold reduced from 850 */
   color: #1e293b !important;
 }
 
 .sidebar .workspace-name small {
   font-size: 10.5px !important;
-  font-weight: 600 !important;
+  font-weight: 400 !important; /* Bold reduced from 600 */
   color: #64748b !important;
 }
 
-/* Dark mode sidebar contrast */
-.dark .sidebar .nav-label {
-  color: #cbd5e1 !important;
-}
-
-.dark .sidebar .nav-sublabel {
-  color: #94a3b8 !important;
-}
-
+/* Dark mode theme consistency */
 .dark .sidebar .nav-item {
   color: #cbd5e1 !important;
 }
 
 .dark .sidebar .nav-item:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
-  color: #ffffff !important;
+  background: var(--brand-primary-dark-bg, rgba(6, 182, 212, 0.16)) !important;
+  color: var(--brand-primary-dark-text, #22d3ee) !important;
 }
 
 .dark .sidebar .nav-item.selected {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: var(--brand-primary-dark-bg, rgba(6, 182, 212, 0.24)) !important;
+  color: var(--brand-primary-dark-text, #22d3ee) !important;
+  border-color: rgba(6, 182, 212, 0.35) !important;
 }
 
 .dark .nav-icon-badge {
-  background: var(--nav-bg, rgba(6, 182, 212, 0.20)) !important;
-  border-color: var(--nav-border, rgba(6, 182, 212, 0.35)) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: none !important;
+}
+
+.dark .sidebar .nav-item:hover .nav-icon-badge {
+  border-color: var(--brand-primary, #06b6d4) !important;
+  box-shadow: none !important;
 }
 
 .dark .sidebar .nav-item.selected .nav-icon-badge {
-  background: linear-gradient(135deg, var(--nav-grad-start, #06b6d4), var(--nav-grad-end, #0891b2)) !important;
+  background: rgba(6, 182, 212, 0.2) !important;
+  border-color: var(--brand-primary, #06b6d4) !important;
+  box-shadow: none !important;
+}
+
+.dark .sidebar .nav-item.selected .nav-icon-badge svg {
+  color: var(--brand-primary-dark-text, #22d3ee) !important;
+  stroke: var(--brand-primary-dark-text, #22d3ee) !important;
 }
 
 .dark .sidebar .nav-dropdown-children {
   border-left-color: rgba(51, 65, 85, 0.7);
+}
+
+/* 1. Mobile screen responsive size reduction (ss1) */
+@media (max-width: 760px) {
+  .sidebar .nav-item {
+    gap: 9px !important;
+    padding: 5px 6px !important;
+    margin: 2px 0 !important;
+    font-size: 13px !important;
+  }
+
+  .nav-icon-badge {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+    border-radius: 7px !important;
+  }
+
+  .nav-icon-badge svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .nav-icon-badge-sm {
+    width: 21px !important;
+    height: 21px !important;
+    min-width: 21px !important;
+    min-height: 21px !important;
+    border-radius: 5px !important;
+  }
+
+  .nav-icon-badge-sm svg {
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  .sidebar .nav-sublabel {
+    font-size: 8.5px !important;
+    margin: 10px 10px 3px !important;
+  }
+
+  .sidebar .nav-label {
+    font-size: 9.5px !important;
+    margin: 12px 10px 4px !important;
+  }
+
+  .sidebar .nav-child {
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+    gap: 8px !important;
+  }
 }
 
 /* Breadcrumb Campus Pill - Dynamic Theme Color */

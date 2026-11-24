@@ -1630,7 +1630,7 @@ function App() {
         } as React.CSSProperties}
       >
         <span className="nav-icon-badge">
-          <IconComponent size={17} strokeWidth={2.1} />
+          <IconComponent size={17} strokeWidth={1.8} />
         </span>
         <span className="nav-item-title">{label}</span>
         {extraBadge}
@@ -2530,7 +2530,7 @@ function App() {
 
         {user.role === 'teacher' ? (
           <>
-            <div className="nav-label">MY TEACHING WORKSPACE</div>
+            <div className="nav-label">TEACHER PORTAL</div>
             <nav>
               <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
               {renderNavButton('Overview', 'My Home', LayoutDashboard)}
@@ -2573,7 +2573,7 @@ function App() {
                       } as React.CSSProperties}
                     >
                       <span className="nav-icon-badge">
-                        <MessageSquare size={17} strokeWidth={2.1} />
+                        <MessageSquare size={17} strokeWidth={1.8} />
                       </span>
                       <span className="nav-item-title">Communication</span>
                       <span
@@ -2581,7 +2581,7 @@ function App() {
                         onClick={(e) => toggleDropdown('Communication', e)}
                         title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
                       >
-                        <ChevronDown size={15} strokeWidth={2.2} />
+                        <ChevronDown size={15} strokeWidth={1.8} />
                       </span>
                     </button>
                   );
@@ -2605,7 +2605,7 @@ function App() {
                           } as React.CSSProperties}
                         >
                           <span className="nav-icon-badge nav-icon-badge-sm">
-                            <Trophy size={14} strokeWidth={2} />
+                            <Trophy size={14} strokeWidth={1.8} />
                           </span>
                           <span>Leaderboard</span>
                         </button>
@@ -2628,7 +2628,7 @@ function App() {
                           } as React.CSSProperties}
                         >
                           <span className="nav-icon-badge nav-icon-badge-sm">
-                            <Globe size={14} strokeWidth={2} />
+                            <Globe size={14} strokeWidth={1.8} />
                           </span>
                           <span>Community</span>
                         </button>
@@ -2651,7 +2651,7 @@ function App() {
                           } as React.CSSProperties}
                         >
                           <span className="nav-icon-badge nav-icon-badge-sm">
-                            <ClipboardCheck size={14} strokeWidth={2} />
+                            <ClipboardCheck size={14} strokeWidth={1.8} />
                           </span>
                           <span>Online Assessments</span>
                         </button>
@@ -2707,7 +2707,7 @@ function App() {
                       } as React.CSSProperties}
                     >
                       <span className="nav-icon-badge">
-                        <MessageSquare size={17} strokeWidth={2.1} />
+                        <MessageSquare size={17} strokeWidth={1.8} />
                       </span>
                       <span className="nav-item-title">Communication</span>
                       <span
@@ -2715,7 +2715,7 @@ function App() {
                         onClick={(e) => toggleDropdown('Communication', e)}
                         title={openDropdowns['Communication'] ? 'Collapse' : 'Expand'}
                       >
-                        <ChevronDown size={15} strokeWidth={2.2} />
+                        <ChevronDown size={15} strokeWidth={1.8} />
                       </span>
                     </button>
                   );
@@ -2739,7 +2739,7 @@ function App() {
                           } as React.CSSProperties}
                         >
                           <span className="nav-icon-badge nav-icon-badge-sm">
-                            <Trophy size={14} strokeWidth={2} />
+                            <Trophy size={14} strokeWidth={1.8} />
                           </span>
                           <span>Leaderboard</span>
                         </button>
@@ -2762,7 +2762,7 @@ function App() {
                           } as React.CSSProperties}
                         >
                           <span className="nav-icon-badge nav-icon-badge-sm">
-                            <Globe size={14} strokeWidth={2} />
+                            <Globe size={14} strokeWidth={1.8} />
                           </span>
                           <span>Community</span>
                         </button>
@@ -2785,7 +2785,7 @@ function App() {
                           } as React.CSSProperties}
                         >
                           <span className="nav-icon-badge nav-icon-badge-sm">
-                            <ClipboardCheck size={14} strokeWidth={2} />
+                            <ClipboardCheck size={14} strokeWidth={1.8} />
                           </span>
                           <span>Online Assessments</span>
                         </button>
@@ -2805,7 +2805,6 @@ function App() {
           </>
         ) : (
           <>
-            <div className="nav-label">WORKSPACE</div>
             <nav>
               {NAV_GROUPS.map(group => {
                 const isAdmin = group.adminLabel;
@@ -2861,7 +2860,7 @@ function App() {
                               } as React.CSSProperties}
                             >
                               <span className="nav-icon-badge">
-                                <Icon size={17} strokeWidth={2.1} />
+                                <Icon size={17} strokeWidth={1.8} />
                               </span>
                               <span className="nav-item-title">{name}</span>
                               <span
@@ -2869,7 +2868,7 @@ function App() {
                                 onClick={(e) => toggleDropdown(name, e)}
                                 title={isOpen ? 'Collapse' : 'Expand'}
                               >
-                                <ChevronDown size={15} strokeWidth={2.2} />
+                                <ChevronDown size={15} strokeWidth={1.8} />
                               </span>
                             </button>
                             {isOpen && (
@@ -2898,7 +2897,7 @@ function App() {
                                       } as React.CSSProperties}
                                     >
                                       <span className="nav-icon-badge nav-icon-badge-sm">
-                                        <ChildIcon size={14} strokeWidth={2} />
+                                        <ChildIcon size={14} strokeWidth={1.8} />
                                       </span>
                                       <span className="nav-item-title">{child.name}</span>
                                     </button>
