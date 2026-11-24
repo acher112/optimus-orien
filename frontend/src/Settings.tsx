@@ -574,7 +574,7 @@ export default function Settings({ user, onUserUpdated, notify }: SettingsProps)
                     </button>
                   )}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))', gap: 8, maxHeight: 200, overflowY: 'auto', padding: '2px 4px' }}>
                   {AVATAR_PRESETS.map((preset) => {
                     const isSelected = (avatarImage || DEFAULT_AVATAR_URI) === preset.dataUri;
                     return (
