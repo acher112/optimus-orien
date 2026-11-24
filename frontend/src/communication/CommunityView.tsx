@@ -197,6 +197,7 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                 <input
                   type="text"
                   className="comm-input"
+                  style={{ paddingLeft: 42 }}
                   placeholder={`Search ${category} by name, subject, or campus...`}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -266,7 +267,7 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                             {it.experience} Exp
                           </span>
                         )}
-                        {it.average && (
+                        {Boolean(it.average && it.average > 0) && (
                           <span className="comm-mono" style={{ fontSize: 11.5, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', color: '#047857', fontWeight: 800 }}>
                             {it.average}% Avg
                           </span>
@@ -530,11 +531,15 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, marginBottom: 24 }}>
                         <div style={{ padding: 12, background: '#fffdf9', border: '1px solid rgba(254, 230, 133, 0.8)', borderRadius: 10, textAlign: 'center' }}>
                           <div style={{ fontSize: 11, color: '#64748b' }}>Academic Avg</div>
-                          <div className="comm-mono" style={{ fontSize: 17, fontWeight: 800, color: '#0d9488' }}>{profileData.kpis.academic_average}%</div>
+                          <div className="comm-mono" style={{ fontSize: 17, fontWeight: 800, color: '#0d9488' }}>
+                            {profileData.kpis.academic_average > 0 ? `${profileData.kpis.academic_average}%` : '—'}
+                          </div>
                         </div>
                         <div style={{ padding: 12, background: '#fffdf9', border: '1px solid rgba(254, 230, 133, 0.8)', borderRadius: 10, textAlign: 'center' }}>
                           <div style={{ fontSize: 11, color: '#64748b' }}>Global Rank</div>
-                          <div className="comm-mono" style={{ fontSize: 17, fontWeight: 800, color: '#1e1633' }}>#{profileData.kpis.global_rank}</div>
+                          <div className="comm-mono" style={{ fontSize: 17, fontWeight: 800, color: '#1e1633' }}>
+                            {profileData.kpis.global_rank > 0 ? `#${profileData.kpis.global_rank}` : '—'}
+                          </div>
                         </div>
                         <div style={{ padding: 12, background: '#fffdf9', border: '1px solid rgba(254, 230, 133, 0.8)', borderRadius: 10, textAlign: 'center' }}>
                           <div style={{ fontSize: 11, color: '#64748b' }}>Assessments</div>
@@ -568,36 +573,42 @@ export default function CommunityView({ notify }: CommunityViewProps) {
 
                     {/* Verified Competition Records */}
                     {profileData.verified_records && (
-                      <div>
+                      <div style={{ marginBottom: 16 }}>
                         <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: '#1e1633' }}>Verified Official Competition Records</h3>
-                        <div className="comm-table-card">
-                          <div className="comm-table-wrap">
-                            <table className="comm-table">
-                              <thead>
-                                <tr>
-                                  <th>Competition Name</th>
-                                  <th>Score Achieved</th>
-                                  <th>Completion Time</th>
-                                  <th>Verification</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {profileData.verified_records.map((r: any, ri: number) => (
-                                  <tr key={ri}>
-                                    <td style={{ fontWeight: 700, color: '#1e1633' }}>{r.competition}</td>
-                                    <td><strong className="comm-mono" style={{ color: '#0d9488' }}>{r.score}%</strong></td>
-                                    <td className="comm-tabular" style={{ color: '#475569' }}>{r.time}</td>
-                                    <td>
-                                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', color: '#047857', fontWeight: 700 }}>
-                                        ✓ {r.status}
-                                      </span>
-                                    </td>
+                        {profileData.verified_records.length > 0 ? (
+                          <div className="comm-table-card">
+                            <div className="comm-table-wrap">
+                              <table className="comm-table">
+                                <thead>
+                                  <tr>
+                                    <th>Competition Name</th>
+                                    <th>Score Achieved</th>
+                                    <th>Completion Time</th>
+                                    <th>Verification</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {profileData.verified_records.map((r: any, ri: number) => (
+                                    <tr key={ri}>
+                                      <td style={{ fontWeight: 700, color: '#1e1633' }}>{r.competition}</td>
+                                      <td><strong className="comm-mono" style={{ color: '#0d9488' }}>{r.score}%</strong></td>
+                                      <td className="comm-tabular" style={{ color: '#475569' }}>{r.time}</td>
+                                      <td>
+                                        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', color: '#047857', fontWeight: 700 }}>
+                                          ✓ {r.status}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div style={{ padding: '16px 20px', background: '#f8fafc', borderRadius: 10, border: '1px dashed #cbd5e1', color: '#64748b', fontSize: 12.5, textAlign: 'center' }}>
+                            No official competition or diagnostic assessment records recorded yet.
+                          </div>
+                        )}
                       </div>
                     )}
 

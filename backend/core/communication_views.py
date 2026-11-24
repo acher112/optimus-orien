@@ -628,7 +628,7 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
                     'status': conn_status,
                     'avatar_color': color,
                     'badges': badges,
-                    'average': avg_val if avg_val > 0 else 88.0
+                    'average': avg_val if avg_val > 0 else None
                 })
 
         elif category == 'teachers':
@@ -756,7 +756,7 @@ class CommunityDirectoryView(CommunicationBaseAPIView):
                     'city': f"{s.city or 'National'}",
                     'curriculum': curriculum,
                     'students': student_count,
-                    'average': avg_val if avg_val > 0 else 85.0,
+                    'average': avg_val if avg_val > 0 else None,
                     'principal': principal_name,
                     'status': 'verified' if student_count > 0 else 'provisional'
                 })
@@ -797,7 +797,7 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
                 student=st,
                 overall_percentage__isnull=False
             ).aggregate(a=Avg('overall_percentage'))['a']
-            avg_val = round_dec(avg_res) if avg_res is not None else 92.5
+            avg_val = round_dec(avg_res) if avg_res is not None else 0.0
 
             # Real attempts from QuizAttempt
             attempts = QuizAttempt.objects.filter(Q(student=st) | (Q(user=st.user) if st.user else Q(id=0))).select_related('competition')
@@ -811,10 +811,15 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
                     'status': 'Verified Official' if att.is_official else 'Peer Practice'
                 })
 
-            if not verified_records:
-                verified_records = [
-                    {'competition': 'Global Academic Diagnostic Assessment', 'score': avg_val, 'time': '14m 20s', 'date': timezone.now().strftime('%Y-%m-%d'), 'status': 'Verified Official'}
-                ]
+            student_badges = [
+                {'title': 'Verified Institutional Learner', 'category': 'Verification', 'date': '2026', 'icon': 'star'}
+            ]
+            if avg_val >= 90.0:
+                student_badges.append({'title': 'Academic Distinction Honor', 'category': 'Academic', 'date': '2026', 'icon': 'trophy'})
+            elif avg_val >= 80.0:
+                student_badges.append({'title': 'Merit Honor Learner', 'category': 'Academic', 'date': '2026', 'icon': 'award'})
+            if len(verified_records) > 0:
+                student_badges.append({'title': 'Olympiad Participant', 'category': 'Competition', 'date': '2026', 'icon': 'award'})
 
             return Response({
                 'id': st.id,
@@ -829,16 +834,12 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
                 'connection_status': 'active_profile',
                 'kpis': {
                     'academic_average': avg_val,
-                    'global_rank': max(1, st.id % 20),
-                    'assessments_taken': max(1, len(verified_records)),
-                    'competitions_entered': max(1, len(verified_records)),
-                    'badges_earned': 4 if avg_val >= 90 else 2
+                    'global_rank': (max(1, st.id % 20) if avg_val > 0 else 0),
+                    'assessments_taken': len(verified_records),
+                    'competitions_entered': len(verified_records),
+                    'badges_earned': len(student_badges)
                 },
-                'badges': [
-                    {'title': 'Academic Distinction Honor', 'category': 'Academic', 'date': '2026', 'icon': 'trophy'},
-                    {'title': 'Verified Institutional Learner', 'category': 'Verification', 'date': '2026', 'icon': 'star'},
-                    {'title': 'Olympiad Participant', 'category': 'Competition', 'date': '2026', 'icon': 'award'}
-                ],
+                'badges': student_badges,
                 'verified_records': verified_records
             })
         else:

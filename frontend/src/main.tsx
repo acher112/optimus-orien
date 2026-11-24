@@ -2188,7 +2188,7 @@ function App() {
     }
 
     return (
-      <React.Suspense fallback={<div className="loader-screen"><img src="/brand-logo.png" alt="" className="brand-logo-img" style={{ width: 44, height: 44, marginBottom: 8 }} /><div>Loading Website Owner Console…</div></div>}>
+      <React.Suspense fallback={<div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Loading Website Owner Console…</div></div>}>
         <AdminPortal
           user={user}
           notify={notify}
@@ -2214,7 +2214,7 @@ function App() {
 
   if (isPublicInfoRoute) {
     return (
-      <React.Suspense fallback={<div className="loader-screen"><img src="/brand-logo.png" alt="" className="brand-logo-img" style={{ width: 44, height: 44, marginBottom: 8 }} /><div>Loading...</div></div>}>
+      <React.Suspense fallback={<div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Loading...</div></div>}>
         <PublicInfoPage initialPath={currentPathname} authenticated={Boolean(user)} />
       </React.Suspense>
     );
@@ -2230,7 +2230,7 @@ function App() {
 
     if (subpath === 'compare') {
       return (
-        <React.Suspense fallback={<div className="loader-screen"><img src="/brand-logo.png" alt="" className="brand-logo-img" style={{ width: 44, height: 44, marginBottom: 8 }} /><div>Loading Campus Comparison…</div></div>}>
+        <React.Suspense fallback={<div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Loading Campus Comparison…</div></div>}>
           <PublicSchoolComparePage onNavigate={handleNav} />
         </React.Suspense>
       );
@@ -2238,7 +2238,7 @@ function App() {
 
     if (subpath === 'methodology') {
       return (
-        <React.Suspense fallback={<div className="loader-screen"><img src="/brand-logo.png" alt="" className="brand-logo-img" style={{ width: 44, height: 44, marginBottom: 8 }} /><div>Loading Ranking Methodology…</div></div>}>
+        <React.Suspense fallback={<div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Loading Ranking Methodology…</div></div>}>
           <PublicMethodologyPage onNavigate={handleNav} />
         </React.Suspense>
       );
@@ -2246,14 +2246,14 @@ function App() {
 
     if (subpath && !subpath.includes('/')) {
       return (
-        <React.Suspense fallback={<div className="loader-screen"><img src="/brand-logo.png" alt="" className="brand-logo-img" style={{ width: 44, height: 44, marginBottom: 8 }} /><div>Loading Campus Profile…</div></div>}>
+        <React.Suspense fallback={<div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Loading Campus Profile…</div></div>}>
           <PublicSchoolProfilePage slug={subpath} onNavigate={handleNav} authenticated={Boolean(user)} />
         </React.Suspense>
       );
     }
 
     return (
-      <React.Suspense fallback={<div className="loader-screen"><img src="/brand-logo.png" alt="" className="brand-logo-img" style={{ width: 44, height: 44, marginBottom: 8 }} /><div>Loading Campus Directory…</div></div>}>
+      <React.Suspense fallback={<div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Loading Campus Directory…</div></div>}>
         <PublicSchoolsPage onNavigate={handleNav} authenticated={Boolean(user)} />
       </React.Suspense>
     );
@@ -2298,7 +2298,7 @@ function App() {
     );
   }
 
-  if (loading) return <div className="loader-screen"><img src="/brand-logo.png" alt="" className="brand-logo-img" style={{ width: 44, height: 44, marginBottom: 8 }} /><div>Preparing your workspace…</div></div>;
+  if (loading) return <div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Preparing your workspace…</div></div>;
 
   if (!user) return (
     <Login
@@ -2413,9 +2413,8 @@ function App() {
           style={{ cursor: 'pointer' }}
           title="Go to Landing Page (Home)"
         >
-          <img src="/brand-logo.png" alt="Optimus Orien" className="brand-logo-img" />
           <span className="brand-copy">
-            <strong>optimus<span>orien</span></strong>
+            <strong>OPTIMUS <span>ORIEN</span></strong>
             <small>EDUCATION INTELLIGENCE</small>
           </span>
           <button className="mobile-x" onClick={(e) => { e.stopPropagation(); setSidebar(false); }}><X size={19} /></button>
@@ -4445,7 +4444,7 @@ function App() {
             )
           )}
           {page === 'Platform owner' && (
-            <React.Suspense fallback={<div className="loader-screen"><div className="brand-symbol">◈</div><div>Loading Website Owner Console…</div></div>}>
+            <React.Suspense fallback={<div className="loader-screen"><div className="loader-brand-title">OPTIMUS <span>ORIEN</span></div><div>Loading Website Owner Console…</div></div>}>
               <AdminPortal user={user} notify={notify} onGoToApp={() => setPage('Overview')} />
             </React.Suspense>
           )}
@@ -6211,8 +6210,7 @@ function Login({ onLogin }: { onLogin: (user: User, isNewRegistration?: boolean)
           style={{ cursor: 'pointer' }}
           title="Go to Landing Page (Home)"
         >
-          <img src="/brand-logo.png" alt="Optimus Orien" className="brand-logo-img" style={{ width: 34, height: 34 }} />
-          <strong>optimus<span>orien</span></strong>
+          <strong>OPTIMUS <span>ORIEN</span></strong>
         </div>
         <div className="login-art">
           <div className="login-circle one" />

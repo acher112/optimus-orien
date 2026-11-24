@@ -160,6 +160,7 @@ export default function LeaderboardView({ notify }: LeaderboardViewProps) {
             <input
               type="text"
               className="comm-input"
+              style={{ paddingLeft: 42 }}
               placeholder="Search by city, campus, or region..."
               value={searchCity}
               onChange={(e) => setSearchCity(e.target.value)}

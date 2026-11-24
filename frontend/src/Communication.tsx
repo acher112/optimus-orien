@@ -27,7 +27,7 @@ export default function Communication({
   const [activeSuiteTab, setActiveSuiteTab] = useState<'leaderboard' | 'community' | 'assessments'>(initialTab);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fbf8f3' }}>
+    <div style={{ minHeight: '100vh', background: '#ffffff' }}>
       {/* Top Suite Tab Switcher */}
       <div className="comm-suite-top-bar">
         <div className="comm-suite-top-brand">

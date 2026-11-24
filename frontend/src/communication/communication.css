@@ -239,11 +239,12 @@
 }
 
 .comm-suite-top-bar {
-  background: rgba(255, 253, 249, 0.96);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(254, 230, 133, 0.85);
-  padding: 12px 32px;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: none;
+  box-shadow: none;
+  padding: 14px 32px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -283,8 +284,8 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease-in-out;
-  background: #fffdf9;
-  border: 1px solid rgba(254, 230, 133, 0.85);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   color: #475569;
   white-space: nowrap;
   flex-shrink: 0;
@@ -309,9 +310,9 @@
 }
 
 .comm-tab-pill:hover {
-  background: #fef9ee;
+  background: #f8fafc;
   color: #1e1633;
-  border-color: #fcd34d;
+  border-color: #cbd5e1;
 }
 
 /* Active tab variants */
@@ -370,20 +371,24 @@
   position: relative;
   flex: 1 1 240px;
   min-width: 200px;
+  display: flex;
+  align-items: center;
 }
 
-.comm-search-icon {
+.comm-search-icon,
+.comm-search-wrap .comm-search-icon {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: #94a3b8;
   pointer-events: none;
+  z-index: 2;
 }
 
 .comm-input {
   width: 100%;
-  padding: 8px 12px 8px 36px;
+  padding: 10px 14px 10px 42px !important;
   border-radius: 10px;
   border: 1px solid rgba(254, 230, 133, 0.8);
   background: #ffffff;
@@ -392,6 +397,10 @@
   outline: none;
   transition: all 0.15s ease;
   box-sizing: border-box;
+}
+
+.comm-search-wrap .comm-input {
+  padding-left: 42px !important;
 }
 
 .comm-input:focus {

@@ -883,6 +883,80 @@ button.delete-btn:hover {
 }
 
 /* Branding & Workspace Identifiers */
+.brand {
+  height: auto;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px 10px 12px !important;
+  margin-bottom: 4px;
+}
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+}
+.brand-copy strong {
+  font-family: 'Plus Jakarta Sans', Manrope, -apple-system, sans-serif !important;
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: #1a1a2e !important;
+  line-height: 1.2 !important;
+}
+.brand-copy strong span {
+  color: var(--brand-primary, #06b6d4) !important;
+}
+.brand-copy small {
+  font-size: 8.5px !important;
+  letter-spacing: 1.8px !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+  margin-top: 3px !important;
+  text-transform: uppercase;
+}
+
+.dark .brand-copy strong {
+  color: #f1f5f9 !important;
+}
+
+.login-brand strong {
+  font-family: 'Plus Jakarta Sans', Manrope, -apple-system, sans-serif !important;
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: #ffffff !important;
+}
+.login-brand strong span {
+  color: var(--brand-primary-lighter, #67e8f9) !important;
+}
+
+.plan-selection-brand strong {
+  font-family: 'Plus Jakarta Sans', Manrope, -apple-system, sans-serif !important;
+  font-size: 19px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: #1a1a2e !important;
+}
+.plan-selection-brand strong span {
+  color: var(--brand-primary, #06b6d4) !important;
+}
+
+.loader-brand-title {
+  font-family: 'Plus Jakarta Sans', Manrope, -apple-system, sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #1a1a2e;
+  margin-bottom: 6px;
+}
+.loader-brand-title span {
+  color: var(--brand-primary, #06b6d4);
+}
+.dark .loader-brand-title {
+  color: #f1f5f9;
+}
+
 .brand-logo-img {
   width: 36px;
   height: 36px;
@@ -1583,6 +1657,9 @@ input:focus-visible,
   background: #fafbfe;
   color: #2b3147;
   outline: none;
+}
+.comm-search-wrap .comm-input {
+  padding-left: 42px !important;
 }
 .comm-input:focus {
   border-color: var(--brand-primary, #06b6d4);

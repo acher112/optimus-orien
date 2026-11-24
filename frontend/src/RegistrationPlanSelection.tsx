@@ -62,8 +62,7 @@ export const RegistrationPlanSelection: React.FC<RegistrationPlanSelectionProps>
       {/* Top Navigation Banner */}
       <header className="plan-selection-top-bar">
         <div className="plan-selection-brand">
-          <span className="brand-symbol">◈</span>
-          <strong>optimus<span>orien</span></strong>
+          <strong>OPTIMUS <span>ORIEN</span></strong>
           <span className="plan-selection-step-tag">Step 2: Choose Plan</span>
         </div>
         <div className="plan-selection-top-user">

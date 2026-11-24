@@ -46,8 +46,7 @@ export default function FooterSection({
           {/* Brand Info & Buttons */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <img src="/brand-logo.png" alt="Optimus Orien" className="brand-logo-img" style={{ width: 32, height: 32 }} />
-              <h2 className="footer-brand" style={{ margin: 0 }}>OPTIMUS ORIEN</h2>
+              <h2 className="footer-brand" style={{ margin: 0 }}>OPTIMUS <span>ORIEN</span></h2>
             </div>
             <p className="footer-desc">{t.brandTagline}</p>
 

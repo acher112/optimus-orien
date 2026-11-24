@@ -1459,6 +1459,10 @@ body {
   margin-bottom: 0.5rem;
 }
 
+.footer-brand span {
+  color: #06b6d4;
+}
+
 .footer-desc {
   font-size: 0.95rem;
   color: #6b7280;
