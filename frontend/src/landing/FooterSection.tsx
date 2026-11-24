@@ -121,7 +121,7 @@ export default function FooterSection({
                 </a>
               </li>
               <li>
-                <a href="/schools" onClick={(e) => handleLinkClick('/schools', e)} style={{ color: '#4f46e5', fontWeight: 700 }}>
+                <a href="/schools" onClick={(e) => handleLinkClick('/schools', e)} style={{ color: 'var(--brand-primary, #06b6d4)', fontWeight: 700 }}>
                   Find a School (Leaderboard)
                 </a>
               </li>

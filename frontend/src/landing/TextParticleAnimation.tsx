@@ -104,7 +104,7 @@ export default function TextParticleAnimation() {
       ctx.clearRect(0, 0, width, height);
 
       // Batched drawing: 1 single beginPath & fill call for all particles
-      ctx.fillStyle = '#9b51e0';
+      ctx.fillStyle = '#06b6d4';
       ctx.beginPath();
 
       const pLen = particles.length;

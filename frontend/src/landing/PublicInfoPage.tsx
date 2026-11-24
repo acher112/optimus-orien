@@ -672,7 +672,7 @@ export default function PublicInfoPage({ initialPath = '/about', authenticated =
           {page.highlights.map((h, idx) => (
             <div key={idx} className="info-highlight-card">
               <div className="highlight-icon-box">
-                {h.icon || <CheckCircle2 size={24} color="#9b51e0" />}
+                {h.icon || <CheckCircle2 size={24} color="#06b6d4" />}
               </div>
               <h3 className="highlight-title">{h.title}</h3>
               <p className="highlight-desc">{h.desc}</p>

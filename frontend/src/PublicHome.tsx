@@ -135,7 +135,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '24px', marginBottom: '32px' }}>
               <div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(99, 102, 241, 0.2)', border: '1px solid rgba(99, 102, 241, 0.4)', color: '#a5b4fc', padding: '6px 14px', borderRadius: '100px', fontSize: '0.84rem', fontWeight: 700, marginBottom: '14px' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(6, 182, 212, 0.15)', border: '1px solid rgba(6, 182, 212, 0.35)', color: '#06b6d4', padding: '6px 14px', borderRadius: '100px', fontSize: '0.84rem', fontWeight: 700, marginBottom: '14px' }}>
                   <Award size={16} />
                   <span>PUBLIC CAMPUS LEADERBOARD</span>
                 </div>
@@ -151,7 +151,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                 <button
                   onClick={() => navigate('/schools')}
                   style={{
-                    background: '#4f46e5',
+                    background: 'var(--brand-primary, #06b6d4)',
                     color: '#ffffff',
                     border: 'none',
                     padding: '14px 24px',
@@ -162,7 +162,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '10px',
-                    boxShadow: '0 4px 16px rgba(79, 70, 229, 0.4)'
+                    boxShadow: '0 4px 16px rgba(6, 182, 212, 0.4)'
                   }}
                 >
                   <span>Explore Full Leaderboard</span>
@@ -248,7 +248,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
               <a
                 href="/schools/methodology"
                 onClick={(e) => { e.preventDefault(); navigate('/schools/methodology'); }}
-                style={{ marginLeft: 'auto', color: '#a5b4fc', textDecoration: 'underline', fontSize: '0.88rem' }}
+                style={{ marginLeft: 'auto', color: 'var(--brand-primary, #06b6d4)', textDecoration: 'underline', fontSize: '0.88rem' }}
               >
                 How We Compute Rankings
               </a>

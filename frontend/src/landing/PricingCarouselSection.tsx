@@ -127,7 +127,7 @@ export default function PricingCarouselSection({
       zIndex,
       opacity,
       pointerEvents,
-      '--accent': '#9b51e0',
+      '--accent': 'var(--brand-primary, #06b6d4)',
     } as React.CSSProperties;
   };
 
