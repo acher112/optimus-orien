@@ -292,7 +292,6 @@ export default function RolesSection() {
                 <span className="b-dot dot-red" />
                 <span className="b-dot dot-yellow" />
                 <span className="b-dot dot-green" />
-                <span className="browser-url">{current.url}</span>
               </div>
               <span className="portal-badge-chip">{current.badge}</span>
             </div>
@@ -303,7 +302,6 @@ export default function RolesSection() {
                 <div className="portal-showcase-hero">
                   <div className="portal-showcase-meta">
                     <span className="portal-showcase-chip">{current.badge}</span>
-                    <span className="portal-showcase-endpoint">{current.url}</span>
                   </div>
                   <h3 className="portal-showcase-title">{current.roleName} Capabilities & Operations</h3>
                   <p className="portal-showcase-summary">{current.summary}</p>

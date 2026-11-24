@@ -91,20 +91,10 @@ export default function LandingNavbar({
             </a>
             <a
               href="/schools"
-              className="nav-link-find-school"
               onClick={(e) => {
                 e.preventDefault();
                 closeMenu();
                 navigate('/schools');
-              }}
-              style={{
-                color: 'var(--brand-primary, #06b6d4)',
-                fontWeight: 700,
-                background: 'rgba(6, 182, 212, 0.1)',
-                padding: '5px 14px',
-                borderRadius: '8px',
-                border: '1.5px solid rgba(6, 182, 212, 0.35)',
-                transition: 'all 0.2s ease',
               }}
             >
               Find a School

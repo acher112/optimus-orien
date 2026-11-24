@@ -107,155 +107,6 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
           subtitle={heroSlide?.subtitle}
         />
 
-        {/* Section 1.5: "Find a School" Leaderboard Teaser (Expanded near full-screen) */}
-        <section
-          id="find-school-teaser"
-          style={{
-            width: 'calc(100% - 32px)',
-            maxWidth: 'calc(100vw - 32px)',
-            margin: '32px auto',
-            padding: 0,
-            position: 'relative',
-            zIndex: 10,
-            boxSizing: 'border-box'
-          }}
-        >
-          <div style={{
-            background: 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)',
-            borderRadius: '24px',
-            padding: 'clamp(32px, 5vw, 64px) clamp(24px, 4vw, 56px)',
-            minHeight: 'calc(100vh - 48px)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            boxShadow: '0 20px 40px -15px rgba(15, 23, 42, 0.4)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            color: '#ffffff',
-            boxSizing: 'border-box'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '24px', marginBottom: '32px' }}>
-              <div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(6, 182, 212, 0.15)', border: '1px solid rgba(6, 182, 212, 0.35)', color: '#06b6d4', padding: '6px 14px', borderRadius: '100px', fontSize: '0.84rem', fontWeight: 700, marginBottom: '14px' }}>
-                  <Award size={16} />
-                  <span>PUBLIC CAMPUS LEADERBOARD</span>
-                </div>
-                <h2 style={{ margin: '0 0 12px', fontSize: 'clamp(1.8rem, 3.5vw, 2.75rem)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                  Find Top Performing Campuses on Optimus Orien
-                </h2>
-                <p style={{ margin: 0, color: '#94a3b8', fontSize: 'clamp(0.95rem, 1.2vw, 1.15rem)', maxWidth: '750px', lineHeight: 1.6 }}>
-                  Parents and prospective families can discover registered institutions ranked by verified Academic Quality Index (AQI), curriculum boards, and facilities.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => navigate('/schools')}
-                  style={{
-                    background: 'var(--brand-primary, #06b6d4)',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '14px 24px',
-                    borderRadius: '12px',
-                    fontWeight: 700,
-                    fontSize: '0.98rem',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    boxShadow: '0 4px 16px rgba(6, 182, 212, 0.4)'
-                  }}
-                >
-                  <span>Explore Full Leaderboard</span>
-                  <ArrowRight size={18} />
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Search Form */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                navigate(`/schools?search=${encodeURIComponent(searchQuery)}`);
-              }}
-              style={{
-                display: 'flex',
-                gap: '12px',
-                background: 'rgba(255, 255, 255, 0.08)',
-                padding: '10px',
-                borderRadius: '18px',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                marginBottom: '28px'
-              }}
-            >
-              <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
-                <Search size={22} color="#94a3b8" style={{ position: 'absolute', left: '18px' }} />
-                <input
-                  type="text"
-                  placeholder="Search by school name, city (e.g. Lahore, Islamabad), or curriculum board..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    color: '#ffffff',
-                    padding: '14px 18px 14px 54px',
-                    fontSize: '1.05rem'
-                  }}
-                />
-              </div>
-              <button
-                type="submit"
-                style={{
-                  background: '#ffffff',
-                  color: '#0f172a',
-                  border: 'none',
-                  padding: '14px 28px',
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  fontSize: '0.95rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Search
-              </button>
-            </form>
-
-            {/* Popular City Filter Pills */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '0.9rem' }}>
-              <span style={{ color: '#94a3b8' }}>Popular locations:</span>
-              {['Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Faisalabad'].map((city) => (
-                <button
-                  key={city}
-                  type="button"
-                  onClick={() => navigate(`/schools?city=${city}`)}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    border: 'none',
-                    color: '#e2e8f0',
-                    padding: '6px 16px',
-                    borderRadius: '100px',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    fontWeight: 500
-                  }}
-                >
-                  {city}
-                </button>
-              ))}
-              <a
-                href="/schools/methodology"
-                onClick={(e) => { e.preventDefault(); navigate('/schools/methodology'); }}
-                style={{ marginLeft: 'auto', color: 'var(--brand-primary, #06b6d4)', textDecoration: 'underline', fontSize: '0.88rem' }}
-              >
-                How We Compute Rankings
-              </a>
-            </div>
-          </div>
-        </section>
-
         {/* Section 2: Core Features (6 features dark card) */}
         <FeaturesSection features={features} locale={locale} />
 
@@ -277,6 +128,155 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
           onOpenContact={() => setContactModalOpen(true)}
         />
 
+        {/* "Find a School" Leaderboard Teaser (Relocated right before FAQ, clean white card) */}
+        <section
+          id="find-school-teaser"
+          style={{
+            width: 'calc(100% - 32px)',
+            maxWidth: '1200px',
+            margin: '40px auto 20px auto',
+            padding: 0,
+            position: 'relative',
+            zIndex: 10,
+            boxSizing: 'border-box'
+          }}
+        >
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '20px',
+            padding: 'clamp(24px, 3.5vw, 36px) clamp(20px, 3vw, 36px)',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.06)',
+            border: '1px solid #e2e8f0',
+            color: '#0f172a',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px', marginBottom: '22px' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(6, 182, 212, 0.1)', border: '1px solid rgba(6, 182, 212, 0.3)', color: '#0891b2', padding: '4px 12px', borderRadius: '100px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '10px' }}>
+                  <Award size={15} />
+                  <span>PUBLIC CAMPUS LEADERBOARD</span>
+                </div>
+                <h2 style={{ margin: '0 0 8px', fontSize: 'clamp(1.5rem, 2.8vw, 2.2rem)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2, color: '#0f172a' }}>
+                  Find Top Performing Campuses on Optimus Orien
+                </h2>
+                <p style={{ margin: 0, color: '#64748b', fontSize: 'clamp(0.9rem, 1.1vw, 1rem)', maxWidth: '750px', lineHeight: 1.5 }}>
+                  Parents and prospective families can discover registered institutions ranked by verified Academic Quality Index (AQI), curriculum boards, and facilities.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => navigate('/schools')}
+                  style={{
+                    background: 'var(--brand-primary, #06b6d4)',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    fontSize: '0.92rem',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(6, 182, 212, 0.35)'
+                  }}
+                >
+                  <span>Explore Full Leaderboard</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Compact Search Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                navigate(`/schools?search=${encodeURIComponent(searchQuery)}`);
+              }}
+              style={{
+                display: 'flex',
+                gap: '8px',
+                background: '#f8fafc',
+                padding: '6px 8px',
+                borderRadius: '12px',
+                border: '1.5px solid #e2e8f0',
+                marginBottom: '16px',
+                alignItems: 'center'
+              }}
+            >
+              <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                <Search size={18} color="#64748b" style={{ position: 'absolute', left: '12px' }} />
+                <input
+                  type="text"
+                  placeholder="Search by school name, city (e.g. Lahore, Islamabad), or curriculum board..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: '#0f172a',
+                    padding: '6px 12px 6px 38px',
+                    fontSize: '0.92rem',
+                    height: '34px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <button
+                type="submit"
+                style={{
+                  background: 'var(--brand-primary, #06b6d4)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0 20px',
+                  height: '34px',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Search
+              </button>
+            </form>
+
+            {/* Popular City Filter Pills */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
+              <span style={{ color: '#64748b', fontWeight: 500 }}>Popular locations:</span>
+              {['Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Faisalabad'].map((city) => (
+                <button
+                  key={city}
+                  type="button"
+                  onClick={() => navigate(`/schools?city=${city}`)}
+                  style={{
+                    background: '#f1f5f9',
+                    border: '1px solid #e2e8f0',
+                    color: '#475569',
+                    padding: '4px 12px',
+                    borderRadius: '100px',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: 500
+                  }}
+                >
+                  {city}
+                </button>
+              ))}
+              <a
+                href="/schools/methodology"
+                onClick={(e) => { e.preventDefault(); navigate('/schools/methodology'); }}
+                style={{ marginLeft: 'auto', color: 'var(--brand-primary, #06b6d4)', textDecoration: 'underline', fontSize: '0.84rem', fontWeight: 600 }}
+              >
+                How We Compute Rankings
+              </a>
+            </div>
+          </div>
+        </section>
+
         {/* Section 6: Frequently Asked Questions */}
         <FaqSection faqs={faqs} locale={locale} />
 
@@ -294,8 +294,8 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
       {/* Contact Modal */}
       <ContactModal
         isOpen={contactModalOpen}
-        locale={locale}
         onClose={() => setContactModalOpen(false)}
+        locale={locale}
       />
     </div>
   );
