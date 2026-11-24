@@ -43,15 +43,17 @@ export default function VortexAnimation() {
     };
 
     const initParticles = (width: number, height: number) => {
-      // Optimized particle counts: 1,100 on desktop, 320 on mobile
+      // Optimized particle counts: 1,200 on desktop, 360 on mobile
       // Provides identical visual density with >80% reduced CPU/GPU load
       const isMobile = width < 768;
-      const count = isMobile ? 320 : 1100;
+      const count = isMobile ? 360 : 1200;
 
       const clusterConfigs = [
-        { cx: width * 0.5, cy: height * 0.5, scale: 1.2, fraction: 0.75, color: '#10b981', alpha: 0.65 }, // Center (Green)
-        { cx: width * 0.14, cy: height * 0.16, scale: 0.22, fraction: 0.1, color: '#F96E2A', alpha: 0.75 },  // Top-Left (Orange - untouched)
-        { cx: width * 0.85, cy: height * 0.15, scale: 0.3, fraction: 0.15, color: '#10b981', alpha: 0.75 }, // Top-Right (Green)
+        { cx: width * 0.5, cy: height * 0.5, scale: 1.25, fraction: 0.64, color: '#06b6d4', alpha: 0.70 }, // Center Big Circle (Always Cyan)
+        { cx: width * 0.14, cy: height * 0.16, scale: 0.22, fraction: 0.09, color: '#F96E2A', alpha: 0.75 },  // Top-Left (Orange)
+        { cx: width * 0.85, cy: height * 0.15, scale: 0.28, fraction: 0.09, color: '#10b981', alpha: 0.75 }, // Top-Right (Green)
+        { cx: width * 0.15, cy: height * 0.82, scale: 0.24, fraction: 0.09, color: '#10b981', alpha: 0.75 }, // Lower-Left (Green)
+        { cx: width * 0.84, cy: height * 0.80, scale: 0.26, fraction: 0.09, color: '#F96E2A', alpha: 0.75 }, // Lower-Right (Orange)
       ];
 
       clusters = clusterConfigs.map((cfg) => {
