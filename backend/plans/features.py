@@ -216,6 +216,9 @@ def plan_rank(plan: Any) -> int:
 # Organisation Plan Resolver
 # -----------------------------------------------------------------------------
 
+ALL_FEATURES_FREE = True
+
+
 def get_org_plan(org: Any) -> str:
     """
     Retrieves the active plan tier for an organisation.
@@ -229,6 +232,9 @@ def get_org_plan(org: Any) -> str:
     Returns:
     - 'free' | 'standard' | 'premium' | 'custom'
     """
+    if ALL_FEATURES_FREE:
+        return PLAN_CUSTOM
+
     if org is None:
         return PLAN_FREE
 
@@ -374,6 +380,9 @@ def has_feature(org: Any, feature_key: str) -> bool:
     3. If plan is 'custom': all features in premium are included by default, subject to overrides.
     4. Otherwise, compare organization's plan rank with feature's required plan rank.
     """
+    if ALL_FEATURES_FREE:
+        return True
+
     if not feature_key:
         return False
 
@@ -441,6 +450,9 @@ def check_plan_limit(org: Any, limit_name: str, count: int) -> Tuple[bool, Optio
     Returns:
     - (is_allowed: bool, max_allowed: int or None)
     """
+    if ALL_FEATURES_FREE:
+        return True, None
+
     limits = get_plan_limits(org=org)
     max_allowed = limits.get(limit_name)
     if max_allowed is None:

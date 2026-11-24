@@ -9,6 +9,10 @@ from rest_framework.response import Response
 from core.services.entitlements import check_feature_access
 
 
+# Toggle to make all features 100% free and unlocked without paywalls/plan restrictions
+ALL_FEATURES_FREE = True
+
+
 class RequiresFeature(BasePermission):
     """
     DRF BasePermission class for Class-Based Views / ViewSets.
@@ -23,6 +27,9 @@ class RequiresFeature(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
+
+        if ALL_FEATURES_FREE:
+            return True
 
         # Only unscoped platform administrators bypass tenant subscription gating
         if request.user.role == 'platform_admin' and not getattr(request.user, 'organisation_id', None):
@@ -59,6 +66,9 @@ def requires_feature(feature_key: str):
         def _wrapped_view(request, *args, **kwargs):
             if not request.user or not request.user.is_authenticated:
                 return Response({'detail': 'Authentication required.'}, status=401)
+
+            if ALL_FEATURES_FREE:
+                return view_func(request, *args, **kwargs)
 
             # Only unscoped platform administrators bypass tenant subscription gating
             if request.user.role == 'platform_admin' and not getattr(request.user, 'organisation_id', None):

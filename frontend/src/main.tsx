@@ -1028,6 +1028,7 @@ function App() {
   }, [user, fetchSubscription]);
 
   const orgPlan = useMemo<'free' | 'standard' | 'premium' | 'custom'>(() => {
+    if (HIDE_PAYMENT_AND_PLANS) return 'custom';
     if (user?.role === 'platform_admin' && !user?.school && !activeCampusId) return 'custom';
     const subStatus = (subscription?.status || entitlements?.status || '').toLowerCase();
     if (subStatus === 'expired' || subStatus === 'suspended' || subStatus === 'cancelled' || subStatus === 'no_plan') {

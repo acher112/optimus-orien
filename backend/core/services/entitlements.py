@@ -204,6 +204,9 @@ def get_effective_subscription_status(school, now=None):
     return new_status
 
 
+ALL_FEATURES_FREE = True
+
+
 def get_school_entitlements(school, now=None, use_cache=True):
     """
     Computes and returns the complete effective entitlements dictionary for a school.
@@ -237,7 +240,12 @@ def get_school_entitlements(school, now=None, use_cache=True):
     # - past_due: grants full access to their prior plan during grace
     # - active: grants active plan tier (standard or premium)
     # - suspended: 0 features
-    if is_suspended:
+    if ALL_FEATURES_FREE:
+        effective_tier = 'premium'
+        is_suspended = False
+        is_write_allowed = True
+        is_no_plan = False
+    elif is_suspended:
         effective_tier = 'none'
     elif is_no_plan:
         effective_tier = 'no_plan'
@@ -415,6 +423,9 @@ def check_feature_access(school, feature_key, now=None):
     Evaluates whether a school has access to a specific feature key.
     Returns: (is_allowed: bool, reason: str, required_plan: str)
     """
+    if ALL_FEATURES_FREE:
+        return True, "", ""
+
     if not school:
         return True, "", ""
 

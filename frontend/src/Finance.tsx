@@ -103,7 +103,7 @@ interface FinanceProps {
 
 export default function Finance({ user, notify, plan, isPremiumUnlocked, onUpgrade, activeCampusId, campuses = [] }: FinanceProps) {
   const isPrincipal = user.role === 'principal';
-  const hasPremium = isPremiumUnlocked !== undefined ? isPremiumUnlocked : (plan === 'premium' || plan === 'custom');
+  const hasPremium = true; // All features are currently free and unlocked
   const [tab, setTab] = useState<Tab>('overview');
   const [schools, setSchools] = useState<R[]>(() => campuses || []);
   const [school, setSchool] = useState(() => (activeCampusId ? String(activeCampusId) : (isPrincipal && user.school ? String(user.school) : '')));
