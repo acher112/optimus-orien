@@ -64,7 +64,7 @@ interface AttendanceModuleProps {
 }
 
 export default function AttendanceModule({ user, notify, campuses = [], activeCampusId }: AttendanceModuleProps) {
-  const isManager = ['organisation_admin', 'school_admin', 'principal'].includes(user.role);
+  const isManager = Boolean(user.is_superuser || !['student', 'parent'].includes(user.role));
   const [activeTab, setActiveTab] = useState<'student' | 'staff'>('student');
 
   // Multi-campus handling for Org Admin
@@ -281,20 +281,21 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
   return (
     <div className="attendance-portal-wrap" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {/* Top Header & Sub-Tabs Navigation */}
-      <div className="page-header" style={{ marginBottom: 0 }}>
+      <div className="page-header" style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: '0.2rem 0' }}>Attendance Register</h1>
+          <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, color: '#0f172a', letterSpacing: '-0.02em' }}>Attendance Register</h1>
         </div>
 
         {/* Sub-tabs Switcher */}
         {isManager && (
           <div style={{
             display: 'inline-flex',
-            background: 'var(--bg-subtle, #f1f5f9)',
+            background: '#ffffff',
             padding: '4px',
             borderRadius: '10px',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            gap: '4px'
+            border: '1.5px solid #e2e8f0',
+            gap: '4px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
           }}>
             <button
               type="button"
@@ -303,15 +304,15 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                padding: '8px 16px',
+                padding: '8px 18px',
                 borderRadius: '8px',
                 border: 'none',
-                background: activeTab === 'student' ? '#fff' : 'transparent',
-                color: activeTab === 'student' ? 'var(--brand-primary, #715ee8)' : '#64748b',
-                fontWeight: 600,
+                background: activeTab === 'student' ? 'var(--brand-primary, #06b6d4)' : 'transparent',
+                color: activeTab === 'student' ? '#ffffff' : '#64748b',
+                fontWeight: 700,
                 fontSize: '0.88rem',
                 cursor: 'pointer',
-                boxShadow: activeTab === 'student' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                boxShadow: activeTab === 'student' ? '0 2px 8px rgba(6, 182, 212, 0.35)' : 'none',
                 transition: 'all 0.15s ease'
               }}
               onClick={() => setActiveTab('student')}
@@ -326,15 +327,15 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                padding: '8px 16px',
+                padding: '8px 18px',
                 borderRadius: '8px',
                 border: 'none',
-                background: activeTab === 'staff' ? '#fff' : 'transparent',
-                color: activeTab === 'staff' ? '#7c3aed' : '#64748b',
-                fontWeight: 600,
+                background: activeTab === 'staff' ? 'var(--brand-primary, #06b6d4)' : 'transparent',
+                color: activeTab === 'staff' ? '#ffffff' : '#7c3aed',
+                fontWeight: 700,
                 fontSize: '0.88rem',
                 cursor: 'pointer',
-                boxShadow: activeTab === 'staff' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                boxShadow: activeTab === 'staff' ? '0 2px 8px rgba(6, 182, 212, 0.35)' : 'none',
                 transition: 'all 0.15s ease'
               }}
               onClick={() => setActiveTab('staff')}
@@ -355,23 +356,24 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {/* Filter Bar Panel: Class selector + Date Picker */}
           <section className="panel" style={{
-            background: 'var(--card-bg, #fff)',
-            borderRadius: '10px',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            padding: '1.25rem'
+            background: '#ffffff',
+            borderRadius: '14px',
+            border: '1.5px solid #e2e8f0',
+            padding: '1.25rem 1.5rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
           }}>
             {/* Mode Switcher: View Attendance vs Mark Or Edit Attendance */}
             <div style={{
               display: 'flex',
               gap: 10,
               marginBottom: 16,
-              paddingBottom: 14,
+              paddingBottom: 16,
               borderBottom: '1px solid #f1f5f9',
               alignItems: 'center',
               flexWrap: 'wrap'
             }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', marginRight: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Register Mode:
+              <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#64748b', marginRight: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                REGISTER MODE:
               </span>
               <button
                 type="button"
@@ -379,17 +381,17 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 16px',
+                  gap: 7,
+                  padding: '8px 18px',
                   borderRadius: 8,
-                  fontSize: '0.84rem',
-                  fontWeight: attendanceMode === 'view' ? 700 : 500,
-                  background: attendanceMode === 'view' ? '#6366f1' : '#f8fafc',
-                  color: attendanceMode === 'view' ? '#fff' : '#475569',
-                  border: attendanceMode === 'view' ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                  fontSize: '0.86rem',
+                  fontWeight: attendanceMode === 'view' ? 750 : 600,
+                  background: attendanceMode === 'view' ? '#4f46e5' : '#ffffff',
+                  color: attendanceMode === 'view' ? '#ffffff' : '#4f46e5',
+                  border: attendanceMode === 'view' ? '1px solid #4f46e5' : '1.5px solid #6366f1',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  boxShadow: attendanceMode === 'view' ? '0 2px 4px rgba(99, 102, 241, 0.25)' : 'none'
+                  boxShadow: attendanceMode === 'view' ? '0 2px 8px rgba(79, 70, 229, 0.3)' : 'none'
                 }}
               >
                 <Eye size={15} /> View Attendance
@@ -400,48 +402,49 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 16px',
+                  gap: 7,
+                  padding: '8px 18px',
                   borderRadius: 8,
-                  fontSize: '0.84rem',
-                  fontWeight: attendanceMode === 'mark' ? 700 : 500,
-                  background: attendanceMode === 'mark' ? '#6366f1' : '#f8fafc',
-                  color: attendanceMode === 'mark' ? '#fff' : '#475569',
-                  border: attendanceMode === 'mark' ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                  fontSize: '0.86rem',
+                  fontWeight: attendanceMode === 'mark' ? 750 : 600,
+                  background: attendanceMode === 'mark' ? '#4f46e5' : '#ffffff',
+                  color: attendanceMode === 'mark' ? '#ffffff' : '#4f46e5',
+                  border: attendanceMode === 'mark' ? '1px solid #4f46e5' : '1.5px solid #6366f1',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  boxShadow: attendanceMode === 'mark' ? '0 2px 4px rgba(99, 102, 241, 0.25)' : 'none'
+                  boxShadow: attendanceMode === 'mark' ? '0 2px 8px rgba(79, 70, 229, 0.3)' : 'none'
                 }}
               >
                 <Edit3 size={15} /> Mark Or Edit Attendance
               </button>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', width: '100%', maxWidth: '100%' }}>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '100%' }}>
+            {/* Form Controls Row */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 {/* Campus Filter (Org Admin) */}
-                {schools.length > 1 && user.role === 'organisation_admin' && (
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569', maxWidth: '100%' }}>
+                {schools.length > 1 && (user.role === 'organisation_admin' || user.is_superuser) && (
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.78rem', fontWeight: 750, color: '#475569', letterSpacing: '0.04em' }}>
                     CAMPUS:
                     <select
                       className="fx-select"
                       value={schoolId}
                       onChange={e => setSchoolId(e.target.value)}
-                      style={{ height: 38, padding: '4px 10px', fontSize: '0.88rem', borderRadius: 8, maxWidth: '100%', boxSizing: 'border-box' }}
+                      style={{ height: 42, padding: '0 14px', fontSize: '0.88rem', fontWeight: 700, borderRadius: 8, border: '1.5px solid #cbd5e1', background: '#ffffff', minWidth: 200 }}
                     >
                       {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </label>
                 )}
 
-                {/* Class Selector Filter (e.g. Class 9th, 10th, etc.) */}
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569', maxWidth: '100%' }}>
+                {/* Class Selector Filter */}
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.78rem', fontWeight: 750, color: '#475569', letterSpacing: '0.04em' }}>
                   CLASSROOM:
                   <select
                     className="fx-select"
                     value={selectedClassId}
                     onChange={e => setSelectedClassId(e.target.value)}
-                    style={{ height: 38, padding: '4px 10px', fontSize: '0.88rem', borderRadius: 8, minWidth: 160, maxWidth: '100%', fontWeight: 700, boxSizing: 'border-box' }}
+                    style={{ height: 42, padding: '0 14px', fontSize: '0.88rem', borderRadius: 8, minWidth: 220, fontWeight: 700, color: '#1e293b', border: '1.5px solid #cbd5e1', background: '#ffffff' }}
                   >
                     {classes.map(c => (
                       <option key={c.id} value={c.id}>
@@ -453,98 +456,133 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 </label>
 
                 {/* Date Filter */}
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontWeight: 600, color: '#475569', maxWidth: '100%' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.78rem', fontWeight: 750, color: '#475569', letterSpacing: '0.04em' }}>
                   ATTENDANCE DATE:
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
                       type="date"
                       className="fx-select"
                       value={dateVal}
                       onChange={e => setDateVal(e.target.value)}
-                      style={{ height: 38, padding: '4px 8px', fontSize: '0.85rem', borderRadius: 8, flex: '1 1 120px', minWidth: 115, maxWidth: '100%', boxSizing: 'border-box' }}
+                      style={{ height: 42, padding: '0 12px', fontSize: '0.88rem', fontWeight: 700, borderRadius: 8, border: '1.5px solid #cbd5e1', background: '#ffffff', color: '#1e293b', width: 140 }}
                     />
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        className="outline-btn"
-                        onClick={() => setQuickDate(0)}
-                        style={{ height: 38, padding: '0 9px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
-                        title="Today's attendance"
-                      >
-                        Today
-                      </button>
-                      <button
-                        type="button"
-                        className="outline-btn"
-                        onClick={() => setQuickDate(1)}
-                        style={{ height: 38, padding: '0 9px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
-                        title="Yesterday's attendance"
-                      >
-                        Yesterday
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(0)}
+                      style={{
+                        height: 42,
+                        padding: '0 18px',
+                        fontSize: '0.84rem',
+                        fontWeight: 700,
+                        borderRadius: 8,
+                        border: 'none',
+                        background: '#06b6d4',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(6, 182, 212, 0.25)',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Today's attendance"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(1)}
+                      style={{
+                        height: 42,
+                        padding: '0 18px',
+                        fontSize: '0.84rem',
+                        fontWeight: 700,
+                        borderRadius: 8,
+                        border: 'none',
+                        background: '#0284c7',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Yesterday's attendance"
+                    >
+                      Yesterday
+                    </button>
                   </div>
                 </label>
               </div>
 
-              {/* Action Buttons: Only visible in 'mark' mode */}
-              {attendanceMode === 'mark' ? (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Mode switch or action row */}
+              <div style={{ marginTop: 2 }}>
+                {attendanceMode === 'view' ? (
                   <button
                     type="button"
-                    className="outline-btn"
-                    onClick={markAllPresent}
-                    disabled={loading || records.length === 0}
-                    style={{ height: 38, fontSize: '0.85rem' }}
-                  >
-                    <Check size={15} /> Mark All Present
-                  </button>
-
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    onClick={handleSaveStudentAttendance}
-                    disabled={isSubmitDisabled}
-                    style={{
-                      height: 38,
-                      fontSize: '0.85rem',
-                      padding: '0 18px',
-                      opacity: isSubmitDisabled ? 0.6 : 1,
-                      cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
-                      background: dirty ? '#16a34a' : undefined,
-                      borderColor: dirty ? '#16a34a' : undefined,
-                      transition: 'all 0.2s ease',
-                    }}
-                    title={
-                      isConducted && !dirty
-                        ? 'Attendance already conducted and saved. Change any student status to undisable submit.'
-                        : 'Submit attendance updates to database'
-                    }
-                  >
-                    <Save size={15} />{' '}
-                    {saving
-                      ? 'Saving...'
-                      : dirty
-                      ? isConducted
-                        ? 'Update Attendance *'
-                        : 'Submit Attendance *'
-                      : isConducted
-                      ? 'Attendance Saved (No Changes)'
-                      : 'Submit Attendance'}
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    className="outline-btn"
                     onClick={() => setAttendanceMode('mark')}
-                    style={{ height: 38, fontSize: '0.84rem', borderColor: '#6366f1', color: '#6366f1' }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      height: 38,
+                      padding: '0 16px',
+                      fontSize: '0.84rem',
+                      fontWeight: 700,
+                      borderRadius: 8,
+                      border: '1.5px solid #6366f1',
+                      background: '#ffffff',
+                      color: '#4f46e5',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
                   >
                     <Edit3 size={14} /> Switch to Mark / Edit
                   </button>
-                </div>
-              )}
+                ) : (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      onClick={markAllPresent}
+                      disabled={loading || records.length === 0}
+                      style={{ height: 38, fontSize: '0.85rem', fontWeight: 700 }}
+                    >
+                      <Check size={15} /> Mark All Present
+                    </button>
+
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      onClick={handleSaveStudentAttendance}
+                      disabled={isSubmitDisabled}
+                      style={{
+                        height: 38,
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        padding: '0 20px',
+                        opacity: isSubmitDisabled ? 0.6 : 1,
+                        cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+                        background: dirty ? '#16a34a' : 'var(--brand-primary, #06b6d4)',
+                        borderColor: dirty ? '#16a34a' : 'var(--brand-primary, #06b6d4)',
+                        boxShadow: '0 2px 8px rgba(6, 182, 212, 0.3)',
+                        transition: 'all 0.2s ease',
+                      }}
+                      title={
+                        isConducted && !dirty
+                          ? 'Attendance already conducted and saved. Change any student status to undisable submit.'
+                          : 'Submit attendance updates to database'
+                      }
+                    >
+                      <Save size={15} />{' '}
+                      {saving
+                        ? 'Saving...'
+                        : dirty
+                        ? isConducted
+                          ? 'Update Attendance *'
+                          : 'Submit Attendance *'
+                        : isConducted
+                        ? 'Attendance Saved (No Changes)'
+                        : 'Submit Attendance'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Quick Classroom Filter Chips */}
@@ -561,9 +599,9 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                       type="button"
                       onClick={() => setSelectedClassId(String(c.id))}
                       style={{
-                        border: isSelected ? '1px solid #715ee8' : '1px solid #e2e8f0',
-                        background: isSelected ? '#ede9fe' : '#f8fafc',
-                        color: isSelected ? '#5b21b6' : '#475569',
+                        border: isSelected ? '1.5px solid #06b6d4' : '1px solid #e2e8f0',
+                        background: isSelected ? '#ecfeff' : '#f8fafc',
+                        color: isSelected ? '#0891b2' : '#475569',
                         padding: '4px 10px',
                         borderRadius: '6px',
                         fontSize: '0.8rem',
@@ -582,33 +620,34 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
 
           {/* Conducted Status Banner */}
           <div style={{
-            background: isConducted ? '#ecfdf5' : '#fffbeb',
-            border: isConducted ? '1px solid #a7f3d0' : '1px solid #fde68a',
-            borderRadius: '10px',
-            padding: '12px 18px',
+            background: isConducted ? '#ecfdf5' : '#ffedd5',
+            border: isConducted ? '1.5px solid #a7f3d0' : '1.5px solid #fed7aa',
+            borderRadius: '12px',
+            padding: '14px 20px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             flexWrap: 'wrap',
-            gap: 10
+            gap: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               {isConducted ? (
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#d1fae5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <CheckCircle2 size={18} />
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#d1fae5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <CheckCircle2 size={20} />
                 </div>
               ) : (
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Clock size={18} />
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#fed7aa', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Clock size={20} />
                 </div>
               )}
               <div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: isConducted ? '#065f46' : '#92400e' }}>
+                <div style={{ fontSize: '0.94rem', fontWeight: 800, color: isConducted ? '#065f46' : '#9a3412', marginBottom: 2 }}>
                   {isConducted
                     ? `Attendance Conducted on ${dateVal}`
                     : `Attendance Not Recorded Yet for ${dateVal}`}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: isConducted ? '#047857' : '#b45309' }}>
+                <div style={{ fontSize: '0.82rem', color: isConducted ? '#047857' : '#c2410c', fontWeight: 500 }}>
                   {isConducted ? (
                     <>
                       Conducted by: <b>{conductedBy || classInfo.teacher || 'Assigned Instructor'}</b>
@@ -627,9 +666,9 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
                 background: '#fef3c7',
                 color: '#b45309',
                 fontSize: '0.78rem',
-                fontWeight: 700,
-                padding: '4px 10px',
-                borderRadius: '6px',
+                fontWeight: 750,
+                padding: '4px 12px',
+                borderRadius: '8px',
                 border: '1px solid #fde68a'
               }}>
                 ✎ Unsaved modifications detected
@@ -637,124 +676,166 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
             )}
           </div>
 
-          {/* Summary Strip (KPIs) */}
+          {/* Summary Strip: 6 Individual Vibrant Cards (Exact Single-Row 6-Column Layout) */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-            gap: 10,
-            background: 'var(--card-bg, #fff)',
-            borderRadius: '10px',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            padding: '1rem'
+            gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+            gap: '12px',
+            width: '100%'
           }}>
+            {/* Card 1: TOTAL ENROLLED */}
             <div
               onClick={() => setStatusFilter('all')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 8,
-                background: statusFilter === 'all' ? '#f1f5f9' : 'transparent',
-                border: statusFilter === 'all' ? '1.5px solid #64748b' : '1.5px solid transparent',
-                transition: 'all 0.15s ease'
+                background: '#eef2ff',
+                border: '1.5px solid #c7d2fe',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(99, 102, 241, 0.08)',
+                transition: 'all 0.2s ease',
+                minWidth: 0
               }}
               title="Click to show all students"
             >
-              <Users size={18} color="#64748b" />
-              <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>TOTAL ENROLLED</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{liveSummary.total}</div>
+              <Users size={22} color="#4f46e5" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.68rem', color: '#4338ca', fontWeight: 750, letterSpacing: '0.03em', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>TOTAL ENROLLED</div>
+                <div style={{ fontSize: '1.55rem', fontWeight: 850, color: '#1e1b4b', lineHeight: 1.1, marginTop: 2 }}>{liveSummary.total}</div>
               </div>
             </div>
 
+            {/* Card 2: PRESENT */}
             <div
               onClick={() => setStatusFilter('present')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 8,
-                background: statusFilter === 'present' ? '#ecfdf5' : 'transparent',
-                border: statusFilter === 'present' ? '1.5px solid #16a34a' : '1.5px solid transparent',
-                transition: 'all 0.15s ease'
+                background: '#dcfce7',
+                border: '1.5px solid #86efac',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(22, 163, 74, 0.08)',
+                transition: 'all 0.2s ease',
+                minWidth: 0
               }}
               title="Click to filter by Present students"
             >
-              <CheckCircle2 size={18} color="#16a34a" />
-              <div>
-                <div style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 600 }}>PRESENT</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#16a34a' }}>{liveSummary.present}</div>
+              <CheckCircle2 size={22} color="#16a34a" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.68rem', color: '#15803d', fontWeight: 750, letterSpacing: '0.03em', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>PRESENT</div>
+                <div style={{ fontSize: '1.55rem', fontWeight: 850, color: '#14532d', lineHeight: 1.1, marginTop: 2 }}>{liveSummary.present}</div>
               </div>
             </div>
 
+            {/* Card 3: ABSENT */}
             <div
               onClick={() => setStatusFilter('absent')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 8,
-                background: statusFilter === 'absent' ? '#fef2f2' : 'transparent',
-                border: statusFilter === 'absent' ? '1.5px solid #dc2626' : '1.5px solid transparent',
-                transition: 'all 0.15s ease'
+                background: '#ffe4e6',
+                border: '1.5px solid #fecdd3',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(225, 29, 72, 0.08)',
+                transition: 'all 0.2s ease',
+                minWidth: 0
               }}
               title="Click to filter by Absent students"
             >
-              <XCircle size={18} color="#dc2626" />
-              <div>
-                <div style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 600 }}>ABSENT</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#dc2626' }}>{liveSummary.absent}</div>
+              <XCircle size={22} color="#e11d48" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.68rem', color: '#be123c', fontWeight: 750, letterSpacing: '0.03em', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>ABSENT</div>
+                <div style={{ fontSize: '1.55rem', fontWeight: 850, color: '#881337', lineHeight: 1.1, marginTop: 2 }}>{liveSummary.absent}</div>
               </div>
             </div>
 
+            {/* Card 4: LATE */}
             <div
               onClick={() => setStatusFilter('late')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 8,
-                background: statusFilter === 'late' ? '#fffbeb' : 'transparent',
-                border: statusFilter === 'late' ? '1.5px solid #d97706' : '1.5px solid transparent',
-                transition: 'all 0.15s ease'
+                background: '#fef3c7',
+                border: '1.5px solid #fde68a',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(217, 119, 6, 0.08)',
+                transition: 'all 0.2s ease',
+                minWidth: 0
               }}
               title="Click to filter by Late students"
             >
-              <Clock size={18} color="#d97706" />
-              <div>
-                <div style={{ fontSize: '0.72rem', color: '#d97706', fontWeight: 600 }}>LATE</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#d97706' }}>{liveSummary.late}</div>
+              <Clock size={22} color="#d97706" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.68rem', color: '#b45309', fontWeight: 750, letterSpacing: '0.03em', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>LATE</div>
+                <div style={{ fontSize: '1.55rem', fontWeight: 850, color: '#78350f', lineHeight: 1.1, marginTop: 2 }}>{liveSummary.late}</div>
               </div>
             </div>
 
+            {/* Card 5: NOT TAKEN */}
             <div
               onClick={() => setStatusFilter('not_taken')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 8,
-                background: statusFilter === 'not_taken' ? '#f5f3ff' : 'transparent',
-                border: statusFilter === 'not_taken' ? '1.5px solid #8b5cf6' : '1.5px solid transparent',
-                transition: 'all 0.15s ease'
+                background: '#ede9fe',
+                border: '1.5px solid #ddd6fe',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(124, 58, 237, 0.08)',
+                transition: 'all 0.2s ease',
+                minWidth: 0
               }}
               title="Click to filter by Not Taken students"
             >
-              <AlertTriangle size={18} color="#8b5cf6" />
-              <div>
-                <div style={{ fontSize: '0.72rem', color: '#8b5cf6', fontWeight: 600 }}>NOT TAKEN</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: liveSummary.not_taken > 0 ? '#b45309' : '#64748b' }}>
-                  {liveSummary.not_taken}
-                </div>
+              <AlertTriangle size={22} color="#7c3aed" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.68rem', color: '#6d28d9', fontWeight: 750, letterSpacing: '0.03em', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>NOT TAKEN</div>
+                <div style={{ fontSize: '1.55rem', fontWeight: 850, color: '#4c1d95', lineHeight: 1.1, marginTop: 2 }}>{liveSummary.not_taken}</div>
               </div>
             </div>
 
+            {/* Card 6: ATTENDANCE RATE with Progress Bar */}
             <div
               onClick={() => setStatusFilter('all')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 8,
-                background: 'transparent',
-                border: '1.5px solid transparent',
-                transition: 'all 0.15s ease'
+                background: '#cffafe',
+                border: '1.5px solid #a5f3fc',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(6, 182, 212, 0.08)',
+                transition: 'all 0.2s ease',
+                minWidth: 0
               }}
               title="Attendance rate across enrolled students"
             >
-              <ClipboardCheck size={18} color="#0ea5e9" />
-              <div>
-                <div style={{ fontSize: '0.72rem', color: '#0ea5e9', fontWeight: 600 }}>ATTENDANCE RATE</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: (liveSummary.rate ?? 0) >= 85 ? '#16a34a' : '#d97706' }}>
-                  {liveSummary.rate !== null ? `${liveSummary.rate}%` : '—'}
+              <ClipboardCheck size={22} color="#0891b2" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.68rem', color: '#0e7490', fontWeight: 750, letterSpacing: '0.03em', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>ATTENDANCE RATE</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                  <span style={{ fontSize: '1.55rem', fontWeight: 850, color: '#155e75', lineHeight: 1.1 }}>
+                    {liveSummary.rate !== null ? `${Math.round(liveSummary.rate)}%` : '—'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 24, height: 6, background: 'rgba(8, 145, 178, 0.2)', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ width: `${liveSummary.rate !== null ? Math.min(100, Math.max(0, liveSummary.rate)) : 0}%`, height: '100%', background: '#06b6d4', borderRadius: 999 }} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -762,63 +843,80 @@ export default function AttendanceModule({ user, notify, campuses = [], activeCa
 
           {/* Student Register Table */}
           <section className="panel" style={{
-            background: 'var(--card-bg, #fff)',
-            borderRadius: '10px',
-            border: '1px solid var(--border-color, #e2e8f0)',
+            background: '#ffffff',
+            borderRadius: '14px',
+            border: '1.5px solid #e2e8f0',
             padding: 0,
-            overflow: 'hidden'
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
           }}>
             {/* Table Controls (Search & Status Filter) */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              padding: '12px 18px',
+              padding: '14px 20px',
               borderBottom: '1px solid #e2e8f0',
+              background: '#ffffff',
               flexWrap: 'wrap',
-              gap: 10
+              gap: 12
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', minWidth: 260 }}>
-                <Search size={15} color="#94a3b8" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#ffffff', padding: '8px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', minWidth: 280 }}>
+                <Search size={16} color="#94a3b8" />
                 <input
                   type="text"
-                  placeholder="Search students by name or admission ID..."
+                  placeholder="Search students by name or adm..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', width: '100%' }}
+                  style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.86rem', fontWeight: 500, color: '#1e293b', width: '100%' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Filter:</span>
-                {(['all', 'present', 'absent', 'late', 'not_taken'] as const).map(st => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setStatusFilter(st)}
-                    style={{
-                      border: statusFilter === st ? '1px solid #715ee8' : '1px solid #e2e8f0',
-                      background: statusFilter === st ? '#ede9fe' : '#fff',
-                      color: statusFilter === st ? '#5b21b6' : '#64748b',
-                      fontSize: '0.78rem',
-                      fontWeight: statusFilter === st ? 700 : 500,
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      textTransform: 'capitalize'
-                    }}
-                  >
-                    {st === 'all' ? 'All' : st.replace('_', ' ')}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>Filter:</span>
+                {(['all', 'present', 'absent', 'late', 'not_taken'] as const).map(st => {
+                  const isSel = statusFilter === st;
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setStatusFilter(st)}
+                      style={{
+                        border: isSel ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                        background: isSel ? '#ede9fe' : '#ffffff',
+                        color: isSel ? '#4f46e5' : '#64748b',
+                        fontSize: '0.82rem',
+                        fontWeight: isSel ? 750 : 600,
+                        padding: '6px 14px',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        textTransform: 'capitalize',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {st === 'all' ? 'All' : st.replace('_', ' ')}
+                    </button>
+                  );
+                })}
                 <button
                   type="button"
-                  className="outline-btn"
                   onClick={loadClassAttendance}
-                  style={{ height: 30, padding: '0 8px', fontSize: '0.78rem' }}
+                  style={{
+                    height: 34,
+                    width: 34,
+                    borderRadius: 8,
+                    border: '1px solid #e2e8f0',
+                    background: '#ffffff',
+                    color: '#64748b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
                   title="Reload attendance register"
                 >
-                  <RefreshCw size={13} />
+                  <RefreshCw size={14} />
                 </button>
               </div>
             </div>
