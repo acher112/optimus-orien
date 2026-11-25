@@ -278,18 +278,8 @@ export default function RolesSection() {
             <ChevronRight size={28} />
           </button>
 
-          {/* Single Slide Card Container */}
+          {/* Single Slide Container (Pure white bg, no card box) */}
           <div className="portal-slide-card">
-            {/* Top Browser Chrome Bar */}
-            <div className="portal-browser-bar">
-              <div className="browser-dots">
-                <span className="b-dot dot-red" />
-                <span className="b-dot dot-yellow" />
-                <span className="b-dot dot-green" />
-              </div>
-              <span className="portal-badge-chip">{current.badge}</span>
-            </div>
-
             {/* Rich Portal Description & Operational Capabilities Showcase */}
             <div className="portal-image-frame portal-showcase-frame">
               <div className="portal-content-showcase">

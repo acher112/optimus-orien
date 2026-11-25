@@ -49,11 +49,7 @@ export default function VortexAnimation() {
       const count = isMobile ? 360 : 1200;
 
       const clusterConfigs = [
-        { cx: width * 0.5, cy: height * 0.5, scale: 1.25, fraction: 0.64, color: '#06b6d4', alpha: 0.70 }, // Center Big Circle (Always Cyan)
-        { cx: width * 0.14, cy: height * 0.16, scale: 0.22, fraction: 0.09, color: '#F96E2A', alpha: 0.75 },  // Top-Left (Orange)
-        { cx: width * 0.85, cy: height * 0.15, scale: 0.28, fraction: 0.09, color: '#10b981', alpha: 0.75 }, // Top-Right (Green)
-        { cx: width * 0.15, cy: height * 0.82, scale: 0.24, fraction: 0.09, color: '#10b981', alpha: 0.75 }, // Lower-Left (Green)
-        { cx: width * 0.84, cy: height * 0.80, scale: 0.26, fraction: 0.09, color: '#F96E2A', alpha: 0.75 }, // Lower-Right (Orange)
+        { cx: width * 0.5, cy: height * 0.5, scale: 1.25, fraction: 1.0, color: '#06b6d4', alpha: 0.75 }, // Center Big Circle (Always Cyan)
       ];
 
       clusters = clusterConfigs.map((cfg) => {

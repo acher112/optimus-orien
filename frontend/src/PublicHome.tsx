@@ -121,13 +121,13 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
           onOpenContact={() => setContactModalOpen(true)}
         />
 
-        {/* "Find a School" Leaderboard Teaser (Relocated right before FAQ, clean white card) */}
+        {/* "Find a School" Leaderboard Teaser (Pure white bg, no card box) */}
         <section
           id="find-school-teaser"
           style={{
             width: 'calc(100% - 32px)',
             maxWidth: '1200px',
-            margin: '40px auto 20px auto',
+            margin: '40px auto 40px auto',
             padding: 0,
             position: 'relative',
             zIndex: 10,
@@ -136,10 +136,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
         >
           <div style={{
             background: '#ffffff',
-            borderRadius: '20px',
-            padding: 'clamp(24px, 3.5vw, 36px) clamp(20px, 3vw, 36px)',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.06)',
-            border: '1px solid #e2e8f0',
+            padding: '24px 0',
             color: '#0f172a',
             boxSizing: 'border-box'
           }}>
@@ -190,10 +187,10 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
               style={{
                 display: 'flex',
                 gap: '8px',
-                background: '#f8fafc',
+                background: '#ffffff',
                 padding: '6px 8px',
                 borderRadius: '12px',
-                border: '1.5px solid #e2e8f0',
+                border: '1.5px solid #cbd5e1',
                 marginBottom: '16px',
                 alignItems: 'center'
               }}
@@ -246,8 +243,8 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                   type="button"
                   onClick={() => navigate(`/schools?city=${city}`)}
                   style={{
-                    background: '#f1f5f9',
-                    border: '1px solid #e2e8f0',
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
                     color: '#475569',
                     padding: '4px 12px',
                     borderRadius: '100px',
