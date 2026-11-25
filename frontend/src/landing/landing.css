@@ -306,7 +306,7 @@ body {
 .brand-logo-text {
   font-size: clamp(2.5rem, 6vw, 4.5rem);
   font-weight: 800;
-  color: #1a0b2e;
+  color: #000000 !important;
   letter-spacing: 2px;
   margin: 0;
   padding: 0;
@@ -510,7 +510,7 @@ body {
 .roles-title {
   font-size: clamp(2.2rem, 5vw, 3.5rem);
   font-weight: 800;
-  color: #0a0a0a;
+  color: #000000 !important;
   letter-spacing: -0.025em;
   margin-bottom: 1rem;
   line-height: 1.15;
@@ -700,7 +700,7 @@ body {
 .portal-showcase-title {
   font-size: 1.35rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #000000 !important;
   margin: 0;
 }
 
@@ -769,7 +769,7 @@ body {
   margin: 0;
   font-size: 0.925rem;
   font-weight: 700;
-  color: #0f172a;
+  color: #000000 !important;
 }
 
 .portal-function-desc {
@@ -814,7 +814,7 @@ body {
 .portal-caption-title {
   font-size: 1.35rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #000000 !important;
   margin: 0 0 0.4rem 0;
 }
 
@@ -2661,4 +2661,25 @@ body {
   color: #0f172a;
   letter-spacing: 1px;
   margin-right: 0.75rem;
+}
+
+/* High-specificity overrides to ensure landing light sections ALWAYS show crisp black text */
+.landing-root .brand-logo-text,
+.dark .landing-root .brand-logo-text,
+.dark .hero-section .brand-logo-text,
+.landing-root .roles-title,
+.dark .landing-root .roles-title,
+.dark .roles-section .roles-title,
+.landing-root .portal-showcase-title,
+.dark .landing-root .portal-showcase-title,
+.dark .roles-section .portal-showcase-title,
+.landing-root .portal-function-title,
+.dark .landing-root .portal-function-title,
+.dark .roles-section .portal-function-title,
+.landing-root .portal-caption-title,
+.dark .landing-root .portal-caption-title,
+.dark .roles-section .portal-caption-title,
+.landing-root #find-school-teaser h2,
+.dark .landing-root #find-school-teaser h2 {
+  color: #000000 !important;
 }

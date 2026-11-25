@@ -49,6 +49,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
     // Sync document direction and title
     document.documentElement.dir = 'ltr';
     document.documentElement.lang = 'en';
+    document.documentElement.classList.remove('dark');
     document.title = 'Optimus Orien - School Performance Intelligence & Early Intervention';
 
     localStorage.setItem('optimus_landing_locale', 'en');
@@ -146,7 +147,7 @@ export default function PublicHome({ authenticated }: PublicHomeProps) {
                   <Award size={15} />
                   <span>PUBLIC CAMPUS LEADERBOARD</span>
                 </div>
-                <h2 style={{ margin: '0 0 8px', fontSize: 'clamp(1.5rem, 2.8vw, 2.2rem)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2, color: '#0f172a' }}>
+                <h2 style={{ margin: '0 0 8px', fontSize: 'clamp(1.5rem, 2.8vw, 2.2rem)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2, color: '#000000' }}>
                   Find Top Performing Campuses on Optimus Orien
                 </h2>
                 <p style={{ margin: 0, color: '#64748b', fontSize: 'clamp(0.9rem, 1.1vw, 1rem)', maxWidth: '750px', lineHeight: 1.5 }}>

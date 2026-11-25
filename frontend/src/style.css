@@ -4401,13 +4401,13 @@ html, body {
   color: #e2e8f0;
 }
 
-/* Global Dark Mode High-Contrast Rules for Headings and Tables */
-.dark h1,
-.dark h2,
-.dark h3,
-.dark h4,
-.dark h5,
-.dark h6 {
+/* Global Dark Mode High-Contrast Rules for Headings and Tables (App dashboard) */
+.dark .app h1,
+.dark .app h2,
+.dark .app h3,
+.dark .app h4,
+.dark .app h5,
+.dark .app h6 {
   color: #f8fafc !important;
 }
 

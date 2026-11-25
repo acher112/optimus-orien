@@ -14,10 +14,12 @@ export default function HeroSection({
   const defaultHeadline = 'OPTIMUS ORIEN';
 
   return (
-    <section id="masthead" className="hero-section">
+    <section id="masthead" className="hero-section" style={{ backgroundColor: '#ffffff' }}>
       <VortexAnimation />
       <div className="hero-center-content">
-        <h1 className="brand-logo-text">{headline || defaultHeadline}</h1>
+        <h1 className="brand-logo-text" style={{ color: '#000000', margin: 0 }}>
+          {headline || defaultHeadline}
+        </h1>
       </div>
     </section>
   );

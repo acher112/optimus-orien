@@ -214,14 +214,14 @@ export default function RolesSection() {
   const current = slides[currentIndex] || slides[0];
 
   return (
-    <section id="platform" className="roles-section">
+    <section id="platform" className="roles-section" style={{ backgroundColor: '#ffffff' }}>
       <div className="roles-container">
         {/* Section Header */}
         <div className="roles-header">
           <div className="roles-badge">
             <span>Role-Based Experiences</span>
           </div>
-          <h2 className="roles-title">One Platform. Multiple Perspectives.</h2>
+          <h2 className="roles-title" style={{ color: '#000000' }}>One Platform. Multiple Perspectives.</h2>
           <p className="roles-desc">
             Every stakeholder sees exactly the intelligence they need from systemic executive oversight to daily student growth.
           </p>
@@ -279,26 +279,26 @@ export default function RolesSection() {
           </button>
 
           {/* Single Slide Container (Pure white bg, no card box) */}
-          <div className="portal-slide-card">
+          <div className="portal-slide-card" style={{ background: '#ffffff', border: 'none', boxShadow: 'none' }}>
             {/* Rich Portal Description & Operational Capabilities Showcase */}
-            <div className="portal-image-frame portal-showcase-frame">
+            <div className="portal-image-frame portal-showcase-frame" style={{ background: '#ffffff', padding: '1rem 0 2rem 0' }}>
               <div className="portal-content-showcase">
                 <div className="portal-showcase-hero">
                   <div className="portal-showcase-meta">
                     <span className="portal-showcase-chip">{current.badge}</span>
                   </div>
-                  <h3 className="portal-showcase-title">{current.roleName} Capabilities & Operations</h3>
+                  <h3 className="portal-showcase-title" style={{ color: '#000000' }}>{current.roleName} Capabilities & Operations</h3>
                   <p className="portal-showcase-summary">{current.summary}</p>
                 </div>
 
                 <div className="portal-functions-grid">
                   {current.functions.map((fn, idx) => (
-                    <div key={idx} className="portal-function-card">
+                    <div key={idx} className="portal-function-card" style={{ background: 'transparent', border: 'none', boxShadow: 'none' }}>
                       <div className="portal-function-icon-wrap">
                         {fn.icon}
                       </div>
                       <div className="portal-function-text">
-                        <h4 className="portal-function-title">{fn.title}</h4>
+                        <h4 className="portal-function-title" style={{ color: '#000000' }}>{fn.title}</h4>
                         <p className="portal-function-desc">{fn.desc}</p>
                       </div>
                     </div>
@@ -308,12 +308,12 @@ export default function RolesSection() {
             </div>
 
             {/* Slide Caption and Details */}
-            <div className="portal-caption-footer">
+            <div className="portal-caption-footer" style={{ background: '#ffffff', borderTop: 'none', padding: '1.5rem 0 0 0' }}>
               <div className="portal-caption-info">
-                <h3 className="portal-caption-title">{current.roleName}</h3>
+                <h3 className="portal-caption-title" style={{ color: '#000000' }}>{current.roleName}</h3>
                 <p className="portal-caption-desc">{current.description}</p>
               </div>
-              <div className="portal-counter">
+              <div className="portal-counter" style={{ background: '#ffffff' }}>
                 <span>0{currentIndex + 1}</span>
                 <span className="counter-sep">/</span>
                 <span>0{total}</span>
