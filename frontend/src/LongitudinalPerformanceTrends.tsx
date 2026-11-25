@@ -90,6 +90,7 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <TrendingUp size={20} color="#4f46e5" />
           <h2
+            className="longitudinal-trends-title"
             style={{
               margin: 0,
               fontSize: 19,
@@ -97,44 +98,43 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
               fontStyle: 'italic',
               letterSpacing: '-0.3px',
               textTransform: 'uppercase',
-              color: '#0f172a',
             }}
           >
             {title}
           </h2>
         </div>
         <p
+          className="longitudinal-trends-subtitle"
           style={{
             margin: 0,
             fontSize: 11,
             fontWeight: 800,
             letterSpacing: '0.8px',
             textTransform: 'uppercase',
-            color: '#64748b',
           }}
         >
           {subtitle}
         </p>
       </div>
 
-      <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20 }}>
+      <div className="longitudinal-trends-divider" style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20 }}>
         {displayData.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b' }}>
             <TrendingUp size={36} style={{ color: '#94a3b8', margin: '0 auto 12px', display: 'block' }} />
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#334155' }}>No campus performance data recorded yet</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>When teachers, learners, and academic assessments are recorded, longitudinal performance trends will appear here.</div>
+            <div className="longitudinal-trends-title" style={{ fontWeight: 700, fontSize: 14 }}>No campus performance data recorded yet</div>
+            <div className="longitudinal-trends-subtitle" style={{ fontSize: 12, marginTop: 4 }}>When teachers, learners, and academic assessments are recorded, longitudinal performance trends will appear here.</div>
           </div>
         ) : (
           <div className="longitudinal-trends-grid">
             {/* Left Column: Bar Chart */}
             <div style={{ minWidth: 0, width: '100%' }}>
               <div
+                className="longitudinal-trends-subtitle"
                 style={{
                   fontSize: 11,
                   fontWeight: 800,
                   letterSpacing: '0.8px',
                   textTransform: 'uppercase',
-                  color: '#64748b',
                   marginBottom: 16,
                 }}
               >
@@ -185,12 +185,12 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
             {/* Right Column: Standings List */}
             <div style={{ minWidth: 0, width: '100%' }}>
               <div
+                className="longitudinal-trends-subtitle"
                 style={{
                   fontSize: 11,
                   fontWeight: 800,
                   letterSpacing: '0.8px',
                   textTransform: 'uppercase',
-                  color: '#64748b',
                   marginBottom: 16,
                 }}
               >
@@ -202,22 +202,22 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
                   <div key={divItem.divisionName} className="standing-row-card">
                     <div>
                       <div
+                        className="standing-division-title"
                         style={{
                           fontSize: 14,
                           fontWeight: 800,
-                          color: '#0f172a',
                           letterSpacing: '-0.2px',
                         }}
                       >
                         {divItem.divisionName}
                       </div>
                       <div
+                        className="standing-division-subtitle"
                         style={{
                           fontSize: 10,
                           fontWeight: 700,
                           letterSpacing: '0.6px',
                           textTransform: 'uppercase',
-                          color: '#64748b',
                           marginTop: 2,
                         }}
                       >
@@ -227,10 +227,10 @@ export const LongitudinalPerformanceTrends: React.FC<LongitudinalPerformanceTren
 
                     <div style={{ textAlign: 'right' }}>
                       <div
+                        className="standing-division-spi"
                         style={{
                           fontSize: 14,
                           fontWeight: 900,
-                          color: '#0f172a',
                           letterSpacing: '-0.2px',
                         }}
                       >

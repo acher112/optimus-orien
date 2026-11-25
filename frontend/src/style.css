@@ -4324,14 +4324,99 @@ html, body {
   width: 100%;
 }
 
+.student-name-link {
+  color: #4f46e5;
+  text-decoration-color: #c7d2fe;
+}
+
+.dark .student-name-link {
+  color: #38bdf8 !important;
+  text-decoration-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+.dark .student-name-link:hover {
+  color: #7dd3fc !important;
+  text-decoration-color: #7dd3fc !important;
+}
+
+.longitudinal-trends-title {
+  color: #0f172a;
+}
+
+.dark .longitudinal-trends-title {
+  color: #f1f5f9 !important;
+}
+
+.longitudinal-trends-subtitle {
+  color: #64748b;
+}
+
+.dark .longitudinal-trends-subtitle {
+  color: #94a3b8 !important;
+}
+
+.longitudinal-trends-divider {
+  border-top-color: #f1f5f9;
+}
+
+.dark .longitudinal-trends-divider {
+  border-top-color: #35374c !important;
+}
+
+.standing-division-title {
+  color: #0f172a;
+}
+
+.dark .standing-division-title {
+  color: #f8fafc !important;
+}
+
+.standing-division-subtitle {
+  color: #64748b;
+}
+
+.dark .standing-division-subtitle {
+  color: #94a3b8 !important;
+}
+
+.standing-division-spi {
+  color: #0f172a;
+}
+
+.dark .standing-division-spi {
+  color: #f8fafc !important;
+}
+
 .dark .longitudinal-trends-card {
-  background: #232538;
-  border-color: #35374c;
+  background: #232538 !important;
+  border-color: #35374c !important;
 }
 
 .dark .standing-row-card {
-  background: #1e1f30;
-  border-color: #35374c;
+  background: #1e1f30 !important;
+  border-color: #35374c !important;
+}
+
+.dark .standing-row-card div {
+  color: #e2e8f0;
+}
+
+/* Global Dark Mode High-Contrast Rules for Headings and Tables */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: #f8fafc !important;
+}
+
+.dark .data-table th {
+  color: #a2a8bc !important;
+}
+
+.dark .data-table td {
+  color: #e2e8f0 !important;
 }
 
 .attendance-summary-grid {

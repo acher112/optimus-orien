@@ -56,6 +56,13 @@
   gap: 12px;
 }
 
+.record-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .record-title-group h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -518,11 +525,59 @@
   .record-title-row {
     flex-direction: column;
     align-items: flex-start;
+    gap: 14px;
+    width: 100%;
   }
+
+  .record-title-group {
+    width: 100%;
+  }
+
+  .record-header-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .record-header-actions .record-select,
+  .record-header-actions .record-btn-secondary,
+  .record-header-actions .record-download-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .record-header-actions .record-btn-secondary {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
   .record-filter-bar {
     flex-direction: column;
     align-items: stretch;
+    width: 100%;
+    box-sizing: border-box;
   }
+
+  .record-filter-inputs {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .record-filter-inputs .record-input,
+  .record-filter-inputs .record-select {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
   .record-download-btn {
     width: 100%;
     justify-content: center;

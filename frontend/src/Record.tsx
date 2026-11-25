@@ -287,7 +287,7 @@ export default function Record({
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="record-header-actions">
             {campuses.length > 1 && user.role !== 'principal' && (
               <select
                 className="record-select"
