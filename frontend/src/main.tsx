@@ -2628,7 +2628,7 @@ function App() {
                           <span className="nav-icon-badge nav-icon-badge-sm">
                             <Trophy size={14} strokeWidth={1.8} />
                           </span>
-                          <span>Leaderboard</span>
+                          <span className="nav-item-title">Leaderboard</span>
                         </button>
                       );
                     })()}
@@ -2651,7 +2651,7 @@ function App() {
                           <span className="nav-icon-badge nav-icon-badge-sm">
                             <Globe size={14} strokeWidth={1.8} />
                           </span>
-                          <span>Community</span>
+                          <span className="nav-item-title">Community</span>
                         </button>
                       );
                     })()}
@@ -2674,7 +2674,7 @@ function App() {
                           <span className="nav-icon-badge nav-icon-badge-sm">
                             <ClipboardCheck size={14} strokeWidth={1.8} />
                           </span>
-                          <span>Online Assessments</span>
+                          <span className="nav-item-title">Online Assessments</span>
                         </button>
                       );
                     })()}
@@ -2762,7 +2762,7 @@ function App() {
                           <span className="nav-icon-badge nav-icon-badge-sm">
                             <Trophy size={14} strokeWidth={1.8} />
                           </span>
-                          <span>Leaderboard</span>
+                          <span className="nav-item-title">Leaderboard</span>
                         </button>
                       );
                     })()}
@@ -2785,7 +2785,7 @@ function App() {
                           <span className="nav-icon-badge nav-icon-badge-sm">
                             <Globe size={14} strokeWidth={1.8} />
                           </span>
-                          <span>Community</span>
+                          <span className="nav-item-title">Community</span>
                         </button>
                       );
                     })()}
@@ -2808,7 +2808,7 @@ function App() {
                           <span className="nav-icon-badge nav-icon-badge-sm">
                             <ClipboardCheck size={14} strokeWidth={1.8} />
                           </span>
-                          <span>Online Assessments</span>
+                          <span className="nav-item-title">Online Assessments</span>
                         </button>
                       );
                     })()}

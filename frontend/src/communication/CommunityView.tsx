@@ -355,9 +355,9 @@ export default function CommunityView({ notify }: CommunityViewProps) {
           </>
         ) : (
           /* Connections & Requests View */
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
             {/* Received Requests */}
-            <div>
+            <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
               <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, color: '#1e1633' }}>
                 Received Invitations ({connections.received?.length || 0})
               </h3>
@@ -366,22 +366,22 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                   No pending connection requests.
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                <div className="comm-invitations-grid">
                   {connections.received?.map((req) => (
-                    <div key={req.request_id} className="comm-card" style={{ padding: 16 }}>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: req.avatar_color || '#10b981', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div key={req.request_id} className="comm-card comm-invitation-card" style={{ padding: 16 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: req.avatar_color || '#10b981', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {req.name.charAt(0)}
                         </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633' }}>{req.name}</div>
-                          <div style={{ fontSize: 12, color: '#64748b' }}>{req.school} • {req.grade}</div>
+                        <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.name}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.school} • {req.grade}</div>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12, flexWrap: 'wrap' }}>
                         <button
                           className="comm-cat-pill"
-                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          style={{ padding: '6px 14px', fontSize: 12 }}
                           disabled={actionPendingKey !== null}
                           onClick={() => handleAction('decline', req.request_id, { target_user_id: req.user_id, request_id: req.request_id })}
                         >
@@ -389,6 +389,7 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                         </button>
                         <button
                           className="comm-btn-connect"
+                          style={{ padding: '6px 16px', fontSize: 12 }}
                           disabled={actionPendingKey !== null}
                           onClick={() => handleAction('accept', req.request_id, { target_user_id: req.user_id, request_id: req.request_id })}
                         >
@@ -402,7 +403,7 @@ export default function CommunityView({ notify }: CommunityViewProps) {
             </div>
 
             {/* Sent Invitations */}
-            <div>
+            <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
               <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, color: '#1e1633' }}>
                 Sent Requests ({connections.sent?.length || 0})
               </h3>
@@ -411,16 +412,16 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                   No pending outgoing requests.
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                <div className="comm-invitations-grid">
                   {connections.sent.map((req) => (
-                    <div key={req.request_id} className="comm-card" style={{ padding: 16 }}>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f59e0b', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div key={req.request_id} className="comm-card comm-invitation-card" style={{ padding: 16 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f59e0b', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {req.name.charAt(0)}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633' }}>{req.name}</div>
-                          <div style={{ fontSize: 12, color: '#64748b' }}>{req.school} {req.grade ? `• ${req.grade}` : ''} • Sent {req.sent_at}</div>
+                        <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.name}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.school} {req.grade ? `• ${req.grade}` : ''} • Sent {req.sent_at}</div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
@@ -440,7 +441,7 @@ export default function CommunityView({ notify }: CommunityViewProps) {
             </div>
 
             {/* Connected Network */}
-            <div>
+            <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
               <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, color: '#1e1633' }}>
                 Active Network ({connections.connected?.length || 0})
               </h3>
@@ -449,16 +450,16 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                   You have no active connections yet. Discover students, educators, and schools to connect!
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                <div className="comm-invitations-grid">
                   {connections.connected.map((peer) => (
-                    <div key={peer.peer_id} className="comm-card" style={{ padding: 16 }}>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: peer.avatar_color || '#0ea5e9', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div key={peer.peer_id} className="comm-card comm-invitation-card" style={{ padding: 16 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: peer.avatar_color || '#0ea5e9', color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {peer.name.charAt(0)}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633' }}>{peer.name}</div>
-                          <div style={{ fontSize: 12, color: '#64748b' }}>{peer.school} • {peer.grade}</div>
+                        <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1633', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{peer.name}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{peer.school} • {peer.grade}</div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
