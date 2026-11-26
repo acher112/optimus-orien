@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <defs>
+        <radialGradient id="bgGrad" cx="50%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#E69C24"/>
+            <stop offset="40%" stop-color="#CD7F32"/>
+            <stop offset="100%" stop-color="#8C501E"/>
+        </radialGradient>
+        <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#E69C24"/>
+            <stop offset="50%" stop-color="#CD7F32"/>
+            <stop offset="100%" stop-color="#5C3317"/>
+        </linearGradient>
+        <linearGradient id="diamondGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38BDF8"/>
+            <stop offset="50%" stop-color="#818CF8"/>
+            <stop offset="100%" stop-color="#C084FC"/>
+        </linearGradient>
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.45"/>
+        </filter>
+    </defs>
+
+    <!-- Outer Medallion Shadow & Rim -->
+    <g filter="url(#shadow)">
+        <circle cx="256" cy="256" r="226" fill="url(#rimGrad)" stroke="#5C3317" stroke-width="4"/>
+        <circle cx="256" cy="256" r="214" fill="#064E3B"/>
+        <circle cx="256" cy="256" r="202" fill="url(#bgGrad)"/>
+        <circle cx="256" cy="256" r="190" fill="#064E3B" opacity="0.15"/>
+    </g>
+
+    <!-- Prismatic / Crystal Halo -->
+    
+
+    <!-- Central Emblem -->
+    <g>
+        
+        <path d="M256,130 L350,175 C350,285 256,345 256,365 C256,345 162,285 162,175 Z" fill="#064E3B" opacity="0.6"/>
+        <path d="M256,145 L335,185 C335,275 256,330 256,350 C256,330 177,275 177,185 Z" fill="#059669"/>
+        <path d="M220,250 L245,275 L300,215" fill="none" stroke="#E69C24" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+        
+    </g>
+
+    <!-- Star Tier Indicators -->
+    <g>
+        
+        <polygon points="256,385 260,394 270,394 262,401 265,411 256,404 247,411 250,401 242,394 252,394" fill="#E69C24" stroke="#8C501E" stroke-width="1.5"/>
+        
+    </g>
+</svg>

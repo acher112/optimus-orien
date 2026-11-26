@@ -429,6 +429,8 @@ urlpatterns = [
     path('communication/assessments/competitions/<int:pk>/standings/', communication_views.AssessmentsCompetitionStandingsView.as_view()),
     path('communication/assessments/analytics-badges/', communication_views.AssessmentsAnalyticsAndBadgesView.as_view()),
 
+    path('badges/', include('core.badge_urls')),
+
     path('', include(r.urls))
 
 ]

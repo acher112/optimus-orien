@@ -3758,6 +3758,159 @@ class QuizAttempt(models.Model):
         return f"{self.user.username} - {self.competition.title}: {self.score_percentage}% ({self.time_spent_seconds}s)"
 
 
+# ============================================================================
+# BADGES AND ACHIEVEMENTS SYSTEM (Stage 1 Core Architecture)
+# ============================================================================
+
+class BadgeDefinition(models.Model):
+    """
+    Platform-level catalog defining available badges, metadata, categories, tiers,
+    and visual assets. Intentionally unscoped across tenants.
+    """
+    CATEGORY_CHOICES = [
+        ('principal', 'Principal'),
+        ('teacher', 'Teacher'),
+        ('student', 'Student'),
+        ('quiz', 'Quiz'),
+        ('manual', 'Manual Recognition'),
+    ]
+    TIER_CHOICES = [
+        ('bronze', 'Bronze'),
+        ('silver', 'Silver'),
+        ('gold', 'Gold'),
+        ('platinum', 'Platinum'),
+        ('diamond', 'Diamond'),
+    ]
+
+    slug = models.CharField(max_length=64, unique=True, db_index=True)
+    name = models.CharField(max_length=120)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, db_index=True)
+    tier = models.CharField(max_length=20, choices=TIER_CHOICES, db_index=True)
+    description = models.TextField()
+    criteria_summary = models.TextField()
+    icon_asset_name = models.CharField(max_length=120)
+    is_active = models.BooleanField(default=True, db_index=True)
+    is_manual = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Badge Definition"
+        verbose_name_plural = "Badge Definitions"
+        ordering = ['category', 'tier', 'name']
+
+    def __str__(self):
+        return f"{self.name} [{self.category.capitalize()} - {self.tier.capitalize()}]"
+
+
+class BadgeCriteria(models.Model):
+    """
+    Versioned evaluation criteria and threshold parameters for a BadgeDefinition.
+    Platform-level table, versioned configuration (never hardcoded in engine).
+    """
+    badge = models.ForeignKey(BadgeDefinition, on_delete=models.CASCADE, related_name='criteria_versions')
+    version = models.PositiveIntegerField(default=1)
+    rules = models.JSONField(default=dict, blank=True)
+    active = models.BooleanField(default=True, db_index=True)
+    explanation_of_change = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Badge Criteria"
+        verbose_name_plural = "Badge Criteria Versions"
+        unique_together = ('badge', 'version')
+        ordering = ['badge', '-version']
+
+    def __str__(self):
+        return f"{self.badge.slug} v{self.version} ({'Active' if self.active else 'Inactive'})"
+
+
+class AchievementAward(models.Model):
+    """
+    Tenant-scoped institutional and pedagogical achievements awarded to users.
+    Row-level security enforced on school_id.
+    """
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='achievement_awards', db_index=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements', db_index=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True, related_name='achievements', db_index=True)
+    badge = models.ForeignKey(BadgeDefinition, on_delete=models.CASCADE, related_name='awards', db_index=True)
+    tier = models.CharField(max_length=20, db_index=True)
+    criteria_version = models.PositiveIntegerField(default=1)
+    period_identifier = models.CharField(max_length=80, blank=True, default='', db_index=True)
+    earned_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    evidence_data = models.JSONField(default=dict, blank=True)
+    is_manual = models.BooleanField(default=False, db_index=True)
+    conferred_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='conferred_achievements')
+    conferred_reason = models.TextField(blank=True, default='')
+    review_flag = models.BooleanField(default=False, db_index=True)
+    review_reason = models.TextField(blank=True, default='')
+    review_resolved_at = models.DateTimeField(null=True, blank=True)
+    review_resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_badge_reviews')
+
+    class Meta:
+        verbose_name = "Achievement Award"
+        verbose_name_plural = "Achievement Awards"
+        ordering = ['-earned_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'badge', 'period_identifier'],
+                name='unique_user_badge_period'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.badge.name} ({self.tier}) -> {self.user.username} [{self.period_identifier}]"
+
+
+class BadgeProgress(models.Model):
+    """
+    Tenant-scoped progress tracker for in-progress / locked badges.
+    Stores actual calculable metrics (never fake or invented percentages).
+    """
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='badge_progress_records', db_index=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='badge_progress', db_index=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True, related_name='badge_progress', db_index=True)
+    badge = models.ForeignKey(BadgeDefinition, on_delete=models.CASCADE, related_name='user_progress', db_index=True)
+    current_value = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal('0.00'))
+    target_value = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal('100.00'))
+    progress_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    unit = models.CharField(max_length=30, blank=True, default='')
+    period_identifier = models.CharField(max_length=80, blank=True, default='', db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Badge Progress"
+        verbose_name_plural = "Badge Progress Records"
+        unique_together = ('user', 'badge', 'period_identifier')
+
+    def __str__(self):
+        return f"{self.user.username} progress on {self.badge.slug}: {self.current_value}/{self.target_value} ({self.progress_percentage}%)"
+
+
+class BadgeAuditLog(models.Model):
+    """
+    Audited record of all badge evaluation runs, award creations, manual conferrals,
+    criteria revisions, and review flag lifecycle actions.
+    """
+    school = models.ForeignKey(School, on_delete=models.CASCADE, null=True, blank=True, related_name='badge_audit_logs', db_index=True)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='badge_audit_actions')
+    action = models.CharField(max_length=50, db_index=True)
+    badge_slug = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    target_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='badge_target_audits')
+    award = models.ForeignKey(AchievementAward, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Badge Audit Log"
+        verbose_name_plural = "Badge Audit Logs"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        actor_name = self.actor.username if self.actor else "System"
+        return f"[{self.created_at}] {actor_name} -> {self.action} ({self.badge_slug})"
+
+
+
 
 
 

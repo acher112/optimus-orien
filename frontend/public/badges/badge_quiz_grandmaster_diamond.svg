@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <defs>
+        <radialGradient id="bgGrad" cx="50%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#C084FC"/>
+            <stop offset="40%" stop-color="#818CF8"/>
+            <stop offset="100%" stop-color="#4F46E5"/>
+        </radialGradient>
+        <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#C084FC"/>
+            <stop offset="50%" stop-color="#818CF8"/>
+            <stop offset="100%" stop-color="#312E81"/>
+        </linearGradient>
+        <linearGradient id="diamondGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38BDF8"/>
+            <stop offset="50%" stop-color="#818CF8"/>
+            <stop offset="100%" stop-color="#C084FC"/>
+        </linearGradient>
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.45"/>
+        </filter>
+    </defs>
+
+    <!-- Outer Medallion Shadow & Rim -->
+    <g filter="url(#shadow)">
+        <circle cx="256" cy="256" r="226" fill="url(#rimGrad)" stroke="#312E81" stroke-width="4"/>
+        <circle cx="256" cy="256" r="214" fill="#2E1065"/>
+        <circle cx="256" cy="256" r="202" fill="url(#bgGrad)"/>
+        <circle cx="256" cy="256" r="190" fill="#2E1065" opacity="0.15"/>
+    </g>
+
+    <!-- Prismatic / Crystal Halo -->
+    
+        <circle cx="256" cy="256" r="235" fill="none" stroke="url(#diamondGlow)" stroke-width="12" stroke-dasharray="14,10" opacity="0.85"/>
+        <polygon points="256,15 264,35 256,55 248,35" fill="#E0E7FF"/>
+        <polygon points="256,457 264,477 256,497 248,477" fill="#E0E7FF"/>
+        <polygon points="15,256 35,264 55,256 35,248" fill="#E0E7FF"/>
+        <polygon points="457,256 477,264 497,256 477,248" fill="#E0E7FF"/>
+        
+
+    <!-- Central Emblem -->
+    <g>
+        
+        <circle cx="256" cy="256" r="85" fill="#2E1065" opacity="0.7"/>
+        <polygon points="256,135 280,225 370,225 297,278 325,365 256,312 187,365 215,278 142,225 232,225" fill="#C084FC"/>
+        <circle cx="256" cy="256" r="45" fill="#7C3AED"/>
+        <path d="M265,200 L235,260 L260,260 L245,310 L285,245 L260,245 Z" fill="#C084FC"/>
+        
+    </g>
+
+    <!-- Star Tier Indicators -->
+    <g>
+        
+        <polygon points="168,385 172,394 182,394 174,401 177,411 168,404 159,411 162,401 154,394 164,394" fill="#C084FC" stroke="#4F46E5" stroke-width="1.5"/>
+        
+        <polygon points="212,385 216,394 226,394 218,401 221,411 212,404 203,411 206,401 198,394 208,394" fill="#C084FC" stroke="#4F46E5" stroke-width="1.5"/>
+        
+        <polygon points="256,385 260,394 270,394 262,401 265,411 256,404 247,411 250,401 242,394 252,394" fill="#C084FC" stroke="#4F46E5" stroke-width="1.5"/>
+        
+        <polygon points="300,385 304,394 314,394 306,401 309,411 300,404 291,411 294,401 286,394 296,394" fill="#C084FC" stroke="#4F46E5" stroke-width="1.5"/>
+        
+        <polygon points="344,385 348,394 358,394 350,401 353,411 344,404 335,411 338,401 330,394 340,394" fill="#C084FC" stroke="#4F46E5" stroke-width="1.5"/>
+        
+    </g>
+</svg>

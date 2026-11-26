@@ -47,6 +47,7 @@ const PublicMethodologyPage = React.lazy(() => import('./public-directory/Public
 const LeaderboardView = React.lazy(() => import('./communication/LeaderboardView'));
 const CommunityView = React.lazy(() => import('./communication/CommunityView'));
 const OnlineAssessmentsView = React.lazy(() => import('./communication/OnlineAssessmentsView'));
+const AchievementsView = React.lazy(() => import('./achievements/AchievementsView'));
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
@@ -125,6 +126,7 @@ const WORKSPACE_NAV = [
   { name: 'Leaderboard', icon: Trophy, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Community', icon: Globe, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Online Assessments & Quiz Competitions', icon: ClipboardCheck, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
+  { name: 'Achievements', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
   { name: 'Staff Salaries', icon: Banknote, roles: ['organisation_admin', 'school_admin', 'teacher'] },
   { name: 'Finance', icon: Wallet, roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -237,7 +239,7 @@ const NAV_GROUPS = [
   { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
   { sublabel: 'RECORD & ARCHIVE', items: ['Record'] },
   { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance', 'Set Criteria', 'Evaluation'] },
-  { sublabel: 'COMMUNICATION & NETWORKING', items: ['Leaderboard', 'Community', 'Online Assessments & Quiz Competitions', 'Announcements'] },
+  { sublabel: 'COMMUNICATION & NETWORKING', items: ['Leaderboard', 'Community', 'Online Assessments & Quiz Competitions', 'Achievements', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
@@ -251,6 +253,7 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   'Leaderboard': 'free',
   'Community': 'free',
   'Online Assessments & Quiz Competitions': 'free',
+  'Achievements': 'free',
   'Campuses': 'free',
   'Campus setup': 'free',
   'Academic years': 'free',
@@ -838,6 +841,7 @@ function App() {
       if (p.includes('leaderboard')) setPage('Leaderboard');
       else if (p.includes('community')) setPage('Community');
       else if (p.includes('assessment') || p.includes('quiz')) setPage('Online Assessments & Quiz Competitions');
+      else if (p.includes('achievement') || p.includes('badge')) setPage('Achievements');
       else if (p.includes('communication')) setPage('Leaderboard');
     };
     window.addEventListener('popstate', handleLocationChange);
@@ -912,6 +916,7 @@ function App() {
         if (p.includes('leaderboard')) return 'Leaderboard';
         if (p.includes('community')) return 'Community';
         if (p.includes('assessment') || p.includes('quiz')) return 'Online Assessments & Quiz Competitions';
+        if (p.includes('achievement') || p.includes('badge')) return 'Achievements';
         if (p.includes('communication')) return 'Leaderboard';
       }
       const storedUserStr = localStorage.getItem('optimus_user');
@@ -1540,6 +1545,7 @@ function App() {
         'Leaderboard': 'leaderboard',
         'Community': 'community',
         'Online Assessments & Quiz Competitions': 'assessments',
+        'Achievements': 'achievements',
         'Communication': 'communication'
       };
       if (slugMap[target]) {
@@ -1634,7 +1640,7 @@ function App() {
     IconComponent: any,
     extraBadge?: React.ReactNode
   ) => {
-    const isSelected = page === targetPage || (targetPage === 'Online Assessments & Quiz Competitions' && ['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page));
+    const isSelected = page === targetPage || (targetPage === 'Online Assessments & Quiz Competitions' && ['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page)) || (targetPage === 'Achievements' && ['Achievements', 'Badges', 'Achievements & Badges'].includes(page));
     const navColor = getNavColorConfig(targetPage);
     return (
       <button
@@ -2571,6 +2577,7 @@ function App() {
               {renderNavButton('Leaderboard', 'Leaderboard', Trophy)}
               {renderNavButton('Community', 'Community', Globe)}
               {renderNavButton('Online Assessments & Quiz Competitions', 'Online Assessments', ClipboardCheck)}
+              {renderNavButton('Achievements', 'Achievements', Award)}
               {renderNavButton('Announcements', 'Announcements', Megaphone)}
             </nav>
 
@@ -2596,6 +2603,7 @@ function App() {
               {renderNavButton('Leaderboard', 'Leaderboard', Trophy)}
               {renderNavButton('Community', 'Community', Globe)}
               {renderNavButton('Online Assessments & Quiz Competitions', 'Online Assessments', ClipboardCheck)}
+              {renderNavButton('Achievements', 'Achievements & Badges', Award)}
               {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
             </nav>
 
@@ -2677,7 +2685,7 @@ function App() {
                               <div className="nav-dropdown-children">
                                 {children.map((child: any) => {
                                   const ChildIcon = child.icon;
-                                  const isChildSelected = page === child.name || (child.name === 'Online Assessments & Quiz Competitions' && ['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page));
+                                  const isChildSelected = page === child.name || (child.name === 'Online Assessments & Quiz Competitions' && ['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page)) || (child.name === 'Achievements' && ['Achievements', 'Badges', 'Achievements & Badges'].includes(page));
                                   const childColor = getNavColorConfig(child.name);
                                   let childExtraClass = '';
                                   if (child.name === 'Leaderboard') childExtraClass = ' nav-child-leaderboard';
@@ -4346,6 +4354,14 @@ function App() {
                 user={user}
                 activeCampusId={activeCampusId}
                 campuses={campuses}
+              />
+            </ErrorBoundary>
+          )}
+          {['Achievements', 'Badges', 'Achievements & Badges'].includes(page) && (
+            <ErrorBoundary fallbackTitle="Achievements & Badges">
+              <AchievementsView
+                currentUser={user}
+                notify={notify}
               />
             </ErrorBoundary>
           )}

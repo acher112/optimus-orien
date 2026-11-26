@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <defs>
+        <radialGradient id="bgGrad" cx="50%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#E69C24"/>
+            <stop offset="40%" stop-color="#CD7F32"/>
+            <stop offset="100%" stop-color="#8C501E"/>
+        </radialGradient>
+        <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#E69C24"/>
+            <stop offset="50%" stop-color="#CD7F32"/>
+            <stop offset="100%" stop-color="#5C3317"/>
+        </linearGradient>
+        <linearGradient id="diamondGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38BDF8"/>
+            <stop offset="50%" stop-color="#818CF8"/>
+            <stop offset="100%" stop-color="#C084FC"/>
+        </linearGradient>
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.45"/>
+        </filter>
+    </defs>
+
+    <!-- Outer Medallion Shadow & Rim -->
+    <g filter="url(#shadow)">
+        <circle cx="256" cy="256" r="226" fill="url(#rimGrad)" stroke="#5C3317" stroke-width="4"/>
+        <circle cx="256" cy="256" r="214" fill="#1E293B"/>
+        <circle cx="256" cy="256" r="202" fill="url(#bgGrad)"/>
+        <circle cx="256" cy="256" r="190" fill="#1E293B" opacity="0.15"/>
+    </g>
+
+    <!-- Prismatic / Crystal Halo -->
+    
+
+    <!-- Central Emblem -->
+    <g>
+        
+        <polygon points="256,135 345,260 295,260 295,350 217,350 217,260 167,260" fill="#E69C24"/>
+        <polygon points="256,155 330,255 285,255 285,340 227,340 227,255 182,255" fill="#2563EB"/>
+        <polygon points="256,185 295,245 275,245 275,325 237,325 237,245 217,245" fill="#E69C24"/>
+        
+    </g>
+
+    <!-- Star Tier Indicators -->
+    <g>
+        
+        <polygon points="256,385 260,394 270,394 262,401 265,411 256,404 247,411 250,401 242,394 252,394" fill="#E69C24" stroke="#8C501E" stroke-width="1.5"/>
+        
+    </g>
+</svg>
