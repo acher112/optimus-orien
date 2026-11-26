@@ -3,7 +3,7 @@ import {
   Trophy, Award, Clock, CheckCircle2,
   Plus, Users, Share2, Globe, Building2, MapPin,
   ChevronRight, ChevronLeft, Sparkles, X, RefreshCw, Zap, Lock, Calendar,
-  BarChart3, Medal, Star, Shield, BookOpen, TrendingUp, Check, Filter
+  BarChart3, Medal, Star, Shield, BookOpen, TrendingUp, Check, Filter, User, Bell
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -282,7 +282,12 @@ export default function OnlineAssessmentsView({
   const [newQuizDifficulty, setNewQuizDifficulty] = useState('Intermediate');
   const [newQuizNumQuestions, setNewQuizNumQuestions] = useState(5);
   const [newQuizDuration, setNewQuizDuration] = useState(10);
-  const [newQuizScope, setNewQuizScope] = useState<'our_campus' | 'org_campuses' | 'worldwide'>('worldwide');
+  const [newQuizScope, setNewQuizScope] = useState<'class' | 'our_campus' | 'org_campuses' | 'worldwide'>('worldwide');
+  const [userClassInfo, setUserClassInfo] = useState<{ id: number; name: string; grade_level?: string; section?: string } | null>(null);
+  const [availableClasses, setAvailableClasses] = useState<Array<{ id: number; name: string; grade_level?: string; section?: string }>>([]);
+  const [targetClassId, setTargetClassId] = useState<string>('');
+  const [selectedCampusForStudents, setSelectedCampusForStudents] = useState<TopPrincipalHonor | null>(null);
+  const [selectedTeacherForProfile, setSelectedTeacherForProfile] = useState<TopTeacherHonor | null>(null);
   const [targetSchoolId, setTargetSchoolId] = useState<string>(() =>
     activeCampusId ? String(activeCampusId) : (user?.school ? String(user.school) : (campuses[0]?.id ? String(campuses[0].id) : ''))
   );
@@ -322,6 +327,13 @@ export default function OnlineAssessmentsView({
       }
       if (res.participant_region) {
         setDetectedRegion(res.participant_region);
+      }
+      if (res.user_class_info) {
+        setUserClassInfo(res.user_class_info);
+        setTargetClassId((prev) => prev || String(res.user_class_info!.id));
+      }
+      if (res.available_classes && res.available_classes.length > 0) {
+        setAvailableClasses(res.available_classes);
       }
     } catch (err) {
       console.error(err);
@@ -658,6 +670,10 @@ export default function OnlineAssessmentsView({
       notify?.('Please select a campus for a campus-only quiz.', 'error');
       return;
     }
+    if (newQuizScope === 'class' && !targetClassId && !userClassInfo?.id) {
+      notify?.('Please select or enroll in a class for a class-scoped quiz challenge.', 'error');
+      return;
+    }
 
     setCreatingQuiz(true);
     try {
@@ -670,12 +686,13 @@ export default function OnlineAssessmentsView({
         duration_minutes: newQuizDuration,
         num_questions: newQuizNumQuestions,
         scope: newQuizScope,
-        target_school_id: newQuizScope === 'our_campus' ? targetSchoolId : undefined,
+        target_school_id: (newQuizScope === 'our_campus' || newQuizScope === 'class') ? targetSchoolId : undefined,
+        target_class_id: newQuizScope === 'class' ? (targetClassId ? Number(targetClassId) : (userClassInfo?.id || undefined)) : undefined,
         start_time: newQuizStartTime ? new Date(newQuizStartTime).toISOString() : null,
         end_time: newQuizEndTime ? new Date(newQuizEndTime).toISOString() : null,
         questions: generatedPreview.length > 0 ? generatedPreview : undefined,
       });
-      notify?.(`Quiz published to Quiz Available! Invite Code: ${res.invite_code}`);
+      notify?.(`Quiz Challenge published! Invite Code: ${res.invite_code}. Notifications sent to your selected cohort.`);
       setCreateModalOpen(false);
       setNewQuizTitle('');
       setNewQuizTopic('');
@@ -1666,33 +1683,56 @@ export default function OnlineAssessmentsView({
                       >
                         <div>
                           {/* Student Header */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div
                                 style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 10,
-                                  background: idx === 0 ? '#fef3c7' : idx === 1 ? '#f1f5f9' : '#ede9fe',
-                                  color: idx === 0 ? '#b45309' : idx === 1 ? '#475569' : '#6d28d9',
-                                  fontWeight: 900,
+                                  width: 42,
+                                  height: 42,
+                                  borderRadius: '50%',
+                                  background: st.avatar_color || '#7c3aed',
+                                  color: '#ffffff',
+                                  fontWeight: 800,
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   fontSize: 14,
+                                  position: 'relative',
+                                  flexShrink: 0,
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
                                 }}
                               >
-                                #{idx + 1}
+                                {st.initials || st.name.slice(0, 2).toUpperCase()}
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: -2,
+                                    right: -2,
+                                    fontSize: 10,
+                                    fontWeight: 900,
+                                    background: idx === 0 ? '#f59e0b' : idx === 1 ? '#94a3b8' : idx === 2 ? '#d97706' : '#64748b',
+                                    color: '#ffffff',
+                                    borderRadius: '50%',
+                                    width: 17,
+                                    height: 17,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '1.5px solid #ffffff',
+                                  }}
+                                >
+                                  {idx + 1}
+                                </span>
                               </div>
                               <div>
-                                <strong style={{ fontSize: 14, color: '#1e1633' }}>{st.name}</strong>
-                                <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                <strong style={{ fontSize: 14.5, color: '#1e1633', display: 'block' }}>{st.name}</strong>
+                                <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1 }}>
                                   {st.handle} • {st.school_name}
                                 </div>
                               </div>
                             </div>
 
-                            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
                               🌍 {st.country}
                             </span>
                           </div>
@@ -1768,9 +1808,9 @@ export default function OnlineAssessmentsView({
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <h4 style={{ fontSize: 14.5, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <BookOpen size={16} color="#7c3aed" /> Top Faculty Mentors &amp; Quiz Architects
+                      <BookOpen size={16} color="#7c3aed" /> Top Quiz-Making Teachers &amp; Faculty Mentors
                     </h4>
-                    <span style={{ fontSize: 12, color: '#64748b' }}>Ranked by Student Cohort Performance</span>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Ranked by Quizzes Made &amp; Student Cohort Scores</span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
@@ -1790,46 +1830,71 @@ export default function OnlineAssessmentsView({
                       >
                         <div>
                           {/* Teacher Header */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div
                                 style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 10,
-                                  background: '#faf5ff',
-                                  color: '#7c3aed',
-                                  fontWeight: 900,
+                                  width: 42,
+                                  height: 42,
+                                  borderRadius: '50%',
+                                  background: t.avatar_color || '#4f46e5',
+                                  color: '#ffffff',
+                                  fontWeight: 800,
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   fontSize: 14,
+                                  position: 'relative',
+                                  flexShrink: 0,
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
                                 }}
                               >
-                                #{idx + 1}
+                                {t.initials || t.name.slice(0, 2).toUpperCase()}
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: -2,
+                                    right: -2,
+                                    fontSize: 10,
+                                    fontWeight: 900,
+                                    background: idx === 0 ? '#f59e0b' : idx === 1 ? '#94a3b8' : idx === 2 ? '#d97706' : '#7c3aed',
+                                    color: '#ffffff',
+                                    borderRadius: '50%',
+                                    width: 17,
+                                    height: 17,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '1.5px solid #ffffff',
+                                  }}
+                                >
+                                  {idx + 1}
+                                </span>
                               </div>
                               <div>
-                                <strong style={{ fontSize: 14, color: '#1e1633' }}>{t.name}</strong>
-                                <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                <strong style={{ fontSize: 14.5, color: '#1e1633', display: 'block' }}>{t.name}</strong>
+                                <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1 }}>
                                   {t.school_name}
                                 </div>
                               </div>
                             </div>
 
-                            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 999, background: '#ede9fe', color: '#6d28d9', fontWeight: 700 }}>
+                            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#ede9fe', color: '#6d28d9', fontWeight: 700 }}>
                               {t.subject}
                             </span>
                           </div>
 
-                          {/* Metrics Pills */}
+                          {/* Metrics 4 columns */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12, textAlign: 'center' }}>
                             <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
-                              <div style={{ fontSize: 10, color: '#64748b' }}>Quizzes</div>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Quizzes Made</div>
                               <strong style={{ fontSize: 13, color: '#7c3aed' }}>{t.quizzes_created}</strong>
                             </div>
                             <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
-                              <div style={{ fontSize: 10, color: '#64748b' }}>Assessed</div>
-                              <strong style={{ fontSize: 13, color: '#2563eb' }}>{t.total_students_assessed}</strong>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Avg Participants</div>
+                              <strong style={{ fontSize: 13, color: '#2563eb' }}>
+                                {t.avg_participants_per_quiz || Math.round(t.total_students_assessed / Math.max(1, t.quizzes_created))}
+                              </strong>
                             </div>
                             <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
                               <div style={{ fontSize: 10, color: '#64748b' }}>Cohort Avg</div>
@@ -1871,8 +1936,26 @@ export default function OnlineAssessmentsView({
                           </div>
                         </div>
 
-                        {/* Card Action */}
-                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                        {/* Card Actions: Profile Modal & Confer Honor */}
+                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="comm-cat-pill"
+                            style={{
+                              fontSize: 11.5,
+                              padding: '5px 11px',
+                              background: '#f5f3ff',
+                              color: '#6d28d9',
+                              borderColor: '#c4b5fd',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 5,
+                            }}
+                            onClick={() => setSelectedTeacherForProfile(t)}
+                          >
+                            <User size={13} /> View Teacher Profile
+                          </button>
                           <button
                             className="comm-cat-pill"
                             style={{ fontSize: 11.5, padding: '4px 10px' }}
@@ -1887,14 +1970,14 @@ export default function OnlineAssessmentsView({
                 </div>
               )}
 
-              {/* 3. TOP PRINCIPALS SECTION */}
+              {/* 3. TOP CAMPUS PRINCIPALS & SCHOOLS SECTION */}
               {(badgeCategoryFilter === 'all' || badgeCategoryFilter === 'principals') && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <h4 style={{ fontSize: 14.5, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Shield size={16} color="#0284c7" /> Top Campus Principals &amp; Institutional Leaders
+                      <Shield size={16} color="#0284c7" /> Top Performing Schools &amp; Campus Principals
                     </h4>
-                    <span style={{ fontSize: 12, color: '#64748b' }}>Ranked by Overall Campus Quiz Benchmark</span>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Click Campus to View Top Performing Students</span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
@@ -1913,35 +1996,58 @@ export default function OnlineAssessmentsView({
                         }}
                       >
                         <div>
-                          {/* Principal Header */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                          {/* Principal / Campus Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div
                                 style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 10,
-                                  background: '#f0f9ff',
-                                  color: '#0284c7',
-                                  fontWeight: 900,
+                                  width: 42,
+                                  height: 42,
+                                  borderRadius: '50%',
+                                  background: p.avatar_color || '#0284c7',
+                                  color: '#ffffff',
+                                  fontWeight: 800,
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   fontSize: 14,
+                                  position: 'relative',
+                                  flexShrink: 0,
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
                                 }}
                               >
-                                #{idx + 1}
+                                {p.initials || (p.principal_name || p.name).slice(0, 2).toUpperCase()}
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: -2,
+                                    right: -2,
+                                    fontSize: 10,
+                                    fontWeight: 900,
+                                    background: idx === 0 ? '#f59e0b' : idx === 1 ? '#94a3b8' : idx === 2 ? '#d97706' : '#0284c7',
+                                    color: '#ffffff',
+                                    borderRadius: '50%',
+                                    width: 17,
+                                    height: 17,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '1.5px solid #ffffff',
+                                  }}
+                                >
+                                  {idx + 1}
+                                </span>
                               </div>
                               <div>
-                                <strong style={{ fontSize: 14, color: '#1e1633' }}>{p.name}</strong>
-                                <div style={{ fontSize: 11.5, color: '#64748b' }}>
-                                  Principal • {p.campus_name}
+                                <strong style={{ fontSize: 14.5, color: '#1e1633', display: 'block' }}>{p.campus_name}</strong>
+                                <div style={{ fontSize: 12, color: '#0284c7', fontWeight: 700, marginTop: 1 }}>
+                                  Principal: {p.principal_name || p.name}
                                 </div>
                               </div>
                             </div>
 
-                            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
-                              {p.city_country}
+                            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                              📍 {p.city_country}
                             </span>
                           </div>
 
@@ -1995,8 +2101,26 @@ export default function OnlineAssessmentsView({
                           </div>
                         </div>
 
-                        {/* Card Action */}
-                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                        {/* Card Actions: Top Students Modal & Confer Honor */}
+                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="comm-cat-pill"
+                            style={{
+                              fontSize: 11.5,
+                              padding: '5px 11px',
+                              background: '#f0f9ff',
+                              color: '#0369a1',
+                              borderColor: '#bae6fd',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 5,
+                            }}
+                            onClick={() => setSelectedCampusForStudents(p)}
+                          >
+                            <Trophy size={13} /> View Top Students ({p.top_students?.length || 0})
+                          </button>
                           <button
                             className="comm-cat-pill"
                             style={{ fontSize: 11.5, padding: '4px 10px' }}
@@ -2580,6 +2704,12 @@ export default function OnlineAssessmentsView({
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
                     {[
                       {
+                        value: 'class',
+                        title: 'My Class Only',
+                        desc: userClassInfo ? `Classmates in ${userClassInfo.name}` : 'Target only enrolled classmates',
+                        icon: <BookOpen size={15} />,
+                      },
+                      {
                         value: 'our_campus',
                         title: 'Only Our Campus',
                         desc: 'Restricted to students in this campus',
@@ -2622,6 +2752,41 @@ export default function OnlineAssessmentsView({
                     })}
                   </div>
 
+                  {newQuizScope === 'class' && (
+                    <div style={{ marginTop: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: 12 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: '#6d28d9', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <BookOpen size={15} /> Class-Scoped Quiz Challenge
+                      </div>
+                      {userClassInfo ? (
+                        <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
+                          Target Class: <strong>{userClassInfo.name}</strong> {userClassInfo.grade_level ? `(${userClassInfo.grade_level})` : ''} — Only students in your class can see and attempt this challenge.
+                        </div>
+                      ) : availableClasses.length > 0 ? (
+                        <div style={{ marginTop: 8 }}>
+                          <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, marginBottom: 4, color: '#475569' }}>
+                            Select Target Class:
+                          </label>
+                          <select
+                            className="comm-select"
+                            style={{ width: '100%' }}
+                            value={targetClassId}
+                            onChange={(e) => setTargetClassId(e.target.value)}
+                          >
+                            {availableClasses.map((ac) => (
+                              <option key={ac.id} value={String(ac.id)}>
+                                {ac.name} {ac.grade_level ? `(${ac.grade_level})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                          You will challenge enrolled students in your registered school class.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {newQuizScope === 'our_campus' && campuses.length > 0 && (
                     <div style={{ marginTop: 10 }}>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 4, color: '#475569' }}>
@@ -2641,6 +2806,14 @@ export default function OnlineAssessmentsView({
                       </select>
                     </div>
                   )}
+
+                  {/* Notification notice */}
+                  <div style={{ marginTop: 10, background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Bell size={15} color="#059669" />
+                    <span style={{ fontSize: 11.5, color: '#065f46', fontWeight: 600 }}>
+                      Instant Alerts: Targeted students will receive a direct notification challenge with code and instructions!
+                    </span>
+                  </div>
                 </div>
 
                 {/* Start Time & End Time */}
@@ -2865,6 +3038,317 @@ export default function OnlineAssessmentsView({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================================
+            CAMPUS TOP PERFORMING STUDENTS MODAL
+           ================================================================= */}
+        {selectedCampusForStudents && (
+          <div className="comm-modal-backdrop" onClick={() => setSelectedCampusForStudents(null)}>
+            <div className="comm-modal-dialog" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
+              <div className="comm-modal-header" style={{ alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: selectedCampusForStudents.avatar_color || '#0284c7',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      fontSize: 16,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {selectedCampusForStudents.initials || 'CP'}
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#1e1633' }}>
+                      {selectedCampusForStudents.campus_name}
+                    </h2>
+                    <div style={{ fontSize: 12.5, color: '#0284c7', fontWeight: 700, marginTop: 2 }}>
+                      Principal: {selectedCampusForStudents.principal_name || selectedCampusForStudents.name} • {selectedCampusForStudents.city_country}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                  onClick={() => setSelectedCampusForStudents(null)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Campus Summary Strip */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, margin: '14px 0', background: '#f8fafc', padding: 10, borderRadius: 10, textAlign: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Campus Benchmark</div>
+                  <strong style={{ fontSize: 14, color: '#059669' }}>{selectedCampusForStudents.campus_avg_score}%</strong>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Top Score</div>
+                  <strong style={{ fontSize: 14, color: '#7c3aed' }}>{selectedCampusForStudents.top_student_score}%</strong>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Accuracy</div>
+                  <strong style={{ fontSize: 14, color: '#d97706' }}>{selectedCampusForStudents.campus_avg_accuracy}%</strong>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Participants</div>
+                  <strong style={{ fontSize: 14, color: '#2563eb' }}>{selectedCampusForStudents.total_campus_participants}</strong>
+                </div>
+              </div>
+
+              <h4 style={{ fontSize: 14, fontWeight: 800, color: '#1e1633', margin: '12px 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Trophy size={16} color="#f59e0b" /> Campus Top Performing Students
+              </h4>
+
+              {/* Students List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+                {(selectedCampusForStudents.top_students && selectedCampusForStudents.top_students.length > 0) ? (
+                  selectedCampusForStudents.top_students.map((st, sIdx) => (
+                    <div
+                      key={st.id || sIdx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: '50%',
+                            background: st.avatar_color || '#7c3aed',
+                            color: '#ffffff',
+                            fontWeight: 800,
+                            fontSize: 12.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {st.initials || 'ST'}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 900, color: sIdx === 0 ? '#b45309' : '#475569', background: sIdx === 0 ? '#fef3c7' : '#f1f5f9', padding: '1px 6px', borderRadius: 6 }}>
+                              #{sIdx + 1}
+                            </span>
+                            <strong style={{ fontSize: 13.5, color: '#1e1633' }}>{st.name}</strong>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#64748b' }}>{st.handle}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right' }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: '#7c3aed' }}>{st.best_score}%</div>
+                          <div style={{ fontSize: 10.5, color: '#64748b' }}>Acc: {st.avg_accuracy}%</div>
+                        </div>
+                        {st.badges && st.badges.length > 0 && (
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              padding: '2px 7px',
+                              borderRadius: 999,
+                              background: '#fef3c7',
+                              color: '#b45309',
+                              border: '1px solid #fde68a',
+                            }}
+                          >
+                            🏆 {st.badges[0].title}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: '#64748b', fontSize: 13 }}>
+                    No student quiz records found for this campus yet.
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                <button
+                  type="button"
+                  className="comm-cat-pill"
+                  onClick={() => setSelectedCampusForStudents(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================================
+            TEACHER PROFILE MODAL
+           ================================================================= */}
+        {selectedTeacherForProfile && (
+          <div className="comm-modal-backdrop" onClick={() => setSelectedTeacherForProfile(null)}>
+            <div className="comm-modal-dialog" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
+              <div className="comm-modal-header" style={{ alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                  <div
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: '50%',
+                      background: selectedTeacherForProfile.avatar_color || '#4f46e5',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      fontSize: 18,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {selectedTeacherForProfile.initials || 'TC'}
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#1e1633' }}>
+                      {selectedTeacherForProfile.name}
+                    </h2>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                      Faculty Mentor &amp; Quiz Architect • {selectedTeacherForProfile.school_name}
+                    </div>
+                    <div style={{ marginTop: 4 }}>
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#ede9fe', color: '#6d28d9', fontWeight: 700 }}>
+                        Speciality: {selectedTeacherForProfile.subject}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                  onClick={() => setSelectedTeacherForProfile(null)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* 4 Metric Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, margin: '14px 0', textAlign: 'center' }}>
+                <div style={{ background: '#f8fafc', padding: 10, borderRadius: 10 }}>
+                  <div style={{ fontSize: 10.5, color: '#64748b' }}>Quizzes Made</div>
+                  <strong style={{ fontSize: 15, color: '#7c3aed' }}>{selectedTeacherForProfile.quizzes_created}</strong>
+                </div>
+                <div style={{ background: '#f8fafc', padding: 10, borderRadius: 10 }}>
+                  <div style={{ fontSize: 10.5, color: '#64748b' }}>Avg Participants</div>
+                  <strong style={{ fontSize: 15, color: '#2563eb' }}>
+                    {selectedTeacherForProfile.avg_participants_per_quiz || Math.round(selectedTeacherForProfile.total_students_assessed / Math.max(1, selectedTeacherForProfile.quizzes_created))}
+                  </strong>
+                </div>
+                <div style={{ background: '#f8fafc', padding: 10, borderRadius: 10 }}>
+                  <div style={{ fontSize: 10.5, color: '#64748b' }}>Cohort Avg</div>
+                  <strong style={{ fontSize: 15, color: '#059669' }}>{selectedTeacherForProfile.avg_student_score}%</strong>
+                </div>
+                <div style={{ background: '#f8fafc', padding: 10, borderRadius: 10 }}>
+                  <div style={{ fontSize: 10.5, color: '#64748b' }}>Accuracy</div>
+                  <strong style={{ fontSize: 15, color: '#d97706' }}>{selectedTeacherForProfile.avg_student_accuracy}%</strong>
+                </div>
+              </div>
+
+              {/* Quizzes Authored List */}
+              <h4 style={{ fontSize: 13.5, fontWeight: 800, color: '#1e1633', margin: '14px 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <BookOpen size={16} color="#7c3aed" /> Quizzes Authored ({selectedTeacherForProfile.quizzes_list?.length || selectedTeacherForProfile.quizzes_created})
+              </h4>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', marginBottom: 14 }}>
+                {selectedTeacherForProfile.quizzes_list && selectedTeacherForProfile.quizzes_list.length > 0 ? (
+                  selectedTeacherForProfile.quizzes_list.map((q) => (
+                    <div
+                      key={q.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: 13, color: '#1e1633' }}>{q.title}</strong>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>
+                          {q.subject} • {q.difficulty} • Scope: {q.scope_label}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#ede9fe', color: '#6d28d9' }}>
+                          {q.attempts_count} participants
+                        </span>
+                        {q.avg_score > 0 && (
+                          <div style={{ fontSize: 10.5, color: '#059669', marginTop: 2 }}>Avg: {q.avg_score}%</div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ fontSize: 12, color: '#64748b', padding: '10px 0' }}>
+                    Active drills and curriculum-aligned practice assessments.
+                  </div>
+                )}
+              </div>
+
+              {/* Badges Earned */}
+              <h4 style={{ fontSize: 13.5, fontWeight: 800, color: '#1e1633', margin: '10px 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Medal size={16} color="#f59e0b" /> Conferred Honors &amp; Pedagogy Badges
+              </h4>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {selectedTeacherForProfile.badges?.map((b) => {
+                  const style = getBadgeTierStyle(b.tier);
+                  return (
+                    <span
+                      key={b.id}
+                      title={b.description}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: 999,
+                        background: style.bg,
+                        border: `1px solid ${style.border}`,
+                        color: style.text,
+                      }}
+                    >
+                      <span style={{ color: style.icon }}>{renderBadgeIcon(b.icon)}</span>
+                      {b.title}
+                    </span>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                <button
+                  type="button"
+                  className="comm-cat-pill"
+                  onClick={() => setSelectedTeacherForProfile(null)}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

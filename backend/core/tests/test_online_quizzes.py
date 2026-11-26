@@ -5,7 +5,8 @@ from rest_framework.test import APIClient
 
 from core.models import (
     Organisation, School, User, Student, PublicCampusListing,
-    QuizCompetition, QuizQuestion, QuizAttempt
+    QuizCompetition, QuizQuestion, QuizAttempt,
+    SchoolClass, Enrollment, Notification, AcademicYear
 )
 
 
@@ -375,3 +376,104 @@ class OnlineQuizzesEnhancementsTests(TestCase):
         self.assertTrue(resp.data['success'])
         self.assertEqual(resp.data['badge']['title'], 'Grandmaster Scholar')
         self.assertEqual(resp.data['badge']['tier'], 'gold')
+
+    def test_student_quiz_challenge_class_scoping_and_notifications(self):
+        # 1. Setup AcademicYear & SchoolClass and enroll Zain (student_pk) and another classmate
+        ay = AcademicYear.objects.create(
+            school=self.school_pk,
+            name='2025-2026',
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            active=True
+        )
+        class_8a = SchoolClass.objects.create(
+            school=self.school_pk,
+            academic_year=ay,
+            name='Grade 8-A',
+            grade_level='Grade 8',
+            section='A'
+        )
+        Enrollment.objects.create(student=self.student_pk, school_class=class_8a, start_date=date(2025, 1, 1))
+
+        # Create a classmate in the same class
+        classmate_user = User.objects.create_user(
+            username='classmate_pk', password='Password123!', role='student',
+            first_name='Bilal', last_name='Ahmed',
+            organisation=self.org1, school=self.school_pk
+        )
+        classmate_student = Student.objects.create(
+            school=self.school_pk, admission_number='PK-002',
+            first_name='Bilal', last_name='Ahmed',
+            enrolled_on=date(2025, 1, 1), user=classmate_user
+        )
+        Enrollment.objects.create(student=classmate_student, school_class=class_8a, start_date=date(2025, 1, 1))
+
+        # 2. Student Zain creates a quiz challenge for his class
+        self.client.force_authenticate(user=self.student_user_pk)
+        create_resp = self.client.post('/api/v1/communication/assessments/create-quiz/', {
+            'title': 'Grade 8 Science Challenge',
+            'subject': 'Physics',
+            'difficulty': 'Intermediate',
+            'scope': 'class',
+            'target_class_id': class_8a.id,
+            'duration_minutes': 15,
+            'num_questions': 3,
+        }, format='json')
+
+        self.assertEqual(create_resp.status_code, 201)
+        comp_id = create_resp.data['competition_id']
+        invite_code = create_resp.data['invite_code']
+        self.assertEqual(create_resp.data['target_class_id'], class_8a.id)
+
+        # 3. Verify notification was dispatched to classmate Bilal
+        notif = Notification.objects.filter(user=classmate_user).first()
+        self.assertIsNotNone(notif)
+        self.assertIn(invite_code, notif.body)
+        self.assertIn('Physics', notif.body)
+
+        # 4. Verify class-scoping visibility in available quizzes
+        # Classmate Bilal can see it
+        self.client.force_authenticate(user=classmate_user)
+        list_resp_bilal = self.client.get('/api/v1/communication/assessments/competitions/')
+        self.assertEqual(list_resp_bilal.status_code, 200)
+        self.assertTrue(any(q['id'] == comp_id for q in list_resp_bilal.data['available_quizzes']))
+
+        # Student Oliver from UK CANNOT see it (different class & campus)
+        self.client.force_authenticate(user=self.student_user_uk)
+        list_resp_oliver = self.client.get('/api/v1/communication/assessments/competitions/')
+        self.assertEqual(list_resp_oliver.status_code, 200)
+        self.assertFalse(any(q['id'] == comp_id for q in list_resp_oliver.data['available_quizzes']))
+
+        # Student Oliver cannot attempt it (forbidden)
+        attempt_resp_oliver = self.client.post(f'/api/v1/communication/assessments/competitions/{comp_id}/attempt/', {
+            'answers': {},
+            'time_spent_seconds': 60,
+        }, format='json')
+        self.assertEqual(attempt_resp_oliver.status_code, 403)
+
+        # 5. Classmate Bilal attempts it and gets rapid results
+        q_item = QuizQuestion.objects.filter(competition_id=comp_id).first()
+        build_ans = {}
+        if q_item:
+            ans_val = q_item.correct_answer.get('id', 'A')
+            build_ans[str(q_item.id)] = ans_val
+
+        self.client.force_authenticate(user=classmate_user)
+        att_resp_bilal = self.client.post(f'/api/v1/communication/assessments/competitions/{comp_id}/attempt/', {
+            'answers': build_ans,
+            'time_spent_seconds': 95,
+        }, format='json')
+        self.assertEqual(att_resp_bilal.status_code, 201)
+        self.assertTrue(att_resp_bilal.data['saved_to_profile'])
+
+        # 6. Verify Analytics includes campus top students and teacher quizzes
+        analytics_resp = self.client.get('/api/v1/communication/assessments/analytics-badges/')
+        self.assertEqual(analytics_resp.status_code, 200)
+        top_principals = analytics_resp.data['badges']['principals']
+        self.assertTrue(len(top_principals) >= 1)
+        alpha_principal = next((p for p in top_principals if p['campus_name'] == 'Alpha Lahore'), None)
+        self.assertIsNotNone(alpha_principal)
+        self.assertIn('top_students', alpha_principal)
+        self.assertTrue(len(alpha_principal['top_students']) >= 1)
+        self.assertIn('avatar_color', alpha_principal)
+        self.assertIn('initials', alpha_principal)

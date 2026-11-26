@@ -144,6 +144,8 @@ export interface QuizCompetitionItem {
   scope_label?: string;
   target_school_id?: number | null;
   target_school_name?: string | null;
+  target_class_id?: number | null;
+  target_class_name?: string | null;
   invite_code: string;
   generation_source?: string;
   start_time?: string | null;
@@ -261,32 +263,52 @@ export interface TopStudentHonor {
   id: number;
   name: string;
   handle: string;
+  avatar_color?: string;
+  initials?: string;
   school_name: string;
   country: string;
   best_score: number;
   avg_score: number;
   avg_accuracy: number;
   quizzes_attempted: number;
-  fastest_time_seconds: number;
-  fastest_time_display: string;
+  fastest_time_seconds?: number;
+  fastest_time_display?: string;
   badges: HonorBadge[];
 }
 
 export interface TopTeacherHonor {
   id: number;
   name: string;
+  email?: string;
+  avatar_color?: string;
+  initials?: string;
   school_name: string;
   subject: string;
   quizzes_created: number;
   total_students_assessed: number;
+  avg_participants_per_quiz?: number;
   avg_student_score: number;
   avg_student_accuracy: number;
   badges: HonorBadge[];
+  quizzes_list?: Array<{
+    id: number;
+    title: string;
+    subject: string;
+    difficulty: string;
+    scope: string;
+    scope_label: string;
+    attempts_count: number;
+    avg_score: number;
+    created_at?: string;
+  }>;
 }
 
 export interface TopPrincipalHonor {
   id: number;
   name: string;
+  principal_name?: string;
+  avatar_color?: string;
+  initials?: string;
   school_id: number;
   campus_name: string;
   city_country: string;
@@ -295,6 +317,7 @@ export interface TopPrincipalHonor {
   campus_avg_accuracy: number;
   top_student_score: number;
   badges: HonorBadge[];
+  top_students?: TopStudentHonor[];
 }
 
 export interface AssessmentsAnalyticsResponse {
@@ -382,6 +405,8 @@ export const communicationApi = {
       student_challenges: QuizCompetitionItem[];
       participant_country?: string;
       participant_region?: string;
+      user_class_info?: { id: number; name: string; grade_level?: string; section?: string } | null;
+      available_classes?: Array<{ id: number; name: string; grade_level?: string; section?: string }>;
     }>(
       '/api/v1/communication/assessments/competitions/'
     ),

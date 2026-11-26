@@ -3663,6 +3663,7 @@ class QuizCompetition(models.Model):
     title = models.CharField(max_length=200, db_index=True)
     sponsor_school = models.ForeignKey(School, null=True, blank=True, on_delete=models.SET_NULL, related_name='sponsored_competitions')
     target_organisation = models.ForeignKey(Organisation, null=True, blank=True, on_delete=models.SET_NULL, related_name='scoped_quizzes')
+    target_class = models.ForeignKey('SchoolClass', null=True, blank=True, on_delete=models.SET_NULL, related_name='scoped_quizzes')
     sponsor_name = models.CharField(max_length=150, blank=True, default='')
     subject = models.CharField(max_length=120, db_index=True)
     topic = models.CharField(max_length=250, blank=True, default='')

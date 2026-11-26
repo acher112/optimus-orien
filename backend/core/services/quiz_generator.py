@@ -1515,6 +1515,8 @@ def resolve_participant_location(user=None, school=None, client_country: str = '
 
 def normalize_quiz_scope(scope_raw: str) -> str:
     val = (scope_raw or 'worldwide').strip().lower()
+    if val in ('class', 'my_class', 'our_class'):
+        return 'class'
     if val in ('our_campus', 'campus', 'school', 'my_campus'):
         return 'our_campus'
     if val in ('org_campuses', 'all_our_campuses', 'organisation', 'organization', 'all_campuses'):
@@ -1524,6 +1526,8 @@ def normalize_quiz_scope(scope_raw: str) -> str:
 
 def format_scope_label(scope_raw: str) -> str:
     norm = normalize_quiz_scope(scope_raw)
+    if norm == 'class':
+        return 'My Class Only'
     if norm == 'our_campus':
         return 'Only Our Campus'
     if norm == 'org_campuses':
