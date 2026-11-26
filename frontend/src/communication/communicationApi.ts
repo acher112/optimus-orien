@@ -220,6 +220,102 @@ export interface CountryPerformanceStat {
   top_performer: string;
 }
 
+export interface QuizChartItem {
+  id: number;
+  title: string;
+  short_title: string;
+  subject: string;
+  difficulty: string;
+  scope: string;
+  scope_label: string;
+  attempts_count: number;
+  avg_score: number;
+  avg_accuracy: number;
+  top_score: number;
+  creator_name: string;
+}
+
+export interface CountryChartItem {
+  country: string;
+  student_count: number;
+  avg_score: number;
+  avg_accuracy: number;
+  avg_time_seconds: number;
+  top_score: number;
+  top_performer: string;
+}
+
+export interface HonorBadge {
+  id: string;
+  title: string;
+  category: string;
+  tier: 'gold' | 'silver' | 'bronze' | 'purple' | 'emerald' | 'blue';
+  icon: string;
+  color: string;
+  description: string;
+  assigned_at?: string;
+  awarded_by?: string;
+}
+
+export interface TopStudentHonor {
+  id: number;
+  name: string;
+  handle: string;
+  school_name: string;
+  country: string;
+  best_score: number;
+  avg_score: number;
+  avg_accuracy: number;
+  quizzes_attempted: number;
+  fastest_time_seconds: number;
+  fastest_time_display: string;
+  badges: HonorBadge[];
+}
+
+export interface TopTeacherHonor {
+  id: number;
+  name: string;
+  school_name: string;
+  subject: string;
+  quizzes_created: number;
+  total_students_assessed: number;
+  avg_student_score: number;
+  avg_student_accuracy: number;
+  badges: HonorBadge[];
+}
+
+export interface TopPrincipalHonor {
+  id: number;
+  name: string;
+  school_id: number;
+  campus_name: string;
+  city_country: string;
+  total_campus_participants: number;
+  campus_avg_score: number;
+  campus_avg_accuracy: number;
+  top_student_score: number;
+  badges: HonorBadge[];
+}
+
+export interface AssessmentsAnalyticsResponse {
+  summary: {
+    total_quizzes: number;
+    total_attempts: number;
+    total_students_participated: number;
+    total_countries_participated: number;
+    avg_score: number;
+    avg_accuracy: number;
+    highest_score: number;
+  };
+  quiz_attempts_chart: QuizChartItem[];
+  country_distribution_chart: CountryChartItem[];
+  badges: {
+    students: TopStudentHonor[];
+    teachers: TopTeacherHonor[];
+    principals: TopPrincipalHonor[];
+  };
+}
+
 export const communicationApi = {
   // 1. Leaderboard
   getSchools: (params: Record<string, string> = {}) => {
@@ -375,5 +471,24 @@ export const communicationApi = {
   getCompetitionStandings: (id: number) =>
     request<{ competition_id: number; title: string; standings: any[] }>(
       `/api/v1/communication/assessments/competitions/${id}/standings/`
+    ),
+  getAssessmentsAnalytics: (params: { scope?: string; country?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.scope) q.set('scope', params.scope);
+    if (params.country) q.set('country', params.country);
+    return request<AssessmentsAnalyticsResponse>(
+      `/api/v1/communication/assessments/analytics-badges/?${q.toString()}`
+    );
+  },
+  assignHonorBadge: (data: {
+    target_role: 'student' | 'teacher' | 'principal';
+    target_id: number;
+    badge_title: string;
+    badge_tier?: string;
+    badge_description?: string;
+  }) =>
+    request<{ success: boolean; message: string; badge: HonorBadge }>(
+      '/api/v1/communication/assessments/analytics-badges/',
+      { method: 'POST', body: JSON.stringify(data) }
     )
 };

@@ -36,6 +36,11 @@ class OnlineQuizzesEnhancementsTests(TestCase):
             first_name='Sara', last_name='Malik',
             organisation=self.org1, school=self.school_pk
         )
+        self.principal_pk = User.objects.create_user(
+            username='principal_pk', password='Password123!', role='principal',
+            first_name='Dr. Tariq', last_name='Khan',
+            organisation=self.org1, school=self.school_pk
+        )
         self.student_user_pk = User.objects.create_user(
             username='student_pk', password='Password123!', role='student',
             first_name='Zain', last_name='Ahmed',
@@ -261,3 +266,112 @@ class OnlineQuizzesEnhancementsTests(TestCase):
             'time_spent_seconds': 20,
         }, format='json')
         self.assertEqual(attempt_early.status_code, 400)
+
+    def test_assessments_analytics_and_badges_charts(self):
+        # 1. Create a quiz
+        self.client.force_authenticate(user=self.teacher_pk)
+        resp = self.client.post('/api/v1/communication/assessments/create-quiz/', {
+            'title': 'Global STEM Olympiad',
+            'subject': 'Mathematics',
+            'difficulty': 'Olympiad',
+            'scope': 'worldwide',
+            'duration_minutes': 10,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        comp_id = resp.data['competition_id']
+
+        # Get questions
+        comp = QuizCompetition.objects.get(id=comp_id)
+        def build_correct():
+            ans = {}
+            for q in comp.questions.all():
+                if q.question_type == 'numerical':
+                    ans[str(q.id)] = q.correct_answer.get('value', 0)
+                elif q.question_type == 'true_false':
+                    ans[str(q.id)] = q.correct_answer.get('id', 'true')
+                else:
+                    ans[str(q.id)] = q.correct_answer.get('id', 'A')
+            return ans
+
+        # 2. Student Zain (Pakistan) attempts
+        self.client.force_authenticate(user=self.student_user_pk)
+        att1 = self.client.post(f'/api/v1/communication/assessments/competitions/{comp_id}/attempt/', {
+            'answers': build_correct(),
+            'time_spent_seconds': 180,
+            'country': 'Pakistan',
+        }, format='json')
+        self.assertEqual(att1.status_code, 201)
+
+        # 3. Student Oliver (UK) attempts
+        self.client.force_authenticate(user=self.student_user_uk)
+        att2 = self.client.post(f'/api/v1/communication/assessments/competitions/{comp_id}/attempt/', {
+            'answers': build_correct(),
+            'time_spent_seconds': 240,
+            'country': 'United Kingdom',
+        }, format='json')
+        self.assertEqual(att2.status_code, 201)
+
+        # 4. Fetch Analytics & Badges
+        analytics_resp = self.client.get('/api/v1/communication/assessments/analytics-badges/')
+        self.assertEqual(analytics_resp.status_code, 200)
+
+        data = analytics_resp.data
+        self.assertIn('summary', data)
+        self.assertIn('quiz_attempts_chart', data)
+        self.assertIn('country_distribution_chart', data)
+        self.assertIn('badges', data)
+
+        # Check summary metrics
+        self.assertGreaterEqual(data['summary']['total_quizzes'], 1)
+        self.assertGreaterEqual(data['summary']['total_attempts'], 2)
+        self.assertGreaterEqual(data['summary']['total_students_participated'], 2)
+
+        # Check quiz attempts chart
+        q_entry = next((item for item in data['quiz_attempts_chart'] if item['id'] == comp_id), None)
+        self.assertIsNotNone(q_entry)
+        self.assertEqual(q_entry['attempts_count'], 2)
+        self.assertEqual(q_entry['difficulty'], 'Olympiad')
+
+        # Check country distribution chart
+        pk_country = next((c for c in data['country_distribution_chart'] if c['country'] == 'Pakistan'), None)
+        self.assertIsNotNone(pk_country)
+        self.assertGreaterEqual(pk_country['student_count'], 1)
+
+        uk_country = next((c for c in data['country_distribution_chart'] if c['country'] == 'United Kingdom'), None)
+        self.assertIsNotNone(uk_country)
+        self.assertGreaterEqual(uk_country['student_count'], 1)
+
+        # Check Badges for Top Students
+        top_students = data['badges']['students']
+        self.assertTrue(len(top_students) >= 2)
+        zain_honor = next((s for s in top_students if 'Zain' in s['name']), None)
+        self.assertIsNotNone(zain_honor)
+        self.assertGreaterEqual(len(zain_honor['badges']), 1)
+        # Check that high score awarded Grandmaster Scholar
+        self.assertTrue(any(b['id'] == 'gold_grandmaster' for b in zain_honor['badges']))
+
+        # Check Badges for Top Teachers
+        top_teachers = data['badges']['teachers']
+        self.assertTrue(len(top_teachers) >= 1)
+        sara_honor = next((t for t in top_teachers if 'Sara' in t['name']), None)
+        self.assertIsNotNone(sara_honor)
+        self.assertGreaterEqual(len(sara_honor['badges']), 1)
+
+        # Check Badges for Top Principals
+        top_principals = data['badges']['principals']
+        self.assertTrue(len(top_principals) >= 1)
+
+    def test_assign_honorary_badge_post(self):
+        self.client.force_authenticate(user=self.teacher_pk)
+        resp = self.client.post('/api/v1/communication/assessments/analytics-badges/', {
+            'target_role': 'student',
+            'target_id': self.student_pk.id,
+            'badge_title': 'Grandmaster Scholar',
+            'badge_tier': 'gold',
+            'badge_description': 'Awarded for exceptional math competition performance.',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['success'])
+        self.assertEqual(resp.data['badge']['title'], 'Grandmaster Scholar')
+        self.assertEqual(resp.data['badge']['tier'], 'gold')

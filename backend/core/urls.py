@@ -427,6 +427,7 @@ urlpatterns = [
     path('communication/assessments/leaderboard/', communication_views.AssessmentsLeaderboardView.as_view()),
     path('communication/assessments/peer-scores/<int:pk>/', communication_views.AssessmentsPeerScoresView.as_view()),
     path('communication/assessments/competitions/<int:pk>/standings/', communication_views.AssessmentsCompetitionStandingsView.as_view()),
+    path('communication/assessments/analytics-badges/', communication_views.AssessmentsAnalyticsAndBadgesView.as_view()),
 
     path('', include(r.urls))
 

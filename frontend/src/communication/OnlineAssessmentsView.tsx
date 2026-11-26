@@ -2,14 +2,32 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Trophy, Award, Clock, CheckCircle2,
   Plus, Users, Share2, Globe, Building2, MapPin,
-  ChevronRight, ChevronLeft, Sparkles, X, RefreshCw, Zap, Lock, Calendar
+  ChevronRight, ChevronLeft, Sparkles, X, RefreshCw, Zap, Lock, Calendar,
+  BarChart3, Medal, Star, Shield, BookOpen, TrendingUp, Check, Filter
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  CartesianGrid,
+  Cell,
+} from 'recharts';
 import {
   communicationApi,
   QuizCompetitionItem,
   QuizQuestionItem,
   QuizAttemptResult,
-  CountryPerformanceStat
+  CountryPerformanceStat,
+  QuizChartItem,
+  CountryChartItem,
+  HonorBadge,
+  TopStudentHonor,
+  TopTeacherHonor,
+  TopPrincipalHonor,
+  AssessmentsAnalyticsResponse,
 } from './communicationApi';
 import './communication.css';
 
@@ -78,14 +96,136 @@ function formatDateTimeDisplay(iso?: string | null): string {
   }
 }
 
+const renderBadgeIcon = (iconName: string, size = 13) => {
+  switch (iconName) {
+    case 'trophy': return <Trophy size={size} />;
+    case 'award': return <Award size={size} />;
+    case 'zap': return <Zap size={size} />;
+    case 'star': return <Star size={size} />;
+    case 'shield': return <Shield size={size} />;
+    case 'users': return <Users size={size} />;
+    case 'book-open': return <BookOpen size={size} />;
+    case 'trending-up': return <TrendingUp size={size} />;
+    default: return <Award size={size} />;
+  }
+};
+
+const getBadgeTierStyle = (tier: string) => {
+  switch (tier?.toLowerCase()) {
+    case 'gold':
+      return { bg: '#fffbeb', border: '#f59e0b', text: '#b45309', icon: '#d97706', glow: '0 0 12px rgba(245, 158, 11, 0.25)' };
+    case 'silver':
+      return { bg: '#f8fafc', border: '#94a3b8', text: '#334155', icon: '#64748b', glow: '0 0 10px rgba(148, 163, 184, 0.2)' };
+    case 'purple':
+      return { bg: '#faf5ff', border: '#c084fc', text: '#7e22ce', icon: '#9333ea', glow: '0 0 12px rgba(147, 51, 234, 0.2)' };
+    case 'emerald':
+      return { bg: '#ecfdf5', border: '#34d399', text: '#065f46', icon: '#059669', glow: '0 0 12px rgba(16, 185, 129, 0.2)' };
+    case 'blue':
+      return { bg: '#f0f9ff', border: '#38bdf8', text: '#0369a1', icon: '#0284c7', glow: '0 0 10px rgba(14, 165, 233, 0.2)' };
+    default:
+      return { bg: '#fff7ed', border: '#fb923c', text: '#9a3412', icon: '#ea580c', glow: '0 0 10px rgba(234, 88, 12, 0.2)' };
+  }
+};
+
+const CustomQuizTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as QuizChartItem;
+    return (
+      <div style={{
+        background: '#1e1633',
+        color: '#ffffff',
+        padding: '10px 14px',
+        borderRadius: 10,
+        boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+        fontSize: 12,
+        maxWidth: 240,
+        border: '1px solid rgba(255,255,255,0.15)'
+      }}>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4, color: '#f1f5f9' }}>{data.title}</div>
+        <div style={{ color: '#a78bfa', fontSize: 11, marginBottom: 6 }}>{data.subject} • {data.difficulty} ({data.scope_label})</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, margin: '2px 0' }}>
+          <span style={{ color: '#cbd5e1' }}>Total Attempts:</span>
+          <strong style={{ color: '#38bdf8' }}>{data.attempts_count} Students</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, margin: '2px 0' }}>
+          <span style={{ color: '#cbd5e1' }}>Average Score:</span>
+          <strong style={{ color: '#4ade80' }}>{data.avg_score}%</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, margin: '2px 0' }}>
+          <span style={{ color: '#cbd5e1' }}>Top Score:</span>
+          <strong style={{ color: '#fbbf24' }}>{data.top_score}%</strong>
+        </div>
+        <div style={{ color: '#94a3b8', fontSize: 10.5, marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 4 }}>
+          Created by: {data.creator_name}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomCountryTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as CountryChartItem;
+    return (
+      <div style={{
+        background: '#0f172a',
+        color: '#ffffff',
+        padding: '10px 14px',
+        borderRadius: 10,
+        boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+        fontSize: 12,
+        maxWidth: 240,
+        border: '1px solid rgba(255,255,255,0.15)'
+      }}>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4, color: '#f8fafc' }}>
+          🌍 {data.country}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, margin: '2px 0' }}>
+          <span style={{ color: '#cbd5e1' }}>Participants:</span>
+          <strong style={{ color: '#38bdf8' }}>{data.student_count} Students</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, margin: '2px 0' }}>
+          <span style={{ color: '#cbd5e1' }}>Average Score:</span>
+          <strong style={{ color: '#4ade80' }}>{data.avg_score}%</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, margin: '2px 0' }}>
+          <span style={{ color: '#cbd5e1' }}>Avg Precision:</span>
+          <strong style={{ color: '#a78bfa' }}>{data.avg_accuracy}%</strong>
+        </div>
+        {data.top_performer && (
+          <div style={{ color: '#fde047', fontSize: 10.5, marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 4 }}>
+            Top: {data.top_performer} ({data.top_score}%)
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function OnlineAssessmentsView({
   notify,
   user,
   activeCampusId,
   campuses = [],
 }: OnlineAssessmentsViewProps) {
-  // Two Tabs ONLY: 'available' (Quiz Available) & 'attempted' (Attempted)
-  const [activeTab, setActiveTab] = useState<'available' | 'attempted'>('available');
+  // Three Tabs: 'available' (Quiz Available), 'attempted' (Attempted) & 'analytics' (Charts & Badges)
+  const [activeTab, setActiveTab] = useState<'available' | 'attempted' | 'analytics'>('available');
+
+  // Analytics, Charts & Badges State
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<AssessmentsAnalyticsResponse | null>(null);
+  const [analyticsScope, setAnalyticsScope] = useState<string>('all');
+  const [badgeCategoryFilter, setBadgeCategoryFilter] = useState<'all' | 'students' | 'teachers' | 'principals'>('all');
+
+  // Award Honor Badge Modal State
+  const [awardModalOpen, setAwardModalOpen] = useState(false);
+  const [awardTarget, setAwardTarget] = useState<{ role: 'student' | 'teacher' | 'principal'; id: number; name: string } | null>(null);
+  const [awardBadgeTitle, setAwardBadgeTitle] = useState('Grandmaster Distinction');
+  const [awardBadgeTier, setAwardBadgeTier] = useState<'gold' | 'silver' | 'purple' | 'emerald' | 'blue' | 'bronze'>('gold');
+  const [awardBadgeDesc, setAwardBadgeDesc] = useState('Recognized for superior performance and high accuracy in online quiz assessments.');
+  const [awardSubmitting, setAwardSubmitting] = useState(false);
 
   // Available Quizzes State
   const [availableQuizzes, setAvailableQuizzes] = useState<QuizCompetitionItem[]>([]);
@@ -212,13 +352,89 @@ export default function OnlineAssessmentsView({
     }
   }, [attemptedQuizFilter, attemptedScope, attemptedCountryFilter, mineOnly]);
 
+  // Fetch Analytics & Badges
+  const loadAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    try {
+      const res = await communicationApi.getAssessmentsAnalytics({
+        scope: analyticsScope !== 'all' ? analyticsScope : undefined,
+      });
+      setAnalyticsData(res);
+    } catch (err: any) {
+      console.error('Failed to load assessment analytics:', err);
+      notify?.(err?.message || 'Failed to load assessment analytics', 'error');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [analyticsScope, notify]);
+
+  const openAwardModal = (target: { role: 'student' | 'teacher' | 'principal'; id: number; name: string }) => {
+    setAwardTarget(target);
+    if (target.role === 'student') {
+      setAwardBadgeTitle('Grandmaster Scholar');
+      setAwardBadgeTier('gold');
+      setAwardBadgeDesc('Conferred for exceptional competitive achievement, rapid response speed, and high quiz precision.');
+    } else if (target.role === 'teacher') {
+      setAwardBadgeTitle('Master Quiz Architect');
+      setAwardBadgeTier('gold');
+      setAwardBadgeDesc('Recognized for authoring high-impact assessments and mentoring cohorts to distinction averages.');
+    } else {
+      setAwardBadgeTitle('Campus of Academic Distinction');
+      setAwardBadgeTier('gold');
+      setAwardBadgeDesc('Conferred in recognition of campus-wide online assessment excellence and institutional leadership.');
+    }
+    setAwardModalOpen(true);
+  };
+
+  const handleAssignBadgeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!awardTarget || !awardBadgeTitle.trim()) return;
+    setAwardSubmitting(true);
+    try {
+      const res = await communicationApi.assignHonorBadge({
+        target_role: awardTarget.role,
+        target_id: awardTarget.id,
+        badge_title: awardBadgeTitle.trim(),
+        badge_tier: awardBadgeTier,
+        badge_description: awardBadgeDesc.trim(),
+      });
+      notify?.(res.message || 'Honor badge successfully conferred!', 'success');
+      if (analyticsData) {
+        const copy: AssessmentsAnalyticsResponse = {
+          ...analyticsData,
+          badges: {
+            ...analyticsData.badges,
+            students: awardTarget.role === 'student'
+              ? analyticsData.badges.students.map(st => st.id === awardTarget.id ? { ...st, badges: [res.badge, ...st.badges] } : st)
+              : analyticsData.badges.students,
+            teachers: awardTarget.role === 'teacher'
+              ? analyticsData.badges.teachers.map(t => t.id === awardTarget.id ? { ...t, badges: [res.badge, ...t.badges] } : t)
+              : analyticsData.badges.teachers,
+            principals: awardTarget.role === 'principal'
+              ? analyticsData.badges.principals.map(p => p.id === awardTarget.id ? { ...p, badges: [res.badge, ...p.badges] } : p)
+              : analyticsData.badges.principals,
+          }
+        };
+        setAnalyticsData(copy);
+      }
+      setAwardModalOpen(false);
+      setAwardTarget(null);
+    } catch (err: any) {
+      notify?.(err?.message || 'Failed to confer badge', 'error');
+    } finally {
+      setAwardSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'attempted') {
       loadAttempted();
+    } else if (activeTab === 'analytics') {
+      loadAnalytics();
     } else {
       loadQuizzes();
     }
-  }, [activeTab, loadQuizzes, loadAttempted]);
+  }, [activeTab, loadQuizzes, loadAttempted, loadAnalytics]);
 
   // Keep refs synced for auto-submit
   useEffect(() => {
@@ -547,6 +763,12 @@ export default function OnlineAssessmentsView({
             onClick={() => setActiveTab('attempted')}
           >
             <Award size={16} /> Attempted
+          </button>
+          <button
+            className={`comm-tab-pill ${activeTab === 'analytics' ? 'active-assessments' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            <BarChart3 size={16} /> Charts &amp; Badges
           </button>
         </div>
 
@@ -1129,6 +1351,665 @@ export default function OnlineAssessmentsView({
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================================
+            TAB 3: INSIGHTS, CHARTS & BADGES RECOGNITION SYSTEM
+           ================================================================= */}
+        {activeTab === 'analytics' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Scope Filter & Refresh Bar */}
+            <div className="comm-filter-surface" style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Filter size={15} /> Telemetry Scope:
+                </span>
+                {[
+                  { key: 'all', label: 'All Scopes' },
+                  { key: 'worldwide', label: 'Worldwide Open' },
+                  { key: 'org_campuses', label: 'All Campuses' },
+                  { key: 'our_campus', label: 'Our Campus Only' },
+                ].map((sc) => (
+                  <button
+                    key={sc.key}
+                    className={`comm-cat-pill ${analyticsScope === sc.key ? 'active' : ''}`}
+                    style={{ padding: '6px 12px', fontSize: 12 }}
+                    onClick={() => setAnalyticsScope(sc.key)}
+                  >
+                    {sc.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  className="comm-btn-join"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+                  onClick={loadAnalytics}
+                  disabled={analyticsLoading}
+                >
+                  <RefreshCw size={14} className={analyticsLoading ? 'comm-spin' : ''} />
+                  {analyticsLoading ? 'Refreshing Telemetry...' : 'Refresh Telemetry'}
+                </button>
+                <button
+                  className="comm-btn-attempt"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, padding: '7px 14px' }}
+                  onClick={() => {
+                    const firstStudent = analyticsData?.badges.students[0];
+                    if (firstStudent) {
+                      openAwardModal({ role: 'student', id: firstStudent.id, name: firstStudent.name });
+                    } else {
+                      openAwardModal({ role: 'student', id: 1, name: 'Top Performer' });
+                    }
+                  }}
+                >
+                  <Medal size={15} /> + Confer Honor Badge
+                </button>
+              </div>
+            </div>
+
+            {/* Top KPI Metrics Ribbon */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+              <div className="comm-card" style={{ padding: '14px 16px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+                <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Active Quizzes</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#7c3aed', marginTop: 4 }}>
+                  {analyticsData?.summary.total_quizzes ?? 0}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Curated assessments</div>
+              </div>
+
+              <div className="comm-card" style={{ padding: '14px 16px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+                <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Total Attempts</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#2563eb', marginTop: 4 }}>
+                  {analyticsData?.summary.total_attempts ?? 0}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Single-attempt locked</div>
+              </div>
+
+              <div className="comm-card" style={{ padding: '14px 16px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+                <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Participating Students</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#059669', marginTop: 4 }}>
+                  {analyticsData?.summary.total_students_participated ?? 0}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Unique candidates</div>
+              </div>
+
+              <div className="comm-card" style={{ padding: '14px 16px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+                <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Countries Active</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#d97706', marginTop: 4 }}>
+                  {analyticsData?.summary.total_countries_participated ?? 0}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Worldwide reach</div>
+              </div>
+
+              <div className="comm-card" style={{ padding: '14px 16px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+                <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Global Avg Score</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#db2777', marginTop: 4 }}>
+                  {analyticsData?.summary.avg_score ?? 0}%
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Competitive cohort</div>
+              </div>
+
+              <div className="comm-card" style={{ padding: '14px 16px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+                <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Precision Accuracy</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#0891b2', marginTop: 4 }}>
+                  {analyticsData?.summary.avg_accuracy ?? 0}%
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Accuracy metric</div>
+              </div>
+            </div>
+
+            {/* Dual Charts: Quiz Attempt Volumes & Country Distribution */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: 16 }}>
+              {/* Chart 1: Which Quiz Attempted How Many Students */}
+              <div className="comm-card" style={{ padding: 20, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <BarChart3 size={18} color="#7c3aed" /> Quiz Attempt Volumes &amp; Participation
+                    </h3>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                      Total students attempted per quiz competition
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 999, background: '#ede9fe', color: '#6d28d9', fontWeight: 700 }}>
+                    {analyticsData?.quiz_attempts_chart.length || 0} Quizzes
+                  </span>
+                </div>
+
+                {analyticsLoading ? (
+                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13 }}>
+                    <RefreshCw size={18} className="comm-spin" style={{ marginRight: 8 }} /> Loading attempt charts...
+                  </div>
+                ) : (analyticsData?.quiz_attempts_chart || []).length === 0 ? (
+                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13 }}>
+                    No quiz data available for this scope.
+                  </div>
+                ) : (
+                  <div>
+                    <ResponsiveContainer width="100%" height={290}>
+                      <BarChart data={analyticsData?.quiz_attempts_chart || []} margin={{ top: 10, right: 10, left: -20, bottom: 45 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis
+                          dataKey="short_title"
+                          tick={{ fontSize: 10.5, fill: '#64748b' }}
+                          interval={0}
+                          angle={-22}
+                          textAnchor="end"
+                          height={55}
+                        />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
+                        <RechartsTooltip content={<CustomQuizTooltip />} />
+                        <Bar dataKey="attempts_count" radius={[5, 5, 0, 0]} name="Students">
+                          {(analyticsData?.quiz_attempts_chart || []).map((entry, index) => {
+                            const fill =
+                              entry.difficulty === 'Olympiad'
+                                ? '#f59e0b'
+                                : entry.difficulty === 'Advanced'
+                                ? '#8b5cf6'
+                                : entry.difficulty === 'Intermediate'
+                                ? '#3b82f6'
+                                : '#10b981';
+                            return <Cell key={`q-cell-${index}`} fill={fill} />;
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+
+                    {/* Chart Legend / Summary */}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap', fontSize: 11.5, color: '#475569', marginTop: 10, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: '#10b981' }} /> Foundation
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: '#3b82f6' }} /> Intermediate
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: '#8b5cf6' }} /> Advanced
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f59e0b' }} /> Olympiad
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Chart 2: Which Countries Students Are From */}
+              <div className="comm-card" style={{ padding: 20, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Globe size={18} color="#0284c7" /> Geographical Distribution of Students
+                    </h3>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                      Student participant counts by country &amp; region
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}>
+                    {analyticsData?.country_distribution_chart.length || 0} Countries
+                  </span>
+                </div>
+
+                {analyticsLoading ? (
+                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13 }}>
+                    <RefreshCw size={18} className="comm-spin" style={{ marginRight: 8 }} /> Loading country distributions...
+                  </div>
+                ) : (analyticsData?.country_distribution_chart || []).length === 0 ? (
+                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13 }}>
+                    No country participation records found yet.
+                  </div>
+                ) : (
+                  <div>
+                    <ResponsiveContainer width="100%" height={290}>
+                      <BarChart data={analyticsData?.country_distribution_chart || []} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis
+                          dataKey="country"
+                          tick={{ fontSize: 11.5, fill: '#64748b' }}
+                        />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
+                        <RechartsTooltip content={<CustomCountryTooltip />} />
+                        <Bar dataKey="student_count" radius={[5, 5, 0, 0]} name="Students">
+                          {(analyticsData?.country_distribution_chart || []).map((_, index) => {
+                            const palette = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+                            return <Cell key={`c-cell-${index}`} fill={palette[index % palette.length]} />;
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+
+                    {/* Country Top Performers Mini-Bar */}
+                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginTop: 10, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                      {(analyticsData?.country_distribution_chart || []).slice(0, 3).map((c, idx) => (
+                        <div key={idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 11, flex: '1 0 auto' }}>
+                          <strong style={{ color: '#1e1633' }}>{c.country}:</strong> {c.student_count} Students
+                          <span style={{ color: '#059669', marginLeft: 6, fontWeight: 700 }}>Avg {c.avg_score}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* =================================================================
+                HONORS & BADGES RECOGNITION SYSTEM
+               ================================================================= */}
+            <div className="comm-card" style={{ padding: 22, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14 }}>
+              {/* Header & Badges Filter Tabs */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, marginBottom: 20 }}>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 900, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Trophy size={20} color="#f59e0b" /> Quiz Honors &amp; Badge Recognition Board
+                  </h3>
+                  <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 4 }}>
+                    Conferring verified merit badges to top students, exceptional teacher architects, and leading campus principals.
+                  </div>
+                </div>
+
+                {/* Filter Pills */}
+                <div style={{ display: 'flex', gap: 6, background: '#f1f5f9', padding: 4, borderRadius: 10 }}>
+                  {[
+                    { key: 'all', label: 'All Honors' },
+                    { key: 'students', label: `Top Students (${analyticsData?.badges.students.length || 0})` },
+                    { key: 'teachers', label: `Top Teachers (${analyticsData?.badges.teachers.length || 0})` },
+                    { key: 'principals', label: `Top Principals (${analyticsData?.badges.principals.length || 0})` },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      style={{
+                        background: badgeCategoryFilter === f.key ? '#7c3aed' : 'transparent',
+                        color: badgeCategoryFilter === f.key ? '#ffffff' : '#475569',
+                        fontWeight: 700,
+                        fontSize: 12,
+                        padding: '6px 12px',
+                        borderRadius: 8,
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onClick={() => setBadgeCategoryFilter(f.key as any)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 1. TOP STUDENTS SECTION */}
+              {(badgeCategoryFilter === 'all' || badgeCategoryFilter === 'students') && (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h4 style={{ fontSize: 14.5, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Star size={16} color="#f59e0b" /> Top Performing Students (Quiz Champions)
+                    </h4>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Ranked by Best Score &amp; Accuracy</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
+                    {(analyticsData?.badges.students || []).map((st, idx) => (
+                      <div
+                        key={st.id || idx}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 12,
+                          padding: 16,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                        }}
+                      >
+                        <div>
+                          {/* Student Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 10,
+                                  background: idx === 0 ? '#fef3c7' : idx === 1 ? '#f1f5f9' : '#ede9fe',
+                                  color: idx === 0 ? '#b45309' : idx === 1 ? '#475569' : '#6d28d9',
+                                  fontWeight: 900,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 14,
+                                }}
+                              >
+                                #{idx + 1}
+                              </div>
+                              <div>
+                                <strong style={{ fontSize: 14, color: '#1e1633' }}>{st.name}</strong>
+                                <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                  {st.handle} • {st.school_name}
+                                </div>
+                              </div>
+                            </div>
+
+                            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                              🌍 {st.country}
+                            </span>
+                          </div>
+
+                          {/* Metrics Pills */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12, textAlign: 'center' }}>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Best Score</div>
+                              <strong style={{ fontSize: 13, color: '#7c3aed' }}>{st.best_score}%</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Avg Acc</div>
+                              <strong style={{ fontSize: 13, color: '#059669' }}>{st.avg_accuracy}%</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Quizzes</div>
+                              <strong style={{ fontSize: 13, color: '#2563eb' }}>{st.quizzes_attempted}</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Speed</div>
+                              <strong style={{ fontSize: 12, color: '#d97706' }}>{st.fastest_time_display}</strong>
+                            </div>
+                          </div>
+
+                          {/* Badges Earned */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                            {st.badges?.map((b) => {
+                              const style = getBadgeTierStyle(b.tier);
+                              return (
+                                <span
+                                  key={b.id}
+                                  title={b.description}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: '3px 8px',
+                                    borderRadius: 999,
+                                    background: style.bg,
+                                    border: `1px solid ${style.border}`,
+                                    color: style.text,
+                                    boxShadow: style.glow,
+                                  }}
+                                >
+                                  <span style={{ color: style.icon }}>{renderBadgeIcon(b.icon)}</span>
+                                  {b.title}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Card Action */}
+                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            className="comm-cat-pill"
+                            style={{ fontSize: 11.5, padding: '4px 10px' }}
+                            onClick={() => openAwardModal({ role: 'student', id: st.id, name: st.name })}
+                          >
+                            <Medal size={13} style={{ marginRight: 4 }} /> Confer Special Honor
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. TOP TEACHERS SECTION */}
+              {(badgeCategoryFilter === 'all' || badgeCategoryFilter === 'teachers') && (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h4 style={{ fontSize: 14.5, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <BookOpen size={16} color="#7c3aed" /> Top Faculty Mentors &amp; Quiz Architects
+                    </h4>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Ranked by Student Cohort Performance</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
+                    {(analyticsData?.badges.teachers || []).map((t, idx) => (
+                      <div
+                        key={t.id || idx}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 12,
+                          padding: 16,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                        }}
+                      >
+                        <div>
+                          {/* Teacher Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 10,
+                                  background: '#faf5ff',
+                                  color: '#7c3aed',
+                                  fontWeight: 900,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 14,
+                                }}
+                              >
+                                #{idx + 1}
+                              </div>
+                              <div>
+                                <strong style={{ fontSize: 14, color: '#1e1633' }}>{t.name}</strong>
+                                <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                  {t.school_name}
+                                </div>
+                              </div>
+                            </div>
+
+                            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 999, background: '#ede9fe', color: '#6d28d9', fontWeight: 700 }}>
+                              {t.subject}
+                            </span>
+                          </div>
+
+                          {/* Metrics Pills */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12, textAlign: 'center' }}>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Quizzes</div>
+                              <strong style={{ fontSize: 13, color: '#7c3aed' }}>{t.quizzes_created}</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Assessed</div>
+                              <strong style={{ fontSize: 13, color: '#2563eb' }}>{t.total_students_assessed}</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Cohort Avg</div>
+                              <strong style={{ fontSize: 13, color: '#059669' }}>{t.avg_student_score}%</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Accuracy</div>
+                              <strong style={{ fontSize: 13, color: '#d97706' }}>{t.avg_student_accuracy}%</strong>
+                            </div>
+                          </div>
+
+                          {/* Badges Earned */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                            {t.badges?.map((b) => {
+                              const style = getBadgeTierStyle(b.tier);
+                              return (
+                                <span
+                                  key={b.id}
+                                  title={b.description}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: '3px 8px',
+                                    borderRadius: 999,
+                                    background: style.bg,
+                                    border: `1px solid ${style.border}`,
+                                    color: style.text,
+                                    boxShadow: style.glow,
+                                  }}
+                                >
+                                  <span style={{ color: style.icon }}>{renderBadgeIcon(b.icon)}</span>
+                                  {b.title}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Card Action */}
+                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            className="comm-cat-pill"
+                            style={{ fontSize: 11.5, padding: '4px 10px' }}
+                            onClick={() => openAwardModal({ role: 'teacher', id: t.id, name: t.name })}
+                          >
+                            <Medal size={13} style={{ marginRight: 4 }} /> Confer Faculty Honor
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. TOP PRINCIPALS SECTION */}
+              {(badgeCategoryFilter === 'all' || badgeCategoryFilter === 'principals') && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h4 style={{ fontSize: 14.5, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Shield size={16} color="#0284c7" /> Top Campus Principals &amp; Institutional Leaders
+                    </h4>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Ranked by Overall Campus Quiz Benchmark</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
+                    {(analyticsData?.badges.principals || []).map((p, idx) => (
+                      <div
+                        key={p.id || idx}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 12,
+                          padding: 16,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                        }}
+                      >
+                        <div>
+                          {/* Principal Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 10,
+                                  background: '#f0f9ff',
+                                  color: '#0284c7',
+                                  fontWeight: 900,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 14,
+                                }}
+                              >
+                                #{idx + 1}
+                              </div>
+                              <div>
+                                <strong style={{ fontSize: 14, color: '#1e1633' }}>{p.name}</strong>
+                                <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                  Principal • {p.campus_name}
+                                </div>
+                              </div>
+                            </div>
+
+                            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                              {p.city_country}
+                            </span>
+                          </div>
+
+                          {/* Metrics Pills */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12, textAlign: 'center' }}>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Participants</div>
+                              <strong style={{ fontSize: 13, color: '#7c3aed' }}>{p.total_campus_participants}</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Campus Avg</div>
+                              <strong style={{ fontSize: 13, color: '#059669' }}>{p.campus_avg_score}%</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Top Score</div>
+                              <strong style={{ fontSize: 13, color: '#d97706' }}>{p.top_student_score}%</strong>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '6px 4px', borderRadius: 8 }}>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>Accuracy</div>
+                              <strong style={{ fontSize: 13, color: '#2563eb' }}>{p.campus_avg_accuracy}%</strong>
+                            </div>
+                          </div>
+
+                          {/* Badges Earned */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                            {p.badges?.map((b) => {
+                              const style = getBadgeTierStyle(b.tier);
+                              return (
+                                <span
+                                  key={b.id}
+                                  title={b.description}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: '3px 8px',
+                                    borderRadius: 999,
+                                    background: style.bg,
+                                    border: `1px solid ${style.border}`,
+                                    color: style.text,
+                                    boxShadow: style.glow,
+                                  }}
+                                >
+                                  <span style={{ color: style.icon }}>{renderBadgeIcon(b.icon)}</span>
+                                  {b.title}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Card Action */}
+                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            className="comm-cat-pill"
+                            style={{ fontSize: 11.5, padding: '4px 10px' }}
+                            onClick={() => openAwardModal({ role: 'principal', id: p.id, name: p.name })}
+                          >
+                            <Medal size={13} style={{ marginRight: 4 }} /> Confer Leadership Honor
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1841,6 +2722,149 @@ export default function OnlineAssessmentsView({
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================================
+            CONFER / AWARD SPECIAL HONOR BADGE MODAL
+           ================================================================= */}
+        {awardModalOpen && awardTarget && (
+          <div className="comm-modal-backdrop" onClick={() => setAwardModalOpen(false)}>
+            <div className="comm-modal-dialog" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
+              <div className="comm-modal-header">
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#1e1633', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Medal size={20} color="#f59e0b" /> Confer Honor Badge
+                  </h2>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                    Confer a performance-backed honor to <strong>{awardTarget.name}</strong> ({awardTarget.role.toUpperCase()}).
+                  </div>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }} onClick={() => setAwardModalOpen(false)}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAssignBadgeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
+                {/* Quick Presets */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
+                    Quick Presets:
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {[
+                      { title: 'Grandmaster Scholar', tier: 'gold' as const },
+                      { title: 'Olympiad Distinction', tier: 'silver' as const },
+                      { title: 'Rapid Precision Ace', tier: 'emerald' as const },
+                      { title: 'Master Quiz Architect', tier: 'gold' as const },
+                      { title: 'Distinction Faculty Mentor', tier: 'purple' as const },
+                      { title: 'Campus of Academic Distinction', tier: 'gold' as const },
+                      { title: 'Institutional Leadership Cup', tier: 'blue' as const },
+                    ].map((p, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        className="comm-cat-pill"
+                        style={{
+                          fontSize: 11,
+                          padding: '4px 9px',
+                          background: awardBadgeTitle === p.title ? '#ede9fe' : '#f8fafc',
+                          color: awardBadgeTitle === p.title ? '#6d28d9' : '#475569',
+                          borderColor: awardBadgeTitle === p.title ? '#7c3aed' : '#e2e8f0',
+                        }}
+                        onClick={() => {
+                          setAwardBadgeTitle(p.title);
+                          setAwardBadgeTier(p.tier);
+                        }}
+                      >
+                        {p.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Badge Title Input */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>
+                    Badge Title:
+                  </label>
+                  <input
+                    type="text"
+                    className="comm-input"
+                    value={awardBadgeTitle}
+                    onChange={(e) => setAwardBadgeTitle(e.target.value)}
+                    required
+                    placeholder="e.g., Grandmaster Scholar"
+                  />
+                </div>
+
+                {/* Tier Selector */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
+                    Badge Tier &amp; Color Scheme:
+                  </label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {[
+                      { key: 'gold', label: 'Gold', color: '#f59e0b' },
+                      { key: 'silver', label: 'Silver', color: '#94a3b8' },
+                      { key: 'purple', label: 'Purple', color: '#8b5cf6' },
+                      { key: 'emerald', label: 'Emerald', color: '#10b981' },
+                      { key: 'blue', label: 'Blue', color: '#3b82f6' },
+                      { key: 'bronze', label: 'Bronze', color: '#fb923c' },
+                    ].map((t) => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        style={{
+                          background: awardBadgeTier === t.key ? `${t.color}20` : '#f8fafc',
+                          borderColor: awardBadgeTier === t.key ? t.color : '#e2e8f0',
+                          borderWidth: 1,
+                          borderStyle: 'solid',
+                          color: t.color,
+                          fontWeight: 700,
+                          fontSize: 11.5,
+                          padding: '5px 12px',
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                        onClick={() => setAwardBadgeTier(t.key as any)}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color }} />
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Description / Citation */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>
+                    Citation / Award Reason:
+                  </label>
+                  <textarea
+                    className="comm-input"
+                    rows={3}
+                    value={awardBadgeDesc}
+                    onChange={(e) => setAwardBadgeDesc(e.target.value)}
+                    placeholder="Enter citation description for this award..."
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                {/* Submit Actions */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                  <button type="button" className="comm-cat-pill" onClick={() => setAwardModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="comm-btn-attempt" disabled={awardSubmitting}>
+                    {awardSubmitting ? 'Conferring Badge...' : 'Confirm & Confer Badge'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
