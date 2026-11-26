@@ -45,18 +45,62 @@ def badge_catalogue_view(request):
     for b in qs:
         active_crits = [c for c in b.criteria_versions.all() if c.active]
         active_crit = sorted(active_crits, key=lambda c: c.version, reverse=True)[0] if active_crits else None
+        rules_dict = active_crit.rules if active_crit else {}
+
+        # Primary grouping into the 4 official functional categories
+        if b.category == 'principal' or b.slug in ['manual_principal_honour', 'manual_leadership_distinction']:
+            primary_cat = 'principal'
+            target_role = 'principal'
+        elif b.category == 'teacher' or b.slug == 'manual_inspirational_teacher':
+            primary_cat = 'teacher'
+            target_role = 'teacher'
+        elif b.category == 'student' or b.slug == 'manual_teachers_commendation':
+            primary_cat = 'student'
+            target_role = 'student'
+        elif b.category == 'quiz':
+            primary_cat = 'quiz'
+            target_role = 'student'
+        else:
+            primary_cat = b.category
+            target_role = 'all'
+
+        # Measurement period calculation from rules and criteria summary
+        if 'terms_count' in rules_dict:
+            period = f"{rules_dict['terms_count']} Academic Terms"
+        elif 'month' in b.criteria_summary.lower() or 'monthly' in b.criteria_summary.lower():
+            period = "1 Calendar Month"
+        elif 'two terms' in b.criteria_summary.lower():
+            period = "2 Consecutive Terms"
+        elif 'term' in b.criteria_summary.lower():
+            period = "1 Academic Term"
+        elif b.category == 'quiz':
+            period = "Official Olympiads & Competitions"
+        else:
+            period = "Cumulative / Milestone"
+
+        # Authorized awarder roles
+        if b.is_manual:
+            auth_roles = rules_dict.get('allowed_grantor_roles', ['organisation_admin', 'school_admin'])
+        else:
+            auth_roles = ['system']
+
         catalogue.append({
             'id': b.id,
             'slug': b.slug,
             'name': b.name,
             'category': b.category,
+            'primary_category': primary_cat,
+            'target_role': target_role,
             'tier': b.tier,
             'description': b.description,
             'criteria_summary': b.criteria_summary,
             'icon_asset_name': b.icon_asset_name,
             'is_manual': b.is_manual,
+            'awarding_method': 'manual' if b.is_manual else 'system',
+            'authorized_roles': auth_roles,
+            'measurement_period': period,
             'criteria_version': active_crit.version if active_crit else 1,
-            'rules': active_crit.rules if active_crit else {},
+            'rules': rules_dict,
         })
 
     return Response({

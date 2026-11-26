@@ -669,3 +669,303 @@ body.dark-mode .ach-evidence-item,
 [data-theme='dark'] .ach-evidence-item {
   color: #cbd5e1;
 }
+
+/* Category Descriptions Banner / Grid */
+.ach-category-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+@media (min-width: 640px) {
+  .ach-category-overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1200px) {
+  .ach-category-overview-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.ach-cat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.ach-cat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  border-color: #0284c7;
+}
+.ach-cat-card.active {
+  border-color: #0284c7;
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.05), rgba(56, 189, 248, 0.02));
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.12);
+}
+.ach-cat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.ach-cat-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ach-cat-count {
+  background: #f1f5f9;
+  color: #0284c7;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.ach-cat-card.active .ach-cat-count {
+  background: #0284c7;
+  color: #ffffff;
+}
+.ach-cat-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.45;
+  margin: 0;
+  flex: 1;
+}
+
+/* Compact Awarding System & Governance Section */
+.ach-awarding-info-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+.ach-awarding-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ach-awarding-info-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ach-hierarchy-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+}
+.ach-hierarchy-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.ach-hierarchy-node.admin { background: #ede9fe; color: #6d28d9; }
+.ach-hierarchy-node.principal { background: #fef3c7; color: #b45309; }
+.ach-hierarchy-node.teacher { background: #dbeafe; color: #1d4ed8; }
+.ach-hierarchy-node.student { background: #dcfce7; color: #15803d; }
+.ach-hierarchy-arrow {
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.ach-awarding-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 768px) {
+  .ach-awarding-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.ach-award-pillar {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border-left: 4px solid #0284c7;
+}
+[dir="rtl"] .ach-award-pillar {
+  border-left: none;
+  border-right: 4px solid #0284c7;
+}
+.ach-award-pillar h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: #0f172a;
+}
+.ach-award-pillar p {
+  font-size: 0.775rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Status Badges */
+.ach-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.725rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ach-status-badge.earned {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid rgba(21, 128, 61, 0.2);
+}
+.ach-status-badge.in-progress {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid rgba(3, 105, 161, 0.2);
+}
+.ach-status-badge.locked {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+.ach-status-badge.not-eligible {
+  background: #f8fafc;
+  color: #94a3b8;
+  border: 1px dashed #cbd5e1;
+}
+
+/* Sort Select */
+.ach-sort-select {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+  background: #ffffff;
+  cursor: pointer;
+  outline: none;
+}
+.ach-sort-select:focus {
+  border-color: #0284c7;
+}
+
+/* Modal Enhancements */
+.ach-modal-details-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+@media (min-width: 600px) {
+  .ach-modal-details-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.ach-detail-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.ach-detail-box .label {
+  font-size: 0.725rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ach-detail-box .val {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* Dark Mode Additions */
+body.dark-mode .ach-cat-card,
+[data-theme='dark'] .ach-cat-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+body.dark-mode .ach-cat-title,
+[data-theme='dark'] .ach-cat-title {
+  color: #f8fafc;
+}
+body.dark-mode .ach-cat-desc,
+[data-theme='dark'] .ach-cat-desc {
+  color: #94a3b8;
+}
+body.dark-mode .ach-awarding-info-card,
+[data-theme='dark'] .ach-awarding-info-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+body.dark-mode .ach-awarding-info-title,
+[data-theme='dark'] .ach-awarding-info-title {
+  color: #f8fafc;
+}
+body.dark-mode .ach-hierarchy-flow,
+[data-theme='dark'] .ach-hierarchy-flow {
+  background: #0f172a;
+  border-color: #334155;
+}
+body.dark-mode .ach-award-pillar,
+[data-theme='dark'] .ach-award-pillar {
+  background: #0f172a;
+}
+body.dark-mode .ach-award-pillar h4,
+[data-theme='dark'] .ach-award-pillar h4 {
+  color: #f8fafc;
+}
+body.dark-mode .ach-award-pillar p,
+[data-theme='dark'] .ach-award-pillar p {
+  color: #94a3b8;
+}
+body.dark-mode .ach-sort-select,
+[data-theme='dark'] .ach-sort-select {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+body.dark-mode .ach-detail-box,
+[data-theme='dark'] .ach-detail-box {
+  background: #0f172a;
+  border-color: #334155;
+}
+body.dark-mode .ach-detail-box .val,
+[data-theme='dark'] .ach-detail-box .val {
+  color: #f8fafc;
+}
