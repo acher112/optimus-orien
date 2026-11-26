@@ -91,6 +91,54 @@ export default function MyPerformance() {
           <div className="report-note"><ShieldCheck size={19} /><span>Only averages are shown. No other student is named. {data.method?.basis} {data.method?.missing}</span></div>
         </div>
       )}
+
+      {data && Array.isArray(data.quiz_performance) && (
+        <section className="panel rp-panel" style={{ marginTop: 20 }}>
+          <div className="panel-head">
+            <div>
+              <h3>Online Quiz Performance Record</h3>
+              <p>
+                {data.quiz_summary?.total_attempted || 0} Quiz(zes) Attempted
+                {data.quiz_summary?.average_score !== null && data.quiz_summary?.average_score !== undefined
+                  ? ` · Average Score: ${data.quiz_summary.average_score}%`
+                  : ''}
+              </p>
+            </div>
+          </div>
+          {data.quiz_performance.length === 0 ? (
+            <div className="rp-empty">No online quizzes attempted yet.</div>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>QUIZ</th>
+                    <th>SUBJECT</th>
+                    <th>DIFFICULTY</th>
+                    <th>SCORE</th>
+                    <th>ACCURACY</th>
+                    <th>TIME</th>
+                    <th>DATE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.quiz_performance.map((qp: R) => (
+                    <tr key={qp.id}>
+                      <td style={{ fontWeight: 700 }}>{qp.title}</td>
+                      <td>{qp.subject}</td>
+                      <td>{qp.difficulty}</td>
+                      <td style={{ color: '#7c3aed', fontWeight: 800 }}>{qp.score_percentage}%</td>
+                      <td style={{ color: '#059669', fontWeight: 700 }}>{qp.accuracy_percentage}%</td>
+                      <td>{qp.time_display}</td>
+                      <td>{qp.submitted_date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </>
   );
 }

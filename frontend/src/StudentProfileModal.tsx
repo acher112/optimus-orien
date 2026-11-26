@@ -76,6 +76,27 @@ interface StudentProfileData {
     current_enrollment: { school_name: string; details: string };
     previous_institution?: { school_name: string; details: string };
   };
+  quiz_summary?: {
+    total_attempted: number;
+    average_score: number | null;
+    average_accuracy: number | null;
+    best_score: number | null;
+  };
+  quiz_performance?: Array<{
+    id: number;
+    competition_id: number;
+    title: string;
+    subject: string;
+    difficulty: string;
+    scope_label: string;
+    score_percentage: number;
+    raw_score: number;
+    total_marks: number;
+    accuracy_percentage: number;
+    time_display: string;
+    country: string;
+    submitted_date: string;
+  }>;
 }
 
 interface Props {
@@ -377,6 +398,8 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                     trajectory: profile.performance_trajectory,
                     historyItems: profile.grade_history,
                     transferRecord: profile.transfer_record,
+                    quizSummary: profile.quiz_summary,
+                    quizPerformance: profile.quiz_performance,
                   }}
                 />
               )}
@@ -643,6 +666,45 @@ export function StudentProfileModal({ studentId, onClose, notify }: Props) {
                       </div>
                     </div>
                   )}
+
+                  {/* Online Quiz & Assessment Performance History */}
+                  <div>
+                    <h3 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 800, color: '#334155', textTransform: 'uppercase' }}>
+                      Online Quiz &amp; Competition Performance ({profile.quiz_summary?.total_attempted || 0})
+                    </h3>
+                    {!profile.quiz_performance || profile.quiz_performance.length === 0 ? (
+                      <div style={{ background: '#f8fafc', borderRadius: 12, padding: 18, textAlign: 'center', color: '#64748b', border: '1px solid #e2e8f0', fontSize: 13 }}>
+                        No online quizzes attempted by this student yet.
+                      </div>
+                    ) : (
+                      <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                              <th style={{ padding: '10px 14px' }}>Quiz Title</th>
+                              <th style={{ padding: '10px 14px' }}>Subject &amp; Difficulty</th>
+                              <th style={{ padding: '10px 14px' }}>Score</th>
+                              <th style={{ padding: '10px 14px' }}>Accuracy</th>
+                              <th style={{ padding: '10px 14px' }}>Speed</th>
+                              <th style={{ padding: '10px 14px' }}>Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {profile.quiz_performance.map((qp) => (
+                              <tr key={qp.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0f172a' }}>{qp.title}</td>
+                                <td style={{ padding: '10px 14px', color: '#475569' }}>{qp.subject} • {qp.difficulty}</td>
+                                <td style={{ padding: '10px 14px', fontWeight: 800, color: '#7c3aed' }}>{qp.score_percentage}%</td>
+                                <td style={{ padding: '10px 14px', fontWeight: 700, color: '#059669' }}>{qp.accuracy_percentage}%</td>
+                                <td style={{ padding: '10px 14px', color: '#475569' }}>{qp.time_display}</td>
+                                <td style={{ padding: '10px 14px', color: '#64748b' }}>{qp.submitted_date}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

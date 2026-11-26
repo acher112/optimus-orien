@@ -102,6 +102,8 @@ export const StudentProfile: React.FC<Props> = ({ user, notify }) => {
     trajectory: profile.performance_trajectory,
     historyItems: profile.grade_history,
     transferRecord: profile.transfer_record,
+    quizSummary: profile.quiz_summary,
+    quizPerformance: profile.quiz_performance,
   };
 
   return (

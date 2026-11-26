@@ -24,6 +24,7 @@ from core.services.student_credentials import (
 )
 from core.services.aqi_scope import aqi_scope, AQIScope
 from core.services.aqi_engine import get_student_aqi_profile
+from core.services.quiz_generator import get_student_quiz_performance
 
 
 def _resolve_student_for_user(request, student_id=None):
@@ -249,6 +250,8 @@ def student_dashboard(request):
     # Unread notifications
     unread_notifs = Notification.objects.filter(user=request.user, read=False).count()
 
+    quiz_perf = get_student_quiz_performance(student=student, user=student.user)
+
     payload = {
         'student': {
             'id': student.id,
@@ -282,6 +285,8 @@ def student_dashboard(request):
             'status_color': profile_data.get('status_color') if profile_data else '#64748b',
             'subjects_count': len(profile_data.get('subjects', [])) if profile_data else 0,
         },
+        'quiz_summary': quiz_perf['summary'],
+        'quiz_performance': quiz_perf['attempts'][:5],
         'homework': homework_items,
         'unread_notifications_count': unread_notifs,
         'discussion_enabled': student.school.discussion_enabled
@@ -493,6 +498,10 @@ def student_results(request):
             s['risk_color'] = '#94a3b8'
             s['guidance'] = 'No assessment marks published yet.'
 
+    quiz_perf = get_student_quiz_performance(student=student, user=student.user)
+    profile['quiz_summary'] = quiz_perf['summary']
+    profile['quiz_performance'] = quiz_perf['attempts']
+
     return Response(profile)
 
 
@@ -638,6 +647,8 @@ def student_profile(request):
             }
         }
 
+    quiz_perf = get_student_quiz_performance(student=student, user=student.user)
+
     return Response({
         'id': student.id,
         'full_name': student.full_name,
@@ -675,6 +686,8 @@ def student_profile(request):
         },
         'academic_summary': academic_summary,
         'recent_grades': recent_grades,
+        'quiz_summary': quiz_perf['summary'],
+        'quiz_performance': quiz_perf['attempts'],
         'performance_trajectory': perf_trajectory,
         'grade_history': grade_history,
         'transfer_record': transfer_record,

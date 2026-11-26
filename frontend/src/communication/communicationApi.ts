@@ -124,25 +124,41 @@ export interface QuizCompetitionItem {
   id: number;
   title: string;
   sponsor_name: string;
+  created_by_name?: string;
+  created_by_role?: string;
+  created_by_campus?: string;
   subject: string;
+  topic?: string;
   grade_level: string;
   curriculum: string;
   duration_minutes: number;
   max_participants: number;
   registered_count: number;
+  attempts_count?: number;
   eligible_countries: string;
   question_format_desc: string;
   total_marks: number;
   is_official: boolean;
   difficulty: string;
   scope: string;
+  scope_label?: string;
+  target_school_id?: number | null;
+  target_school_name?: string | null;
   invite_code: string;
+  generation_source?: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  created_at?: string | null;
+  window_status?: 'live' | 'scheduled' | 'ended';
   questions_count: number;
   user_attempt?: {
     attempted: boolean;
+    attempt_id?: number;
     score?: number;
     accuracy?: number;
     time_spent?: number;
+    country?: string;
+    region?: string;
     submitted_at?: string;
   };
 }
@@ -161,11 +177,22 @@ export interface QuizAttemptResult {
   message: string;
   attempt_id: number;
   competition_id: number;
+  title?: string;
+  subject?: string;
+  difficulty?: string;
+  scope?: string;
+  scope_label?: string;
   score_percentage: number;
   raw_score: number;
   total_marks: number;
   accuracy_percentage: number;
   time_spent_seconds: number;
+  speed_seconds_per_question?: number;
+  country?: string;
+  region?: string;
+  rank?: number;
+  total_participants?: number;
+  saved_to_profile?: boolean;
   is_official: boolean;
   graded_breakdown: Array<{
     question_id: number;
@@ -179,6 +206,18 @@ export interface QuizAttemptResult {
     max_marks: number;
     explanation: string;
   }>;
+}
+
+export interface CountryPerformanceStat {
+  rank: number;
+  country: string;
+  participants: number;
+  avg_score: number;
+  avg_accuracy: number;
+  best_score: number;
+  avg_time_seconds: number;
+  avg_time_display: string;
+  top_performer: string;
 }
 
 export const communicationApi = {
@@ -241,7 +280,13 @@ export const communicationApi = {
 
   // 3. Online Assessments & Quiz Competitions
   getCompetitions: () =>
-    request<{ official_competitions: QuizCompetitionItem[]; student_challenges: QuizCompetitionItem[] }>(
+    request<{
+      available_quizzes: QuizCompetitionItem[];
+      official_competitions: QuizCompetitionItem[];
+      student_challenges: QuizCompetitionItem[];
+      participant_country?: string;
+      participant_region?: string;
+    }>(
       '/api/v1/communication/assessments/competitions/'
     ),
   getCompetitionDetails: (id: number) =>
@@ -249,29 +294,80 @@ export const communicationApi = {
       id: number;
       title: string;
       subject: string;
+      topic?: string;
+      difficulty?: string;
+      scope?: string;
+      scope_label?: string;
+      created_by_name?: string;
+      created_by_role?: string;
+      created_by_campus?: string;
+      start_time?: string | null;
+      end_time?: string | null;
+      window_status?: string;
       duration_minutes: number;
       total_marks: number;
       is_official: boolean;
       has_attempted: boolean;
+      participant_country?: string;
+      participant_region?: string;
       existing_attempt?: any;
       questions: QuizQuestionItem[];
     }>(`/api/v1/communication/assessments/competitions/${id}/`),
-  submitAttempt: (id: number, answers: Record<string, any>, timeSpentSeconds: number) =>
+  submitAttempt: (
+    id: number,
+    answers: Record<string, any>,
+    timeSpentSeconds: number,
+    location?: { country?: string; region?: string }
+  ) =>
     request<QuizAttemptResult>(`/api/v1/communication/assessments/competitions/${id}/attempt/`, {
       method: 'POST',
-      body: JSON.stringify({ answers, time_spent_seconds: timeSpentSeconds })
+      body: JSON.stringify({
+        answers,
+        time_spent_seconds: timeSpentSeconds,
+        ...(location || {})
+      })
     }),
+  generateQuizQuestions: (data: {
+    subject: string;
+    topic?: string;
+    difficulty?: string;
+    grade_level?: string;
+    num_questions?: number;
+  }) =>
+    request<{ source: string; difficulty: string; subject: string; topic: string; questions: any[] }>(
+      '/api/v1/communication/assessments/generate-questions/',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
   createQuiz: (data: any) =>
-    request<{ message: string; competition_id: number; invite_code: string; title: string }>(
+    request<{
+      message: string;
+      competition_id: number;
+      invite_code: string;
+      title: string;
+      questions_count?: number;
+      scope_label?: string;
+    }>(
       '/api/v1/communication/assessments/create-quiz/',
       { method: 'POST', body: JSON.stringify(data) }
     ),
   joinQuizByCode: (code: string) =>
     request<any>(`/api/v1/communication/assessments/join/${code}/`),
-  getQuizLeaderboard: (category: 'official' | 'student', scope = 'global') =>
-    request<{ category: string; results: any[] }>(
-      `/api/v1/communication/assessments/leaderboard/?category=${category}&scope=${scope}`
-    ),
+  getQuizLeaderboard: (params: { quiz_id?: string; scope?: string; country?: string; mine_only?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (params.quiz_id) q.set('quiz_id', params.quiz_id);
+    if (params.scope) q.set('scope', params.scope);
+    if (params.country) q.set('country', params.country);
+    if (params.mine_only) q.set('mine_only', 'true');
+    return request<{
+      results: any[];
+      country_analytics: CountryPerformanceStat[];
+      available_countries: string[];
+      quiz_options: Array<{ id: number; title: string; subject: string; difficulty: string; scope_label: string; attempts_count: number }>;
+      my_summary: { total_attempted: number; average_score: number | null; average_accuracy: number | null; best_score: number | null };
+    }>(
+      `/api/v1/communication/assessments/leaderboard/?${q.toString()}`
+    );
+  },
   getPeerScores: (id: number) =>
     request<{ challenge_id: number; title: string; author: string; standings: any[] }>(
       `/api/v1/communication/assessments/peer-scores/${id}/`

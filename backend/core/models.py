@@ -3658,12 +3658,14 @@ class NetworkAuditEvent(models.Model):
 
 class QuizCompetition(models.Model):
     """
-    Official Worldwide Competitions and Student Practice Challenges.
+    Online Assessments & Quiz Competitions (Worldwide, Organisation Campuses, or Campus-Only).
     """
     title = models.CharField(max_length=200, db_index=True)
     sponsor_school = models.ForeignKey(School, null=True, blank=True, on_delete=models.SET_NULL, related_name='sponsored_competitions')
+    target_organisation = models.ForeignKey(Organisation, null=True, blank=True, on_delete=models.SET_NULL, related_name='scoped_quizzes')
     sponsor_name = models.CharField(max_length=150, blank=True, default='')
-    subject = models.CharField(max_length=100, db_index=True)
+    subject = models.CharField(max_length=120, db_index=True)
+    topic = models.CharField(max_length=250, blank=True, default='')
     grade_level = models.CharField(max_length=50, default='Grade 8')
     curriculum = models.CharField(max_length=100, default='Cambridge IGCSE')
     duration_minutes = models.PositiveIntegerField(default=15)
@@ -3674,8 +3676,11 @@ class QuizCompetition(models.Model):
     total_marks = models.PositiveIntegerField(default=40)
     is_official = models.BooleanField(default=True, db_index=True)
     difficulty = models.CharField(max_length=50, default='Intermediate')  # Foundation, Intermediate, Advanced, Olympiad
-    scope = models.CharField(max_length=50, default='public')  # public, school, invite_only
+    scope = models.CharField(max_length=50, default='worldwide')  # our_campus, org_campuses, worldwide (legacy: public, school)
     invite_code = models.CharField(max_length=30, blank=True, default='', db_index=True)
+    generation_source = models.CharField(max_length=50, default='dummy_ai')  # dummy_ai, groq, openai
+    start_time = models.DateTimeField(null=True, blank=True, db_index=True)
+    end_time = models.DateTimeField(null=True, blank=True, db_index=True)
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_quizzes')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
@@ -3727,11 +3732,13 @@ class QuizQuestion(models.Model):
 class QuizAttempt(models.Model):
     """
     Candidate attempts with automatic grading, score %, accuracy %, completion time,
-    single-attempt enforcement for official competitions, and step-by-step review.
+    single-attempt enforcement across all quizzes, participant region/country, and step-by-step review.
     """
     competition = models.ForeignKey(QuizCompetition, on_delete=models.CASCADE, related_name='attempts')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_attempts')
     student = models.ForeignKey(Student, null=True, blank=True, on_delete=models.SET_NULL, related_name='quiz_attempts')
+    country = models.CharField(max_length=100, blank=True, default='Pakistan', db_index=True)
+    region = models.CharField(max_length=120, blank=True, default='')
     score_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     raw_score = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     total_marks = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)

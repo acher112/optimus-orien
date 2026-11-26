@@ -421,6 +421,7 @@ urlpatterns = [
     path('communication/assessments/competitions/', communication_views.AssessmentsCompetitionsListView.as_view()),
     path('communication/assessments/competitions/<int:pk>/', communication_views.AssessmentsCompetitionDetailView.as_view()),
     path('communication/assessments/competitions/<int:pk>/attempt/', communication_views.AssessmentsAttemptSubmitView.as_view()),
+    path('communication/assessments/generate-questions/', communication_views.AssessmentsGenerateQuestionsView.as_view()),
     path('communication/assessments/create-quiz/', communication_views.AssessmentsCreateQuizView.as_view()),
     path('communication/assessments/join/<str:code>/', communication_views.AssessmentsJoinByCodeView.as_view()),
     path('communication/assessments/leaderboard/', communication_views.AssessmentsLeaderboardView.as_view()),

@@ -6,9 +6,11 @@ Fully connected to the live database (ZERO hardcoded / dummy mock data):
 3. Online Assessments & Quiz Competitions Engine (Real Competitions, Questions, Automated Grading, DB Attempts & Leaderboards)
 """
 import random
+from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from django.db.models import Avg, Count, Q, Case, When, IntegerField
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -26,6 +28,15 @@ from core.models import (
     SchoolNetworkSetting, NetworkProfile, ConnectionRequest, Connection,
     QuizCompetition, QuizQuestion, QuizAttempt, Notification
 )
+from core.services.quiz_generator import (
+    generate_quiz_questions,
+    ensure_competition_has_questions,
+    infer_country_name,
+    resolve_participant_location,
+    normalize_quiz_scope,
+    format_scope_label,
+    get_student_quiz_performance,
+)
 
 
 def round_dec(val, places=1):
@@ -39,19 +50,7 @@ def round_dec(val, places=1):
 
 
 def infer_country(city_name: str, listing_country = None) -> str:
-    if listing_country:
-        if isinstance(listing_country, str) and listing_country.strip():
-            return listing_country.strip()
-        elif isinstance(listing_country, list) and listing_country:
-            return str(listing_country[0])
-    c = (city_name or '').lower()
-    if 'london' in c or 'manchester' in c or 'birmingham' in c or 'uk' in c:
-        return 'United Kingdom'
-    if 'dubai' in c or 'abu dhabi' in c or 'sharjah' in c or 'uae' in c:
-        return 'UAE'
-    if 'kuala lumpur' in c or 'penang' in c or 'malaysia' in c:
-        return 'Malaysia'
-    return 'Pakistan'
+    return infer_country_name(city_name=city_name, listing_country=listing_country)
 
 
 def infer_curriculum(city_name: str, boards = None) -> str:
@@ -799,16 +798,21 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
             ).aggregate(a=Avg('overall_percentage'))['a']
             avg_val = round_dec(avg_res) if avg_res is not None else 0.0
 
-            # Real attempts from QuizAttempt
-            attempts = QuizAttempt.objects.filter(Q(student=st) | (Q(user=st.user) if st.user else Q(id=0))).select_related('competition')
+            # Real attempts from QuizAttempt (Student Profile Performance Record)
+            quiz_perf = get_student_quiz_performance(student=st)
             verified_records = []
-            for att in attempts:
+            for att in quiz_perf['attempts']:
                 verified_records.append({
-                    'competition': att.competition.title,
-                    'score': float(att.score_percentage),
-                    'time': f"{att.time_spent_seconds // 60}m {att.time_spent_seconds % 60}s",
-                    'date': att.submitted_at.strftime('%Y-%m-%d'),
-                    'status': 'Verified Official' if att.is_official else 'Peer Practice'
+                    'competition': att['title'],
+                    'subject': att['subject'],
+                    'difficulty': att['difficulty'],
+                    'scope': att['scope_label'],
+                    'score': att['score_percentage'],
+                    'accuracy': att['accuracy_percentage'],
+                    'time': att['time_display'],
+                    'country': att['country'],
+                    'date': att['submitted_date'],
+                    'status': 'Verified Official' if att['is_official'] else 'Quiz Attempt Recorded'
                 })
 
             student_badges = [
@@ -819,14 +823,14 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
             elif avg_val >= 80.0:
                 student_badges.append({'title': 'Merit Honor Learner', 'category': 'Academic', 'date': '2026', 'icon': 'award'})
             if len(verified_records) > 0:
-                student_badges.append({'title': 'Olympiad Participant', 'category': 'Competition', 'date': '2026', 'icon': 'award'})
+                student_badges.append({'title': 'Quiz & Olympiad Participant', 'category': 'Competition', 'date': '2026', 'icon': 'award'})
 
             return Response({
                 'id': st.id,
                 'user_id': st.user_id,
                 'name': f"{st.first_name} {st.last_name}".strip() or f"Student #{st.id}",
                 'handle': f"@{st.user.username}" if st.user else (f"@{st.first_name.lower()}.{st.id}" if st.first_name else f"@learner.{st.id}"),
-                'bio': f"Verified learner enrolled at {school_name}. Active participant in academic evaluations and competitive Olympiads.",
+                'bio': f"Verified learner enrolled at {school_name}. Active participant in academic evaluations and competitive quizzes.",
                 'school': school_name,
                 'city': f"{city}, {country}",
                 'curriculum': curriculum,
@@ -839,6 +843,7 @@ class MemberProfileDetailView(CommunicationBaseAPIView):
                     'competitions_entered': len(verified_records),
                     'badges_earned': len(student_badges)
                 },
+                'quiz_summary': quiz_perf['summary'],
                 'badges': student_badges,
                 'verified_records': verified_records
             })
@@ -1113,77 +1118,216 @@ class CommunityConnectionsView(CommunicationBaseAPIView):
 # 3. ONLINE ASSESSMENTS & QUIZ COMPETITIONS VIEWS (100% Real DB Queries)
 # =============================================================================
 
+def _can_user_access_quiz(user, comp):
+    norm_scope = normalize_quiz_scope(comp.scope)
+    if norm_scope == 'worldwide':
+        return True
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser or getattr(user, 'role', '') == 'platform_admin':
+        return True
+    if comp.created_by_id == user.id:
+        return True
+
+    user_org_id = user.organisation_id or (user.school.organisation_id if user.school else None)
+    comp_org_id = comp.target_organisation_id or (comp.sponsor_school.organisation_id if comp.sponsor_school else None)
+
+    if norm_scope == 'org_campuses':
+        return bool(comp_org_id and user_org_id and comp_org_id == user_org_id)
+
+    # our_campus
+    if user.role == 'organisation_admin' and comp_org_id and user_org_id and comp_org_id == user_org_id:
+        return True
+    if comp.sponsor_school_id and user.school_id and comp.sponsor_school_id == user.school_id:
+        return True
+    if user.role == 'parent' and comp.sponsor_school_id:
+        return user.wards.filter(school_id=comp.sponsor_school_id).exists()
+    return False
+
+
+def _compute_window_status(comp, now=None):
+    now = now or timezone.now()
+    if comp.start_time and now < comp.start_time:
+        return 'scheduled'
+    if comp.end_time and now > comp.end_time:
+        return 'ended'
+    return 'live'
+
+
+def _creator_meta(comp):
+    creator = comp.created_by
+    if creator:
+        creator_name = creator.get_full_name() or creator.username
+        creator_role = (creator.role or 'member').replace('_', ' ').title()
+        creator_campus = creator.school.name if creator.school else (
+            comp.sponsor_school.name if comp.sponsor_school else (
+                creator.organisation.name if creator.organisation else 'Optimus Network'
+            )
+        )
+    else:
+        creator_name = comp.sponsor_name or 'Optimus Orien'
+        creator_role = 'Institution' if comp.is_official else 'Member'
+        creator_campus = comp.sponsor_school.name if comp.sponsor_school else 'Global Campus'
+    return creator_name, creator_role, creator_campus
+
+
+class AssessmentsGenerateQuestionsView(CommunicationBaseAPIView):
+    """
+    AI-Ready Question Generator endpoint.
+    Currently randomly selects & generates questions from the saved dummy bank
+    (supporting custom subjects & difficulty levels), ready to swap in Groq/GPT later.
+    """
+    def post(self, request):
+        data = request.data or {}
+        subject = (data.get('subject') or '').strip()
+        if not subject:
+            return Response({'error': 'Please enter or select a subject.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        topic = (data.get('topic') or '').strip()
+        difficulty = (data.get('difficulty') or 'Intermediate').strip()
+        grade_level = (data.get('grade_level') or 'Grade 8').strip()
+        try:
+            num_questions = int(data.get('num_questions', 5))
+        except (TypeError, ValueError):
+            num_questions = 5
+
+        generated = generate_quiz_questions(
+            subject=subject,
+            topic=topic,
+            difficulty=difficulty,
+            grade_level=grade_level,
+            num_questions=num_questions,
+            provider=data.get('provider', 'dummy_ai'),
+        )
+        return Response(generated)
+
+
 class AssessmentsCompetitionsListView(CommunicationBaseAPIView):
     """
-    Returns official competitions and peer challenges directly from QuizCompetition table.
-    Checks whether current user has attempted each exam to enforce single-attempt locks.
+    Returns available quizzes filtered by audience scope (Only Our Campus / All Our Campuses / Worldwide).
+    Checks whether current user has attempted each quiz to enforce strict single-attempt locks.
     """
     def get(self, request):
         user = request.user if request.user.is_authenticated else None
+        now = timezone.now()
 
-        comps = QuizCompetition.objects.all().select_related('sponsor_school').prefetch_related('questions', 'attempts')
+        comps = (
+            QuizCompetition.objects.all()
+            .select_related('sponsor_school', 'target_organisation', 'created_by', 'created_by__school', 'created_by__organisation')
+            .prefetch_related('questions', 'attempts')
+            .order_by('-created_at', '-id')
+        )
 
+        # Find attempts by current user or linked student record
+        user_attempts = {}
+        if user:
+            student_rec = Student.objects.filter(user=user).first()
+            att_q = Q(user=user)
+            if student_rec:
+                att_q |= Q(student=student_rec)
+            for att in QuizAttempt.objects.filter(att_q).order_by('-submitted_at'):
+                if att.competition_id not in user_attempts:
+                    user_attempts[att.competition_id] = {
+                        'attempted': True,
+                        'attempt_id': att.id,
+                        'score': float(att.score_percentage),
+                        'accuracy': float(att.accuracy_percentage),
+                        'time_spent': att.time_spent_seconds,
+                        'country': att.country,
+                        'region': att.region,
+                        'submitted_at': att.submitted_at.isoformat(),
+                    }
+
+        available_quizzes = []
         official_list = []
         practice_list = []
 
-        # Find attempts by current user
-        user_attempts = {}
-        if user:
-            for att in QuizAttempt.objects.filter(user=user):
-                user_attempts[att.competition_id] = {
-                    'attempted': True,
-                    'score': float(att.score_percentage),
-                    'accuracy': float(att.accuracy_percentage),
-                    'time_spent': att.time_spent_seconds,
-                    'submitted_at': att.submitted_at.isoformat()
-                }
-
         for c in comps:
+            if not _can_user_access_quiz(user, c):
+                continue
+
+            if not c.questions.exists():
+                ensure_competition_has_questions(c)
+
             attempt_info = user_attempts.get(c.id, {'attempted': False})
-            sponsor = c.sponsor_school.name if c.sponsor_school else c.sponsor_name
+            creator_name, creator_role, creator_campus = _creator_meta(c)
+            sponsor = c.sponsor_school.name if c.sponsor_school else (c.sponsor_name or creator_name)
+            norm_scope = normalize_quiz_scope(c.scope)
+            window_status = _compute_window_status(c, now)
 
             item = {
                 'id': c.id,
                 'title': c.title,
                 'sponsor_name': sponsor,
+                'created_by_name': creator_name,
+                'created_by_role': creator_role,
+                'created_by_campus': creator_campus,
                 'subject': c.subject,
+                'topic': getattr(c, 'topic', '') or '',
                 'grade_level': c.grade_level,
                 'curriculum': c.curriculum,
                 'duration_minutes': c.duration_minutes,
                 'max_participants': c.max_participants,
                 'registered_count': c.attempts.count() or c.registered_count,
+                'attempts_count': c.attempts.count(),
                 'eligible_countries': c.eligible_countries,
                 'question_format_desc': c.question_format_desc,
                 'total_marks': c.total_marks,
                 'is_official': c.is_official,
                 'difficulty': c.difficulty,
-                'scope': c.scope,
+                'scope': norm_scope,
+                'scope_label': format_scope_label(c.scope),
+                'target_school_id': c.sponsor_school_id,
+                'target_school_name': c.sponsor_school.name if c.sponsor_school else None,
                 'invite_code': c.invite_code,
+                'generation_source': getattr(c, 'generation_source', 'dummy_ai') or 'dummy_ai',
+                'start_time': c.start_time.isoformat() if c.start_time else None,
+                'end_time': c.end_time.isoformat() if c.end_time else None,
+                'created_at': c.created_at.isoformat() if c.created_at else None,
+                'window_status': window_status,
                 'questions_count': c.questions.count(),
-                'user_attempt': attempt_info
+                'user_attempt': attempt_info,
             }
+            available_quizzes.append(item)
             if c.is_official:
                 official_list.append(item)
             else:
                 practice_list.append(item)
 
+        participant_country, participant_region = resolve_participant_location(user=user)
+
         return Response({
+            'available_quizzes': available_quizzes,
             'official_competitions': official_list,
-            'student_challenges': practice_list
+            'student_challenges': practice_list,
+            'participant_country': participant_country,
+            'participant_region': participant_region,
         })
 
 
 class AssessmentsCompetitionDetailView(CommunicationBaseAPIView):
     """
-    Fetches real competition questions and metadata for taking the assessment.
+    Fetches quiz questions and metadata for taking the assessment.
+    Enforces scope access, time window status, and strict single-attempt lock.
     """
     def get(self, request, pk):
         user = request.user if request.user.is_authenticated else None
-        comp = QuizCompetition.objects.filter(pk=pk).first()
+        comp = QuizCompetition.objects.filter(pk=pk).select_related('sponsor_school', 'created_by', 'created_by__school').first()
         if not comp:
-            return Response({'error': 'Competition not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Quiz not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        existing_attempt = QuizAttempt.objects.filter(competition=comp, user=user).first() if user else None
+        if not _can_user_access_quiz(user, comp):
+            return Response({'error': 'You do not have access to this campus-scoped quiz.'}, status=status.HTTP_403_FORBIDDEN)
+
+        ensure_competition_has_questions(comp)
+
+        existing_attempt = None
+        if user:
+            student_rec = Student.objects.filter(user=user).first()
+            att_q = Q(user=user)
+            if student_rec:
+                att_q |= Q(student=student_rec)
+            existing_attempt = QuizAttempt.objects.filter(competition=comp).filter(att_q).first()
 
         questions_data = []
         for q in comp.questions.all().order_by('order'):
@@ -1197,19 +1341,41 @@ class AssessmentsCompetitionDetailView(CommunicationBaseAPIView):
                 'marks': q.marks
             })
 
+        creator_name, creator_role, creator_campus = _creator_meta(comp)
+        participant_country, participant_region = resolve_participant_location(user=user)
+        window_status = _compute_window_status(comp)
+
         return Response({
             'id': comp.id,
             'title': comp.title,
             'subject': comp.subject,
+            'topic': getattr(comp, 'topic', '') or '',
+            'difficulty': comp.difficulty,
+            'scope': normalize_quiz_scope(comp.scope),
+            'scope_label': format_scope_label(comp.scope),
+            'created_by_name': creator_name,
+            'created_by_role': creator_role,
+            'created_by_campus': creator_campus,
+            'start_time': comp.start_time.isoformat() if comp.start_time else None,
+            'end_time': comp.end_time.isoformat() if comp.end_time else None,
+            'window_status': window_status,
             'duration_minutes': comp.duration_minutes,
             'total_marks': comp.total_marks,
             'is_official': comp.is_official,
             'has_attempted': existing_attempt is not None,
+            'participant_country': participant_country,
+            'participant_region': participant_region,
             'existing_attempt': {
+                'attempt_id': existing_attempt.id,
                 'score_percentage': float(existing_attempt.score_percentage),
+                'raw_score': float(existing_attempt.raw_score),
+                'total_marks': float(existing_attempt.total_marks),
                 'accuracy_percentage': float(existing_attempt.accuracy_percentage),
                 'time_spent_seconds': existing_attempt.time_spent_seconds,
-                'graded_breakdown': existing_attempt.graded_breakdown
+                'country': existing_attempt.country,
+                'region': existing_attempt.region,
+                'submitted_at': existing_attempt.submitted_at.isoformat(),
+                'graded_breakdown': existing_attempt.graded_breakdown,
             } if existing_attempt else None,
             'questions': questions_data
         })
@@ -1217,32 +1383,58 @@ class AssessmentsCompetitionDetailView(CommunicationBaseAPIView):
 
 class AssessmentsAttemptSubmitView(CommunicationBaseAPIView):
     """
-    Automated grading engine:
-    Evaluates questions, calculates score, and saves real QuizAttempt record to database.
-    Enforces Single-Attempt Lock for official exams.
+    Rapid automated grading engine:
+    Evaluates answers immediately, captures participant region/country,
+    enforces Single-Attempt Lock on ALL quizzes, and saves to Student Profile Performance Record.
     """
     def post(self, request, pk):
-        user = request.user if request.user.is_authenticated else User.objects.first()
-        comp = QuizCompetition.objects.filter(pk=pk).first()
-        if not comp:
-            return Response({'error': 'Competition not found'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user if request.user.is_authenticated else None
+        if not user:
+            return Response({'error': 'Authentication required to submit a quiz attempt.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Single-Attempt Lock for official competitions
-        if comp.is_official and user:
-            existing = QuizAttempt.objects.filter(competition=comp, user=user).first()
-            if existing:
-                return Response({
-                    'error': 'Single Attempt Lock: You have already submitted an official attempt for this competition.',
-                    'attempt': {
-                        'score_percentage': float(existing.score_percentage),
-                        'accuracy_percentage': float(existing.accuracy_percentage),
-                        'time_spent_seconds': existing.time_spent_seconds,
-                        'graded_breakdown': existing.graded_breakdown
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
+        comp = QuizCompetition.objects.filter(pk=pk).select_related('sponsor_school').first()
+        if not comp:
+            return Response({'error': 'Quiz not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _can_user_access_quiz(user, comp):
+            return Response({'error': 'You are not eligible to attempt this campus-scoped quiz.'}, status=status.HTTP_403_FORBIDDEN)
+
+        now = timezone.now()
+        if comp.start_time and now < comp.start_time:
+            return Response({'error': 'This quiz has not started yet.'}, status=status.HTTP_400_BAD_REQUEST)
+        if comp.end_time and now > comp.end_time + timedelta(minutes=2):
+            return Response({'error': 'This quiz submission window has ended.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        student_rec = Student.objects.filter(user=user).select_related('school').first()
+
+        # Strict Single-Attempt Lock for ALL quizzes
+        att_q = Q(user=user)
+        if student_rec:
+            att_q |= Q(student=student_rec)
+        existing = QuizAttempt.objects.filter(competition=comp).filter(att_q).first()
+        if existing:
+            return Response({
+                'error': 'Single Attempt Lock: You can only attempt each quiz 1 time. Your score is already recorded.',
+                'attempt': {
+                    'attempt_id': existing.id,
+                    'score_percentage': float(existing.score_percentage),
+                    'raw_score': float(existing.raw_score),
+                    'total_marks': float(existing.total_marks),
+                    'accuracy_percentage': float(existing.accuracy_percentage),
+                    'time_spent_seconds': existing.time_spent_seconds,
+                    'country': existing.country,
+                    'region': existing.region,
+                    'graded_breakdown': existing.graded_breakdown,
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        ensure_competition_has_questions(comp)
 
         submitted_answers = request.data.get('answers', {})
-        time_spent_seconds = int(request.data.get('time_spent_seconds', 0))
+        try:
+            time_spent_seconds = max(1, int(request.data.get('time_spent_seconds', 0)))
+        except (TypeError, ValueError):
+            time_spent_seconds = 10
 
         questions = list(comp.questions.all().order_by('order'))
         total_possible = sum(q.marks for q in questions) or comp.total_marks or 40
@@ -1251,10 +1443,12 @@ class AssessmentsAttemptSubmitView(CommunicationBaseAPIView):
         graded_breakdown = []
 
         for q in questions:
-            user_ans = submitted_answers.get(str(q.id)) or submitted_answers.get(q.id)
+            user_ans = submitted_answers.get(str(q.id))
+            if user_ans is None:
+                user_ans = submitted_answers.get(q.id)
             correct_ans = q.correct_answer
             is_correct = False
-            user_display = str(user_ans) if user_ans is not None else 'No answer provided'
+            user_display = str(user_ans) if (user_ans is not None and str(user_ans).strip() != '') else 'No answer provided'
             correct_display = ''
 
             if q.question_type == 'numerical':
@@ -1274,7 +1468,18 @@ class AssessmentsAttemptSubmitView(CommunicationBaseAPIView):
                 user_str = str(user_ans).lower() if user_ans else ''
                 if user_str == target_id:
                     is_correct = True
-                correct_display = str(correct_ans.get('id', '')).upper()
+                if q.question_type == 'multiple_choice' and q.options:
+                    opt_map = {str(o.get('id', '')).lower(): o.get('text', '') for o in q.options}
+                    if user_str in opt_map:
+                        user_display = f"{str(user_ans).upper()}. {opt_map[user_str]}"
+                    if target_id in opt_map:
+                        correct_display = f"{target_id.upper()}. {opt_map[target_id]}"
+                    else:
+                        correct_display = target_id.upper()
+                else:
+                    correct_display = target_id.capitalize()
+                    if user_ans is not None and str(user_ans).strip() != '':
+                        user_display = str(user_ans).capitalize()
 
             elif q.question_type == 'matching':
                 if isinstance(user_ans, dict):
@@ -1309,13 +1514,24 @@ class AssessmentsAttemptSubmitView(CommunicationBaseAPIView):
 
         score_pct = round((earned_marks / total_possible) * 100.0, 1) if total_possible > 0 else 0.0
         acc_pct = round((correct_count / len(questions)) * 100.0, 1) if questions else 0.0
+        speed_per_q = round(time_spent_seconds / len(questions), 1) if questions else float(time_spent_seconds)
 
-        student_rec = Student.objects.filter(user=user).first() or Student.objects.first()
+        client_country = (request.data.get('country') or '').strip()
+        client_region = (request.data.get('region') or '').strip()
+        participant_school = student_rec.school if student_rec else user.school
+        country, region = resolve_participant_location(
+            user=user,
+            school=participant_school,
+            client_country=client_country,
+            client_region=client_region,
+        )
 
         attempt = QuizAttempt.objects.create(
             competition=comp,
             user=user,
             student=student_rec,
+            country=country,
+            region=region,
             score_percentage=Decimal(str(score_pct)),
             raw_score=Decimal(str(earned_marks)),
             total_marks=Decimal(str(total_possible)),
@@ -1326,95 +1542,221 @@ class AssessmentsAttemptSubmitView(CommunicationBaseAPIView):
             is_official=comp.is_official
         )
 
-        comp.registered_count += 1
+        comp.registered_count = comp.attempts.count()
         comp.save(update_fields=['registered_count'])
 
+        # Compute rapid live standing within this quiz
+        ordered_ids = list(
+            QuizAttempt.objects.filter(competition=comp)
+            .order_by('-score_percentage', 'time_spent_seconds', '-accuracy_percentage', 'submitted_at')
+            .values_list('id', flat=True)
+        )
+        live_rank = ordered_ids.index(attempt.id) + 1 if attempt.id in ordered_ids else 1
+
         return Response({
-            'message': 'Official Assessment Record Saved — Eligible for Rankings & Quiz Badges',
+            'message': 'Rapid Result Ready — Quiz attempt saved to your profile performance record.',
             'attempt_id': attempt.id,
             'competition_id': comp.id,
+            'title': comp.title,
+            'subject': comp.subject,
+            'difficulty': comp.difficulty,
+            'scope': normalize_quiz_scope(comp.scope),
+            'scope_label': format_scope_label(comp.scope),
             'score_percentage': score_pct,
             'raw_score': earned_marks,
             'total_marks': total_possible,
             'accuracy_percentage': acc_pct,
             'time_spent_seconds': time_spent_seconds,
+            'speed_seconds_per_question': speed_per_q,
+            'country': country,
+            'region': region,
+            'rank': live_rank,
+            'total_participants': len(ordered_ids),
+            'saved_to_profile': True,
             'is_official': comp.is_official,
             'graded_breakdown': graded_breakdown
         }, status=status.HTTP_201_CREATED)
 
 
+def _parse_iso_dt(val):
+    if not val:
+        return None
+    dt = parse_datetime(str(val).strip())
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
 class AssessmentsCreateQuizView(CommunicationBaseAPIView):
     """
-    Creates a new quiz competition and questions directly in SQLite.
-    Generates a unique invite code.
+    Creates an AI-generated (saved dummy bank) quiz competition with custom subjects,
+    difficulty level, campus/worldwide scope, and start/end schedule.
     """
     def post(self, request):
-        user = request.user if request.user.is_authenticated else User.objects.first()
-        data = request.data
+        user = request.user if request.user.is_authenticated else None
+        if not user:
+            return Response({'error': 'Authentication required to create a quiz.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        title = data.get('title', 'Practice Drill').strip()
-        subject = data.get('subject', 'Mathematics')
-        grade_level = data.get('grade_level', 'Grade 8')
-        difficulty = data.get('difficulty', 'Intermediate')
-        duration_minutes = int(data.get('duration_minutes', 10))
-        scope = data.get('scope', 'public')
-        questions_in = data.get('questions', [])
+        data = request.data or {}
+        subject = (data.get('subject') or '').strip()
+        if not subject:
+            return Response({'error': 'Subject is required (choose a preset or enter a custom subject).'}, status=status.HTTP_400_BAD_REQUEST)
 
-        subj_prefix = (subject[:3] if len(subject) >= 3 else 'QZ').upper()
+        topic = (data.get('topic') or '').strip()
+        difficulty = (data.get('difficulty') or 'Intermediate').strip()
+        grade_level = (data.get('grade_level') or 'All Grades').strip()
+        try:
+            duration_minutes = max(1, min(int(data.get('duration_minutes', 10)), 180))
+        except (TypeError, ValueError):
+            duration_minutes = 10
+        try:
+            num_questions = max(1, min(int(data.get('num_questions', 5)), 25))
+        except (TypeError, ValueError):
+            num_questions = 5
+
+        scope = normalize_quiz_scope(data.get('scope', 'worldwide'))
+        title = (data.get('title') or '').strip() or f"{subject} ({difficulty}) AI Quiz"
+
+        start_time = _parse_iso_dt(data.get('start_time'))
+        end_time = _parse_iso_dt(data.get('end_time'))
+        if start_time and end_time and end_time <= start_time:
+            return Response({'error': 'End time must be after start time.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Resolve target campus & organisation
+        target_school_id = data.get('target_school_id')
+        target_school = None
+        if target_school_id and str(target_school_id).isdigit():
+            qs = School.objects.filter(pk=int(target_school_id))
+            if not user.is_superuser and user.role != 'platform_admin' and user.organisation_id:
+                qs = qs.filter(organisation_id=user.organisation_id)
+            target_school = qs.first()
+        if not target_school:
+            target_school = user.school
+
+        target_org = (
+            user.organisation
+            or (target_school.organisation if target_school else None)
+        )
+
+        if scope == 'our_campus' and not target_school:
+            return Response({'error': 'Please select a campus for a campus-only quiz.'}, status=status.HTTP_400_BAD_REQUEST)
+        if scope == 'org_campuses' and not target_org:
+            # Graceful fallback if user has no org
+            scope = 'our_campus' if target_school else 'worldwide'
+
+        questions_in = data.get('questions') or []
+        gen_source = data.get('generation_source', 'dummy_ai')
+        if not questions_in:
+            generated = generate_quiz_questions(
+                subject=subject,
+                topic=topic,
+                difficulty=difficulty,
+                grade_level=grade_level,
+                num_questions=num_questions,
+            )
+            questions_in = generated['questions']
+            gen_source = generated['source']
+
+        clean_prefix = ''.join(ch for ch in subject.upper() if ch.isalnum())[:3] or 'QZ'
         rand_num = random.randint(100, 9999)
-        code = f"{subj_prefix}-{rand_num}"
+        code = f"{clean_prefix}-{rand_num}"
 
-        creator_name = (user.get_full_name() or user.username) if user else 'Optimus Member'
+        creator_name = user.get_full_name() or user.username
+        creator_role_label = (user.role or 'member').replace('_', ' ').title()
+        total_marks = sum(int(q.get('marks', 10)) for q in questions_in) or (len(questions_in) * 10)
 
         comp = QuizCompetition.objects.create(
             title=title,
-            sponsor_name=f"{creator_name} (Peer Challenge)",
-            subject=subject,
-            grade_level=grade_level,
+            sponsor_school=target_school if scope in ('our_campus', 'org_campuses') else user.school,
+            target_organisation=target_org if scope == 'org_campuses' else None,
+            sponsor_name=f"{creator_name} ({creator_role_label})",
+            subject=subject[:120],
+            topic=topic[:250],
+            grade_level=grade_level[:50],
             duration_minutes=duration_minutes,
             difficulty=difficulty,
             scope=scope,
+            eligible_countries='All Countries' if scope == 'worldwide' else (target_school.city if target_school and target_school.city else 'Campus Scope'),
+            question_format_desc='AI-Generated (MCQ, True/False, Numerical)',
             is_official=False,
             invite_code=code,
+            generation_source=gen_source,
+            start_time=start_time,
+            end_time=end_time,
             created_by=user,
-            total_marks=len(questions_in) * 10
+            total_marks=total_marks,
         )
 
         for i, q in enumerate(questions_in):
             QuizQuestion.objects.create(
                 competition=comp,
                 order=i + 1,
-                prompt=q.get('prompt', f'Question {i+1}'),
+                prompt=q.get('prompt', f'Question {i + 1}'),
                 question_type=q.get('question_type', 'multiple_choice'),
                 options=q.get('options', []),
                 correct_answer=q.get('correct_answer', {}),
+                tolerance=float(q.get('tolerance') or 0.0),
                 unit=q.get('unit', ''),
                 explanation=q.get('explanation', ''),
-                marks=int(q.get('marks', 10))
+                marks=int(q.get('marks', 10)),
             )
 
         return Response({
-            'message': 'Practice Quiz Created Successfully',
+            'message': 'Quiz Generated & Published to Available Quizzes!',
             'competition_id': comp.id,
             'invite_code': code,
-            'title': comp.title
+            'title': comp.title,
+            'subject': comp.subject,
+            'difficulty': comp.difficulty,
+            'scope': comp.scope,
+            'scope_label': format_scope_label(comp.scope),
+            'questions_count': len(questions_in),
+            'start_time': comp.start_time.isoformat() if comp.start_time else None,
+            'end_time': comp.end_time.isoformat() if comp.end_time else None,
         }, status=status.HTTP_201_CREATED)
 
 
 class AssessmentsJoinByCodeView(CommunicationBaseAPIView):
     """
-    Looks up challenge by alphanumeric code from SQLite.
+    Looks up quiz by invitation code and validates scope, time window, and single-attempt lock.
     """
     def get(self, request, code):
-        comp = QuizCompetition.objects.filter(invite_code__iexact=code.strip()).first()
+        user = request.user if request.user.is_authenticated else None
+        comp = QuizCompetition.objects.filter(invite_code__iexact=code.strip()).select_related('sponsor_school', 'created_by').first()
         if not comp:
             return Response({'error': f'No active quiz found for invitation code "{code}".'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _can_user_access_quiz(user, comp):
+            return Response({'error': 'This invitation code belongs to a restricted campus quiz outside your campus/organisation.'}, status=status.HTTP_403_FORBIDDEN)
+
+        ensure_competition_has_questions(comp)
+
+        has_attempted = False
+        if user:
+            student_rec = Student.objects.filter(user=user).first()
+            att_q = Q(user=user)
+            if student_rec:
+                att_q |= Q(student=student_rec)
+            has_attempted = QuizAttempt.objects.filter(competition=comp).filter(att_q).exists()
+
+        window_status = _compute_window_status(comp)
+        if has_attempted:
+            return Response({'error': 'You have already attempted this quiz. Only 1 attempt is permitted per student.'}, status=status.HTTP_400_BAD_REQUEST)
+        if window_status == 'scheduled':
+            return Response({'error': 'This quiz has not opened yet. Check its start time.'}, status=status.HTTP_400_BAD_REQUEST)
+        if window_status == 'ended':
+            return Response({'error': 'This quiz window has already ended.'}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({
             'id': comp.id,
             'title': comp.title,
             'subject': comp.subject,
             'duration_minutes': comp.duration_minutes,
             'difficulty': comp.difficulty,
+            'scope': normalize_quiz_scope(comp.scope),
+            'scope_label': format_scope_label(comp.scope),
             'invite_code': comp.invite_code,
             'questions_count': comp.questions.count(),
             'sponsor_name': comp.sponsor_name
@@ -1423,45 +1765,194 @@ class AssessmentsJoinByCodeView(CommunicationBaseAPIView):
 
 class AssessmentsLeaderboardView(CommunicationBaseAPIView):
     """
-    Standings dynamically queried from real QuizAttempt records.
+    Attempted Quizzes & Country/Region Performance Analytics for the Attempted tab.
+    Shows participant region/country, rapid completion speed, single-attempt results,
+    and aggregates which country's students achieved the best performance.
     """
     def get(self, request):
-        category = request.query_params.get('category', 'official')
-        is_official = (category == 'official')
         user = request.user if request.user.is_authenticated else None
+        quiz_id = request.query_params.get('quiz_id', '').strip()
+        scope_filter = request.query_params.get('scope', 'all').strip().lower()
+        country_filter = request.query_params.get('country', '').strip()
+        mine_only = request.query_params.get('mine_only', 'false').lower() == 'true'
 
-        attempts_qs = QuizAttempt.objects.filter(
-            competition__is_official=is_official
-        ).select_related('user', 'competition', 'student', 'student__school').order_by('-score_percentage', 'time_spent_seconds')[:50]
-
-        standings = []
-        for idx, att in enumerate(attempts_qs):
-            candidate_name = (
-                (att.student.first_name + ' ' + att.student.last_name).strip() if att.student
-                else (att.user.get_full_name() or att.user.username if att.user else 'Learner')
+        attempts_qs = (
+            QuizAttempt.objects.all()
+            .select_related(
+                'user', 'user__school', 'competition', 'competition__sponsor_school',
+                'competition__created_by', 'student', 'student__school'
             )
-            school_name = att.student.school.name if (att.student and att.student.school) else (
-                att.user.school.name if (att.user and att.user.school) else 'Optimus Campus'
+            .order_by('-score_percentage', 'time_spent_seconds', '-accuracy_percentage', '-submitted_at')
+        )
+
+        if quiz_id and quiz_id.isdigit():
+            attempts_qs = attempts_qs.filter(competition_id=int(quiz_id))
+
+        student_rec = Student.objects.filter(user=user).first() if user else None
+        is_staff_or_admin = bool(
+            user and (user.is_superuser or user.role in ('platform_admin', 'organisation_admin', 'school_admin', 'principal', 'teacher'))
+        )
+
+        # First pass: scope visibility & build quiz options + country analytics
+        scoped_attempts = []
+        quiz_map = {}
+
+        for att in attempts_qs:
+            comp = att.competition
+            is_mine = bool(
+                user and (att.user_id == user.id or (student_rec and att.student_id == student_rec.id))
             )
-            city = att.student.school.city if (att.student and att.student.school) else 'National'
-            country = infer_country(city)
+            if not is_mine and not _can_user_access_quiz(user, comp):
+                continue
 
-            mins = att.time_spent_seconds // 60
-            secs = att.time_spent_seconds % 60
+            norm_scope = normalize_quiz_scope(comp.scope)
+            if scope_filter in ('worldwide', 'org_campuses', 'our_campus') and norm_scope != scope_filter:
+                continue
+            if mine_only and not is_mine:
+                continue
 
-            standings.append({
-                'rank': idx + 1,
-                'name': candidate_name,
-                'school': school_name,
+            # Resolve country / region reliably
+            st = att.student
+            school_obj = st.school if (st and st.school) else (att.user.school if (att.user and att.user.school) else None)
+            if att.country and att.country.strip():
+                country = att.country.strip()
+                region = (att.region or '').strip() or country
+            else:
+                country, region = resolve_participant_location(user=att.user, school=school_obj)
+
+            scoped_attempts.append((att, is_mine, norm_scope, school_obj, country, region))
+
+            if comp.id not in quiz_map:
+                quiz_map[comp.id] = {
+                    'id': comp.id,
+                    'title': comp.title,
+                    'subject': comp.subject,
+                    'difficulty': comp.difficulty,
+                    'scope_label': format_scope_label(comp.scope),
+                    'attempts_count': 0,
+                }
+            quiz_map[comp.id]['attempts_count'] += 1
+
+        # Aggregate country performance analytics across scoped attempts
+        country_buckets = {}
+        available_countries = set()
+        for att, is_mine, norm_scope, school_obj, country, region in scoped_attempts:
+            available_countries.add(country)
+            bucket = country_buckets.setdefault(country, {
                 'country': country,
-                'assessment': att.competition.title,
-                'score': float(att.score_percentage),
-                'accuracy': float(att.accuracy_percentage),
-                'time': f"{mins:02d}m {secs:02d}s",
-                'is_current_user': (user and att.user_id == user.id)
+                'participants': 0,
+                'scores': [],
+                'accuracies': [],
+                'times': [],
+                'top_score': 0.0,
+                'top_performer': '',
+            })
+            s_val = float(att.score_percentage)
+            a_val = float(att.accuracy_percentage)
+            t_val = int(att.time_spent_seconds or 0)
+            bucket['participants'] += 1
+            bucket['scores'].append(s_val)
+            bucket['accuracies'].append(a_val)
+            bucket['times'].append(t_val)
+            if s_val >= bucket['top_score']:
+                bucket['top_score'] = s_val
+                cand_name = (
+                    f"{att.student.first_name} {att.student.last_name}".strip()
+                    if att.student
+                    else (att.user.get_full_name() or att.user.username if att.user else 'Learner')
+                )
+                bucket['top_performer'] = cand_name
+
+        country_analytics = []
+        for c_name, b in country_buckets.items():
+            cnt = b['participants']
+            avg_s = round(sum(b['scores']) / cnt, 1) if cnt else 0.0
+            avg_a = round(sum(b['accuracies']) / cnt, 1) if cnt else 0.0
+            avg_t = round(sum(b['times']) / cnt) if cnt else 0
+            country_analytics.append({
+                'country': c_name,
+                'participants': cnt,
+                'avg_score': avg_s,
+                'avg_accuracy': avg_a,
+                'best_score': round(b['top_score'], 1),
+                'avg_time_seconds': avg_t,
+                'avg_time_display': f"{avg_t // 60:02d}m {avg_t % 60:02d}s",
+                'top_performer': b['top_performer'],
             })
 
-        return Response({'category': category, 'results': standings})
+        country_analytics.sort(key=lambda x: (-x['avg_score'], x['avg_time_seconds'], -x['participants']))
+        for idx, c_item in enumerate(country_analytics, start=1):
+            c_item['rank'] = idx
+
+        # Build detailed participant attempt list (optionally filtered by country)
+        standings = []
+        my_scores = []
+        my_acc = []
+        my_best = 0.0
+
+        for att, is_mine, norm_scope, school_obj, country, region in scoped_attempts:
+            if is_mine:
+                sv = float(att.score_percentage)
+                my_scores.append(sv)
+                my_acc.append(float(att.accuracy_percentage))
+                if sv > my_best:
+                    my_best = sv
+
+            if country_filter and country_filter.lower() != 'all' and country.lower() != country_filter.lower():
+                continue
+
+            st = att.student
+            comp = att.competition
+            candidate_name = (
+                f"{st.first_name} {st.last_name}".strip() if st
+                else (att.user.get_full_name() or att.user.username if att.user else 'Learner')
+            )
+            school_name = school_obj.name if school_obj else 'Optimus Global'
+            mins = att.time_spent_seconds // 60
+            secs = att.time_spent_seconds % 60
+            q_cnt = len(att.graded_breakdown) if att.graded_breakdown else max(1, comp.questions.count())
+            speed_per_q = round(att.time_spent_seconds / q_cnt, 1) if q_cnt else float(att.time_spent_seconds)
+            can_view_breakdown = bool(is_mine or is_staff_or_admin or (user and comp.created_by_id == user.id))
+
+            standings.append({
+                'attempt_id': att.id,
+                'rank': len(standings) + 1,
+                'name': candidate_name,
+                'role': (att.user.role or 'student').replace('_', ' ').title() if att.user else 'Student',
+                'school': school_name,
+                'country': country,
+                'region': region,
+                'competition_id': comp.id,
+                'assessment': comp.title,
+                'subject': comp.subject,
+                'difficulty': comp.difficulty,
+                'scope': norm_scope,
+                'scope_label': format_scope_label(comp.scope),
+                'score': float(att.score_percentage),
+                'raw_score': float(att.raw_score),
+                'total_marks': float(att.total_marks),
+                'accuracy': float(att.accuracy_percentage),
+                'time': f"{mins:02d}m {secs:02d}s",
+                'time_spent_seconds': att.time_spent_seconds,
+                'speed_seconds_per_question': speed_per_q,
+                'submitted_at': att.submitted_at.isoformat(),
+                'is_current_user': is_mine,
+                'can_view_breakdown': can_view_breakdown,
+                'graded_breakdown': att.graded_breakdown if can_view_breakdown else [],
+            })
+
+        return Response({
+            'results': standings[:100],
+            'country_analytics': country_analytics,
+            'available_countries': sorted(available_countries),
+            'quiz_options': list(quiz_map.values()),
+            'my_summary': {
+                'total_attempted': len(my_scores),
+                'average_score': round(sum(my_scores) / len(my_scores), 1) if my_scores else None,
+                'average_accuracy': round(sum(my_acc) / len(my_acc), 1) if my_acc else None,
+                'best_score': round(my_best, 1) if my_scores else None,
+            },
+        })
 
 
 class AssessmentsPeerScoresView(CommunicationBaseAPIView):
@@ -1471,24 +1962,27 @@ class AssessmentsPeerScoresView(CommunicationBaseAPIView):
     def get(self, request, pk):
         comp = QuizCompetition.objects.filter(pk=pk).first()
         if not comp:
-            return Response({'error': 'Competition not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Quiz not found'}, status=status.HTTP_404_NOT_FOUND)
 
         attempts_qs = QuizAttempt.objects.filter(
             competition_id=pk
-        ).select_related('user', 'student').order_by('-score_percentage', 'time_spent_seconds')
+        ).select_related('user', 'user__school', 'student', 'student__school').order_by('-score_percentage', 'time_spent_seconds')
 
         standings = []
         for idx, att in enumerate(attempts_qs):
             candidate_name = (
-                (att.student.first_name + ' ' + att.student.last_name).strip() if att.student
+                f"{att.student.first_name} {att.student.last_name}".strip() if att.student
                 else (att.user.get_full_name() or att.user.username if att.user else 'Peer Learner')
             )
             mins = att.time_spent_seconds // 60
             secs = att.time_spent_seconds % 60
+            school_obj = att.student.school if (att.student and att.student.school) else (att.user.school if att.user else None)
+            country = att.country or resolve_participant_location(user=att.user, school=school_obj)[0]
 
             standings.append({
                 'rank': idx + 1,
                 'name': candidate_name,
+                'country': country,
                 'score': float(att.score_percentage),
                 'accuracy': float(att.accuracy_percentage),
                 'time': f"{mins:02d}m {secs:02d}s"
@@ -1509,17 +2003,19 @@ class AssessmentsCompetitionStandingsView(CommunicationBaseAPIView):
     def get(self, request, pk):
         comp = QuizCompetition.objects.filter(pk=pk).first()
         if not comp:
-            return Response({'error': 'Competition not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Quiz not found'}, status=status.HTTP_404_NOT_FOUND)
 
         attempts_qs = QuizAttempt.objects.filter(
             competition=comp
-        ).select_related('user', 'student', 'student__school').order_by('-score_percentage', 'time_spent_seconds')[:25]
+        ).select_related('user', 'user__school', 'student', 'student__school').order_by('-score_percentage', 'time_spent_seconds')[:50]
 
         standings = []
         for idx, att in enumerate(attempts_qs):
             st = att.student
             name = f"{st.first_name} {st.last_name}".strip() if st else (att.user.get_full_name() or att.user.username if att.user else 'Candidate')
-            school = st.school.name if st and st.school else (att.user.school.name if att.user and att.user.school else 'Optimus Member')
+            school_obj = st.school if st and st.school else (att.user.school if att.user and att.user.school else None)
+            school = school_obj.name if school_obj else 'Optimus Member'
+            country = att.country or resolve_participant_location(user=att.user, school=school_obj)[0]
             mins = att.time_spent_seconds // 60
             secs = att.time_spent_seconds % 60
 
@@ -1527,6 +2023,7 @@ class AssessmentsCompetitionStandingsView(CommunicationBaseAPIView):
                 'rank': idx + 1,
                 'name': name,
                 'school': school,
+                'country': country,
                 'score': float(att.score_percentage),
                 'accuracy': float(att.accuracy_percentage),
                 'time': f"{mins:02d}m {secs:02d}s"

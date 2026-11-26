@@ -592,9 +592,13 @@ def my_performance(request):
     student = next((w for w in wards if str(w.id) == pick), wards[0])
     enrol = Enrollment.objects.filter(student=student, end_date__isnull=True).select_related('school_class').first() \
         or Enrollment.objects.filter(student=student).select_related('school_class').order_by('-start_date').first()
+    from core.services.quiz_generator import get_student_quiz_performance
+    quiz_perf = get_student_quiz_performance(student=student, user=student.user)
     base = {'student': {'id': student.id, 'name': student.full_name, 'gender': student.gender},
             'wards': [{'id': w.id, 'name': w.full_name} for w in wards], 'min_group': MIN_GROUP,
-            'method': {'basis': METHOD['average_basis'], 'missing': METHOD['missing_policy'], 'assessments': METHOD['assessments']}}
+            'method': {'basis': METHOD['average_basis'], 'missing': METHOD['missing_policy'], 'assessments': METHOD['assessments']},
+            'quiz_summary': quiz_perf['summary'],
+            'quiz_performance': quiz_perf['attempts']}
     if not enrol:
         return Response({**base, 'class': None, 'subjects': [], 'overall': None})
     klass = enrol.school_class

@@ -360,6 +360,72 @@ export const StudentResults: React.FC<Props> = ({ user, notify }) => {
         </div>
       )}
       </div>
+
+      {/* Online Quiz & Competition Performance Record */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: 16,
+        padding: 24,
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Award size={18} color="#7c3aed" /> Online Quiz &amp; Assessment Record
+            </h3>
+            <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 2 }}>
+              Automatically recorded upon completing any campus or worldwide online quiz.
+            </div>
+          </div>
+          {profile.quiz_summary && (
+            <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: '#334155', flexWrap: 'wrap' }}>
+              <span>Attempted: <b>{profile.quiz_summary.total_attempted || 0}</b></span>
+              {profile.quiz_summary.average_score !== null && (
+                <span>Average: <b style={{ color: '#7c3aed' }}>{profile.quiz_summary.average_score}%</b></span>
+              )}
+              {profile.quiz_summary.best_score !== null && (
+                <span>Best: <b style={{ color: '#059669' }}>{profile.quiz_summary.best_score}%</b></span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {!profile.quiz_performance || profile.quiz_performance.length === 0 ? (
+          <div style={{ padding: 20, borderRadius: 12, background: '#f8fafc', border: '1px dashed #cbd5e1', textAlign: 'center', fontSize: 13, color: '#64748b' }}>
+            No online quizzes attempted yet. Visit <strong>Online Assessments</strong> to attempt a quiz and record your score!
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                  <th style={{ padding: '10px 12px' }}>Quiz</th>
+                  <th style={{ padding: '10px 12px' }}>Subject &amp; Difficulty</th>
+                  <th style={{ padding: '10px 12px' }}>Scope</th>
+                  <th style={{ padding: '10px 12px' }}>Score</th>
+                  <th style={{ padding: '10px 12px' }}>Accuracy</th>
+                  <th style={{ padding: '10px 12px' }}>Speed</th>
+                  <th style={{ padding: '10px 12px' }}>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profile.quiz_performance.map((qp: any) => (
+                  <tr key={qp.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>{qp.title}</td>
+                    <td style={{ padding: '10px 12px', color: '#475569' }}>{qp.subject} • {qp.difficulty}</td>
+                    <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{qp.scope_label}</td>
+                    <td style={{ padding: '10px 12px', fontWeight: 800, color: '#7c3aed' }}>{qp.score_percentage}%</td>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#059669' }}>{qp.accuracy_percentage}%</td>
+                    <td style={{ padding: '10px 12px', color: '#475569' }}>{qp.time_display}</td>
+                    <td style={{ padding: '10px 12px', color: '#64748b' }}>{qp.submitted_date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

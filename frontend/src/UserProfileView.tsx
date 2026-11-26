@@ -4,7 +4,33 @@ import {
   Phone,
   Hash,
   MapPin,
+  Award,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
+
+export interface QuizPerformanceRecord {
+  id: number;
+  competition_id?: number;
+  title: string;
+  subject: string;
+  difficulty: string;
+  scope_label?: string;
+  score_percentage: number;
+  raw_score?: number;
+  total_marks?: number;
+  accuracy_percentage: number;
+  time_display: string;
+  country?: string;
+  submitted_date: string;
+}
+
+export interface QuizPerformanceSummary {
+  total_attempted: number;
+  average_score: number | null;
+  average_accuracy: number | null;
+  best_score: number | null;
+}
 
 export interface HistoryItem {
   index: string;
@@ -40,6 +66,8 @@ export interface UserProfileData {
   trajectory?: any[];
   historyItems?: HistoryItem[];
   transferRecord?: TransferRecord;
+  quizSummary?: QuizPerformanceSummary;
+  quizPerformance?: QuizPerformanceRecord[];
 }
 
 interface UserProfileViewProps {
@@ -214,6 +242,83 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Student Quiz & Online Assessment Performance Record */}
+      {(isStudent || (profile.quizPerformance && profile.quizPerformance.length > 0)) && (
+        <div
+          style={{
+            marginTop: 20,
+            background: '#ffffff',
+            borderRadius: 24,
+            padding: '24px 24px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Award size={20} color="#7c3aed" />
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
+                Quiz &amp; Assessment Performance Record
+              </h3>
+            </div>
+            {profile.quizSummary && (
+              <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#475569', flexWrap: 'wrap' }}>
+                <span>Attempted: <strong style={{ color: '#0f172a' }}>{profile.quizSummary.total_attempted}</strong></span>
+                {profile.quizSummary.average_score !== null && (
+                  <span>Avg: <strong style={{ color: '#7c3aed' }}>{profile.quizSummary.average_score}%</strong></span>
+                )}
+                {profile.quizSummary.best_score !== null && (
+                  <span>Best: <strong style={{ color: '#059669' }}>{profile.quizSummary.best_score}%</strong></span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {!profile.quizPerformance || profile.quizPerformance.length === 0 ? (
+            <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, padding: 18, textAlign: 'center', fontSize: 13, color: '#64748b' }}>
+              No online quizzes attempted yet. Attempted quiz scores and speed metrics will be saved here automatically.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {profile.quizPerformance.map((qp) => (
+                <div
+                  key={qp.id}
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 13.5, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <CheckCircle2 size={14} color="#059669" /> {qp.title}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                      {qp.subject} • {qp.difficulty} {qp.scope_label ? `• ${qp.scope_label}` : ''} • {qp.submitted_date}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
+                    <span style={{ fontWeight: 800, color: '#7c3aed', background: '#ede9fe', padding: '3px 9px', borderRadius: 8 }}>
+                      {qp.score_percentage}%
+                    </span>
+                    <span style={{ color: '#059669', fontWeight: 700 }}>{qp.accuracy_percentage}% Acc</span>
+                    <span style={{ color: '#475569', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Clock size={12} /> {qp.time_display}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

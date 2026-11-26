@@ -591,7 +591,10 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                                 <tbody>
                                   {profileData.verified_records.map((r: any, ri: number) => (
                                     <tr key={ri}>
-                                      <td style={{ fontWeight: 700, color: '#1e1633' }}>{r.competition}</td>
+                                      <td style={{ fontWeight: 700, color: '#1e1633' }}>
+                                        {r.competition}
+                                        {r.subject && <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>{r.subject}{r.difficulty ? ` • ${r.difficulty}` : ''}</div>}
+                                      </td>
                                       <td><strong className="comm-mono" style={{ color: '#0d9488' }}>{r.score}%</strong></td>
                                       <td className="comm-tabular" style={{ color: '#475569' }}>{r.time}</td>
                                       <td>

@@ -4341,7 +4341,12 @@ function App() {
           )}
           {['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) && (
             <ErrorBoundary fallbackTitle="Online Assessments">
-              <OnlineAssessmentsView notify={notify} />
+              <OnlineAssessmentsView
+                notify={notify}
+                user={user}
+                activeCampusId={activeCampusId}
+                campuses={campuses}
+              />
             </ErrorBoundary>
           )}
           </React.Suspense>

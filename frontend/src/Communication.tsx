@@ -75,7 +75,12 @@ export default function Communication({
         <CommunityView notify={notify} />
       )}
       {activeSuiteTab === 'assessments' && (
-        <OnlineAssessmentsView notify={notify} />
+        <OnlineAssessmentsView
+          notify={notify}
+          user={user}
+          activeCampusId={activeCampusId}
+          campuses={campuses}
+        />
       )}
     </div>
   );

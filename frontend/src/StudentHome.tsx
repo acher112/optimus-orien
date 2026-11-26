@@ -75,7 +75,7 @@ export const StudentHome: React.FC<Props> = ({ user, onNavigate, notify }) => {
     );
   }
 
-  const { student, attendance, academic, homework, unread_notifications_count } = data;
+  const { student, attendance, academic, homework, unread_notifications_count, quiz_summary, quiz_performance } = data;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
@@ -425,6 +425,72 @@ export const StudentHome: React.FC<Props> = ({ user, onNavigate, notify }) => {
             <MessageSquare size={16} /> Ask or View Class Questions
           </button>
         </div>
+      </div>
+
+      {/* Online Quizzes & Competitions Record Panel */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: 16,
+        padding: 24,
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ClipboardCheck size={20} color="#7c3aed" />
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
+              My Quiz &amp; Competition Performance ({quiz_summary?.total_attempted || 0})
+            </h3>
+          </div>
+          <button
+            onClick={() => onNavigate('Online Assessments & Quiz Competitions')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#7c3aed',
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            Go to Online Assessments <ArrowRight size={14} />
+          </button>
+        </div>
+
+        {!quiz_performance || quiz_performance.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '18px 0', color: '#94a3b8', fontSize: 13 }}>
+            You haven&apos;t attempted any online quizzes yet. Attempt a quiz once to record your score in your profile!
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {quiz_performance.map((qp: any) => (
+              <div
+                key={qp.id}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: '#faf5ff',
+                  border: '1px solid #e9d5ff',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 10
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1e293b' }}>{qp.title}</div>
+                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>{qp.subject} • {qp.difficulty} • {qp.time_display}</div>
+                </div>
+                <span style={{ fontWeight: 800, fontSize: 14, color: '#7c3aed', background: '#ffffff', padding: '4px 10px', borderRadius: 8, border: '1px solid #ddd6fe' }}>
+                  {qp.score_percentage}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
