@@ -7,10 +7,11 @@ import { FilterBar } from './FilterBar';
 import PasswordField from './PasswordField';
 import StaffAttendanceRegister from './StaffAttendanceRegister';
 import { UserProfileView, type UserProfileData } from './UserProfileView';
+import { UserCredentialsModal } from './UserCredentialsModal';
 import './hr.css';
 
 type R = Record<string, any>;
-type Action = { kind: 'add' } | { kind: 'promote' | 'role' | 'terminate' | 'history' | 'edit' | 'assignments' | 'profile'; staff: R };
+type Action = { kind: 'add' } | { kind: 'promote' | 'role' | 'terminate' | 'history' | 'edit' | 'assignments' | 'profile' | 'credentials'; staff: R };
 const nice = (s: string) => s.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 const EVENT_TEXT: Record<string, string> = { hired: 'Hired', promoted: 'Promoted', role_changed: 'Role changed', terminated: 'Terminated', reinstated: 'Reinstated', updated: 'Updated' };
 
@@ -194,6 +195,9 @@ export default function Staff({
               <td className="hr-row-actions">
                 <button className="hr-mini" title="View 360° Profile" onClick={() => setAction({ kind: 'profile', staff: s })}><GraduationCap size={13} /> Profile</button>
                 <button className="hr-mini" title="Edit staff member" onClick={() => setAction({ kind: 'edit', staff: s })}><Pencil size={13} /> Edit</button>
+                {s.has_login && (
+                  <button className="hr-mini" title="Show portal credentials (Email, Username, Password)" style={{ color: '#0284c7', borderColor: '#bae6fd' }} onClick={() => setAction({ kind: 'credentials', staff: s })}><KeyRound size={13} /> Credentials</button>
+                )}
                 {s.status === 'active' ? <>
                   {leader && <button className="hr-mini" onClick={() => setAction({ kind: 'promote', staff: s })}><ArrowUpRight size={13} /> Promote</button>}
                   {leader && <button className="hr-mini" onClick={() => setAction({ kind: 'role', staff: s })}><UserCog size={13} /> Role</button>}
@@ -220,6 +224,7 @@ export default function Staff({
       {action?.kind === 'history' && <Timeline s={action.staff} onClose={() => setAction(null)} />}
       {action?.kind === 'assignments' && <TeachingAssignmentsModal s={action.staff} user={user} onClose={() => setAction(null)} onDone={() => done('Assignments updated')} />}
       {action?.kind === 'profile' && <StaffProfileModal staff={action.staff} onClose={() => setAction(null)} onEdit={() => setAction({ kind: 'edit', staff: action.staff })} />}
+      {action?.kind === 'credentials' && <UserCredentialsModal userId={action.staff.user_id || action.staff.id} onClose={() => setAction(null)} notify={notify} />}
       {calendarTarget && <AttendanceCalendarModal target={calendarTarget} onClose={() => setCalendarTarget(null)} />}
     </>
   );

@@ -293,7 +293,10 @@ urlpatterns = [
     path('student/results/', student_views.student_results),
     path('student/profile/', student_views.student_profile),
     path('students/<int:pk>/reset-password/', student_views.reset_student_password),
+    path('students/<int:pk>/credentials/', student_views.student_credentials_view),
     path('students/<int:pk>/inform-parent/', student_views.inform_parent_risk),
+    path('users/<int:pk>/credentials/', student_views.user_credentials_view),
+    path('users/lookup-credentials/', student_views.lookup_user_credentials),
 
     # Class Discussion (Moderated Subject Q&A)
     path('discussion/threads/', discussion_views.discussion_threads),

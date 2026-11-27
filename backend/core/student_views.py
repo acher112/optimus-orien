@@ -784,3 +784,224 @@ def inform_parent_risk(request, pk):
         'has_linked_guardian': True,
         'detail': f"Support notification successfully sent to {guardians.count()} linked guardian(s)."
     })
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def student_credentials_view(request, pk):
+    """
+    Returns or updates credentials (email, username, password) for a student.
+    Accessible to authorized staff (superuser, organisation_admin, school_admin, principal, teacher).
+    """
+    user = request.user
+    if user.role in ('student', 'parent'):
+        raise PermissionDenied("Students and parents cannot view credentials management.")
+
+    try:
+        student = Student.objects.select_related('school', 'school__organisation', 'user').get(pk=pk)
+    except Student.DoesNotExist:
+        raise Http404("Student not found.")
+
+    # Scope validation
+    active_enr = student.enrollments.filter(end_date__isnull=True).select_related('school_class').first()
+    school_class = active_enr.school_class if active_enr else None
+
+    if user.is_superuser or getattr(user, 'is_platform_admin', False) or user.role in ('platform_admin', 'owner'):
+        pass
+    elif user.role == 'organisation_admin':
+        if user.organisation_id != student.school.organisation_id:
+            raise Http404("Student not found.")
+    elif user.role in ('principal', 'school_admin'):
+        if user.school_id != student.school_id:
+            raise Http404("Student not found.")
+    elif user.role == 'teacher':
+        if student.school_id != user.school_id:
+            raise Http404("Student not found.")
+        scope = get_teacher_scope(user, request)
+        if school_class and not (scope.is_class_teacher(school_class.id) or scope.teaches_class(school_class.id)):
+            raise PermissionDenied("You do not have permission to view credentials for students outside your classes.")
+    else:
+        raise PermissionDenied("Unauthorized to view student credentials.")
+
+    # Ensure student has a linked User account
+    with transaction.atomic():
+        if not student.user:
+            username = generate_student_username(student.school, student.admission_number)
+            temp_password = generate_temporary_password(12)
+            student_user = User(
+                username=username,
+                first_name=student.first_name,
+                last_name=student.last_name,
+                role='student',
+                school=student.school,
+                organisation=student.school.organisation,
+                must_change_password=False,
+                is_active=True
+            )
+            student_user.set_password(temp_password)
+            student_user.save()
+            student.user = student_user
+            student.save(update_fields=['user'])
+        elif not student.user.raw_password:
+            temp_password = generate_temporary_password(12)
+            student.user.set_password(temp_password)
+            student.user.save(update_fields=['password', 'raw_password'])
+
+        if request.method == 'POST':
+            action = request.data.get('action')
+            new_pwd = (request.data.get('password') or '').strip()
+            if not new_pwd or action == 'regenerate':
+                new_pwd = generate_temporary_password(12)
+            student.user.set_password(new_pwd)
+            student.user.must_change_password = False
+            student.user.save(update_fields=['password', 'raw_password', 'must_change_password'])
+            record_event(actor=user, action='student_credentials_update', obj=student)
+
+    resolved_email = student.user.email
+    if not resolved_email:
+        school_code = (student.school.code if student.school and student.school.code else 'school').lower().replace(' ', '')
+        resolved_email = f"{student.user.username}@{school_code}.edu"
+
+    return Response({
+        'ok': True,
+        'student_id': student.id,
+        'user_id': student.user.id,
+        'admission_number': student.admission_number,
+        'full_name': student.full_name,
+        'email': resolved_email,
+        'username': student.user.username,
+        'password': student.user.raw_password,
+        'role': 'student',
+        'school_name': student.school.name if student.school else '',
+        'school_code': student.school.code if student.school else '',
+        'class_name': school_class.display_name if school_class else 'Unassigned',
+        'guardian_phone': student.guardian_phone or '',
+        'login_url': '/app'
+    })
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def user_credentials_view(request, pk):
+    """
+    Returns or updates credentials (email, username, password) for any user (staff, teacher, principal, student).
+    Accessible to authorized staff within hierarchy boundaries.
+    """
+    user = request.user
+    if user.role in ('student', 'parent'):
+        raise PermissionDenied("Students and parents cannot view user credentials.")
+
+    try:
+        target_user = User.objects.select_related('school', 'organisation').get(pk=pk)
+    except User.DoesNotExist:
+        raise Http404("User not found.")
+
+    # Hierarchy validation
+    if user.is_superuser or user.role in ('platform_admin', 'owner'):
+        pass
+    elif user.role == 'organisation_admin':
+        if target_user.organisation_id != user.organisation_id:
+            raise Http404("User not found.")
+        if target_user.role in ('platform_admin', 'owner') or (target_user.is_superuser and not user.is_superuser):
+            raise PermissionDenied("Cannot view credentials for platform administrators.")
+    elif user.role in ('principal', 'school_admin'):
+        if target_user.school_id != user.school_id:
+            raise Http404("User not found.")
+        if target_user.role in ('platform_admin', 'owner', 'organisation_admin'):
+            raise PermissionDenied("Cannot view credentials for higher-tier administrators.")
+    else:
+        raise PermissionDenied("Unauthorized to view user credentials.")
+
+    with transaction.atomic():
+        if not target_user.raw_password:
+            temp_pwd = generate_temporary_password(12)
+            target_user.set_password(temp_pwd)
+            target_user.save(update_fields=['password', 'raw_password'])
+
+        if request.method == 'POST':
+            action = request.data.get('action')
+            new_pwd = (request.data.get('password') or '').strip()
+            if not new_pwd or action == 'regenerate':
+                new_pwd = generate_temporary_password(12)
+            target_user.set_password(new_pwd)
+            target_user.must_change_password = False
+            target_user.save(update_fields=['password', 'raw_password', 'must_change_password'])
+            record_event(actor=user, action='user_credentials_update', obj=target_user)
+
+    resolved_email = target_user.email or f"{target_user.username}@optimus.local"
+    full_name = target_user.get_full_name() or target_user.username
+
+    class_name = None
+    if target_user.role == 'student' and hasattr(target_user, 'student_record'):
+        st = target_user.student_record
+        active_enr = st.enrollments.filter(end_date__isnull=True).select_related('school_class').first()
+        if active_enr and active_enr.school_class:
+            class_name = active_enr.school_class.display_name
+
+    return Response({
+        'ok': True,
+        'user_id': target_user.id,
+        'full_name': full_name,
+        'email': resolved_email,
+        'username': target_user.username,
+        'password': target_user.raw_password,
+        'role': target_user.role,
+        'school_name': target_user.school.name if target_user.school else (target_user.organisation.name if target_user.organisation else 'System'),
+        'class_name': class_name,
+        'login_url': '/app'
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def lookup_user_credentials(request):
+    """
+    Search and retrieve credentials for users by query (username, email, name, admission number).
+    """
+    user = request.user
+    if user.role in ('student', 'parent'):
+        raise PermissionDenied("Access denied.")
+
+    q = (request.query_params.get('q') or '').strip()
+    if not q:
+        return Response({'results': []})
+
+    qs = User.objects.select_related('school', 'organisation')
+    if user.is_superuser or user.role in ('platform_admin', 'owner'):
+        pass
+    elif user.role == 'organisation_admin':
+        qs = qs.filter(organisation_id=user.organisation_id).exclude(role__in=['platform_admin', 'owner'])
+    elif user.role in ('principal', 'school_admin'):
+        qs = qs.filter(school_id=user.school_id).exclude(role__in=['platform_admin', 'owner', 'organisation_admin'])
+    elif user.role == 'teacher':
+        qs = qs.filter(school_id=user.school_id, role='student')
+    else:
+        return Response({'results': []})
+
+    matches = qs.filter(
+        Q(username__icontains=q) |
+        Q(email__icontains=q) |
+        Q(first_name__icontains=q) |
+        Q(last_name__icontains=q) |
+        Q(student_record__admission_number__icontains=q)
+    ).distinct()[:15]
+
+    results = []
+    for u in matches:
+        if not u.raw_password:
+            temp = generate_temporary_password(12)
+            u.set_password(temp)
+            u.save(update_fields=['password', 'raw_password'])
+        results.append({
+            'user_id': u.id,
+            'full_name': u.get_full_name() or u.username,
+            'email': u.email or f"{u.username}@optimus.local",
+            'username': u.username,
+            'password': u.raw_password,
+            'role': u.role,
+            'school_name': u.school.name if u.school else '',
+            'login_url': '/app'
+        })
+
+    return Response({'results': results})
+

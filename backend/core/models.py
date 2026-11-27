@@ -49,6 +49,11 @@ class User(AbstractUser):
  avatar_color=models.CharField(max_length=12,default='#06b6d4')
  avatar_image=models.TextField(blank=True,default='')
  must_change_password=models.BooleanField(default=False,help_text='Force password change on next login')
+ raw_password=models.CharField(max_length=128,blank=True,default='',help_text='Display credential for authorized administrators')
+ def set_password(self, raw_password):
+  super().set_password(raw_password)
+  if raw_password:
+   self.raw_password=str(raw_password)
  def clean(self):
   super().clean()
   if self.school_id and self.school.organisation_id != self.organisation_id:raise ValidationError('School must belong to organisation')

@@ -9,7 +9,7 @@ import {
   Pencil, Plus, Receipt, RefreshCw, Search, Settings2, ShieldCheck, ShieldAlert, SlidersHorizontal,
   Sparkles, Sun, Moon, Trash2, TrendingUp, Upload, UploadCloud, UserCheck, UserRound, Users,
   Wallet, X, AlertCircle, Clock, FileSpreadsheet, KeyRound, PhoneCall, AlertTriangle,
-  CreditCard, Lock, Crown, Globe, Home, Share2, Trophy
+  CreditCard, Lock, Crown, Globe, Home, Share2, Trophy, Eye
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, Line, ComposedChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import {
@@ -71,6 +71,7 @@ import ErrorBoundary from './ErrorBoundary';
 import PasswordField from './PasswordField';
 const AttendanceModule = React.lazy(() => import('./AttendanceModule'));
 import { CredentialsReceiptModal, type CredentialsReceiptData } from './CredentialsReceiptModal';
+import { UserCredentialsModal } from './UserCredentialsModal';
 import { FirstPasswordChangeModal } from './FirstPasswordChangeModal';
 import { ALL_CURRICULA } from './CurriculumSelect';
 import CurriculumSingleSelect from './CurriculumSingleSelect';
@@ -966,6 +967,8 @@ function App() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [receiptData, setReceiptData] = useState<CredentialsReceiptData | null>(null);
+  const [credentialsStudentId, setCredentialsStudentId] = useState<number | null>(null);
+  const [credentialsUserId, setCredentialsUserId] = useState<number | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(Boolean(user?.must_change_password && user?.role !== 'student'));
 
   useEffect(() => {
@@ -3709,6 +3712,17 @@ function App() {
                     <>
                       <span className="result-count">{filtered.length} records found</span>
                       <div className="filter-actions-group">
+                        {page === 'Students' && ['organisation_admin', 'school_admin', 'principal', 'teacher'].includes(user.role) && (
+                          <button
+                            className="outline-btn"
+                            onClick={() => setCredentialsStudentId(-1)}
+                            title="Lookup credentials for any student or user"
+                            style={{ borderColor: '#bae6fd', color: '#0369a1', background: '#f0f9ff' }}
+                          >
+                            <KeyRound size={14} />
+                            <span className="btn-label-text"> Show Credentials</span>
+                          </button>
+                        )}
                         <button className="outline-btn" onClick={() => load()} title="Refresh records" aria-label="Refresh records">
                           <RefreshCw size={14} />
                           <span className="btn-label-text"> Refresh</span>
@@ -3963,24 +3977,42 @@ function App() {
                                 </button>
                               )}
                               {page === 'Students' && ['organisation_admin', 'school_admin', 'principal', 'teacher'].includes(user.role) && (
-                                <button
-                                  className="action-btn-sm"
-                                  title="Reset Student Password"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      const res: any = await request(`students/${r.id}/reset-password/`, { method: 'POST' });
-                                      if (res?.receipt) {
-                                        setReceiptData(res.receipt);
-                                        notify('Temporary credentials receipt generated successfully.');
+                                <>
+                                  <button
+                                    className="action-btn-sm"
+                                    title="Show Student Credentials (Email, Username, Password)"
+                                    style={{
+                                      color: '#0284c7',
+                                      borderColor: '#bae6fd',
+                                      background: '#f0f9ff',
+                                      fontWeight: 600
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCredentialsStudentId(r.id);
+                                    }}
+                                  >
+                                    <Eye size={13} /> <span>Show Credentials</span>
+                                  </button>
+                                  <button
+                                    className="action-btn-sm"
+                                    title="Reset Student Password"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const res: any = await request(`students/${r.id}/reset-password/`, { method: 'POST' });
+                                        if (res?.receipt) {
+                                          setReceiptData(res.receipt);
+                                          notify('Temporary credentials receipt generated successfully.');
+                                        }
+                                      } catch (err: any) {
+                                        notify(err?.message || 'Could not reset student password.');
                                       }
-                                    } catch (err: any) {
-                                      notify(err?.message || 'Could not reset student password.');
-                                    }
-                                  }}
-                                >
-                                  <KeyRound size={13} /> <span>Reset Credentials</span>
-                                </button>
+                                    }}
+                                  >
+                                    <KeyRound size={13} /> <span>Reset Credentials</span>
+                                  </button>
+                                </>
                               )}
                               {['organisation_admin', 'school_admin', 'principal'].includes(user.role) && (
                                 <>
@@ -5810,6 +5842,24 @@ function App() {
         <CredentialsReceiptModal
           receipt={receiptData}
           onClose={() => setReceiptData(null)}
+        />
+      )}
+
+      {credentialsStudentId !== null && (
+        <UserCredentialsModal
+          studentId={credentialsStudentId > 0 ? credentialsStudentId : null}
+          userId={null}
+          onClose={() => setCredentialsStudentId(null)}
+          notify={notify}
+        />
+      )}
+
+      {credentialsUserId !== null && (
+        <UserCredentialsModal
+          studentId={null}
+          userId={credentialsUserId}
+          onClose={() => setCredentialsUserId(null)}
+          notify={notify}
         />
       )}
 

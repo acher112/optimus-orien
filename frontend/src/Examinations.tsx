@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle, Award, BarChart3, Building2, Calculator, Calendar, Check, CheckCircle2, ChevronRight,
   Download, FileSpreadsheet, FileText, Filter, Layers, Plus, Printer, RefreshCw,
-  Search, Settings2, ShieldAlert, ShieldCheck, Sparkles, Trash2, TrendingUp, User, Users, X
+  Search, Send, Settings2, ShieldAlert, ShieldCheck, Sparkles, Trash2, TrendingUp, User, Users, X
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { list, request, type User as ApiUser } from './api';
@@ -91,6 +91,8 @@ export default function Examinations({
   const [gridSubjectId, setGridSubjectId] = useState<number | null>(null);
   const [engineMarksData, setEngineMarksData] = useState<R | null>(null);
   const [savingEngineMarks, setSavingEngineMarks] = useState(false);
+  const [submittingEngineMarks, setSubmittingEngineMarks] = useState(false);
+  const [publishingFromGrid, setPublishingFromGrid] = useState(false);
   const [hasUnsavedMarks, setHasUnsavedMarks] = useState(false);
 
   // Active configuration and campus scoping for grid
@@ -629,6 +631,86 @@ export default function Examinations({
       notify(err instanceof Error ? err.message : 'Failed to save marks');
     } finally {
       setSavingEngineMarks(false);
+    }
+  };
+
+  const handleSubmitEngineMarks = async () => {
+    if (!selectedConfigId || !gridClassId || !gridSubjectId || !engineMarksData) {
+      window.alert("Please select an Examination Structure, Class, and Subject before submitting marks.");
+      return;
+    }
+
+    // Check for marks exceeding maximum
+    for (const st of engineMarksData.students || []) {
+      for (const col of engineMarksData.columns || []) {
+        const termEntry = st.terms?.[col.id];
+        if (termEntry && termEntry.marks_obtained !== '' && termEntry.marks_obtained !== null && termEntry.marks_obtained !== undefined) {
+          const val = parseFloat(termEntry.marks_obtained);
+          const maxVal = parseFloat(col.max_marks);
+          if (!isNaN(val) && !isNaN(maxVal) && val > maxVal) {
+            window.alert(`Cannot submit marks: ${st.name}'s mark (${val}) in ${col.name} exceeds max marks (${maxVal}).`);
+            return;
+          }
+        }
+      }
+    }
+
+    setSubmittingEngineMarks(true);
+    try {
+      const payload = {
+        class: gridClassId,
+        subject: gridSubjectId,
+        marks: engineMarksData.students.map((st: R) => ({
+          student_id: st.student_id,
+          terms: st.terms
+        }))
+      };
+      const res = await request<R>(`exams/engine/configurations/${selectedConfigId}/marks-grid/`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      setHasUnsavedMarks(false);
+      await loadMarksGridData();
+      await loadAnalytics();
+      setBump(b => b + 1);
+      window.alert(`Marks submitted successfully!\n\nRecorded ${res.updated_marks} marks records across terms for ${res.affected_students} students.`);
+      notify(`Marks submitted successfully for ${res.affected_students} students.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to submit marks';
+      window.alert(`Failed to submit marks: ${msg}`);
+      notify(msg);
+    } finally {
+      setSubmittingEngineMarks(false);
+    }
+  };
+
+  const handlePublishFromGrid = async () => {
+    if (!selectedConfigId) {
+      window.alert("Please select or create an Examination Structure above before publishing results.");
+      return;
+    }
+    const isAlreadyPublished = currentEngineConfig?.status === 'published';
+    const confirmMsg = isAlreadyPublished
+      ? `Examination structure "${currentEngineConfig?.name || 'Selected'}" is currently published.\n\nRepublishing will lock latest student marks and update official grade sheets. Do you wish to proceed?`
+      : `Publishing examination structure "${currentEngineConfig?.name || 'Selected'}" will lock assessment weightages and make official grades and report cards live to students, parents, and teachers.\n\nDo you want to proceed with publishing?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setPublishingFromGrid(true);
+    try {
+      const res = await request<R>(`exams/engine/configurations/${selectedConfigId}/publish/`, { method: 'POST' });
+      await loadEngineConfigs();
+      await loadMarksGridData();
+      await loadAnalytics();
+      setBump(b => b + 1);
+      window.alert(`Examination published successfully!\n\nStructure "${currentEngineConfig?.name || ''}" version ${res.version} is now officially published. Transcripts, grades, and report cards are now accessible.`);
+      notify(`Examination configuration published! Version ${res.version} is now live.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Publish failed';
+      window.alert(`Publication error: ${msg}`);
+      notify(msg);
+    } finally {
+      setPublishingFromGrid(false);
     }
   };
 
@@ -1447,22 +1529,66 @@ export default function Examinations({
               </div>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Enter student marks across terms. Contributions and normalized scores calculate live.</p>
             </div>
-            <div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 className="primary-btn"
-                onClick={handleSaveEngineMarks}
-                disabled={savingEngineMarks || !engineMarksData}
+                onClick={handleSubmitEngineMarks}
+                disabled={submittingEngineMarks || savingEngineMarks || !engineMarksData}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
                   fontSize: 13,
-                  padding: '8px 18px',
-                  boxShadow: hasUnsavedMarks ? '0 0 0 3px rgba(99, 102, 241, 0.25), 0 4px 12px rgba(99, 102, 241, 0.35)' : undefined
+                  padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #059669, #10b981)',
+                  color: '#ffffff',
+                  borderColor: '#059669',
+                  boxShadow: hasUnsavedMarks ? '0 0 0 3px rgba(16, 185, 129, 0.25), 0 4px 12px rgba(16, 185, 129, 0.35)' : undefined
                 }}
+                title="Submit student marks for this subject"
+              >
+                <Send size={14} /> {submittingEngineMarks ? 'Submitting…' : 'Submit Marks'}
+              </button>
+
+              <button
+                className="outline-btn"
+                onClick={handleSaveEngineMarks}
+                disabled={savingEngineMarks || submittingEngineMarks || !engineMarksData}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 13,
+                  padding: '8px 16px',
+                  background: hasUnsavedMarks ? '#eef2ff' : '#ffffff',
+                  borderColor: '#6366f1',
+                  color: '#4f46e5'
+                }}
+                title="Save marks and recalculate student results"
               >
                 <Check size={14} /> {savingEngineMarks ? 'Saving…' : hasUnsavedMarks ? 'Save Marks & Recalculate ●' : 'Save Marks & Recalculate'}
               </button>
+
+              {isManager && (
+                <button
+                  className="primary-btn"
+                  onClick={handlePublishFromGrid}
+                  disabled={publishingFromGrid || !selectedConfigId}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 13,
+                    padding: '8px 16px',
+                    background: currentEngineConfig?.status === 'published' ? '#f0fdf4' : 'linear-gradient(135deg, #0284c7, #0ea5e9)',
+                    color: currentEngineConfig?.status === 'published' ? '#15803d' : '#ffffff',
+                    borderColor: currentEngineConfig?.status === 'published' ? '#86efac' : '#0284c7'
+                  }}
+                  title={currentEngineConfig?.status === 'published' ? 'Structure is officially published. Click to republish latest marks.' : 'Publish official examination results and make transcripts visible'}
+                >
+                  <CheckCircle2 size={14} /> {publishingFromGrid ? 'Publishing…' : currentEngineConfig?.status === 'published' ? 'Published ✓ (Republish)' : 'Publish Results'}
+                </button>
+              )}
             </div>
           </div>
 
