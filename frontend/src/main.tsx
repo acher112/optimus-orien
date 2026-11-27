@@ -48,6 +48,7 @@ const LeaderboardView = React.lazy(() => import('./communication/LeaderboardView
 const CommunityView = React.lazy(() => import('./communication/CommunityView'));
 const InboxView = React.lazy(() => import('./communication/InboxView'));
 const OnlineAssessmentsView = React.lazy(() => import('./communication/OnlineAssessmentsView'));
+const QADiscussionView = React.lazy(() => import('./communication/QADiscussionView').then(m => ({ default: m.QADiscussionView })));
 const AchievementsView = React.lazy(() => import('./achievements/AchievementsView'));
 import { communicationApi } from './communication/communicationApi';
 import MyPerformance from './MyPerformance';
@@ -128,6 +129,7 @@ const WORKSPACE_NAV = [
   { name: 'Leaderboard', icon: Trophy, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Community', icon: Globe, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Inbox', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
+  { name: 'Discussion', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Online Assessments & Quiz Competitions', icon: ClipboardCheck, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Achievements', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -227,7 +229,7 @@ const FORBIDDEN_TEACHER_PAGES = [
 ];
 
 const NAV_GROUPS = [
-  { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses'] },
+  { sublabel: 'ORGANISATION & CAMPUSES', items: ['Overview', 'Campuses', 'Announcements'] },
   { sublabel: 'ACADEMIC CONFIGURATION', adminLabel: true, items: ['Campus setup', 'Academic years'] },
   { sublabel: 'ACADEMIC STRUCTURE', items: ['Classes', 'Subjects'] },
   {
@@ -242,7 +244,7 @@ const NAV_GROUPS = [
   { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
   { sublabel: 'RECORD & ARCHIVE', items: ['Record'] },
   { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance', 'Set Criteria', 'Evaluation'] },
-  { sublabel: 'COMMUNICATION & NETWORKING', items: ['Leaderboard', 'Community', 'Inbox', 'Online Assessments & Quiz Competitions', 'Achievements', 'Announcements'] },
+  { sublabel: 'COMMUNICATION & NETWORKING', items: ['Leaderboard', 'Community', 'Inbox', 'Discussion', 'Online Assessments & Quiz Competitions', 'Achievements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
@@ -845,6 +847,7 @@ function App() {
       if (p.includes('leaderboard')) setPage('Leaderboard');
       else if (p.includes('community')) setPage('Community');
       else if (p.includes('inbox') || p.includes('messages')) setPage('Inbox');
+      else if (p.includes('discussion') || p.includes('qa')) setPage('Discussion');
       else if (p.includes('assessment') || p.includes('quiz')) setPage('Online Assessments & Quiz Competitions');
       else if (p.includes('achievement') || p.includes('badge')) setPage('Achievements');
       else if (p.includes('communication')) setPage('Leaderboard');
@@ -921,6 +924,7 @@ function App() {
         if (p.includes('leaderboard')) return 'Leaderboard';
         if (p.includes('community')) return 'Community';
         if (p.includes('inbox') || p.includes('messages')) return 'Inbox';
+        if (p.includes('discussion') || p.includes('qa')) return 'Discussion';
         if (p.includes('assessment') || p.includes('quiz')) return 'Online Assessments & Quiz Competitions';
         if (p.includes('achievement') || p.includes('badge')) return 'Achievements';
         if (p.includes('communication')) return 'Leaderboard';
@@ -1569,6 +1573,7 @@ function App() {
         'Leaderboard': 'leaderboard',
         'Community': 'community',
         'Inbox': 'inbox',
+        'Discussion': 'discussion',
         'Online Assessments & Quiz Competitions': 'assessments',
         'Achievements': 'achievements',
         'Communication': 'communication'
@@ -2586,6 +2591,7 @@ function App() {
             <nav>
               <div className="nav-sublabel">CLASSROOM & INSTRUCTION</div>
               {renderNavButton('Overview', 'My Home', LayoutDashboard)}
+              {renderNavButton('Announcements', 'Announcements', Megaphone)}
               {teacherScope?.can_view_my_class && renderNavButton('My Class', 'My Class', Users)}
               {teacherScope?.can_view_my_subjects && renderNavButton('My Subjects', 'My Subjects', BookOpen)}
               {renderNavButton('Students', 'My Students', GraduationCap)}
@@ -2602,9 +2608,9 @@ function App() {
               {renderNavButton('Leaderboard', 'Leaderboard', Trophy)}
               {renderNavButton('Community', 'Community', Globe)}
               {renderNavButton('Inbox', 'Inbox & Direct Chat', MessageSquare, inboxUnreadCount > 0 ? <em>{inboxUnreadCount}</em> : null)}
+              {renderNavButton('Discussion', 'Discussion', MessageSquare)}
               {renderNavButton('Online Assessments & Quiz Competitions', 'Online Assessments', ClipboardCheck)}
               {renderNavButton('Achievements', 'Achievements', Award)}
-              {renderNavButton('Announcements', 'Announcements', Megaphone)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SYSTEM</div>
@@ -2619,6 +2625,7 @@ function App() {
             <nav>
               <div className="nav-sublabel">LEARNING & PROGRESS</div>
               {renderNavButton('Overview', 'My Dashboard', LayoutDashboard)}
+              {renderNavButton('Announcements', 'Announcements', Megaphone)}
               {renderNavButton('Attendance', 'My Attendance', ClipboardCheck)}
               {renderNavButton('Results & Progress', 'Results & Progress', TrendingUp)}
               {isItemUnlocked('Homework') && renderNavButton('Homework', 'Homework', ClipboardList)}
@@ -2629,9 +2636,9 @@ function App() {
               {renderNavButton('Leaderboard', 'Leaderboard', Trophy)}
               {renderNavButton('Community', 'Community', Globe)}
               {renderNavButton('Inbox', 'Inbox & Direct Chat', MessageSquare, inboxUnreadCount > 0 ? <em>{inboxUnreadCount}</em> : null)}
+              {renderNavButton('Discussion', 'Discussion', MessageSquare)}
               {renderNavButton('Online Assessments & Quiz Competitions', 'Online Assessments', ClipboardCheck)}
               {renderNavButton('Achievements', 'Achievements & Badges', Award)}
-              {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
             </nav>
 
             <div className="nav-label nav-lower">ACCOUNT & SECURITY</div>
@@ -4127,7 +4134,7 @@ function App() {
               <StudentResults user={user} notify={notify} />
             )
           )}
-          {page === 'Discussion' && <StudentDiscussion user={user} notify={notify} />}
+          {page === 'Class Discussion' && <StudentDiscussion user={user} notify={notify} />}
           {page === 'Profile' && <StudentProfile user={user} notify={notify} />}
           {['Student fees', 'Student Fees', 'Fees', 'Fee overview', 'Fee structure', 'Collect fee', 'Vouchers', 'Defaulters', 'Concessions', 'Receipts'].includes(page) && (
             !isFeatureUnlocked('fees_offline') ? (
@@ -4379,6 +4386,16 @@ function App() {
               <InboxView
                 currentUser={user}
                 notify={notify}
+              />
+            </ErrorBoundary>
+          )}
+          {['Discussion', 'Discussions', 'Q&A Discussions', 'QA Discussions'].includes(page) && (
+            <ErrorBoundary fallbackTitle="Academic Q&A Discussions">
+              <QADiscussionView
+                currentUser={user}
+                notify={notify}
+                campuses={campuses}
+                activeCampusId={activeCampusId}
               />
             </ErrorBoundary>
           )}

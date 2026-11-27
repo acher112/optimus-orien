@@ -7,7 +7,8 @@ from . import (
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
     parent_views, landing_views, subscription_views, record_views, teacher_performance_views,
-    public_directory_views, network_views, communication_views, inbox_views
+    public_directory_views, network_views, communication_views, inbox_views,
+    discussion_forum_views
 )
 
 r = DefaultRouter()
@@ -422,6 +423,13 @@ urlpatterns = [
     path('communication/inbox/conversations/', inbox_views.InboxConversationsView.as_view()),
     path('communication/inbox/conversations/<int:conversation_id>/messages/', inbox_views.InboxMessagesView.as_view()),
     path('communication/inbox/unread-count/', inbox_views.InboxUnreadCountView.as_view()),
+
+    # Academic Q&A Discussion Forum (Multi-scope targeting)
+    path('communication/discussions/', discussion_forum_views.QADiscussionListView.as_view()),
+    path('communication/discussions/<int:pk>/', discussion_forum_views.QADiscussionDetailView.as_view()),
+    path('communication/discussions/<int:pk>/answers/', discussion_forum_views.QADiscussionAnswerCreateView.as_view()),
+    path('communication/discussions/<int:pk>/accept-solution/', discussion_forum_views.QADiscussionAcceptSolutionView.as_view()),
+    path('communication/discussions/<int:pk>/helpful/', discussion_forum_views.QADiscussionHelpfulView.as_view()),
 
     path('communication/assessments/competitions/', communication_views.AssessmentsCompetitionsListView.as_view()),
     path('communication/assessments/competitions/<int:pk>/', communication_views.AssessmentsCompetitionDetailView.as_view()),

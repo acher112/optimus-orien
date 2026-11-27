@@ -3910,6 +3910,79 @@ class BadgeAuditLog(models.Model):
         return f"[{self.created_at}] {actor_name} -> {self.action} ({self.badge_slug})"
 
 
+class QADiscussionQuestion(models.Model):
+    """
+    Academic Q&A and Community Discussion forum question.
+    Supports targeting by campus subject or custom subject, class/grade, and audience scope
+    (campus teachers only, campus students only, campus staff & students, all campuses, or worldwide).
+    """
+    SCOPE_CHOICES = [
+        ('campus_teachers', 'Our Campus Teachers Only'),
+        ('campus_students', 'Our Campus Students Only'),
+        ('campus_staff_all', 'Our Campus Staff & Students (All)'),
+        ('all_campuses', 'All Branches / Campuses (All Staff & Admins)'),
+        ('worldwide', 'Worldwide / Global Network (Everyone)'),
+    ]
+
+    STATUS_CHOICES = [
+        ('open', 'Open for Answers'),
+        ('answered', 'Answered / Solved'),
+        ('closed', 'Closed'),
+    ]
+
+    title = models.CharField(max_length=255)
+    body = models.TextField()
+    category = models.CharField(max_length=64, default='Academic Doubt')
+    subject = models.ForeignKey(Subject, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    custom_subject = models.CharField(max_length=100, blank=True, default='')
+    school_class = models.ForeignKey(SchoolClass, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    class_grade_label = models.CharField(max_length=100, blank=True, default='')
+    school = models.ForeignKey(School, null=True, blank=True, on_delete=models.SET_NULL, related_name='qa_questions')
+    audience_scope = models.CharField(max_length=32, choices=SCOPE_CHOICES, default='worldwide')
+    author_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='qa_questions')
+    author_role = models.CharField(max_length=32, blank=True, default='')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='open')
+    upvotes_count = models.PositiveIntegerField(default=0)
+    views_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Q&A Discussion Question"
+        verbose_name_plural = "Q&A Discussion Questions"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['audience_scope', 'status', 'created_at']),
+            models.Index(fields=['school', 'audience_scope']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_audience_scope_display()}] {self.title}"
+
+
+class QADiscussionAnswer(models.Model):
+    """
+    Threaded answer or opinion on an Academic Q&A Discussion.
+    """
+    question = models.ForeignKey(QADiscussionQuestion, on_delete=models.CASCADE, related_name='answers')
+    author_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='qa_answers')
+    author_role = models.CharField(max_length=32, blank=True, default='')
+    body = models.TextField()
+    is_accepted_solution = models.BooleanField(default=False)
+    helpful_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Q&A Discussion Answer"
+        verbose_name_plural = "Q&A Discussion Answers"
+        ordering = ['-is_accepted_solution', 'created_at']
+
+    def __str__(self):
+        return f"Answer by {self.author_user.username} on Question {self.question_id}"
+
+
+
 
 
 

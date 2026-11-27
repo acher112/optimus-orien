@@ -541,6 +541,60 @@ export const communicationApi = {
   getInboxUnreadCount: () =>
     request<{ unread_count: number }>(
       '/api/v1/communication/inbox/unread-count/'
+    ),
+
+  // 5. Academic Q&A Discussion Forum
+  getDiscussions: (params?: {
+    scope?: string;
+    category?: string;
+    subject?: string;
+    status?: string;
+    search?: string;
+    campus_id?: number | string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.scope) query.set('scope', params.scope);
+    if (params?.category) query.set('category', params.category);
+    if (params?.subject) query.set('subject', params.subject);
+    if (params?.status) query.set('status', params.status);
+    if (params?.search) query.set('search', params.search);
+    if (params?.campus_id) query.set('campus_id', String(params.campus_id));
+    const qs = query.toString();
+    return request<{ stats: QADiscussionStats; count: number; results: QADiscussionItem[] }>(
+      `/api/v1/communication/discussions/${qs ? `?${qs}` : ''}`
+    );
+  },
+  getDiscussionDetail: (id: number) =>
+    request<QADiscussionDetail>(`/api/v1/communication/discussions/${id}/`),
+  createDiscussion: (data: {
+    title: string;
+    body: string;
+    category?: string;
+    subject_id?: number | null;
+    custom_subject?: string;
+    class_id?: number | null;
+    class_grade_label?: string;
+    audience_scope?: string;
+    school_id?: number | null;
+  }) =>
+    request<QADiscussionItem>('/api/v1/communication/discussions/', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  postDiscussionAnswer: (discussionId: number, body: string) =>
+    request<QADiscussionAnswer>(`/api/v1/communication/discussions/${discussionId}/answers/`, {
+      method: 'POST',
+      body: JSON.stringify({ body })
+    }),
+  acceptDiscussionSolution: (discussionId: number, answerId: number) =>
+    request<{ detail: string; question_status: string; accepted_answer_id: number }>(
+      `/api/v1/communication/discussions/${discussionId}/accept-solution/`,
+      { method: 'POST', body: JSON.stringify({ answer_id: answerId }) }
+    ),
+  upvoteDiscussion: (discussionId: number, answerId?: number) =>
+    request<{ detail: string; helpful_count?: number; upvotes_count?: number }>(
+      `/api/v1/communication/discussions/${discussionId}/helpful/`,
+      { method: 'POST', body: JSON.stringify(answerId ? { answer_id: answerId } : {}) }
     )
 };
 
@@ -586,4 +640,64 @@ export interface InboxMessage {
   sender_signature?: string;
   sent_at: string;
   delivered_at: string | null;
+}
+
+export interface QADiscussionAuthor {
+  id: number | null;
+  name: string;
+  username: string;
+  role: string;
+  avatar_color: string;
+  avatar_image?: string;
+}
+
+export interface QADiscussionItem {
+  id: number;
+  title: string;
+  body_preview: string;
+  category: string;
+  subject_id: number | null;
+  subject_name: string;
+  is_custom_subject: boolean;
+  class_id: number | null;
+  class_name: string;
+  school_id: number | null;
+  school_name: string;
+  audience_scope: 'campus_teachers' | 'campus_students' | 'campus_staff_all' | 'all_campuses' | 'worldwide' | string;
+  audience_scope_label: string;
+  status: 'open' | 'answered' | 'closed';
+  status_label: string;
+  author: QADiscussionAuthor;
+  upvotes_count: number;
+  views_count: number;
+  answers_count: number;
+  has_accepted_solution: boolean;
+  can_reply: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QADiscussionAnswer {
+  id: number;
+  author: QADiscussionAuthor;
+  body: string;
+  is_accepted_solution: boolean;
+  helpful_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QADiscussionDetail extends QADiscussionItem {
+  body: string;
+  reply_permission_reason?: string;
+  can_mark_solution?: boolean;
+  answers: QADiscussionAnswer[];
+}
+
+export interface QADiscussionStats {
+  total_queries: number;
+  worldwide_count: number;
+  campus_queries: number;
+  solved_count: number;
+  my_queries: number;
 }
