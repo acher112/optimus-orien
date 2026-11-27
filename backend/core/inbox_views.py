@@ -72,6 +72,7 @@ class InboxMessagesView(APIView):
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request, conversation_id):
+        message = request.data.get('message') or request.data.get('text')
         ciphertext = request.data.get('ciphertext')
         nonce = request.data.get('nonce')
         sender_signature = request.data.get('sender_signature', '')
@@ -82,6 +83,7 @@ class InboxMessagesView(APIView):
                 conversation_id=conversation_id,
                 ciphertext=ciphertext,
                 nonce=nonce,
+                message=message,
                 sender_signature=sender_signature
             )
             return Response({

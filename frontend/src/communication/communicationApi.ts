@@ -533,10 +533,10 @@ export const communicationApi = {
       `/api/v1/communication/inbox/conversations/${conversationId}/messages/${q}`
     );
   },
-  sendInboxMessage: (conversationId: number, ciphertext: string, nonce: string, sender_signature: string = '') =>
+  sendInboxMessage: (conversationId: number, message: string, nonce: string = 'backend-e2ee', sender_signature: string = '') =>
     request<{ detail: string; message_id: number; sent_at: string }>(
       `/api/v1/communication/inbox/conversations/${conversationId}/messages/`,
-      { method: 'POST', body: JSON.stringify({ ciphertext, nonce, sender_signature }) }
+      { method: 'POST', body: JSON.stringify({ message, text: message, ciphertext: message, nonce, sender_signature }) }
     ),
   getInboxUnreadCount: () =>
     request<{ unread_count: number }>(
@@ -563,7 +563,10 @@ export interface InboxConversation {
   who_msg_first: 'you' | 'peer' | 'none';
   who_msg_first_label: string;
   last_message: {
-    ciphertext: string;
+    text?: string;
+    ciphertext?: string;
+    sender_name?: string;
+    sender_id?: number;
     sent_at: string;
     is_mine: boolean;
     delivered: boolean;
@@ -577,6 +580,7 @@ export interface InboxMessage {
   sender_id: number;
   sender_name: string;
   is_mine: boolean;
+  text?: string;
   ciphertext: string;
   nonce: string;
   sender_signature?: string;

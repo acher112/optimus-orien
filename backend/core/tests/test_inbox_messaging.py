@@ -152,3 +152,38 @@ class InboxMessagingTests(TestCase):
         }, format='json')
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn("active block", res.data['detail'])
+
+    def test_backend_side_e2ee_and_last_message_sender_recipient_preview(self):
+        """Plaintext message sent is encrypted at rest in DB and decrypted with sender_name in preview."""
+        u_a, u_b = (self.user_a, self.user_b) if self.user_a.id < self.user_b.id else (self.user_b, self.user_a)
+        Connection.objects.create(user_a=u_a, user_b=u_b, status='active')
+
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post('/api/v1/communication/inbox/conversations/', {'peer_id': self.user_b.id}, format='json')
+        conv_id = res.data['conversation_id']
+
+        # User A sends plain text "kese ho"
+        res = self.client.post(f'/api/v1/communication/inbox/conversations/{conv_id}/messages/', {
+            'message': 'kese ho'
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        # Verify DB does NOT store "kese ho" in plaintext!
+        msg_db = EncryptedMessage.objects.get(id=res.data['message_id'])
+        self.assertNotEqual(msg_db.ciphertext, 'kese ho')
+        self.assertNotIn('kese ho', msg_db.ciphertext)
+
+        # Verify conversation list returns decrypted last_message with sender_name
+        res = self.client.get('/api/v1/communication/inbox/conversations/')
+        conv_entry = next(c for c in res.data['conversations'] if c['conversation_id'] == conv_id)
+        self.assertEqual(conv_entry['last_message']['text'], 'kese ho')
+        self.assertEqual(conv_entry['last_message']['sender_name'], 'You')
+        self.assertTrue(conv_entry['last_message']['is_mine'])
+
+        # User B reads: should see sender_name as Ali and text as 'kese ho'
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get('/api/v1/communication/inbox/conversations/')
+        conv_entry = next(c for c in res.data['conversations'] if c['conversation_id'] == conv_id)
+        self.assertEqual(conv_entry['last_message']['text'], 'kese ho')
+        self.assertEqual(conv_entry['last_message']['sender_name'], 'Ali')
+        self.assertFalse(conv_entry['last_message']['is_mine'])

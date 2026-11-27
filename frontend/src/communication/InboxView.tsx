@@ -16,14 +16,8 @@ import {
 import {
   communicationApi,
   type InboxConversation,
-  type InboxMessage,
-  type InboxPeer
+  type InboxMessage
 } from './communicationApi';
-import {
-  getConversationCryptoKey,
-  encryptInboxMessage,
-  decryptInboxMessage
-} from './inboxCrypto';
 import './inbox.css';
 
 interface InboxViewProps {
@@ -56,11 +50,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
   const [inputText, setInputText] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
 
-  // Decryption cache: message_id -> plaintext
-  const [decryptedMap, setDecryptedMap] = useState<Record<number, string>>({});
-  // Decrypted snippet cache for conversations list: conv_id -> plaintext
-  const [decryptedSnippets, setDecryptedSnippets] = useState<Record<string, string>>({});
-
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'friends'>('all');
@@ -68,16 +57,29 @@ export const InboxView: React.FC<InboxViewProps> = ({
   // Mobile layout state
   const [mobileChatActive, setMobileChatActive] = useState<boolean>(false);
 
-  // Crypto key for current active chat
-  const [activeKey, setActiveKey] = useState<CryptoKey | null>(null);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Container ref to control messages scroll without scrolling window/viewport
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<any>(null);
   const convoPollRef = useRef<any>(null);
 
+  // Dedicated container-only scroll to prevent window jumping
   const scrollToBottom = useCallback((smooth = true) => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    const el = messagesContainerRef.current;
+    if (el) {
+      if (smooth) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+  }, []);
+
+  // Ensure window stays pinned at top on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      } catch {}
     }
   }, []);
 
@@ -88,22 +90,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
       const res = await communicationApi.getInboxConversations();
       const list = res.conversations || [];
       setConversations(list);
-
-      // Pre-decrypt snippets for preview
-      for (const conv of list) {
-        if (conv.conversation_id && conv.last_message?.ciphertext) {
-          const cacheId = `conv_${conv.conversation_id}`;
-          if (!decryptedSnippets[cacheId]) {
-            getConversationCryptoKey(conv.conversation_id, currentUserId, conv.peer.id).then((k) => {
-              decryptInboxMessage(k, conv.last_message!.ciphertext, '').then((plain) => {
-                if (plain) {
-                  setDecryptedSnippets((prev) => ({ ...prev, [cacheId]: plain }));
-                }
-              });
-            });
-          }
-        }
-      }
     } catch (err: any) {
       if (!quiet) {
         console.error('[Inbox] Error fetching conversations:', err);
@@ -111,12 +97,11 @@ export const InboxView: React.FC<InboxViewProps> = ({
     } finally {
       if (!quiet) setLoadingConvos(false);
     }
-  }, [currentUserId, decryptedSnippets]);
+  }, []);
 
   // Initial load & search query params (?peer=...)
   useEffect(() => {
     fetchConversations().then(() => {
-      // Check query string for peer ID
       let peerToOpen = initialPeerId;
       if (!peerToOpen && typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
@@ -137,7 +122,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
     return () => {
       if (convoPollRef.current) clearInterval(convoPollRef.current);
     };
-  }, [initialPeerId]);
+  }, [initialPeerId, fetchConversations]);
 
   // Total unread count across all conversations
   const totalUnreadCount = useMemo(() => {
@@ -179,22 +164,10 @@ export const InboxView: React.FC<InboxViewProps> = ({
       return;
     }
 
-    // Derive crypto key
-    const key = await getConversationCryptoKey(convo.conversation_id, currentUserId, convo.peer.id);
-    setActiveKey(key);
-
     try {
       const res = await communicationApi.getInboxMessages(convo.conversation_id);
       const rawMsgs = res.messages || [];
       setMessages(rawMsgs);
-
-      // Decrypt all messages asynchronously
-      const decryptedBatch: Record<number, string> = {};
-      for (const msg of rawMsgs) {
-        const plain = await decryptInboxMessage(key, msg.ciphertext, msg.nonce);
-        decryptedBatch[msg.id] = plain;
-      }
-      setDecryptedMap((prev) => ({ ...prev, ...decryptedBatch }));
 
       // Clear unread count locally for responsive UX
       setConversations((prev) =>
@@ -203,7 +176,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
         )
       );
 
-      setTimeout(() => scrollToBottom(false), 50);
+      setTimeout(() => scrollToBottom(false), 30);
     } catch (err: any) {
       console.error('[Inbox] Error loading messages:', err);
     } finally {
@@ -225,18 +198,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
         setMessages((prev) => {
           if (freshMsgs.length > prev.length) {
-            // New message arrived!
-            if (activeKey) {
-              const newDecrypts: Record<number, string> = {};
-              for (const m of freshMsgs) {
-                if (!decryptedMap[m.id]) {
-                  decryptInboxMessage(activeKey, m.ciphertext, m.nonce).then((p) => {
-                    setDecryptedMap((cur) => ({ ...cur, [m.id]: p }));
-                  });
-                }
-              }
-            }
-            setTimeout(() => scrollToBottom(true), 50);
+            setTimeout(() => scrollToBottom(true), 40);
             return freshMsgs;
           }
           return prev;
@@ -249,9 +211,9 @@ export const InboxView: React.FC<InboxViewProps> = ({
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [selectedConvo?.conversation_id, activeKey, decryptedMap, scrollToBottom]);
+  }, [selectedConvo?.conversation_id, scrollToBottom]);
 
-  // 5. Send message
+  // 5. Send message (Backend handles AES-256-GCM encryption at rest)
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const text = inputText.trim();
@@ -270,16 +232,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
         selectedConvo.conversation_id = targetConvId;
       }
 
-      // Ensure key is ready
-      let key = activeKey;
-      if (!key) {
-        key = await getConversationCryptoKey(targetConvId, currentUserId, selectedConvo.peer.id);
-        setActiveKey(key);
-      }
-
-      // Encrypt client-side: AES-256-GCM
-      const { ciphertext, nonce } = await encryptInboxMessage(key, text);
-
       // Optimistic message placeholder
       const tempId = Date.now();
       const optimisticMsg: InboxMessage = {
@@ -288,28 +240,30 @@ export const InboxView: React.FC<InboxViewProps> = ({
         sender_id: currentUserId,
         sender_name: currentUser?.first_name || currentUser?.username || 'You',
         is_mine: true,
-        ciphertext,
-        nonce,
+        text,
+        ciphertext: text,
+        nonce: 'backend-e2ee',
         sent_at: new Date().toISOString(),
         delivered_at: null
       };
 
       setMessages((prev) => [...prev, optimisticMsg]);
-      setDecryptedMap((prev) => ({ ...prev, [tempId]: text }));
       setTimeout(() => scrollToBottom(true), 20);
 
       // Dispatch to API
       const sentRes = await communicationApi.sendInboxMessage(
         targetConvId,
-        ciphertext,
-        nonce
+        text
       );
 
       // Update real message ID & delivered status
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, id: sentRes.message_id, sent_at: sentRes.sent_at } : m))
+        prev.map((m) =>
+          m.id === tempId
+            ? { ...m, id: sentRes.message_id, sent_at: sentRes.sent_at }
+            : m
+        )
       );
-      setDecryptedMap((prev) => ({ ...prev, [sentRes.message_id]: text }));
 
       // Update conversation snippet and total count in sidebar
       setConversations((prev) =>
@@ -321,9 +275,11 @@ export const InboxView: React.FC<InboxViewProps> = ({
               total_messages: (c.total_messages || 0) + 1,
               who_msg_first: c.who_msg_first === 'none' ? 'you' : c.who_msg_first,
               who_msg_first_label:
-                c.who_msg_first === 'none' ? 'You initiated' : c.who_msg_first_label,
+                c.who_msg_first === 'none' ? 'You initiated this chat' : c.who_msg_first_label,
               last_message: {
-                ciphertext,
+                text,
+                ciphertext: text,
+                sender_name: 'You',
                 sent_at: sentRes.sent_at,
                 is_mine: true,
                 delivered: false
@@ -334,7 +290,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
           return c;
         })
       );
-      setDecryptedSnippets((prev) => ({ ...prev, [`conv_${targetConvId}`]: text }));
     } catch (err: any) {
       if (notify) notify(err?.message || 'Failed to send encrypted message.');
       console.error('[Inbox] Send error:', err);
@@ -490,11 +445,17 @@ export const InboxView: React.FC<InboxViewProps> = ({
             ) : (
               filteredConversations.map((convo) => {
                 const isSelected = selectedConvo?.peer.id === convo.peer.id;
-                const snippet =
-                  decryptedSnippets[`conv_${convo.conversation_id}`] ||
-                  (convo.total_messages === 0
-                    ? 'Connected — start the conversation!'
-                    : 'Encrypted message');
+
+                // Format clean snippet: shows sender or receiver name + readable message text
+                const lastMsg = convo.last_message;
+                let snippet = 'Connected — start the conversation!';
+                if (lastMsg) {
+                  const author = lastMsg.is_mine
+                    ? 'You'
+                    : (lastMsg.sender_name || convo.peer.name.split(' ')[0]);
+                  const content = lastMsg.text || lastMsg.ciphertext || 'New message';
+                  snippet = `${author}: ${content}`;
+                }
 
                 return (
                   <div
@@ -526,9 +487,12 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         </span>
                       </div>
 
+                      {/* Snippet: shows sender or receiver name + last message cleanly */}
                       <div className="inbox-convo-sub">
-                        <span className={`inbox-snippet ${convo.unread_count > 0 ? 'unread' : ''}`}>
-                          {convo.last_message?.is_mine ? 'You: ' : ''}
+                        <span
+                          className={`inbox-snippet ${convo.unread_count > 0 ? 'unread' : ''}`}
+                          title={snippet}
+                        >
                           {snippet}
                         </span>
                         {convo.unread_count > 0 && (
@@ -613,20 +577,20 @@ export const InboxView: React.FC<InboxViewProps> = ({
                 {/* E2EE Verification Shield */}
                 <div
                   className="inbox-e2ee-badge"
-                  title="Messages are protected by AES-256-GCM authenticated encryption. Optimus Orien cannot read your plaintext messages."
+                  title="Messages are protected by AES-256-GCM backend authenticated encryption. Zero plaintext is stored in the database."
                 >
                   <Lock size={13} />
                   <span>End-to-End Encrypted</span>
                 </div>
               </div>
 
-              {/* Messages History Scroller */}
-              <div className="inbox-messages-scroll">
+              {/* Messages History Scroller (Uses container-only scroll to avoid window scroll) */}
+              <div className="inbox-messages-scroll" ref={messagesContainerRef}>
                 {/* Privacy Banner */}
                 <div className="inbox-e2ee-notice">
                   <Shield size={14} style={{ display: 'inline', verticalAlign: 'text-top', marginRight: 4 }} />
-                  <strong>Zero-Knowledge End-to-End Encryption Active.</strong> Messages between you and{' '}
-                  <strong>{selectedConvo.peer.name}</strong> are encrypted directly on your device.
+                  <strong>Zero-Knowledge Encryption Active.</strong> Messages between you and{' '}
+                  <strong>{selectedConvo.peer.name}</strong> are encrypted at rest with AES-256-GCM.
                 </div>
 
                 {loadingMessages ? (
@@ -636,7 +600,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       className="inbox-spin"
                       style={{ margin: '0 auto 10px auto', display: 'block', animation: 'spin 1s linear infinite' }}
                     />
-                    Decrypting message history...
+                    Loading message history...
                   </div>
                 ) : messages.length === 0 ? (
                   <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
@@ -664,7 +628,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   </div>
                 ) : (
                   messages.map((msg) => {
-                    const plain = decryptedMap[msg.id] || msg.ciphertext;
+                    const messageText = msg.text || msg.ciphertext;
                     const isMine = msg.is_mine;
 
                     return (
@@ -673,7 +637,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         className={`inbox-message-row ${isMine ? 'mine' : 'theirs'}`}
                       >
                         <div className={`inbox-msg-bubble ${isMine ? 'mine' : 'theirs'}`}>
-                          <div className="inbox-msg-text">{plain}</div>
+                          <div className="inbox-msg-text">{messageText}</div>
                           <div className="inbox-msg-footer">
                             <span>{formatTime(msg.sent_at)}</span>
                             {isMine && (
@@ -691,7 +655,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     );
                   })
                 )}
-                <div ref={messagesEndRef} />
               </div>
 
               {/* Chat Input Bar */}
@@ -704,6 +667,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={sending}
+                  autoComplete="off"
                 />
                 <button
                   type="submit"
