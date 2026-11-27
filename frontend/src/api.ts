@@ -143,7 +143,7 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     credentials: 'include',
     cache: options.cache || (isAuthMe ? 'no-store' : 'default'),
     headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
       ...(!isSafe && token ? { 'X-CSRFToken': token } : {}),
       ...(isAuthMe ? { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } : {}),
       ...(options.headers || {})

@@ -135,6 +135,8 @@ urlpatterns = [
     path('timetables/', platform_owner.class_timetables),
     path('timetables/<int:pk>/', platform_owner.timetable_detail),
     path('imports/csv/', imports.csv_import),
+    path('imports/template/', imports.download_import_template),
+    path('imports/inspect-file/', imports.inspect_import_file),
 
     # Subscription, Invoicing & Entitlements
     path('public/pricing/', subscription_views.public_pricing_view),
