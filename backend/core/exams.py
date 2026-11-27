@@ -851,6 +851,8 @@ def _sync_scale_to_school_configuration(scale):
         'homework_weight': float(scale.homework_weight),
         'classwork_weight': float(scale.classwork_weight),
         'attendance_weight': float(scale.attendance_weight),
+        'custom_components': scale.custom_components or [],
+        'custom_presets': scale.custom_presets or [],
         'grading_scale_id': scale.id,
         'grading_scale_name': scale.name,
         'description': f"Exams {scale.exam_weight}%, Homework {scale.homework_weight}%, Classwork {scale.classwork_weight}%, Attendance {scale.attendance_weight}%. Passing threshold: {scale.passing_percentage}%"
@@ -879,6 +881,8 @@ def grading_scales(request):
             'homework_weight': str(s.homework_weight),
             'classwork_weight': str(s.classwork_weight),
             'attendance_weight': str(s.attendance_weight),
+            'custom_components': s.custom_components or [],
+            'custom_presets': s.custom_presets or [],
             'description': s.description,
             'bands': [{
                 'id': b.id,
@@ -905,9 +909,19 @@ def grading_scales(request):
     hw_w = Decimal(str(request.data.get('homework_weight', '20.00')))
     cw_w = Decimal(str(request.data.get('classwork_weight', '15.00')))
     att_w = Decimal(str(request.data.get('attendance_weight', '5.00')))
+    custom_components = request.data.get('custom_components') or []
+    custom_presets = request.data.get('custom_presets') or []
     desc = (request.data.get('description') or '').strip()[:255]
 
-    total_weight = exam_w + hw_w + cw_w + att_w
+    custom_sum = Decimal('0.00')
+    if isinstance(custom_components, list):
+        for c in custom_components:
+            try:
+                custom_sum += Decimal(str(c.get('weight', 0)))
+            except Exception:
+                pass
+
+    total_weight = exam_w + hw_w + cw_w + att_w + custom_sum
     if abs(total_weight - Decimal('100.00')) > Decimal('0.01'):
         raise ValidationError({'weights': f"Total assessment weightage must equal 100.00%. Current sum: {total_weight}%"})
 
@@ -926,6 +940,8 @@ def grading_scales(request):
             homework_weight=hw_w,
             classwork_weight=cw_w,
             attendance_weight=att_w,
+            custom_components=custom_components,
+            custom_presets=custom_presets,
             description=desc
         )
 
@@ -954,6 +970,8 @@ def grading_scales(request):
         'homework_weight': str(scale.homework_weight),
         'classwork_weight': str(scale.classwork_weight),
         'attendance_weight': str(scale.attendance_weight),
+        'custom_components': scale.custom_components or [],
+        'custom_presets': scale.custom_presets or [],
         'passing_percentage': str(scale.passing_percentage)
     }, status=201)
 
@@ -981,6 +999,8 @@ def grading_scale_detail(request, pk):
             'homework_weight': str(scale.homework_weight),
             'classwork_weight': str(scale.classwork_weight),
             'attendance_weight': str(scale.attendance_weight),
+            'custom_components': scale.custom_components or [],
+            'custom_presets': scale.custom_presets or [],
             'description': scale.description,
             'bands': [{
                 'id': b.id,
@@ -1015,9 +1035,19 @@ def grading_scale_detail(request, pk):
     hw_w = Decimal(str(request.data.get('homework_weight', scale.homework_weight)))
     cw_w = Decimal(str(request.data.get('classwork_weight', scale.classwork_weight)))
     att_w = Decimal(str(request.data.get('attendance_weight', scale.attendance_weight)))
+    custom_components = request.data.get('custom_components') if 'custom_components' in request.data else (scale.custom_components or [])
+    custom_presets = request.data.get('custom_presets') if 'custom_presets' in request.data else (scale.custom_presets or [])
     desc = (request.data.get('description') or scale.description or '').strip()[:255]
 
-    total_weight = exam_w + hw_w + cw_w + att_w
+    custom_sum = Decimal('0.00')
+    if isinstance(custom_components, list):
+        for c in custom_components:
+            try:
+                custom_sum += Decimal(str(c.get('weight', 0)))
+            except Exception:
+                pass
+
+    total_weight = exam_w + hw_w + cw_w + att_w + custom_sum
     if abs(total_weight - Decimal('100.00')) > Decimal('0.01'):
         raise ValidationError({'weights': f"Total assessment weightage must equal 100.00%. Current sum: {total_weight}%"})
 
@@ -1032,6 +1062,8 @@ def grading_scale_detail(request, pk):
         scale.homework_weight = hw_w
         scale.classwork_weight = cw_w
         scale.attendance_weight = att_w
+        scale.custom_components = custom_components
+        scale.custom_presets = custom_presets
         scale.description = desc
         scale.save()
 
@@ -1062,6 +1094,8 @@ def grading_scale_detail(request, pk):
         'homework_weight': str(scale.homework_weight),
         'classwork_weight': str(scale.classwork_weight),
         'attendance_weight': str(scale.attendance_weight),
+        'custom_components': scale.custom_components or [],
+        'custom_presets': scale.custom_presets or [],
         'passing_percentage': str(scale.passing_percentage)
     })
 
@@ -1138,6 +1172,7 @@ def grading_scale_composite_evaluation(request):
         hw_w = scale.homework_weight if scale else Decimal('20.00')
         cw_w = scale.classwork_weight if scale else Decimal('15.00')
         att_w = scale.attendance_weight if scale else Decimal('5.00')
+        custom_components = (scale.custom_components or []) if scale else []
 
         # 1. Exam Score
         csr = CalculatedStudentResult.objects.filter(student=student).order_by('-configuration__version', '-id').first()
@@ -1146,7 +1181,7 @@ def grading_scale_composite_evaluation(request):
         else:
             exam_grades = Grade.objects.filter(student=student, assessment__exam_term__isnull=False).select_related('assessment')
             if exam_grades.exists():
-                pcts = [g.percentage for g in exam_grades if g.percentage is not None]
+                pcts = [Decimal(str(g.percentage)) for g in exam_grades if g.percentage is not None]
                 exam_score = sum(pcts) / Decimal(len(pcts)) if pcts else None
             else:
                 exam_score = None
@@ -1165,7 +1200,7 @@ def grading_scale_composite_evaluation(request):
         # 3. Classwork Score
         cw_grades = Grade.objects.filter(student=student, assessment__exam_term__isnull=True)
         if cw_grades.exists():
-            cw_pcts = [g.percentage for g in cw_grades if g.percentage is not None]
+            cw_pcts = [Decimal(str(g.percentage)) for g in cw_grades if g.percentage is not None]
             classwork_score = sum(cw_pcts) / Decimal(len(cw_pcts)) if cw_pcts else None
         else:
             classwork_score = None
@@ -1209,6 +1244,50 @@ def grading_scale_composite_evaluation(request):
                 'contribution': float(att_score * att_w / Decimal('100.00'))
             })
 
+        # 5. Dynamic Custom Components
+        sim_scores = request.data.get('custom_scores') if isinstance(request.data.get('custom_scores'), dict) else {}
+        for comp in custom_components:
+            comp_name = str(comp.get('name', 'Custom Assessment')).strip()
+            try:
+                comp_w = Decimal(str(comp.get('weight', 0)))
+            except Exception:
+                comp_w = Decimal('0.00')
+            if comp_w <= Decimal('0.00'):
+                continue
+
+            custom_score = None
+            if comp_name in sim_scores or str(comp.get('id', '')) in sim_scores:
+                val = sim_scores.get(comp_name) if comp_name in sim_scores else sim_scores.get(str(comp.get('id', '')))
+                try:
+                    custom_score = Decimal(str(val))
+                except Exception:
+                    custom_score = None
+
+            if custom_score is None:
+                comp_grades = Grade.objects.filter(
+                    student=student
+                ).filter(
+                    Q(assessment__title__icontains=comp_name)
+                ).select_related('assessment')
+                if comp_grades.exists():
+                    pcts = [Decimal(str(g.percentage)) for g in comp_grades if g.percentage is not None]
+                    if pcts:
+                        custom_score = sum(pcts) / Decimal(len(pcts))
+
+            if custom_score is None:
+                if classwork_score is not None:
+                    custom_score = classwork_score
+                elif exam_score is not None:
+                    custom_score = exam_score
+
+            if custom_score is not None:
+                components.append({
+                    'component': comp_name,
+                    'score': float(custom_score),
+                    'weight': float(comp_w),
+                    'contribution': float(custom_score * comp_w / Decimal('100.00'))
+                })
+
         if components:
             tot_assessed_w = sum(c['weight'] for c in components)
             if tot_assessed_w > 0:
@@ -1241,7 +1320,8 @@ def grading_scale_composite_evaluation(request):
                 'exam_weight': float(exam_w),
                 'homework_weight': float(hw_w),
                 'classwork_weight': float(cw_w),
-                'attendance_weight': float(att_w)
+                'attendance_weight': float(att_w),
+                'custom_components': custom_components
             }
         })
 

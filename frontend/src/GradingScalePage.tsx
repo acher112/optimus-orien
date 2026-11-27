@@ -2,10 +2,29 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   SlidersHorizontal, Award, Check, CheckCircle2, AlertCircle, Building2,
   Sparkles, RefreshCw, Plus, Trash2, Edit3, Save, ArrowRight, ShieldCheck,
-  Layers, FileText, TrendingUp, BookOpen, ClipboardCheck, ClipboardList, HelpCircle
+  Layers, FileText, TrendingUp, BookOpen, ClipboardCheck, ClipboardList, HelpCircle,
+  BookmarkPlus, X, Bookmark
 } from 'lucide-react';
 import { request, type User, type Resource } from './api';
 import { getGradeBadgeStyle, getScoreColorStyle } from './performanceColors';
+
+export interface CustomComponentItem {
+  id: string;
+  name: string;
+  weight: number;
+  description?: string;
+}
+
+export interface CustomPresetItem {
+  id: string;
+  name: string;
+  exam_weight: number;
+  homework_weight: number;
+  classwork_weight: number;
+  attendance_weight: number;
+  custom_components: CustomComponentItem[];
+  description?: string;
+}
 
 interface GradeBandItem {
   id?: number;
@@ -27,6 +46,8 @@ interface GradingScaleItem {
   homework_weight: string;
   classwork_weight: string;
   attendance_weight: string;
+  custom_components?: CustomComponentItem[];
+  custom_presets?: CustomPresetItem[];
   description: string;
   bands: GradeBandItem[];
   updated_at?: string;
@@ -40,6 +61,15 @@ interface GradingScalePageProps {
   campuses: any[];
   onNavigate?: (page: string) => void;
 }
+
+const CUSTOM_PALETTES = [
+  { bg: '#fdf2f8', border: '#fbcfe8', text: '#9d174d', accent: '#ec4899', bar: '#ec4899', iconColor: '#db2777' }, // Pink
+  { bg: '#ecfeff', border: '#a5f3fc', text: '#155e75', accent: '#06b6d4', bar: '#06b6d4', iconColor: '#0891b2' }, // Cyan
+  { bg: '#f5f3ff', border: '#ddd6fe', text: '#5b21b6', accent: '#8b5cf6', bar: '#8b5cf6', iconColor: '#7c3aed' }, // Indigo
+  { bg: '#fff1f2', border: '#fecdd3', text: '#9f1239', accent: '#f43f5e', bar: '#f43f5e', iconColor: '#e11d48' }, // Rose
+  { bg: '#f0fdfa', border: '#99f6e4', text: '#115e59', accent: '#14b8a6', bar: '#14b8a6', iconColor: '#0d9488' }, // Teal
+  { bg: '#fefce8', border: '#fef08a', text: '#854d0e', accent: '#eab308', bar: '#eab308', iconColor: '#ca8a04' }, // Yellow
+];
 
 const PRESET_TEMPLATES = [
   {
@@ -114,6 +144,13 @@ export default function GradingScalePage({
   const [bands, setBands] = useState<GradeBandItem[]>(DEFAULT_STANDARD_BANDS);
   const [isDefault, setIsDefault] = useState(true);
 
+  // Dynamic Custom Assessment Components & Custom Presets
+  const [customComponents, setCustomComponents] = useState<CustomComponentItem[]>([]);
+  const [customPresets, setCustomPresets] = useState<CustomPresetItem[]>([]);
+  const [presetModalOpen, setPresetModalOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetDescription, setNewPresetDescription] = useState('');
+
   // Composite Verification / Test State
   const [testStudents, setTestStudents] = useState<any[]>([]);
   const [selectedTestStudentId, setSelectedTestStudentId] = useState<string>('');
@@ -126,10 +163,11 @@ export default function GradingScalePage({
     return campuses.length > 0 ? campuses[0].id : null;
   }, [activeCampusId, user.school, campuses]);
 
-  // Compute total weight
+  // Compute total weight (core components + all dynamic custom components)
   const totalWeight = useMemo(() => {
-    return Number((Number(examWeight || 0) + Number(hwWeight || 0) + Number(cwWeight || 0) + Number(attWeight || 0)).toFixed(2));
-  }, [examWeight, hwWeight, cwWeight, attWeight]);
+    const customSum = (customComponents || []).reduce((acc, c) => acc + (Number(c.weight) || 0), 0);
+    return Number((Number(examWeight || 0) + Number(hwWeight || 0) + Number(cwWeight || 0) + Number(attWeight || 0) + customSum).toFixed(2));
+  }, [examWeight, hwWeight, cwWeight, attWeight, customComponents]);
 
   const isWeightValid = Math.abs(totalWeight - 100) < 0.01;
 
@@ -170,6 +208,8 @@ export default function GradingScalePage({
     setHwWeight(parseFloat(scale.homework_weight) || 20);
     setCwWeight(parseFloat(scale.classwork_weight) || 15);
     setAttWeight(parseFloat(scale.attendance_weight) || 5);
+    setCustomComponents(scale.custom_components && Array.isArray(scale.custom_components) ? scale.custom_components : []);
+    setCustomPresets(scale.custom_presets && Array.isArray(scale.custom_presets) ? scale.custom_presets : []);
     setPassingPercentage(parseFloat(scale.passing_percentage) || 40);
     setDescription(scale.description || '');
     setIsDefault(scale.is_default);
@@ -186,6 +226,8 @@ export default function GradingScalePage({
     setHwWeight(20);
     setCwWeight(15);
     setAttWeight(5);
+    setCustomComponents([]);
+    setCustomPresets([]);
     setPassingPercentage(40);
     setDescription('Institutional assessment weightage and grade mapping criteria.');
     setIsDefault(true);
@@ -202,8 +244,104 @@ export default function GradingScalePage({
     setHwWeight(preset.homework_weight);
     setCwWeight(preset.classwork_weight);
     setAttWeight(preset.attendance_weight);
+    setCustomComponents([]);
     setDescription(preset.description);
     notify(`Applied preset: ${preset.name}`);
+  };
+
+  const applyCustomPreset = (preset: CustomPresetItem) => {
+    setExamWeight(preset.exam_weight);
+    setHwWeight(preset.homework_weight);
+    setCwWeight(preset.classwork_weight);
+    setAttWeight(preset.attendance_weight);
+    setCustomComponents(preset.custom_components ? JSON.parse(JSON.stringify(preset.custom_components)) : []);
+    if (preset.description) setDescription(preset.description);
+    notify(`Applied custom preset: ${preset.name}`);
+  };
+
+  // Custom Component Handlers
+  const handleAddCustomComponent = () => {
+    const id = `comp_${Date.now()}`;
+    const nextIdx = customComponents.length + 1;
+    const defaultName = nextIdx === 1 ? 'Lab & Practical' : (nextIdx === 2 ? 'Project & Presentation' : `Custom Component ${nextIdx}`);
+    setCustomComponents(prev => [
+      ...prev,
+      {
+        id,
+        name: defaultName,
+        weight: 0,
+        description: 'Practical lab experiments, viva, or course project assessment.'
+      }
+    ]);
+  };
+
+  const handleRemoveCustomComponent = (id: string) => {
+    setCustomComponents(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleCustomComponentChange = (id: string, field: keyof CustomComponentItem, val: any) => {
+    setCustomComponents(prev => prev.map(c => c.id === id ? { ...c, [field]: val } : c));
+  };
+
+  // Custom Preset Handlers
+  const handleSaveCustomPreset = async () => {
+    if (!newPresetName.trim()) {
+      notify('Preset name is required.');
+      return;
+    }
+    if (!isWeightValid) {
+      notify(`Total assessment weightage must equal 100.00% to save as preset. Current sum: ${totalWeight}%`);
+      return;
+    }
+
+    const newPreset: CustomPresetItem = {
+      id: `pre_${Date.now()}`,
+      name: newPresetName.trim(),
+      exam_weight: examWeight,
+      homework_weight: hwWeight,
+      classwork_weight: cwWeight,
+      attendance_weight: attWeight,
+      custom_components: JSON.parse(JSON.stringify(customComponents)),
+      description: newPresetDescription.trim() || `Custom criteria preset (${examWeight}/${hwWeight}/${cwWeight}/${attWeight})`
+    };
+
+    const updatedPresets = [...customPresets, newPreset];
+    setCustomPresets(updatedPresets);
+    setPresetModalOpen(false);
+    setNewPresetName('');
+    setNewPresetDescription('');
+
+    // If currently editing an existing scale, persist preset immediately
+    if (selectedScaleId) {
+      try {
+        await request(`exams/grading-scales/${selectedScaleId}/`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            custom_presets: updatedPresets
+          })
+        });
+      } catch (e) {
+        // Ignored; handleSave will persist anyway
+      }
+    }
+    notify(`Custom preset "${newPreset.name}" saved successfully!`);
+  };
+
+  const handleDeleteCustomPreset = async (presetId: string) => {
+    if (!confirm('Are you sure you want to delete this custom preset?')) return;
+    const updated = customPresets.filter(p => p.id !== presetId);
+    setCustomPresets(updated);
+    if (selectedScaleId) {
+      try {
+        await request(`exams/grading-scales/${selectedScaleId}/`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            custom_presets: updated
+          })
+        });
+      } catch (e) {}
+    }
+    notify('Custom preset removed.');
   };
 
   // Save criteria / scale
@@ -230,6 +368,8 @@ export default function GradingScalePage({
         homework_weight: hwWeight,
         classwork_weight: cwWeight,
         attendance_weight: attWeight,
+        custom_components: customComponents,
+        custom_presets: customPresets,
         description: description.trim(),
         bands: bands.map(b => ({
           min_percent: parseFloat(String(b.min_percent)),
@@ -430,17 +570,35 @@ export default function GradingScalePage({
                   Institutional Criteria Presets
                 </h3>
               </div>
-              <span className="pill purple" style={{ fontSize: 11, padding: '3px 8px' }}>
-                Campus: {String(campuses.find((c: any) => c.id === effectiveCampusId)?.name || 'All Campuses')}
-              </span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() => setPresetModalOpen(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, height: 32, padding: '0 10px', color: '#6366f1', borderColor: '#c7d2fe' }}
+                  title="Save current weight distribution as a reusable preset"
+                >
+                  <BookmarkPlus size={14} /> + Save Current Breakdown as Preset
+                </button>
+                <span className="pill purple" style={{ fontSize: 11, padding: '3px 8px' }}>
+                  Campus: {String(campuses.find((c: any) => c.id === effectiveCampusId)?.name || 'All Campuses')}
+                </span>
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+              {/* Built-in Presets */}
               {PRESET_TEMPLATES.map((p, i) => {
-                const isActive = (examWeight === p.exam_weight && hwWeight === p.homework_weight && cwWeight === p.classwork_weight && attWeight === p.attendance_weight);
+                const isActive = (
+                  examWeight === p.exam_weight &&
+                  hwWeight === p.homework_weight &&
+                  cwWeight === p.classwork_weight &&
+                  attWeight === p.attendance_weight &&
+                  customComponents.length === 0
+                );
                 return (
                   <div
-                    key={i}
+                    key={`std_${i}`}
                     onClick={() => applyPreset(p)}
                     className={`preset-card-pro ${isActive ? 'active' : ''}`}
                   >
@@ -468,6 +626,86 @@ export default function GradingScalePage({
                   </div>
                 );
               })}
+
+              {/* Saved Custom Presets */}
+              {customPresets.map((p) => {
+                const isActive = (
+                  examWeight === p.exam_weight &&
+                  hwWeight === p.homework_weight &&
+                  cwWeight === p.classwork_weight &&
+                  attWeight === p.attendance_weight &&
+                  JSON.stringify(customComponents.map(c => ({ name: c.name, weight: c.weight }))) ===
+                  JSON.stringify((p.custom_components || []).map(c => ({ name: c.name, weight: c.weight })))
+                );
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => applyCustomPreset(p)}
+                    className={`preset-card-pro ${isActive ? 'active' : ''}`}
+                    style={{ position: 'relative' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="pill purple" style={{ fontSize: 9, padding: '1px 5px' }}>Custom</span>
+                        <strong style={{ fontSize: 13, color: '#1e293b' }}>{p.name}</strong>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {isActive && (
+                          <span className="pill green" style={{ fontSize: 10, padding: '2px 6px' }}>Active</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCustomPreset(p.id);
+                          }}
+                          title="Delete custom preset"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#94a3b8',
+                            padding: 2,
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="preset-weight-bar">
+                      <div style={{ width: `${p.exam_weight}%`, background: '#6366f1' }} title={`Exams: ${p.exam_weight}%`} />
+                      <div style={{ width: `${p.homework_weight}%`, background: '#3b82f6' }} title={`Homework: ${p.homework_weight}%`} />
+                      <div style={{ width: `${p.classwork_weight}%`, background: '#10b981' }} title={`Classwork: ${p.classwork_weight}%`} />
+                      <div style={{ width: `${p.attendance_weight}%`, background: '#f59e0b' }} title={`Attendance: ${p.attendance_weight}%`} />
+                      {(p.custom_components || []).map((cc, cidx) => {
+                        const pal = CUSTOM_PALETTES[cidx % CUSTOM_PALETTES.length];
+                        return (
+                          <div key={cc.id || cidx} style={{ width: `${cc.weight}%`, background: pal.bar }} title={`${cc.name}: ${cc.weight}%`} />
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 11, color: '#64748b', alignItems: 'center' }}>
+                      <span><strong>{p.exam_weight}%</strong> Exams</span>
+                      <span>·</span>
+                      <span><strong>{p.homework_weight}%</strong> HW</span>
+                      <span>·</span>
+                      <span><strong>{p.classwork_weight}%</strong> CW</span>
+                      <span>·</span>
+                      <span><strong>{p.attendance_weight}%</strong> Att</span>
+                      {(p.custom_components || []).map((cc, cidx) => (
+                        <React.Fragment key={cc.id || cidx}>
+                          <span>·</span>
+                          <span><strong>{cc.weight}%</strong> {cc.name}</span>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
@@ -480,30 +718,51 @@ export default function GradingScalePage({
                 </h3>
               </div>
 
-              {/* Total Weight Sum Badge */}
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 14px',
-                borderRadius: 20,
-                background: isWeightValid ? '#ecfdf5' : '#fef2f2',
-                color: isWeightValid ? '#059669' : '#dc2626',
-                fontWeight: 700,
-                fontSize: 13,
-                border: `1px solid ${isWeightValid ? '#a7f3d0' : '#fecaca'}`
-              }}>
-                {isWeightValid ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                <span>Total Weight: {totalWeight.toFixed(1)}% / 100.0%</span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={handleAddCustomComponent}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, height: 36, padding: '0 12px' }}
+                >
+                  <Plus size={15} /> Add Custom Assessment Component
+                </button>
+
+                {/* Total Weight Sum Badge */}
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  background: isWeightValid ? '#ecfdf5' : '#fef2f2',
+                  color: isWeightValid ? '#059669' : '#dc2626',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  border: `1px solid ${isWeightValid ? '#a7f3d0' : '#fecaca'}`
+                }}>
+                  {isWeightValid ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  <span>Total Weight: {totalWeight.toFixed(1)}% / 100.0%</span>
+                </div>
               </div>
             </div>
 
-            {/* Live Progress Bar */}
+            {/* Live Progress Bar with Core + Custom Components */}
             <div style={{ width: '100%', height: 12, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', display: 'flex', marginBottom: 20 }}>
               <div style={{ width: `${Math.min(100, examWeight)}%`, background: '#6366f1', transition: 'width 0.2s' }} title={`Exams: ${examWeight}%`} />
               <div style={{ width: `${Math.min(100, hwWeight)}%`, background: '#3b82f6', transition: 'width 0.2s' }} title={`Homework: ${hwWeight}%`} />
               <div style={{ width: `${Math.min(100, cwWeight)}%`, background: '#10b981', transition: 'width 0.2s' }} title={`Classwork: ${cwWeight}%`} />
               <div style={{ width: `${Math.min(100, attWeight)}%`, background: '#f59e0b', transition: 'width 0.2s' }} title={`Attendance: ${attWeight}%`} />
+              {customComponents.map((c, i) => {
+                const pal = CUSTOM_PALETTES[i % CUSTOM_PALETTES.length];
+                return (
+                  <div
+                    key={c.id || i}
+                    style={{ width: `${Math.min(100, c.weight)}%`, background: pal.bar, transition: 'width 0.2s' }}
+                    title={`${c.name}: ${c.weight}%`}
+                  />
+                );
+              })}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16, marginBottom: 24 }}>
@@ -598,6 +857,103 @@ export default function GradingScalePage({
                   Institutional attendance threshold percentage.
                 </p>
               </div>
+
+              {/* Dynamic Custom Component Cards */}
+              {customComponents.map((comp, idx) => {
+                const palette = CUSTOM_PALETTES[idx % CUSTOM_PALETTES.length];
+                return (
+                  <div
+                    key={comp.id || idx}
+                    style={{
+                      padding: 16,
+                      borderRadius: 10,
+                      background: palette.bg,
+                      border: `1px solid ${palette.border}`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      position: 'relative'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, color: palette.text }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+                          <Layers size={18} color={palette.iconColor} />
+                          <input
+                            type="text"
+                            value={comp.name}
+                            onChange={e => handleCustomComponentChange(comp.id, 'name', e.target.value)}
+                            placeholder="Component Name (e.g. Lab, Project)"
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              background: 'transparent',
+                              border: 'none',
+                              borderBottom: `1.5px dashed ${palette.border}`,
+                              color: palette.text,
+                              width: '100%',
+                              padding: '2px 0'
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCustomComponent(comp.id)}
+                          title="Remove custom component"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#ef4444',
+                            padding: 4,
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={comp.weight}
+                          onChange={e => handleCustomComponentChange(comp.id, 'weight', parseFloat(e.target.value) || 0)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            fontSize: 16,
+                            fontWeight: 700,
+                            borderRadius: 6,
+                            border: `1px solid ${palette.border}`,
+                            background: '#ffffff'
+                          }}
+                        />
+                        <span style={{ fontSize: 15, fontWeight: 600, color: palette.text }}>%</span>
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={comp.description || ''}
+                      onChange={e => handleCustomComponentChange(comp.id, 'description', e.target.value)}
+                      placeholder="Criteria notes / details…"
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        fontSize: 11,
+                        borderRadius: 4,
+                        border: '1px solid rgba(0,0,0,0.08)',
+                        background: 'rgba(255,255,255,0.7)',
+                        color: palette.text
+                      }}
+                    />
+                  </div>
+                );
+              })}
             </div>
 
             {/* Additional Policy Settings */}
@@ -827,6 +1183,7 @@ export default function GradingScalePage({
                   <th>HOMEWORK</th>
                   <th>CLASSWORK</th>
                   <th>ATTENDANCE</th>
+                  <th>CUSTOM / LAB</th>
                   <th>PASS %</th>
                   <th style={{ textAlign: 'right' }}>ACTIONS</th>
                 </tr>
@@ -855,6 +1212,19 @@ export default function GradingScalePage({
                     <td><span className="pill blue" style={{ fontWeight: 700 }}>{scale.homework_weight}%</span></td>
                     <td><span className="pill green" style={{ fontWeight: 700 }}>{scale.classwork_weight}%</span></td>
                     <td><span className="pill amber" style={{ fontWeight: 700 }}>{scale.attendance_weight}%</span></td>
+                    <td>
+                      {scale.custom_components && scale.custom_components.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {scale.custom_components.map((cc, cci) => (
+                            <span key={cci} className="pill" style={{ fontSize: 10, fontWeight: 700, background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8' }}>
+                              {cc.name}: {cc.weight}%
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
+                      )}
+                    </td>
                     <td><strong>{scale.passing_percentage}%</strong></td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: 6 }}>
@@ -892,7 +1262,7 @@ export default function GradingScalePage({
                 ))}
                 {scales.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                       No criteria defined yet. Click &quot;Create New Campus Criteria&quot; above to setup your first scale.
                     </td>
                   </tr>
@@ -1009,6 +1379,107 @@ export default function GradingScalePage({
             </div>
           )}
         </section>
+      )}
+
+      {/* Save Preset Modal Overlay */}
+      {presetModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: 16
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 14,
+            maxWidth: 480,
+            width: '100%',
+            padding: 24,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: '1px solid #e2e8f0'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BookmarkPlus size={20} color="#6366f1" />
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f172a' }}>
+                  Save Custom Criteria Preset
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPresetModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4 }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px', lineHeight: 1.4 }}>
+              Save your current weight distribution as a reusable institutional preset for this campus.
+            </p>
+
+            {/* Breakdown summary */}
+            <div style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+                Active Breakdown (Total: {totalWeight.toFixed(1)}%)
+              </div>
+              <div style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
+                {examWeight}% Exams · {hwWeight}% HW · {cwWeight}% CW · {attWeight}% Att
+                {customComponents.map((c, i) => ` · ${c.weight}% ${c.name}`).join('')}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                Preset Name *
+              </label>
+              <input
+                type="text"
+                value={newPresetName}
+                onChange={e => setNewPresetName(e.target.value)}
+                placeholder="e.g. Science STEM Focus (50/15/15/5/15 Lab)"
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                Preset Notes / Description
+              </label>
+              <input
+                type="text"
+                value={newPresetDescription}
+                onChange={e => setNewPresetDescription(e.target.value)}
+                placeholder="e.g. Formative and summative science curriculum distribution."
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="outline-btn"
+                onClick={() => setPresetModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={handleSaveCustomPreset}
+                disabled={!newPresetName.trim()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Save size={15} /> Save Preset
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -881,16 +881,29 @@ class GradingScale(models.Model):
     classwork_weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('15.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
     attendance_weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('5.00'), validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
 
+    # Dynamic custom breakdown components (e.g. Lab & Practical, Projects, Oral Exam)
+    custom_components = models.JSONField(default=list, blank=True)
+    # Saved institutional criteria presets
+    custom_presets = models.JSONField(default=list, blank=True)
+
     description = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
         super().clean()
+        custom_sum = Decimal('0.00')
+        if isinstance(self.custom_components, list):
+            for c in self.custom_components:
+                try:
+                    w = Decimal(str(c.get('weight', 0)))
+                    custom_sum += w
+                except Exception:
+                    pass
         total_weight = (self.exam_weight or Decimal('0.00')) + \
                        (self.homework_weight or Decimal('0.00')) + \
                        (self.classwork_weight or Decimal('0.00')) + \
-                       (self.attendance_weight or Decimal('0.00'))
+                       (self.attendance_weight or Decimal('0.00')) + custom_sum
         if abs(total_weight - Decimal('100.00')) > Decimal('0.01'):
             raise ValidationError(f"Total assessment criteria weightage must equal 100.00%. Current sum: {total_weight}%")
 
