@@ -121,6 +121,18 @@ export default function CommunityView({ notify }: CommunityViewProps) {
     }
   };
 
+  const handleOpenChat = async (peerUserId: number) => {
+    try {
+      await communicationApi.openInboxConversation(peerUserId);
+    } catch (err: any) {
+      console.warn('[Community] openInboxConversation error:', err);
+    }
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', `/app/inbox?peer=${peerUserId}`);
+      window.dispatchEvent(new CustomEvent('optimus_navigate', { detail: { page: 'Inbox', peerId: peerUserId } }));
+    }
+  };
+
   return (
     <div className="comm-page-wrapper">
       <div className="comm-suite-container">
@@ -302,9 +314,21 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                           No Portal Account
                         </span>
                       ) : it.status === 'connected' ? (
-                        <span className="comm-badge-connected">
-                          <CheckCircle2 size={13} /> Connected
-                        </span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span className="comm-badge-connected">
+                            <CheckCircle2 size={13} /> Connected
+                          </span>
+                          {it.user_id && (
+                            <button
+                              className="comm-btn-connect"
+                              style={{ padding: '4px 10px', fontSize: 11.5, background: '#0284c7', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                              onClick={() => handleOpenChat(it.user_id!)}
+                              title="Send direct message"
+                            >
+                              <MessageSquare size={12} /> Message
+                            </button>
+                          )}
+                        </div>
                       ) : it.status === 'received_request' ? (
                         <button
                           className="comm-btn-connect"
@@ -463,6 +487,13 @@ export default function CommunityView({ notify }: CommunityViewProps) {
                         </div>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
+                        <button
+                          className="comm-btn-connect"
+                          style={{ padding: '5px 14px', fontSize: 11.5, background: '#0284c7', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          onClick={() => handleOpenChat(peer.peer_id)}
+                        >
+                          <MessageSquare size={13} /> Message
+                        </button>
                         <button
                           className="comm-cat-pill"
                           style={{ padding: '5px 12px', fontSize: 11.5 }}

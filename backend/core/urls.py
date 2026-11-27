@@ -7,7 +7,7 @@ from . import (
     permission_views, views_risk, exam_engine_views, principal_views, attendance_views,
     teacher_views, aqi_views, student_views, discussion_views, psychological_evaluation_views,
     parent_views, landing_views, subscription_views, record_views, teacher_performance_views,
-    public_directory_views, network_views, communication_views
+    public_directory_views, network_views, communication_views, inbox_views
 )
 
 r = DefaultRouter()
@@ -417,6 +417,11 @@ urlpatterns = [
     path('communication/community/directory/', communication_views.CommunityDirectoryView.as_view()),
     path('communication/community/profile/<str:member_type>/<int:pk>/', communication_views.MemberProfileDetailView.as_view()),
     path('communication/community/connections/', communication_views.CommunityConnectionsView.as_view()),
+
+    # Communication Inbox & E2EE Direct Messenger
+    path('communication/inbox/conversations/', inbox_views.InboxConversationsView.as_view()),
+    path('communication/inbox/conversations/<int:conversation_id>/messages/', inbox_views.InboxMessagesView.as_view()),
+    path('communication/inbox/unread-count/', inbox_views.InboxUnreadCountView.as_view()),
 
     path('communication/assessments/competitions/', communication_views.AssessmentsCompetitionsListView.as_view()),
     path('communication/assessments/competitions/<int:pk>/', communication_views.AssessmentsCompetitionDetailView.as_view()),

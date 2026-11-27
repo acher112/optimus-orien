@@ -515,5 +515,71 @@ export const communicationApi = {
     request<{ success: boolean; message: string; badge: HonorBadge }>(
       '/api/v1/communication/assessments/analytics-badges/',
       { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  // 4. Inbox & Direct Messaging (WhatsApp / Instagram Direct style)
+  getInboxConversations: () =>
+    request<{ count: number; conversations: InboxConversation[] }>(
+      '/api/v1/communication/inbox/conversations/'
+    ),
+  openInboxConversation: (peerId: number) =>
+    request<{ detail: string; conversation_id: number; status: string; created_at: string }>(
+      '/api/v1/communication/inbox/conversations/',
+      { method: 'POST', body: JSON.stringify({ peer_id: peerId }) }
+    ),
+  getInboxMessages: (conversationId: number, since?: string) => {
+    const q = since ? `?since=${encodeURIComponent(since)}` : '';
+    return request<{ count: number; messages: InboxMessage[] }>(
+      `/api/v1/communication/inbox/conversations/${conversationId}/messages/${q}`
+    );
+  },
+  sendInboxMessage: (conversationId: number, ciphertext: string, nonce: string, sender_signature: string = '') =>
+    request<{ detail: string; message_id: number; sent_at: string }>(
+      `/api/v1/communication/inbox/conversations/${conversationId}/messages/`,
+      { method: 'POST', body: JSON.stringify({ ciphertext, nonce, sender_signature }) }
+    ),
+  getInboxUnreadCount: () =>
+    request<{ unread_count: number }>(
+      '/api/v1/communication/inbox/unread-count/'
     )
 };
+
+export interface InboxPeer {
+  id: number;
+  name: string;
+  username: string;
+  role: string;
+  role_label: string;
+  school: string;
+  city: string;
+  avatar_color: string;
+}
+
+export interface InboxConversation {
+  conversation_id: number | null;
+  peer: InboxPeer;
+  total_messages: number;
+  unread_count: number;
+  who_msg_first: 'you' | 'peer' | 'none';
+  who_msg_first_label: string;
+  last_message: {
+    ciphertext: string;
+    sent_at: string;
+    is_mine: boolean;
+    delivered: boolean;
+  } | null;
+  last_activity_at: string;
+}
+
+export interface InboxMessage {
+  id: number;
+  conversation_id: number;
+  sender_id: number;
+  sender_name: string;
+  is_mine: boolean;
+  ciphertext: string;
+  nonce: string;
+  sender_signature?: string;
+  sent_at: string;
+  delivered_at: string | null;
+}

@@ -46,8 +46,10 @@ const PublicSchoolComparePage = React.lazy(() => import('./public-directory/Publ
 const PublicMethodologyPage = React.lazy(() => import('./public-directory/PublicMethodologyPage').then(m => ({ default: m.PublicMethodologyPage })));
 const LeaderboardView = React.lazy(() => import('./communication/LeaderboardView'));
 const CommunityView = React.lazy(() => import('./communication/CommunityView'));
+const InboxView = React.lazy(() => import('./communication/InboxView'));
 const OnlineAssessmentsView = React.lazy(() => import('./communication/OnlineAssessmentsView'));
 const AchievementsView = React.lazy(() => import('./achievements/AchievementsView'));
+import { communicationApi } from './communication/communicationApi';
 import MyPerformance from './MyPerformance';
 import Communication from './Communication';
 import Announcements from './Announcements';
@@ -125,6 +127,7 @@ const WORKSPACE_NAV = [
   { name: 'Review cases', icon: ShieldAlert, childOf: 'Students at Risk', roles: ['organisation_admin', 'school_admin', 'principal', 'teacher'] },
   { name: 'Leaderboard', icon: Trophy, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Community', icon: Globe, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
+  { name: 'Inbox', icon: MessageSquare, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Online Assessments & Quiz Competitions', icon: ClipboardCheck, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Achievements', icon: Award, roles: ['organisation_admin', 'school_admin', 'principal', 'teacher', 'student', 'parent', 'platform_admin', 'owner'] },
   { name: 'Staff', icon: BriefcaseIcon, roles: ['organisation_admin', 'school_admin', 'principal'] },
@@ -239,7 +242,7 @@ const NAV_GROUPS = [
   { sublabel: 'STUDENT SUPPORT', items: ['Students at Risk', 'At-risk list', 'Risk criteria', 'Review cases'] },
   { sublabel: 'RECORD & ARCHIVE', items: ['Record'] },
   { sublabel: 'FACULTY & PERFORMANCE', items: ['Teacher Performance', 'Set Criteria', 'Evaluation'] },
-  { sublabel: 'COMMUNICATION & NETWORKING', items: ['Leaderboard', 'Community', 'Online Assessments & Quiz Competitions', 'Achievements', 'Announcements'] },
+  { sublabel: 'COMMUNICATION & NETWORKING', items: ['Leaderboard', 'Community', 'Inbox', 'Online Assessments & Quiz Competitions', 'Achievements', 'Announcements'] },
   { sublabel: 'PEOPLE & HR', items: ['Staff', 'Staff Salaries'] },
   { sublabel: 'FINANCE & BILLING', items: ['Finance'] },
   { sublabel: 'DATA MANAGEMENT', items: ['Data import'] },
@@ -252,6 +255,7 @@ const NAV_ITEM_TIERS: Record<string, 'free' | 'standard' | 'premium'> = {
   'Communication': 'free',
   'Leaderboard': 'free',
   'Community': 'free',
+  'Inbox': 'free',
   'Online Assessments & Quiz Competitions': 'free',
   'Achievements': 'free',
   'Campuses': 'free',
@@ -840,6 +844,7 @@ function App() {
       setCurrentSearch(window.location.search);
       if (p.includes('leaderboard')) setPage('Leaderboard');
       else if (p.includes('community')) setPage('Community');
+      else if (p.includes('inbox') || p.includes('messages')) setPage('Inbox');
       else if (p.includes('assessment') || p.includes('quiz')) setPage('Online Assessments & Quiz Competitions');
       else if (p.includes('achievement') || p.includes('badge')) setPage('Achievements');
       else if (p.includes('communication')) setPage('Leaderboard');
@@ -915,6 +920,7 @@ function App() {
         const p = window.location.pathname.toLowerCase();
         if (p.includes('leaderboard')) return 'Leaderboard';
         if (p.includes('community')) return 'Community';
+        if (p.includes('inbox') || p.includes('messages')) return 'Inbox';
         if (p.includes('assessment') || p.includes('quiz')) return 'Online Assessments & Quiz Competitions';
         if (p.includes('achievement') || p.includes('badge')) return 'Achievements';
         if (p.includes('communication')) return 'Leaderboard';
@@ -931,6 +937,24 @@ function App() {
     } catch {}
     return 'Overview';
   });
+  const [inboxUnreadCount, setInboxUnreadCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const updateInboxUnread = () => {
+      communicationApi.getInboxUnreadCount()
+        .then(res => setInboxUnreadCount(res.unread_count || 0))
+        .catch(() => {});
+    };
+    updateInboxUnread();
+    const interval = setInterval(updateInboxUnread, 12000);
+    window.addEventListener('optimus:refresh-inbox-unread', updateInboxUnread);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('optimus:refresh-inbox-unread', updateInboxUnread);
+    };
+  }, [user]);
+
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [records, setRecords] = useState<Resource[]>([]);
   const [resourceFilters, setResourceFilters] = useState<Record<string, any>>({});
@@ -1544,6 +1568,7 @@ function App() {
       const slugMap: Record<string, string> = {
         'Leaderboard': 'leaderboard',
         'Community': 'community',
+        'Inbox': 'inbox',
         'Online Assessments & Quiz Competitions': 'assessments',
         'Achievements': 'achievements',
         'Communication': 'communication'
@@ -2576,6 +2601,7 @@ function App() {
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION & NETWORKING</div>
               {renderNavButton('Leaderboard', 'Leaderboard', Trophy)}
               {renderNavButton('Community', 'Community', Globe)}
+              {renderNavButton('Inbox', 'Inbox & Direct Chat', MessageSquare, inboxUnreadCount > 0 ? <em>{inboxUnreadCount}</em> : null)}
               {renderNavButton('Online Assessments & Quiz Competitions', 'Online Assessments', ClipboardCheck)}
               {renderNavButton('Achievements', 'Achievements', Award)}
               {renderNavButton('Announcements', 'Announcements', Megaphone)}
@@ -2602,6 +2628,7 @@ function App() {
               <div className="nav-sublabel" style={{ marginTop: 14 }}>COMMUNICATION & NETWORKING</div>
               {renderNavButton('Leaderboard', 'Leaderboard', Trophy)}
               {renderNavButton('Community', 'Community', Globe)}
+              {renderNavButton('Inbox', 'Inbox & Direct Chat', MessageSquare, inboxUnreadCount > 0 ? <em>{inboxUnreadCount}</em> : null)}
               {renderNavButton('Online Assessments & Quiz Competitions', 'Online Assessments', ClipboardCheck)}
               {renderNavButton('Achievements', 'Achievements & Badges', Award)}
               {renderNavButton('Discussion', 'Class Discussion', MessageSquare)}
@@ -2721,9 +2748,9 @@ function App() {
 
                       return renderNavButton(
                         name,
-                        name === 'Online Assessments & Quiz Competitions' ? 'Online Assessments' : name,
+                        name === 'Online Assessments & Quiz Competitions' ? 'Online Assessments' : name === 'Inbox' ? 'Inbox & Direct Chat' : name,
                         Icon,
-                        name === 'Interventions' && !!dash?.counts?.open_cases ? <em>{dash.counts.open_cases}</em> : null
+                        name === 'Interventions' && !!dash?.counts?.open_cases ? <em>{dash.counts.open_cases}</em> : name === 'Inbox' && inboxUnreadCount > 0 ? <em>{inboxUnreadCount}</em> : null
                       );
                     })}
                   </React.Fragment>
@@ -4345,6 +4372,14 @@ function App() {
           {page === 'Community' && (
             <ErrorBoundary fallbackTitle="Community">
               <CommunityView notify={notify} />
+            </ErrorBoundary>
+          )}
+          {['Inbox', 'Messages'].includes(page) && (
+            <ErrorBoundary fallbackTitle="Inbox & Direct Messaging">
+              <InboxView
+                currentUser={user}
+                notify={notify}
+              />
             </ErrorBoundary>
           )}
           {['Online Assessments & Quiz Competitions', 'Online Assessments', 'Assessments'].includes(page) && (
